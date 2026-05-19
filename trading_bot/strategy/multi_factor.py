@@ -636,3 +636,13 @@ MF_H1_BEST_AUTOTUNED = MultiFactorConfig(
     cooldown_bars=8,
     min_bars=60,
 )
+
+# AUTO-TUNED by agent — 2026-05-19 (Sharpe 6.65, DD 8.9%, Return +25.4%)
+MF_H1_BEST_AUTOTUNED = MultiFactorConfig(
+    lots=0.05, max_positions=2,
+    entry_threshold=0.6,
+    atr_sl_multiplier=2.5,
+    atr_tp_multiplier=6.0,
+    cooldown_bars=8,
+    min_bars=60,
+)
