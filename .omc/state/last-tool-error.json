@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"python3 -c \\\"\\nimport ast, sys\\nfor f in ['bitget-engine/vilona_bitget_engine_v2.py', 'bitget-engine/bitget_statarb.py']:\\n    try:\\n        with open(f) as fh:\\n            ast.parse(fh.r...",
+  "error": "Exit code 1",
+  "timestamp": "2026-05-20T22:56:14.673Z",
+  "retry_count": 2
+}
