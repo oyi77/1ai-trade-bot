@@ -1,6 +1,6 @@
-# 🤖 Modular Trading Bot
+# 🤖 Multi-Exchange Trader
 
-A flexible, modular trading bot supporting **Paper Trading** (simulation), **Frontest** (demo account), and **Real Trading** (live) across multiple exchanges.
+A modular trading bot supporting **Paper Trading** (simulation), **Frontest** (demo account), and **Real Trading** (live) across multiple exchanges — Exness, Binance, Bybit, OKX, and Ostium DEX.
 
 ## ✨ Features
 
