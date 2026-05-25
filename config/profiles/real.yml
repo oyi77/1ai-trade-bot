@@ -1,0 +1,9 @@
+# REAL TRADING PROFILE - USE WITH CAUTION
+# WARNING: This profile uses REAL MONEY
+extends: default
+trading:
+  mode: real
+  lot: 0.01  # Start minimum
+risk:
+  max_drawdown_percent: 10.0
+  max_position_size_percent: 2.0

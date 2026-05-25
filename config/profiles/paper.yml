@@ -1,0 +1,6 @@
+# Paper trading profile - pure simulation
+extends: default
+trading:
+  mode: paper
+  balance: 10000
+  slippage: 0.001

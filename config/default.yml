@@ -1,0 +1,38 @@
+# Default configuration for multi-exchange trader
+# Profile layering: default.yml → profile.yml → env vars → CLI args
+
+trading:
+  mode: paper  # paper | frontest | real
+  symbol: "BTC/USDT"
+  lot: 0.01
+  leverage: 1
+  max_positions: 2
+
+exchange:
+  provider: ""  # ccxt | exness | dex
+  chain: ""     # ethereum | bsc | polygon | arbitrum (DEX only)
+  rpc_url: ""   # Override default RPC per chain
+  cex:
+    name: ""    # binance | bybit | okx
+  dex:
+    router: ""  # uniswap | pancakeswap | quickswap
+
+wallet:
+  key_source: env  # env | keystore | hardware
+  derivation_path: "m/44'/60'/0'/0/0"  # Default Ethereum path
+
+risk:
+  max_drawdown_percent: 20.0
+  max_position_size_percent: 5.0
+  max_daily_loss_percent: 10.0
+  circuit_breaker_enabled: true
+  circuit_breaker_cooldown_seconds: 300
+
+data_providers:
+  primary: birdeye
+  birdeye_api_key: ""  # Set via env var BIRDEYE_API_KEY
+
+logging:
+  level: info  # debug | info | warning | error
+  file: "logs/trading_bot.log"
+  format: "%(asctime)s|%(levelname)s|%(name)s|%(message)s"

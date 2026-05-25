@@ -1,0 +1,7 @@
+# Frontest (demo/testnet) profile
+extends: default
+trading:
+  mode: frontest
+  balance: 5000
+exchange:
+  provider: ccxt
