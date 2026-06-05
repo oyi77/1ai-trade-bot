@@ -29,6 +29,14 @@ except Exception as e:
     SUBSCRIPTION_ENGINE = False
     print(f"Subscription engine unavailable: {e}")
 
+# ── Security: Secret Sanitization Middleware ──
+try:
+    from secret_sanitizer import sanitize_telegram_input
+    SECRET_SANITIZER = True
+except Exception as e:
+    SECRET_SANITIZER = False
+    print(f"Secret sanitizer unavailable: {e}")
+
 # ── Project path ──
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
@@ -1851,6 +1859,12 @@ def main():
                 text = msg.get("text", "")
                 chat_id = msg.get("chat", {}).get("id")
                 if text and chat_id:
+                    # ── Security: intercept credentials before any processing ──
+                    try:
+                        if SECRET_SANITIZER:
+                            text = sanitize_telegram_input(text)
+                    except Exception:
+                        pass
                     cmd = text.split()[0].split('@')[0].lower()
                     if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping"):
                         try:
