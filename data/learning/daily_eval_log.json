@@ -1,0 +1,61 @@
+{
+  "date": "2026-06-05",
+  "evaluated_at": "2026-06-05T02:31:24.880160+07:00",
+  "total_signals": 2,
+  "total_trades": 2,
+  "wins": 2,
+  "losses": 0,
+  "holds": 0,
+  "win_rate_pct": 100.0,
+  "pair_breakdown": {
+    "XAUUSD": 2
+  },
+  "signals": [
+    {
+      "timestamp": "2026-06-05T02:31:23.314216+07:00",
+      "pair": "XAUUSD",
+      "price_at_signal": 4480.5,
+      "action": "BUY",
+      "entry_price": 4480.5,
+      "sl": 4470.0,
+      "tp": 4510.0,
+      "confidence": 0.78,
+      "grade": "B",
+      "combat_style": "SCALP",
+      "skc_score": 7.5,
+      "reasoning": "Bullish engulfing + S1 bounce",
+      "session": "London",
+      "source": "auto",
+      "ensemble": "strict_consensus",
+      "_model": "Claude+DeepSeek",
+      "result": "WIN",
+      "close_price": 4481.0,
+      "high_price": 4481.0,
+      "low_price": 4481.0,
+      "day_range": "4481.00 - 4481.00"
+    },
+    {
+      "timestamp": "2026-06-05T02:31:23.314515+07:00",
+      "pair": "XAUUSD",
+      "price_at_signal": 4495.0,
+      "action": "SELL",
+      "entry_price": 4495.0,
+      "sl": 4510.0,
+      "tp": 4465.0,
+      "confidence": 0.65,
+      "grade": "C",
+      "combat_style": "SWING",
+      "skc_score": 5.0,
+      "reasoning": "R2 rejection + DXY surge",
+      "session": "NY",
+      "source": "manual",
+      "ensemble": "disagree",
+      "_model": "DeepSeek",
+      "result": "WIN",
+      "close_price": 4481.0,
+      "high_price": 4481.0,
+      "low_price": 4481.0,
+      "day_range": "4481.00 - 4481.00"
+    }
+  ]
+}

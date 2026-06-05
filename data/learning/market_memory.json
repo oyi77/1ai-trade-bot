@@ -1,0 +1,22 @@
+{
+  "entries": [
+    {
+      "date": "2026-06-05",
+      "generated_at": "2026-06-05T02:31:24.880506+07:00",
+      "win_rate": 100.0,
+      "wins": 2,
+      "losses": 0,
+      "market_character": "Unknown — API unavailable for reflection",
+      "mistakes": [
+        "Unable to analyze — AI endpoints unreachable"
+      ],
+      "adaptation_rules": [
+        "Gunakan SL ketat (max 20 pips) sebagai default",
+        "Hindari entry di luar killzone session",
+        "Tunggu konfirmasi candle sebelum entry"
+      ],
+      "confidence_note": "Auto-generated fallback — AI reflection unavailable"
+    }
+  ],
+  "last_reflection": "2026-06-05"
+}

@@ -1,0 +1,33 @@
+2026-06-04 14:21:18,783 [INFO] ⚡ Vilona Trade FX Executor — LIVE
+2026-06-04 14:21:18,783 [WARNING] bitget: no API keys configured
+2026-06-04 14:21:18,783 [WARNING] binance: no API keys configured
+2026-06-04 14:21:18,783 [WARNING] No exchanges connected — will log signals only
+2026-06-04 14:21:18,783 [INFO] Listening on http://localhost:8765/signal
+2026-06-04 14:21:36,350 [INFO] ⚡ Vilona Trade FX Executor — LIVE
+2026-06-04 14:21:37,776 [INFO] bitget: connected (1448 markets)
+2026-06-04 14:21:37,776 [INFO] Listening on http://localhost:8765/signal
+2026-06-04 14:28:24,611 [INFO] 📡 Signal: vtfx_1780558103509 | BUY XAUUSD
+2026-06-04 14:28:24,611 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 14:38:15,393 [INFO] 📡 Signal: vtfx_1780558694648 | BUY XAUUSD
+2026-06-04 14:38:15,393 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 15:10:54,020 [INFO] 📡 Signal: vtfx_1780560653674 | BUY XAUUSD
+2026-06-04 15:10:54,020 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 15:16:13,378 [INFO] 📡 Signal: vtfx_1780560971340 | BUY XAUUSD
+2026-06-04 15:16:13,378 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 17:15:23,810 [ERROR] Fetch positions error: bitget GET https://api.bitget.com/api/v2/mix/position/all-position?marginCoin=USDT&productType=USDT-FUTURES
+2026-06-04 19:43:35,319 [INFO] 📡 Signal: vtfx_1780577015317 | BUY XAUUSD
+2026-06-04 19:43:35,321 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 19:49:30,730 [INFO] 📡 Signal: vtfx_1780577368614 | BUY XAUUSD
+2026-06-04 19:49:30,731 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 20:03:13,290 [INFO] 📡 Signal: vtfx_1780578191319 | SELL XAUUSD
+2026-06-04 20:03:13,292 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 20:14:19,079 [INFO] 📡 Signal: vtfx_1780578857390 | SELL XAUUSD
+2026-06-04 20:14:19,079 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 20:25:30,978 [INFO] 📡 Signal: vtfx_1780579530116 | BUY XAUUSD
+2026-06-04 20:25:30,978 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 20:39:28,595 [INFO] 📡 Signal: vtfx_1780580367137 | SELL XAUUSD
+2026-06-04 20:39:28,595 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 20:44:53,984 [INFO] 📡 Signal: vtfx_1780580691920 | SELL XAUUSD
+2026-06-04 20:44:53,985 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD
+2026-06-04 21:47:37,835 [INFO] 📡 Signal: test_ea_001 | BUY XAUUSD
+2026-06-04 21:47:37,838 [ERROR] Bitget execution error: bitget does not have market symbol XAUUSD

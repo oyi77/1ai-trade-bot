@@ -1,0 +1,18 @@
+[2026-06-01 09:33:03] 🚀 Deriv Actuary Daemon starting...
+[2026-06-01 09:33:03] 📁 Dashboard: dashboard_api.py (port 6567)
+[2026-06-01 09:33:03] 📁 Streamer:  tick_streamer.py
+[2026-06-01 09:33:03] Started dashboard (PID=816257) → dashboard_api.py
+[2026-06-01 09:33:03] Started streamer (PID=816258) → tick_streamer.py
+[2026-06-02 16:08:40] Received stop signal. Shutting down...
+[2026-06-02 16:09:03] Stopped Streamer
+[2026-06-02 16:09:03] Stopped Dashboard
+[2026-06-02 16:09:03] 👋 Deriv Actuary Daemon stopped
+[2026-06-02 16:22:11] 🚀 Deriv Actuary Daemon starting...
+[2026-06-02 16:22:11] 📁 Dashboard: dashboard_api.py (port 6567)
+[2026-06-02 16:22:11] 📁 Streamer:  tick_streamer.py
+[2026-06-02 16:22:11] Started dashboard (PID=998) → dashboard_api.py
+[2026-06-02 16:22:11] Started streamer (PID=999) → tick_streamer.py
+[2026-06-05 14:26:43] Received stop signal. Shutting down...
+[2026-06-05 14:27:12] Stopped Streamer
+[2026-06-05 14:27:12] Stopped Dashboard
+[2026-06-05 14:27:12] 👋 Deriv Actuary Daemon stopped

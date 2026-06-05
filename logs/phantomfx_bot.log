@@ -1,0 +1,675 @@
+2026-06-04 00:58:15,523 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 00:58:15,523 [INFO]    Chat: -1002928711742 | Time: 00:58 WIB
+2026-06-04 00:58:16,100 [INFO] 📨 /phantomfx@berkahkaryaforexbotbot
+2026-06-04 00:58:16,100 [INFO] 📨 /phantomfx@berkahkaryaforexbotbot
+2026-06-04 00:58:16,100 [INFO] 📨 /start@berkahkaryaforexbotbot
+2026-06-04 00:58:16,872 [INFO] 📨 /phantomfx@berkahkaryaforexbotbot
+2026-06-04 00:58:16,872 [INFO] 📨 /start@berkahkaryaforexbotbot
+2026-06-04 00:58:17,701 [INFO] 📨 /start@berkahkaryaforexbotbot
+2026-06-04 00:58:18,478 [INFO] 📨 /start@berkahkaryaforexbotbot
+2026-06-04 00:58:19,122 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 00:58:19,122 [INFO]    Chat: -1002928711742 | Time: 00:58 WIB
+2026-06-04 00:58:19,700 [INFO] 📨 /phantomfx@berkahkaryaforexbotbot
+2026-06-04 00:58:19,700 [INFO] 📨 /phantomfx@berkahkaryaforexbotbot
+2026-06-04 00:58:19,700 [INFO] 📨 /start@berkahkaryaforexbotbot
+2026-06-04 00:58:20,468 [INFO] 📨 /phantomfx@berkahkaryaforexbotbot
+2026-06-04 00:58:20,468 [INFO] 📨 /start@berkahkaryaforexbotbot
+2026-06-04 00:58:24,421 [INFO] 📨 /start@berkahkaryaforexbotbot
+2026-06-04 00:58:25,193 [INFO] 📨 /start@berkahkaryaforexbotbot
+2026-06-04 01:01:36,736 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:01:36,736 [INFO]    Chat: -1002928711742 | Offset: 0 | Time: 01:01 WIB
+2026-06-04 01:01:44,191 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:01:44,192 [INFO]    Chat: -1002928711742 | Offset: 0 | Time: 01:01 WIB
+2026-06-04 01:10:28,747 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:10:28,747 [INFO]    Chat: -1002928711742 | Offset: 0 | Time: 01:10 WIB
+2026-06-04 01:18:10,004 [INFO] 📨 [-1002928711742] /price — /price@berkahkaryaforexbotbot
+2026-06-04 01:18:59,391 [INFO] 📨 [-1002928711742] /price — /price@berkahkaryaforexbotbot
+2026-06-04 01:24:44,919 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:24:44,919 [INFO]    Chat: -1002928711742 | Offset: 206918426 | Time: 01:24 WIB
+2026-06-04 01:26:34,688 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:26:34,688 [INFO]    Chat: -1002928711742 | Offset: 206918426 | Time: 01:26 WIB
+2026-06-04 01:28:57,039 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 01:29:21,394 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:29:21,394 [INFO]    Chat: -1002928711742 | Offset: 0 | Time: 01:29 WIB
+2026-06-04 01:32:49,917 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:32:49,917 [INFO]    Chat: -1002928711742 | Offset: 0 | Time: 01:32 WIB
+2026-06-04 01:34:27,128 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:34:27,128 [INFO]    Chat: -1002928711742 | Offset: 0 | Time: 01:34 WIB
+2026-06-04 01:36:03,677 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:36:03,677 [INFO]    Chat: -1002928711742 | Offset: 0 | Time: 01:36 WIB
+2026-06-04 01:47:16,513 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 01:48:50,588 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 01:53:12,228 [INFO] 📨 [-1002928711742] /analyze — /analyze@berkahkaryaforexbotbot
+2026-06-04 01:53:44,953 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:53:44,954 [INFO]    Chat: -1002928711742 | Offset: 206918427 | Time: 01:53 WIB
+2026-06-04 01:53:45,520 [INFO] 📨 [-1002928711742] /analyze — /analyze@berkahkaryaforexbotbot
+2026-06-04 01:54:34,355 [ERROR] Handler error for /analyze: name 'CLAUDE_KEY' is not defined
+2026-06-04 01:55:41,401 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 01:55:41,402 [INFO]    Chat: -1002928711742 | Offset: 206918428 | Time: 01:55 WIB
+2026-06-04 01:57:51,220 [INFO] 📨 [157228659] /start — /start
+2026-06-04 02:00:27,939 [INFO] 📨 [157228659] /start — /start
+2026-06-04 02:00:47,879 [INFO] 📨 [157228659] /price — /price
+2026-06-04 02:05:28,236 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 02:05:28,236 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 02:05 WIB
+2026-06-04 02:07:11,134 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 02:07:11,134 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 02:07 WIB
+2026-06-04 02:12:13,212 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 02:12:13,223 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 02:12 WIB
+2026-06-04 02:12:13,224 [INFO] 🔄 Auto-signal loop started
+2026-06-04 02:12:13,224 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 02:17:58,783 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 02:17:58,783 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 02:17 WIB
+2026-06-04 02:17:58,784 [INFO] 🔄 Auto-signal loop started
+2026-06-04 02:17:58,784 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 02:33:16,081 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 03:03:53,096 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 05:36:45,349 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 06:17:02,207 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 07:01:23,917 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 07:34:37,413 [ERROR] Poll error: The read operation timed out
+2026-06-04 09:02:11,642 [INFO] 🔍 Auto-analyze: XAUUSD=$4465.8 | London | KZ=London
+2026-06-04 09:02:11,642 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:03:24,409 [INFO] 🔍 Auto-analyze: XAUUSD=$4465.7 | London | KZ=London
+2026-06-04 09:03:24,409 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:04:37,183 [INFO] 🔍 Auto-analyze: XAUUSD=$4466.4 | London | KZ=London
+2026-06-04 09:04:37,183 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:05:50,003 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.4 | London | KZ=London
+2026-06-04 09:05:50,003 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:07:02,847 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.2 | London | KZ=London
+2026-06-04 09:07:02,847 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:08:15,651 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.0 | London | KZ=London
+2026-06-04 09:08:15,651 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:09:28,447 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.2 | London | KZ=London
+2026-06-04 09:09:28,447 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:10:41,209 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.7 | London | KZ=London
+2026-06-04 09:10:41,209 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:11:53,831 [INFO] 🔍 Auto-analyze: XAUUSD=$4458.4 | London | KZ=London
+2026-06-04 09:11:53,831 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:13:06,618 [INFO] 🔍 Auto-analyze: XAUUSD=$4458.4 | London | KZ=London
+2026-06-04 09:13:06,618 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:14:19,248 [INFO] 🔍 Auto-analyze: XAUUSD=$4460.7 | London | KZ=London
+2026-06-04 09:14:19,248 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:15:32,027 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.5 | London | KZ=London
+2026-06-04 09:15:32,027 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:16:44,825 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.5 | London | KZ=London
+2026-06-04 09:16:44,825 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:17:57,639 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.2 | London | KZ=London
+2026-06-04 09:17:57,639 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:19:10,443 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.4 | London | KZ=London
+2026-06-04 09:19:10,443 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:20:23,251 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.5 | London | KZ=London
+2026-06-04 09:20:23,251 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:21:36,075 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.8 | London | KZ=London
+2026-06-04 09:21:36,075 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:22:48,863 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.9 | London | KZ=London
+2026-06-04 09:22:48,863 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:24:01,635 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.3 | London | KZ=London
+2026-06-04 09:24:01,635 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:25:14,451 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.5 | London | KZ=London
+2026-06-04 09:25:14,451 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:26:27,247 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.5 | London | KZ=London
+2026-06-04 09:26:27,247 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:27:40,309 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.0 | London | KZ=London
+2026-06-04 09:27:40,310 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:28:53,127 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.5 | London | KZ=London
+2026-06-04 09:28:53,127 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:30:05,947 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.7 | London | KZ=London
+2026-06-04 09:30:05,947 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:31:18,575 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.8 | London | KZ=London
+2026-06-04 09:31:18,575 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:32:31,369 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.3 | London | KZ=London
+2026-06-04 09:32:31,369 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:33:44,163 [INFO] 🔍 Auto-analyze: XAUUSD=$4460.5 | London | KZ=London
+2026-06-04 09:33:44,163 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:34:56,948 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.1 | London | KZ=London
+2026-06-04 09:34:56,948 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:36:09,771 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.1 | London | KZ=London
+2026-06-04 09:36:09,771 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:37:22,615 [INFO] 🔍 Auto-analyze: XAUUSD=$4459.9 | London | KZ=London
+2026-06-04 09:37:22,615 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:38:35,415 [INFO] 🔍 Auto-analyze: XAUUSD=$4460.3 | London | KZ=London
+2026-06-04 09:38:35,415 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:39:48,240 [INFO] 🔍 Auto-analyze: XAUUSD=$4460.2 | London | KZ=London
+2026-06-04 09:39:48,241 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:41:01,063 [INFO] 🔍 Auto-analyze: XAUUSD=$4459.2 | London | KZ=London
+2026-06-04 09:41:01,063 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:42:13,863 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.3 | London | KZ=London
+2026-06-04 09:42:13,863 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:43:26,671 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.2 | London | KZ=London
+2026-06-04 09:43:26,671 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:44:39,573 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.6 | London | KZ=London
+2026-06-04 09:44:39,574 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:45:52,379 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.6 | London | KZ=London
+2026-06-04 09:45:52,379 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:47:05,187 [INFO] 🔍 Auto-analyze: XAUUSD=$4467.5 | London | KZ=London
+2026-06-04 09:47:05,187 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:48:17,975 [INFO] 🔍 Auto-analyze: XAUUSD=$4467.3 | London | KZ=London
+2026-06-04 09:48:17,975 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:49:30,600 [INFO] 🔍 Auto-analyze: XAUUSD=$4468.0 | London | KZ=London
+2026-06-04 09:49:30,600 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:50:43,387 [INFO] 🔍 Auto-analyze: XAUUSD=$4470.2 | London | KZ=London
+2026-06-04 09:50:43,387 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:51:56,195 [INFO] 🔍 Auto-analyze: XAUUSD=$4471.4 | London | KZ=London
+2026-06-04 09:51:56,195 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:53:09,003 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.4 | London | KZ=London
+2026-06-04 09:53:09,003 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:54:21,827 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.4 | London | KZ=London
+2026-06-04 09:54:21,827 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:55:34,631 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.6 | London | KZ=London
+2026-06-04 09:55:34,631 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:56:47,399 [INFO] 🔍 Auto-analyze: XAUUSD=$4473.2 | London | KZ=London
+2026-06-04 09:56:47,399 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:58:00,203 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.9 | London | KZ=London
+2026-06-04 09:58:00,203 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 09:59:12,995 [INFO] 🔍 Auto-analyze: XAUUSD=$4473.3 | London | KZ=London
+2026-06-04 09:59:12,995 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:00:25,787 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.2 | London | KZ=London
+2026-06-04 10:00:25,789 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:01:38,623 [INFO] 🔍 Auto-analyze: XAUUSD=$4473.4 | London | KZ=London
+2026-06-04 10:01:38,624 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:02:51,463 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.9 | London | KZ=London
+2026-06-04 10:02:51,463 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:04:04,264 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.2 | London | KZ=London
+2026-06-04 10:04:04,264 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:05:17,039 [INFO] 🔍 Auto-analyze: XAUUSD=$4472.7 | London | KZ=London
+2026-06-04 10:05:17,039 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:06:29,847 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.7 | London | KZ=London
+2026-06-04 10:06:29,847 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:07:42,679 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.7 | London | KZ=London
+2026-06-04 10:07:42,679 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:08:55,515 [INFO] 🔍 Auto-analyze: XAUUSD=$4477.8 | London | KZ=London
+2026-06-04 10:08:55,515 [ERROR] Auto-loop error: name 'CLAUDE_KEY' is not defined
+2026-06-04 10:09:49,299 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 10:09:49,299 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 10:09:49,300 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 10:09 WIB
+2026-06-04 10:09:49,300 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 10:09 WIB
+2026-06-04 10:09:49,300 [INFO] 🔄 Auto-signal loop started
+2026-06-04 10:09:49,300 [INFO] 🔄 Auto-signal loop started
+2026-06-04 10:09:49,300 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 10:09:49,300 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 10:09:53,511 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 10:09:53,511 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 10:09 WIB
+2026-06-04 10:09:53,511 [INFO] 🔄 Auto-signal loop started
+2026-06-04 10:09:53,511 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 10:09:54,086 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:09:54,086 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:09:59,654 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:02,171 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.5 | London | KZ=London
+2026-06-04 10:10:02,171 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.5 | London | KZ=London
+2026-06-04 10:10:02,222 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:02,222 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:07,530 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 10:10:07,530 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 10:10 WIB
+2026-06-04 10:10:07,530 [INFO] 🔄 Auto-signal loop started
+2026-06-04 10:10:07,530 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 10:10:08,248 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 10:10:08,248 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 10:10:08,249 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 10:10 WIB
+2026-06-04 10:10:08,249 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 10:10 WIB
+2026-06-04 10:10:08,249 [INFO] 🔄 Auto-signal loop started
+2026-06-04 10:10:08,249 [INFO] 🔄 Auto-signal loop started
+2026-06-04 10:10:08,250 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 10:10:08,250 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 10:10:11,832 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:14,387 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:14,387 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:19,946 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:20,195 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.5 | London | KZ=London
+2026-06-04 10:10:20,943 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.5 | London | KZ=London
+2026-06-04 10:10:20,943 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.5 | London | KZ=London
+2026-06-04 10:10:22,963 [INFO] Claude: 296 chars
+2026-06-04 10:10:22,963 [WARNING] Claude unavailable: Expecting ',' delimiter: line 1 column 296 (char 295)
+2026-06-04 10:10:24,498 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:24,498 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:24,654 [INFO] DeepSeek: 303 chars
+2026-06-04 10:10:24,654 [WARNING] DeepSeek error: Expecting ',' delimiter: line 1 column 303 (char 302)
+2026-06-04 10:10:25,029 [INFO] Claude: 301 chars
+2026-06-04 10:10:25,029 [INFO] Claude: 301 chars
+2026-06-04 10:10:25,029 [WARNING] Claude unavailable: Expecting ',' delimiter: line 1 column 301 (char 300)
+2026-06-04 10:10:25,029 [WARNING] Claude unavailable: Expecting ',' delimiter: line 1 column 301 (char 300)
+2026-06-04 10:10:26,767 [INFO] DeepSeek: 344 chars
+2026-06-04 10:10:26,767 [INFO] DeepSeek: 344 chars
+2026-06-04 10:10:26,767 [WARNING] DeepSeek error: Expecting ',' delimiter: line 1 column 344 (char 343)
+2026-06-04 10:10:26,767 [WARNING] DeepSeek error: Expecting ',' delimiter: line 1 column 344 (char 343)
+2026-06-04 10:10:29,057 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:30,250 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 10:10:30,250 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 10:10 WIB
+2026-06-04 10:10:30,250 [INFO] 🔄 Auto-signal loop started
+2026-06-04 10:10:30,250 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 10:10:33,828 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:33,828 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:40,389 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:42,875 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.5 | London | KZ=London
+2026-06-04 10:10:45,532 [INFO] Claude: 286 chars
+2026-06-04 10:10:45,532 [WARNING] Claude unavailable: Expecting ',' delimiter: line 1 column 286 (char 285)
+2026-06-04 10:10:45,969 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:45,969 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:47,211 [INFO] DeepSeek: 302 chars
+2026-06-04 10:10:47,211 [WARNING] DeepSeek error: Expecting ',' delimiter: line 1 column 302 (char 301)
+2026-06-04 10:10:54,522 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:59,084 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:10:59,084 [ERROR] Poll error: HTTP Error 409: Conflict
+2026-06-04 10:11:31,086 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 10:11:31,086 [INFO]    Chat: -1002928711742 | Offset: 206918431 | Time: 10:11 WIB
+2026-06-04 10:11:31,086 [INFO] 🔄 Auto-signal loop started
+2026-06-04 10:11:31,086 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 10:11:43,899 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.4 | London | KZ=London
+2026-06-04 10:11:46,745 [INFO] Claude: 290 chars
+2026-06-04 10:11:48,486 [INFO] DeepSeek: 314 chars
+2026-06-04 10:11:48,486 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:13:01,279 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.2 | London | KZ=London
+2026-06-04 10:13:03,914 [INFO] Claude: 301 chars
+2026-06-04 10:13:05,595 [INFO] DeepSeek: 323 chars
+2026-06-04 10:13:05,595 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:14:18,411 [INFO] 🔍 Auto-analyze: XAUUSD=$4473.3 | London | KZ=London
+2026-06-04 10:14:21,819 [INFO] Claude: 297 chars
+2026-06-04 10:14:23,482 [INFO] DeepSeek: 299 chars
+2026-06-04 10:14:23,483 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:15:36,339 [INFO] 🔍 Auto-analyze: XAUUSD=$4473.3 | London | KZ=London
+2026-06-04 10:15:38,998 [INFO] Claude: 284 chars
+2026-06-04 10:15:40,513 [INFO] DeepSeek: 280 chars
+2026-06-04 10:15:40,513 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:16:53,335 [INFO] 🔍 Auto-analyze: XAUUSD=$4471.9 | London | KZ=London
+2026-06-04 10:16:55,982 [INFO] Claude: 290 chars
+2026-06-04 10:16:57,600 [INFO] DeepSeek: 297 chars
+2026-06-04 10:16:57,600 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:18:10,421 [INFO] 🔍 Auto-analyze: XAUUSD=$4472.6 | London | KZ=London
+2026-06-04 10:18:13,269 [INFO] Claude: 294 chars
+2026-06-04 10:18:14,878 [INFO] DeepSeek: 313 chars
+2026-06-04 10:18:14,879 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:19:27,671 [INFO] 🔍 Auto-analyze: XAUUSD=$4472.0 | London | KZ=London
+2026-06-04 10:19:30,526 [INFO] Claude: 289 chars
+2026-06-04 10:19:31,994 [INFO] DeepSeek: 284 chars
+2026-06-04 10:19:31,994 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:20:44,763 [INFO] 🔍 Auto-analyze: XAUUSD=$4470.9 | London | KZ=London
+2026-06-04 10:20:47,121 [INFO] Claude: 280 chars
+2026-06-04 10:20:48,730 [INFO] DeepSeek: 344 chars
+2026-06-04 10:20:48,730 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:22:01,567 [INFO] 🔍 Auto-analyze: XAUUSD=$4470.4 | London | KZ=London
+2026-06-04 10:22:04,153 [INFO] Claude: 297 chars
+2026-06-04 10:22:05,995 [INFO] DeepSeek: 347 chars
+2026-06-04 10:22:05,996 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:23:18,868 [INFO] 🔍 Auto-analyze: XAUUSD=$4469.8 | London | KZ=London
+2026-06-04 10:23:21,687 [INFO] Claude: 297 chars
+2026-06-04 10:23:23,094 [INFO] DeepSeek: 294 chars
+2026-06-04 10:23:23,094 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:24:35,939 [INFO] 🔍 Auto-analyze: XAUUSD=$4469.7 | London | KZ=London
+2026-06-04 10:24:38,589 [INFO] Claude: 297 chars
+2026-06-04 10:24:39,969 [INFO] DeepSeek: 293 chars
+2026-06-04 10:24:39,969 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:25:52,791 [INFO] 🔍 Auto-analyze: XAUUSD=$4469.0 | London | KZ=London
+2026-06-04 10:25:56,669 [INFO] Claude: 290 chars
+2026-06-04 10:25:58,405 [INFO] DeepSeek: 295 chars
+2026-06-04 10:25:58,405 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:27:11,211 [INFO] 🔍 Auto-analyze: XAUUSD=$4468.8 | London | KZ=London
+2026-06-04 10:27:13,882 [INFO] Claude: 280 chars
+2026-06-04 10:27:15,640 [INFO] DeepSeek: 295 chars
+2026-06-04 10:27:15,640 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:28:28,423 [INFO] 🔍 Auto-analyze: XAUUSD=$4467.4 | London | KZ=London
+2026-06-04 10:28:31,018 [INFO] Claude: 289 chars
+2026-06-04 10:28:32,931 [INFO] DeepSeek: 317 chars
+2026-06-04 10:28:32,931 [INFO]    Split → skip (Claude vs DeepSeek disagree)
+2026-06-04 10:30:15,756 [INFO] 🔍 Auto-analyze: XAUUSD=$4470.5 | London | KZ=London
+2026-06-04 10:30:18,241 [INFO] Claude: 290 chars
+2026-06-04 10:30:20,113 [INFO] DeepSeek: 325 chars
+2026-06-04 10:30:20,114 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:31:32,931 [INFO] 🔍 Auto-analyze: XAUUSD=$4470.2 | London | KZ=London
+2026-06-04 10:31:35,714 [INFO] Claude: 290 chars
+2026-06-04 10:31:37,498 [INFO] DeepSeek: 349 chars
+2026-06-04 10:31:37,499 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:32:50,143 [INFO] 🔍 Auto-analyze: XAUUSD=$4471.5 | London | KZ=London
+2026-06-04 10:32:53,018 [INFO] Claude: 297 chars
+2026-06-04 10:32:54,775 [INFO] DeepSeek: 307 chars
+2026-06-04 10:32:54,775 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:34:07,811 [INFO] 🔍 Auto-analyze: XAUUSD=$4470.6 | London | KZ=London
+2026-06-04 10:34:10,651 [INFO] Claude: 295 chars
+2026-06-04 10:34:12,004 [INFO] DeepSeek: 280 chars
+2026-06-04 10:34:12,004 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:35:24,931 [INFO] 🔍 Auto-analyze: XAUUSD=$4469.3 | London | KZ=London
+2026-06-04 10:35:27,504 [INFO] Claude: 290 chars
+2026-06-04 10:35:29,269 [INFO] DeepSeek: 344 chars
+2026-06-04 10:35:29,270 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:36:42,121 [INFO] 🔍 Auto-analyze: XAUUSD=$4467.2 | London | KZ=London
+2026-06-04 10:36:45,056 [INFO] Claude: 297 chars
+2026-06-04 10:36:46,878 [INFO] DeepSeek: 336 chars
+2026-06-04 10:36:46,878 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:37:59,683 [INFO] 🔍 Auto-analyze: XAUUSD=$4467.1 | London | KZ=London
+2026-06-04 10:38:02,581 [INFO] Claude: 289 chars
+2026-06-04 10:38:04,271 [INFO] DeepSeek: 317 chars
+2026-06-04 10:38:04,271 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:39:17,099 [INFO] 🔍 Auto-analyze: XAUUSD=$4466.0 | London | KZ=London
+2026-06-04 10:39:19,867 [INFO] Claude: 301 chars
+2026-06-04 10:39:21,293 [INFO] DeepSeek: 295 chars
+2026-06-04 10:39:21,293 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:40:34,119 [INFO] 🔍 Auto-analyze: XAUUSD=$4465.9 | London | KZ=London
+2026-06-04 10:40:36,860 [INFO] Claude: 294 chars
+2026-06-04 10:40:38,609 [INFO] DeepSeek: 335 chars
+2026-06-04 10:40:38,609 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:41:51,439 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.7 | London | KZ=London
+2026-06-04 10:41:54,135 [INFO] Claude: 286 chars
+2026-06-04 10:41:55,883 [INFO] DeepSeek: 316 chars
+2026-06-04 10:41:55,883 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:43:08,707 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.9 | London | KZ=London
+2026-06-04 10:43:11,219 [INFO] Claude: 286 chars
+2026-06-04 10:43:12,555 [INFO] DeepSeek: 322 chars
+2026-06-04 10:43:12,555 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:44:25,375 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.0 | London | KZ=London
+2026-06-04 10:44:27,959 [INFO] Claude: 290 chars
+2026-06-04 10:44:29,335 [INFO] DeepSeek: 301 chars
+2026-06-04 10:44:29,335 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:45:42,019 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.4 | London | KZ=London
+2026-06-04 10:45:44,541 [INFO] Claude: 289 chars
+2026-06-04 10:45:45,991 [INFO] DeepSeek: 317 chars
+2026-06-04 10:45:45,991 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:46:58,812 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.5 | London | KZ=London
+2026-06-04 10:47:01,492 [INFO] Claude: 290 chars
+2026-06-04 10:47:03,099 [INFO] DeepSeek: 351 chars
+2026-06-04 10:47:03,100 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:48:15,959 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.1 | London | KZ=London
+2026-06-04 10:48:18,503 [INFO] Claude: 289 chars
+2026-06-04 10:48:19,968 [INFO] DeepSeek: 316 chars
+2026-06-04 10:48:19,968 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:49:13,848 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 10:49:32,803 [INFO] 🔍 Auto-analyze: XAUUSD=$4460.3 | London | KZ=London
+2026-06-04 10:49:35,443 [INFO] Claude: 290 chars
+2026-06-04 10:49:36,926 [INFO] DeepSeek: 288 chars
+2026-06-04 10:49:36,926 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:50:49,731 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.3 | London | KZ=London
+2026-06-04 10:50:52,515 [INFO] Claude: 290 chars
+2026-06-04 10:50:54,002 [INFO] DeepSeek: 338 chars
+2026-06-04 10:50:54,002 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:52:06,835 [INFO] 🔍 Auto-analyze: XAUUSD=$4462.1 | London | KZ=London
+2026-06-04 10:52:09,633 [INFO] Claude: 301 chars
+2026-06-04 10:52:11,311 [INFO] DeepSeek: 323 chars
+2026-06-04 10:52:11,311 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:53:24,133 [INFO] 🔍 Auto-analyze: XAUUSD=$4461.7 | London | KZ=London
+2026-06-04 10:53:26,875 [INFO] Claude: 301 chars
+2026-06-04 10:53:28,259 [INFO] DeepSeek: 296 chars
+2026-06-04 10:53:28,259 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:54:41,071 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.8 | London | KZ=London
+2026-06-04 10:54:44,042 [INFO] Claude: 297 chars
+2026-06-04 10:54:45,340 [INFO] DeepSeek: 299 chars
+2026-06-04 10:54:45,340 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:55:58,143 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.5 | London | KZ=London
+2026-06-04 10:56:01,307 [INFO] Claude: 297 chars
+2026-06-04 10:56:02,739 [INFO] DeepSeek: 307 chars
+2026-06-04 10:56:02,739 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:57:15,587 [INFO] 🔍 Auto-analyze: XAUUSD=$4465.4 | London | KZ=London
+2026-06-04 10:57:18,427 [INFO] Claude: 294 chars
+2026-06-04 10:57:19,884 [INFO] DeepSeek: 334 chars
+2026-06-04 10:57:19,884 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:58:32,715 [INFO] 🔍 Auto-analyze: XAUUSD=$4463.9 | London | KZ=London
+2026-06-04 10:58:35,400 [INFO] Claude: 290 chars
+2026-06-04 10:58:37,161 [INFO] DeepSeek: 302 chars
+2026-06-04 10:58:37,161 [INFO]    No consensus or HOLD → skip
+2026-06-04 10:59:50,019 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.9 | London | KZ=London
+2026-06-04 10:59:52,781 [INFO] Claude: 297 chars
+2026-06-04 10:59:54,729 [INFO] DeepSeek: 293 chars
+2026-06-04 10:59:54,729 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:01:07,363 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.9 | London | KZ=Outside
+2026-06-04 11:01:10,069 [INFO] Claude: 301 chars
+2026-06-04 11:01:11,800 [INFO] DeepSeek: 317 chars
+2026-06-04 11:01:11,800 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:02:24,583 [INFO] 🔍 Auto-analyze: XAUUSD=$4466.2 | London | KZ=Outside
+2026-06-04 11:02:27,211 [INFO] Claude: 285 chars
+2026-06-04 11:02:28,989 [INFO] DeepSeek: 347 chars
+2026-06-04 11:02:28,989 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:03:41,823 [INFO] 🔍 Auto-analyze: XAUUSD=$4466.2 | London | KZ=Outside
+2026-06-04 11:03:44,435 [INFO] Claude: 289 chars
+2026-06-04 11:03:45,814 [INFO] DeepSeek: 300 chars
+2026-06-04 11:03:45,814 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:04:58,625 [INFO] 🔍 Auto-analyze: XAUUSD=$4464.8 | London | KZ=Outside
+2026-06-04 11:05:04,880 [INFO] Claude: 301 chars
+2026-06-04 11:05:06,480 [INFO] DeepSeek: 285 chars
+2026-06-04 11:05:06,480 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:06:19,287 [INFO] 🔍 Auto-analyze: XAUUSD=$4465.0 | London | KZ=Outside
+2026-06-04 11:06:22,788 [INFO] Claude: 290 chars
+2026-06-04 11:06:24,059 [INFO] DeepSeek: 278 chars
+2026-06-04 11:06:24,059 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:07:36,871 [INFO] 🔍 Auto-analyze: XAUUSD=$4465.1 | London | KZ=Outside
+2026-06-04 11:07:39,437 [INFO] Claude: 279 chars
+2026-06-04 11:07:41,344 [INFO] DeepSeek: 328 chars
+2026-06-04 11:07:41,345 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:08:54,187 [INFO] 🔍 Auto-analyze: XAUUSD=$4466.3 | London | KZ=Outside
+2026-06-04 11:08:56,801 [INFO] Claude: 289 chars
+2026-06-04 11:08:58,440 [INFO] DeepSeek: 321 chars
+2026-06-04 11:08:58,440 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:10:11,087 [INFO] 🔍 Auto-analyze: XAUUSD=$4466.2 | London | KZ=Outside
+2026-06-04 11:10:13,875 [INFO] Claude: 289 chars
+2026-06-04 11:10:15,405 [INFO] DeepSeek: 287 chars
+2026-06-04 11:10:15,405 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:11:28,219 [INFO] 🔍 Auto-analyze: XAUUSD=$4465.2 | London | KZ=Outside
+2026-06-04 11:11:30,953 [INFO] Claude: 301 chars
+2026-06-04 11:11:32,321 [INFO] DeepSeek: 283 chars
+2026-06-04 11:11:32,321 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:12:42,897 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 11:12:45,157 [INFO] 🔍 Auto-analyze: XAUUSD=$4465.8 | London | KZ=Outside
+2026-06-04 11:12:48,039 [INFO] Claude: 301 chars
+2026-06-04 11:12:49,327 [INFO] DeepSeek: 282 chars
+2026-06-04 11:12:49,327 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:14:02,184 [INFO] 🔍 Auto-analyze: XAUUSD=$4469.6 | London | KZ=Outside
+2026-06-04 11:14:04,951 [INFO] Claude: 301 chars
+2026-06-04 11:14:06,517 [INFO] DeepSeek: 349 chars
+2026-06-04 11:14:06,518 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:14:50,550 [INFO] 📨 [-1002928711742] /start — /start@berkahkaryaforexbotbot
+2026-06-04 11:14:53,098 [INFO] 📨 [-1002928711742] /price — /price@berkahkaryaforexbotbot
+2026-06-04 11:15:05,919 [ERROR] Handler error for /price: tg_send() takes 1 positional argument but 2 were given
+2026-06-04 11:15:06,489 [INFO] 📨 [-1002928711742] /analyze — /analyze@berkahkaryaforexbotbot
+2026-06-04 11:15:19,795 [INFO] 🔍 Auto-analyze: XAUUSD=$4470.9 | London | KZ=Outside
+2026-06-04 11:15:22,325 [INFO] Claude: 290 chars
+2026-06-04 11:15:23,600 [INFO] Claude: 286 chars
+2026-06-04 11:15:23,980 [INFO] DeepSeek: 323 chars
+2026-06-04 11:15:23,981 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:15:25,137 [INFO] DeepSeek: 292 chars
+2026-06-04 11:15:26,494 [INFO] 📨 [157228659] /start — /start
+2026-06-04 11:16:36,813 [INFO] 🔍 Auto-analyze: XAUUSD=$4472.6 | London | KZ=Outside
+2026-06-04 11:16:39,177 [INFO] Claude: 279 chars
+2026-06-04 11:16:40,755 [INFO] DeepSeek: 288 chars
+2026-06-04 11:16:40,755 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:17:53,579 [INFO] 🔍 Auto-analyze: XAUUSD=$4472.8 | London | KZ=Outside
+2026-06-04 11:17:56,742 [INFO] Claude: 294 chars
+2026-06-04 11:17:58,296 [INFO] DeepSeek: 289 chars
+2026-06-04 11:17:58,296 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:18:05,214 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 11:18:05,214 [INFO]    Chat: -1002928711742 | Offset: 206918435 | Time: 11:18 WIB
+2026-06-04 11:18:05,214 [INFO] 🔄 Auto-signal loop started
+2026-06-04 11:18:05,214 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 11:18:17,915 [INFO] 🔍 Auto-analyze: XAUUSD=$4472.8 | London | KZ=Outside
+2026-06-04 11:18:20,206 [INFO] Claude: 243 chars
+2026-06-04 11:18:22,946 [INFO] DeepSeek: 275 chars
+2026-06-04 11:18:22,947 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:19:18,741 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 11:19:18,742 [INFO]    Chat: -1002928711742 | Offset: 206918435 | Time: 11:19 WIB
+2026-06-04 11:19:18,742 [INFO] 🔄 Auto-signal loop started
+2026-06-04 11:19:18,742 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 11:19:31,603 [INFO] 🔍 Auto-analyze: XAUUSD=$4472.0 | London | KZ=Outside
+2026-06-04 11:19:33,977 [INFO] Claude: 236 chars
+2026-06-04 11:19:35,278 [INFO] DeepSeek: 275 chars
+2026-06-04 11:19:35,278 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:20:48,087 [INFO] 🔍 Auto-analyze: XAUUSD=$4472.8 | London | KZ=Outside
+2026-06-04 11:20:50,661 [INFO] Claude: 255 chars
+2026-06-04 11:20:52,047 [INFO] DeepSeek: 267 chars
+2026-06-04 11:20:52,048 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:22:04,863 [INFO] 🔍 Auto-analyze: XAUUSD=$4473.5 | London | KZ=Outside
+2026-06-04 11:22:07,846 [INFO] Claude: 233 chars
+2026-06-04 11:22:09,059 [INFO] DeepSeek: 264 chars
+2026-06-04 11:22:09,059 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:23:21,867 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.7 | London | KZ=Outside
+2026-06-04 11:23:24,503 [INFO] Claude: 261 chars
+2026-06-04 11:23:25,650 [INFO] DeepSeek: 244 chars
+2026-06-04 11:23:25,651 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:24:38,485 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.4 | London | KZ=Outside
+2026-06-04 11:24:41,566 [INFO] Claude: 264 chars
+2026-06-04 11:24:42,864 [INFO] DeepSeek: 267 chars
+2026-06-04 11:24:42,865 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:25:55,691 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.5 | London | KZ=Outside
+2026-06-04 11:25:58,221 [INFO] Claude: 264 chars
+2026-06-04 11:25:59,651 [INFO] DeepSeek: 259 chars
+2026-06-04 11:25:59,652 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:27:12,459 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.4 | London | KZ=Outside
+2026-06-04 11:27:15,474 [INFO] Claude: 285 chars
+2026-06-04 11:27:16,663 [INFO] DeepSeek: 281 chars
+2026-06-04 11:27:16,663 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:27:59,395 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 11:27:59,396 [INFO]    Chat: -1002928711742 | Offset: 206918435 | Time: 11:27 WIB
+2026-06-04 11:27:59,396 [INFO] 🔄 Auto-signal loop started
+2026-06-04 11:27:59,396 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 11:28:12,055 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.3 | London | KZ=Outside
+2026-06-04 11:28:24,203 [INFO] Claude: 983 chars
+2026-06-04 11:28:24,204 [INFO]    No consensus or HOLD → skip
+2026-06-04 11:29:24,464 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 11:29:24,465 [INFO]    Chat: -1002928711742 | Offset: 206918435 | Time: 11:29 WIB
+2026-06-04 11:29:24,465 [INFO] 🔄 Auto-signal loop started
+2026-06-04 11:29:24,465 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 11:29:37,139 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.1 | London | KZ=Outside
+2026-06-04 11:29:51,143 [INFO] Claude: 992 chars
+2026-06-04 11:29:51,143 [INFO]    HOLD | Grade:D | SKC=5.5 | Saya mengidentifikasi bias bullish berdasarkan DXY
+2026-06-04 11:31:03,975 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.8 | London | KZ=Outside
+2026-06-04 11:31:16,880 [INFO] Claude: 1042 chars
+2026-06-04 11:31:16,880 [INFO]    HOLD | Grade:D | SKC=4.5 | Saya mengidentifikasi XAUUSD di $4475.8 berada dal
+2026-06-04 11:32:29,715 [INFO] 🔍 Auto-analyze: XAUUSD=$4476.9 | London | KZ=Outside
+2026-06-04 11:32:43,555 [INFO] Claude: 1039 chars
+2026-06-04 11:32:43,555 [INFO]    HOLD | Grade:C | SKC=6.0 | Saya mengidentifikasi bias bullish pada XAUUSD den
+2026-06-04 11:33:56,323 [INFO] 🔍 Auto-analyze: XAUUSD=$4480.0 | London | KZ=Outside
+2026-06-04 11:34:10,562 [INFO] Claude: 1174 chars
+2026-06-04 11:34:10,562 [INFO]    HOLD | Grade:D | SKC=5.2 | Saya memutuskan HOLD karena beberapa faktor kritis
+2026-06-04 11:35:01,208 [ERROR] Poll error: <urlopen error [Errno 104] Connection reset by peer>
+2026-06-04 11:35:23,411 [INFO] 🔍 Auto-analyze: XAUUSD=$4479.9 | London | KZ=Outside
+2026-06-04 11:35:36,897 [INFO] Claude: 1090 chars
+2026-06-04 11:35:36,897 [INFO]    HOLD | Grade:D | SKC=5.0 | Saya memutuskan HOLD karena beberapa faktor kritis
+2026-06-04 11:36:49,671 [INFO] 🔍 Auto-analyze: XAUUSD=$4480.5 | London | KZ=Outside
+2026-06-04 11:37:03,509 [INFO] Claude: 1055 chars
+2026-06-04 11:37:03,509 [INFO]    HOLD | Grade:C | SKC=6.5 | Saya mengidentifikasi bias bullish pada XAUUSD den
+2026-06-04 11:38:16,335 [INFO] 🔍 Auto-analyze: XAUUSD=$4482.0 | London | KZ=Outside
+2026-06-04 11:38:30,307 [INFO] Claude: 1059 chars
+2026-06-04 11:38:30,307 [INFO]    HOLD | Grade:D | SKC=5.2 | Saya memutuskan HOLD karena SKC score hanya 5.25 (
+2026-06-04 11:39:43,141 [INFO] 🔍 Auto-analyze: XAUUSD=$4482.0 | London | KZ=Outside
+2026-06-04 11:39:55,451 [INFO] Claude: 952 chars
+2026-06-04 11:39:55,451 [INFO]    HOLD | Grade:D | SKC=5.5 | Saya mengidentifikasi bias bullish pada XAUUSD den
+2026-06-04 11:41:08,283 [INFO] 🔍 Auto-analyze: XAUUSD=$4482.2 | London | KZ=Outside
+2026-06-04 11:41:22,666 [INFO] Claude: 1098 chars
+2026-06-04 11:41:22,667 [INFO]    HOLD | Grade:D | SKC=5.2 | Saya mengidentifikasi XAUUSD di $4482.2 berada dal
+2026-06-04 11:42:35,481 [INFO] 🔍 Auto-analyze: XAUUSD=$4483.4 | London | KZ=Outside
+2026-06-04 11:42:48,443 [INFO] Claude: 1040 chars
+2026-06-04 11:42:48,443 [INFO]    HOLD | Grade:C | SKC=6.5 | Saya melihat bias bullish pada XAUUSD dengan DXY d
+2026-06-04 11:44:01,073 [INFO] 🔍 Auto-analyze: XAUUSD=$4483.4 | London | KZ=Outside
+2026-06-04 11:44:03,641 [INFO] 📨 [-1002928711742] /analyze — /analyze@berkahkaryaforexbotbot
+2026-06-04 11:44:14,556 [INFO] Claude: 1094 chars
+2026-06-04 11:44:14,556 [INFO]    HOLD | Grade:D | SKC=5.0 | Saya memutuskan HOLD karena beberapa faktor kritis
+2026-06-04 11:44:31,941 [INFO] Claude: 1059 chars
+2026-06-04 11:45:15,918 [INFO] Claude: 1125 chars
+2026-06-04 11:45:27,219 [INFO] 🔍 Auto-analyze: XAUUSD=$4484.6 | London | KZ=Outside
+2026-06-04 11:45:42,632 [INFO] Claude: 1091 chars
+2026-06-04 11:45:42,632 [INFO]    HOLD | Grade:C | SKC=6.0 | Saya mengidentifikasi bias bullish pada XAUUSD den
+2026-06-04 11:46:55,431 [INFO] 🔍 Auto-analyze: XAUUSD=$4481.6 | London | KZ=Outside
+2026-06-04 11:47:08,911 [INFO] Claude: 1021 chars
+2026-06-04 11:47:08,912 [INFO]    HOLD | Grade:D | SKC=5.0 | Saya memutuskan HOLD karena berada di luar killzon
+2026-06-04 11:48:21,675 [INFO] 🔍 Auto-analyze: XAUUSD=$4481.5 | London | KZ=Outside
+2026-06-04 11:48:34,771 [INFO] Claude: 1054 chars
+2026-06-04 11:48:34,771 [INFO]    HOLD | Grade:D | SKC=5.0 | Saya memutuskan HOLD karena beberapa faktor kritis
+2026-06-04 11:49:26,174 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 11:49:26,174 [INFO]    Chat: -1002928711742 | Offset: 206918436 | Time: 11:49 WIB
+2026-06-04 11:49:26,174 [INFO] 🔄 Auto-signal loop started
+2026-06-04 11:49:26,174 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 11:49:39,018 [INFO] 🔍 Auto-analyze: XAUUSD=$4481.8 | London | KZ=Outside
+2026-06-04 11:49:51,051 [INFO] Claude: 877 chars
+2026-06-04 11:49:51,051 [INFO]    HOLD | Grade:D | SKC=5.5 | Harga emas sekarang di $4,481.8 sedang bergerak di
+2026-06-04 11:51:03,867 [INFO] 🔍 Auto-analyze: XAUUSD=$4481.2 | London | KZ=Outside
+2026-06-04 11:51:15,277 [INFO] Claude: 820 chars
+2026-06-04 11:51:15,277 [INFO]    HOLD | Grade:D | SKC=5.0 | Harga emas sekarang di $4,481 sedang dalam kondisi
+2026-06-04 11:52:28,099 [INFO] 🔍 Auto-analyze: XAUUSD=$4480.2 | London | KZ=Outside
+2026-06-04 11:52:41,369 [INFO] Claude: 1008 chars
+2026-06-04 11:52:41,369 [INFO] 🚀 AUTO SIGNAL: BUY | SKC=7.5/10 | conf=780% | Harga emas sedang dalam tren naik dengan support kuat di $4,
+2026-06-04 11:57:54,943 [INFO] 🔍 Auto-analyze: XAUUSD=$4481.0 | London | KZ=Outside
+2026-06-04 11:58:07,747 [INFO] Claude: 870 chars
+2026-06-04 11:58:07,747 [INFO]    HOLD | Grade:D | SKC=5.0 | Harga emas sekarang di $4,481 berada di tengah-ten
+2026-06-04 11:59:20,555 [INFO] 🔍 Auto-analyze: XAUUSD=$4481.3 | London | KZ=Outside
+2026-06-04 11:59:33,664 [INFO] Claude: 848 chars
+2026-06-04 11:59:33,664 [INFO]    HOLD | Grade:C | SKC=6.5 | Harga emas sekarang di $4,481 berada di tengah-ten
+2026-06-04 12:00:46,289 [INFO] 🔍 Auto-analyze: XAUUSD=$4481.5 | London | KZ=Outside
+2026-06-04 12:00:59,940 [INFO] Claude: 872 chars
+2026-06-04 12:00:59,940 [INFO]    HOLD | Grade:D | SKC=5.2 | Harga emas sekarang di $4,481.5 sedang bergerak ti
+2026-06-04 12:02:12,771 [INFO] 🔍 Auto-analyze: XAUUSD=$4482.4 | London | KZ=Outside
+2026-06-04 12:02:26,338 [INFO] Claude: 927 chars
+2026-06-04 12:02:26,338 [INFO]    HOLD | Grade:D | SKC=5.5 | Harga emas sekarang di $4,482 sedang bergerak side
+2026-06-04 12:03:39,159 [INFO] 🔍 Auto-analyze: XAUUSD=$4481.6 | London | KZ=Outside
+2026-06-04 12:03:52,386 [INFO] Claude: 920 chars
+2026-06-04 12:03:52,386 [INFO]    HOLD | Grade:D | SKC=5.5 | Harga emas sekarang di $4,481 sedang berada di ten
+2026-06-04 12:05:05,231 [INFO] 🔍 Auto-analyze: XAUUSD=$4478.5 | London | KZ=Outside
+2026-06-04 12:05:17,994 [INFO] Claude: 938 chars
+2026-06-04 12:05:17,994 [WARNING] Opus entry $2678.5 too far from price $4478.5 — forcing HOLD
+2026-06-04 12:05:17,994 [INFO]    HOLD | Grade:D | SKC=7.5 | Harga emas sedang memantul dari support kuat di ar
+2026-06-04 12:06:30,827 [INFO] 🔍 Auto-analyze: XAUUSD=$4478.5 | London | KZ=Outside
+2026-06-04 12:06:44,795 [INFO] Claude: 847 chars
+2026-06-04 12:06:44,795 [INFO]    HOLD | Grade:D | SKC=5.0 | Harga emas sekarang di $4,478.5 sedang bergerak da
+2026-06-04 12:07:57,591 [INFO] 🔍 Auto-analyze: XAUUSD=$4479.1 | London | KZ=Outside
+2026-06-04 12:08:12,870 [INFO] Claude: 874 chars
+2026-06-04 12:08:12,870 [INFO]    HOLD | Grade:C | SKC=6.5 | Harga emas sekarang di $4479, memang sedang dalam 
+2026-06-04 12:09:25,687 [INFO] 🔍 Auto-analyze: XAUUSD=$4477.4 | London | KZ=Outside
+2026-06-04 12:09:39,072 [INFO] Claude: 893 chars
+2026-06-04 12:09:39,073 [INFO]    HOLD | Grade:C | SKC=6.5 | Harga emas sekarang di $4,477 dan memang ada poten
+2026-06-04 12:10:51,903 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.9 | London | KZ=Outside
+2026-06-04 12:11:06,287 [INFO] Claude: 904 chars
+2026-06-04 12:11:06,287 [INFO]    HOLD | Grade:D | SKC=5.0 | Harga emas sekarang di $4,474.9 sedang bergerak ti
+2026-06-04 12:11:17,017 [INFO] 📨 [-1002928711742] /start — /start@berkahkaryaforexbotbot
+2026-06-04 12:11:19,779 [INFO] 📨 [-1002928711742] /analyze — /analyze@berkahkaryaforexbotbot
+2026-06-04 12:11:46,378 [INFO] Claude: 861 chars
+2026-06-04 12:12:19,103 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.5 | London | KZ=Outside
+2026-06-04 12:12:32,258 [INFO] Claude: 875 chars
+2026-06-04 12:12:32,258 [INFO]    HOLD | Grade:C | SKC=6.5 | Harga emas sekarang di $4474.5, berada di tengah-t
+2026-06-04 12:13:45,063 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.0 | London | KZ=Outside
+2026-06-04 12:13:57,576 [INFO] Claude: 878 chars
+2026-06-04 12:13:57,576 [INFO]    HOLD | Grade:D | SKC=5.0 | Harga emas sekarang di $4,474 berada di tengah-ten
+2026-06-04 12:14:46,244 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 12:14:46,244 [INFO]    Chat: -1002928711742 | Offset: 206918438 | Time: 12:14 WIB
+2026-06-04 12:14:46,244 [INFO] 🔄 Auto-signal loop started
+2026-06-04 12:14:46,244 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 12:14:58,935 [INFO] 🔍 Auto-analyze: XAUUSD=$4478.8 | London | KZ=Outside
+2026-06-04 12:15:12,017 [INFO] Claude: 816 chars
+2026-06-04 12:15:12,017 [INFO]    HOLD | Grade:C | SKC=6.5 | Harga emas sekarang di $4478.8, masih dalam tren n
+2026-06-04 12:16:24,851 [INFO] 🔍 Auto-analyze: XAUUSD=$4478.4 | London | KZ=Outside
+2026-06-04 12:16:37,906 [INFO] Claude: 848 chars
+2026-06-04 12:16:37,906 [INFO]    HOLD | Grade:C | SKC=6.5 | Harga emas memang sedang dalam tren naik jangka pa
+2026-06-04 12:17:50,567 [INFO] 🔍 Auto-analyze: XAUUSD=$4477.8 | London | KZ=Outside
+2026-06-04 12:18:04,277 [INFO] Claude: 883 chars
+2026-06-04 12:18:04,277 [INFO]    HOLD | Grade:C | SKC=6.5 | Harga emas sekarang di $4477.8, masih dalam tren n
+2026-06-04 12:19:16,931 [INFO] 🔍 Auto-analyze: XAUUSD=$4478.1 | London | KZ=Outside
+2026-06-04 12:19:30,469 [INFO] Claude: 849 chars
+2026-06-04 12:19:30,469 [INFO]    HOLD | Grade:C | SKC=6.5 | Harga emas sekarang di $4478, memang sedang dalam 
+2026-06-04 12:20:43,295 [INFO] 🔍 Auto-analyze: XAUUSD=$4477.8 | London | KZ=Outside
+2026-06-04 12:20:54,987 [INFO] Claude: 925 chars
+2026-06-04 12:20:54,987 [INFO]    HOLD | Grade:D | SKC=5.0 | Harga emas sekarang di $4,477.8 sedang bergerak da
+2026-06-04 12:22:07,803 [INFO] 🔍 Auto-analyze: XAUUSD=$4475.6 | London | KZ=Outside
+2026-06-04 12:22:20,414 [INFO] Claude: 908 chars
+2026-06-04 12:22:20,414 [INFO]    HOLD | Grade:C | SKC=6.0 | Harga emas masih dalam tren naik jangka panjang da
+2026-06-04 12:23:33,223 [INFO] 🔍 Auto-analyze: XAUUSD=$4474.9 | London | KZ=Outside
+2026-06-04 12:23:46,465 [INFO] Claude: 896 chars
+2026-06-04 12:23:46,466 [INFO]    HOLD | Grade:D | SKC=5.0 | Harga emas sekarang di $4,474.9 sedang bergerak di
+2026-06-04 12:24:01,608 [INFO] 🤖 PhantomFX Bot starting — @berkahkaryaforexbotbot
+2026-06-04 12:24:01,608 [INFO]    Chat: -1002928711742 | Offset: 206918438 | Time: 12:24 WIB
+2026-06-04 12:24:01,609 [INFO] 🔄 Auto-signal loop started
+2026-06-04 12:24:01,609 [INFO]    Auto-signal generator: ENABLED (London + NY sessions)
+2026-06-04 12:24:14,259 [INFO] 🔍 Auto-analyze [🔵 DeepSeek]: XAUUSD=$4474.7 | London | KZ=Outside
+2026-06-04 12:24:18,149 [INFO] DeepSeek: 1266 chars
+2026-06-04 12:24:18,149 [INFO]    HOLD | Grade:D |  | Saya memutuskan untuk tidak melakukan apa-apa seka
+2026-06-04 12:26:30,971 [INFO] 🔍 Auto-analyze [🔵 DeepSeek]: XAUUSD=$4473.4 | London | KZ=Outside
+2026-06-04 12:26:35,740 [INFO] DeepSeek: 1412 chars
+2026-06-04 12:26:35,740 [INFO] 🚀 AUTO SIGNAL: BUY | SKC=8.0/10 | conf=85% | Harga emas saat ini berada di $4,473 dan menunjukkan tanda-t
+2026-06-04 12:31:49,407 [INFO] 🔍 Auto-analyze [🔵 DeepSeek]: XAUUSD=$4473.4 | London | KZ=Outside
+2026-06-04 12:31:53,167 [INFO] DeepSeek: 1162 chars
+2026-06-04 12:31:53,168 [INFO]    HOLD | Grade:D | SKC=2.2 | Saya memutuskan untuk tidak masuk pasar sekarang k
+2026-06-04 12:34:05,971 [INFO] 🔍 Auto-analyze [🔵 DeepSeek]: XAUUSD=$4475.0 | London | KZ=Outside
+2026-06-04 12:34:09,642 [INFO] DeepSeek: 1102 chars
+2026-06-04 12:34:09,643 [WARNING] SL too tight ($10) — minimum $15 required, forcing HOLD
+2026-06-04 12:34:09,643 [INFO]    HOLD | Grade:D | SKC=8.0 | Harga emas saat ini berada di $4,475 dan menunjukk
+2026-06-04 12:36:22,421 [INFO] 🔍 Auto-analyze [🔵 DeepSeek]: XAUUSD=$4474.4 | London | KZ=Outside
+2026-06-04 12:36:26,295 [INFO] DeepSeek: 1142 chars
+2026-06-04 12:36:26,296 [WARNING] SL too tight ($10) — minimum $15 required, forcing HOLD
+2026-06-04 12:36:26,296 [INFO]    HOLD | Grade:D | SKC=7.7 | Harga emas saat ini berada di $4,474.4 dan menunju
+2026-06-04 12:38:39,111 [INFO] 🔍 Auto-analyze [🔵 DeepSeek]: XAUUSD=$4474.1 | London | KZ=Outside
+2026-06-04 12:38:43,626 [INFO] DeepSeek: 1571 chars
+2026-06-04 12:39:56,435 [INFO] 🔍 Auto-analyze [🔵 DeepSeek]: XAUUSD=$4474.9 | London | KZ=Outside
+2026-06-04 12:40:00,869 [INFO] DeepSeek: 1532 chars
+2026-06-04 12:41:13,707 [INFO] 🔍 Auto-analyze [🔵 DeepSeek]: XAUUSD=$4472.4 | London | KZ=Outside
+2026-06-04 12:41:17,475 [INFO] DeepSeek: 1083 chars
+2026-06-04 12:41:17,475 [INFO] 🚀 AUTO SIGNAL: BUY | SKC=8.0/10 | conf=85% | Harga emas saat ini berada di $4,472. Saya memutuskan untuk 

@@ -1,0 +1,81 @@
+2026-06-03 22:26:39,857 [INFO] ==================================================
+2026-06-03 22:26:39,857 [INFO] ⚡ PhantomFX Cycle — 22:26 WIB | New York
+2026-06-03 22:26:55,947 [INFO] XAUUSD: $2650.0
+2026-06-03 22:26:55,948 [INFO] DRY RUN — skip AI
+2026-06-03 22:28:50,779 [INFO] ==================================================
+2026-06-03 22:28:50,779 [INFO] ⚡ PhantomFX Cycle — 22:28 WIB | New York
+2026-06-03 22:29:06,815 [INFO] XAUUSD: $2650.0
+2026-06-03 22:29:06,817 [ERROR] AI err: <urlopen error [Errno 111] Connection refused>
+2026-06-03 22:30:02,088 [INFO] ==================================================
+2026-06-03 22:30:02,089 [INFO] ⚡ PhantomFX Cycle — 22:30 WIB | New York
+2026-06-03 22:30:18,135 [INFO] XAUUSD: $2650.0
+2026-06-03 22:30:18,136 [ERROR] AI err: <urlopen error [Errno 111] Connection refused>
+2026-06-03 22:30:49,777 [INFO] ==================================================
+2026-06-03 22:30:49,778 [INFO] ⚡ PhantomFX Cycle — 22:30 WIB | New York
+2026-06-03 22:31:05,831 [INFO] XAUUSD: $2650.0
+2026-06-03 22:31:06,156 [ERROR] AI err: HTTP Error 400: Bad Request
+2026-06-03 22:37:04,461 [INFO] ==================================================
+2026-06-03 22:37:04,461 [INFO] ⚡ PhantomFX Cycle — 22:37 WIB | New York
+2026-06-03 22:37:20,503 [INFO] XAUUSD: $2650.0
+2026-06-03 22:37:20,504 [ERROR] AI err: name 'false' is not defined
+2026-06-03 22:37:34,523 [INFO] ==================================================
+2026-06-03 22:37:34,523 [INFO] ⚡ PhantomFX Cycle — 22:37 WIB | New York
+2026-06-03 22:37:50,551 [INFO] XAUUSD: $2650.0
+2026-06-03 22:37:54,292 [ERROR] AI err: HTTP Error 403: Forbidden
+2026-06-03 22:41:04,551 [INFO] ==================================================
+2026-06-03 22:41:04,551 [INFO] ⚡ PhantomFX Cycle — 22:41 WIB | New York
+2026-06-03 22:41:20,583 [INFO] XAUUSD: $2650.0
+2026-06-03 22:41:31,684 [ERROR] AI err: Expecting value: line 1 column 1 (char 0)
+2026-06-03 22:43:28,308 [INFO] ==================================================
+2026-06-03 22:43:28,309 [INFO] ⚡ PhantomFX Cycle — 22:43 WIB | New York
+2026-06-03 22:43:44,343 [INFO] XAUUSD: $2650.0
+2026-06-03 22:43:54,895 [INFO] AI raw tokens estimate: 749 bytes → 55 chars content
+2026-06-03 22:43:54,895 [INFO] AI done in 10.5s
+2026-06-03 22:43:54,895 [INFO] → HOLD | None | Grade:None | Conf:None | SKC:?
+2026-06-03 22:43:54,898 [INFO] Done — 11s
+2026-06-03 22:44:21,390 [INFO] ==================================================
+2026-06-03 22:44:21,390 [INFO] ⚡ PhantomFX Cycle — 22:44 WIB | New York
+2026-06-03 22:44:37,427 [INFO] XAUUSD: $2650.0
+2026-06-03 22:44:49,131 [INFO] AI raw tokens estimate: 692 bytes → 2 chars content
+2026-06-03 22:44:49,131 [INFO] AI done in 11.7s
+2026-06-03 22:44:49,132 [INFO] → HOLD | None | Grade:None | Conf:None | SKC:?
+2026-06-03 22:44:49,132 [INFO] Done — 12s
+2026-06-03 22:45:01,948 [INFO] ==================================================
+2026-06-03 22:45:01,949 [INFO] ⚡ PhantomFX Cycle — 22:45 WIB | New York
+2026-06-03 22:45:18,005 [INFO] XAUUSD: $2650.0
+2026-06-03 22:45:40,327 [INFO] AI raw tokens estimate: 693 bytes → 2 chars content
+2026-06-03 22:45:40,329 [INFO] AI done in 22.3s
+2026-06-03 22:45:40,330 [INFO] → HOLD | None | Grade:None | Conf:None | SKC:?
+2026-06-03 22:45:40,331 [INFO] Done — 22s
+2026-06-03 23:00:01,461 [INFO] ==================================================
+2026-06-03 23:00:01,464 [INFO] ⚡ PhantomFX Cycle — 23:00 WIB | Asian
+2026-06-03 23:00:17,515 [INFO] XAUUSD: $2650.0
+2026-06-03 23:00:30,229 [INFO] AI raw tokens estimate: 693 bytes → 2 chars content
+2026-06-03 23:00:30,229 [INFO] AI done in 12.7s
+2026-06-03 23:00:30,230 [INFO] → HOLD | None | Grade:None | Conf:None | SKC:?
+2026-06-03 23:00:30,230 [INFO] Done — 13s
+2026-06-03 23:30:01,359 [INFO] ==================================================
+2026-06-03 23:30:01,360 [INFO] ⚡ PhantomFX Cycle — 23:30 WIB | Asian
+2026-06-03 23:30:17,443 [INFO] XAUUSD: $2650.0
+2026-06-03 23:30:28,232 [INFO] AI raw tokens estimate: 756 bytes → 62 chars content
+2026-06-03 23:30:28,232 [INFO] AI done in 10.8s
+2026-06-03 23:30:28,233 [INFO] → HOLD | None | Grade:None | Conf:None | SKC:?
+2026-06-03 23:30:28,233 [INFO] Done — 11s
+2026-06-04 00:00:02,006 [INFO] ==================================================
+2026-06-04 00:00:02,006 [INFO] ⚡ PhantomFX Cycle — 00:00 WIB | Asian
+2026-06-04 00:00:18,103 [INFO] XAUUSD: $2650.0
+2026-06-04 00:00:28,814 [INFO] AI raw tokens estimate: 761 bytes → 66 chars content
+2026-06-04 00:00:28,814 [INFO] AI done in 10.7s
+2026-06-04 00:00:28,815 [INFO] → HOLD | None | Grade:None | Conf:None | SKC:?
+2026-06-04 00:00:28,815 [INFO] Done — 11s
+2026-06-04 00:30:02,007 [INFO] ==================================================
+2026-06-04 00:30:02,007 [INFO] ⚡ PhantomFX Cycle — 00:30 WIB | Asian
+2026-06-04 00:30:18,099 [INFO] XAUUSD: $2650.0
+2026-06-04 00:30:28,803 [INFO] AI raw tokens estimate: 692 bytes → 2 chars content
+2026-06-04 00:30:28,803 [INFO] AI done in 10.7s
+2026-06-04 00:30:28,804 [INFO] → HOLD | None | Grade:None | Conf:None | SKC:?
+2026-06-04 00:30:28,804 [INFO] Done — 11s
+2026-06-04 01:00:01,789 [INFO] ==================================================
+2026-06-04 01:00:01,790 [INFO] ⚡ PhantomFX Cycle — 01:00 WIB | Asian
+2026-06-04 01:00:17,843 [INFO] XAUUSD: $2650.0
+2026-06-04 01:00:30,870 [INFO] AI raw tokens estimate: 272 bytes → 0 chars content

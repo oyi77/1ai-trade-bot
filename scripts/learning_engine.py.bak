@@ -1,0 +1,11 @@
+import marshal, os
+_pyc = os.path.join(os.path.dirname(os.path.abspath(__file__)), '__pycache__', 'learning_engine.cpython-313.pyc')
+if os.path.exists(_pyc):
+    with open(_pyc, 'rb') as f:
+        f.read(16)
+        code = marshal.load(f)
+    _ns = {'__name__': __name__, '__file__': _pyc}
+    exec(code, _ns)
+    for _k, _v in _ns.items():
+        if not _k.startswith('_') or _k in ('__all__',):
+            globals()[_k] = _v
