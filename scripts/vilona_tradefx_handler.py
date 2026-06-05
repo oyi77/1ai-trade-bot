@@ -82,6 +82,15 @@ except Exception as e:
     SMC_ENGINE = False
     print(f"SMC engine unavailable: {e}")
 
+# ── Ultimate SMC Engine v3.0 (13+ repos combined) ──
+try:
+    from ultimate_smc_engine import (ultimate_analyze, format_ultimate_block,
+                                      Grade as UltimateGrade)
+    ULTIMATE_ENGINE = True
+except Exception as e:
+    ULTIMATE_ENGINE = False
+    print(f"Ultimate SMC engine unavailable: {e}")
+
 # ── Trade Tracker ──
 try:
     from trade_tracker import (open_trade, check_outcomes, get_stats,
@@ -1005,6 +1014,12 @@ def handle_command(cmd, text, chat_id, msg):
                             crt_block = format_crt_block(crt_result)
                             if crt_block:
                                 auto_text += crt_block + "\n"
+                        except: pass
+                    # 🏛️ Ultimate SMC v3.0 (13 repos combined)
+                    if ULTIMATE_ENGINE and ohlcv_bars:
+                        try:
+                            ult = ultimate_analyze(ohlcv_bars, disp, price)
+                            auto_text += "\n" + format_ultimate_block(ult) + "\n"
                         except: pass
                     # 🏦 SMC + 📈 Trend Break
                     if SMC_ENGINE and ohlcv_bars:
