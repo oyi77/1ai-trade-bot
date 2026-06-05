@@ -3,11 +3,21 @@
 Vilona Trade FX Telegram Bot Handler
 Grab forex data + generate signals even without MT5/EA.
 
-Commands: /start /help /price /analyze /stocks /data /killzone /status
+Commands: /start /help /price /analyze /data /killzone /status /subscribe /autosync /genkey /listkeys /mykey
 """
 import json, logging, os, re, sys, threading, time, urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+try:
+    from layering import enrich_signal_with_layers
+    LAYERING_ENGINE = True
+except ImportError:
+    LAYERING_ENGINE = False
+try:
+    from license_manager import cmd_genkey, cmd_listkeys, cmd_revokekey, cmd_mykey, is_admin
+    LICENSE_ENGINE = True
+except ImportError:
+    LICENSE_ENGINE = False
 
 # ── Project path ──
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -54,6 +64,33 @@ try:
 except Exception as e:
     FVG_ENGINE = False
     print(f"FVG engine unavailable: {e}")
+
+# ── CRT/TBS Engine (Candle Range Theory) ──
+try:
+    from crt_tbs_engine import analyze_crt_setup, format_crt_block
+    CRT_ENGINE = True
+except Exception as e:
+    CRT_ENGINE = False
+    print(f"CRT/TBS engine unavailable: {e}")
+
+# ── SMC Scalper + Trend Break Engine ──
+try:
+    from smc_scalper_engine import (analyze_smc_scalper, analyze_trend_break,
+                                     format_smc_block, format_trend_block)
+    SMC_ENGINE = True
+except Exception as e:
+    SMC_ENGINE = False
+    print(f"SMC engine unavailable: {e}")
+
+# ── Trade Tracker ──
+try:
+    from trade_tracker import (open_trade, check_outcomes, get_stats,
+                                format_winrate, format_history, format_trade_close_alert,
+                                format_daily_recap, format_mini_recap)
+    TRADE_TRACKER = True
+except Exception as e:
+    TRADE_TRACKER = False
+    print(f"Trade tracker unavailable: {e}")
 
 # ── Hermes Liquidity Hunter ──
 try:
@@ -167,19 +204,79 @@ def save_state(s):
     STATE_PATH.write_text(json.dumps(s))
 
 
-# ── Price fetching ──
-def fetch_price(pair="gold"):
+# ── Auto-Sync ──
+AUTOSYNC_PATH = DATA_DIR / "autosync.json"
+
+def load_autosync():
+    try:
+        if AUTOSYNC_PATH.exists():
+            return json.loads(AUTOSYNC_PATH.read_text())
+    except: pass
+    return {}
+
+def save_autosync(data):
+    AUTOSYNC_PATH.write_text(json.dumps(data))
+
+def is_autosync(chat_id):
+    return str(chat_id) in load_autosync()
+
+def set_autosync(chat_id, enabled=True):
+    data = load_autosync()
+    if enabled:
+        data[str(chat_id)] = wib_now().isoformat()
+    else:
+        data.pop(str(chat_id), None)
+    save_autosync(data)
+
+
+def _fetch_ohlcv_for_ai(pair="gold"):
+    """Fetch OHLCV bars for AI analysis prompt."""
     pair = pair.lower().strip()
+    sym_map = {"gold":"GC=F","xauusd":"GC=F","btc":"BTC-USD","btcusd":"BTC-USD",
+               "oil":"CL=F","eurusd":"EURUSD=X","gbpusd":"GBPUSD=X",
+               "usdjpy":"JPY=X","jpyusd":"JPY=X",
+               "aapl":"AAPL","tsla":"TSLA","msft":"MSFT","nvda":"NVDA",
+               "bbca":"BBCA.JK","bbri":"BBRI.JK","tlkm":"TLKM.JK","asii":"ASII.JK",
+               "unvr":"UNVR.JK","bmri":"BMRI.JK","adro":"ADRO.JK","ihsg":"^JKSE"}
+    sym = sym_map.get(pair, "GC=F")
+    # Stocks use daily; forex/crypto/commodities use 15m
+    is_stock = sym.replace(".JK","").isalpha() and "." not in sym.replace(".JK","")
+    interval = "1d" if (".JK" in sym or sym in ("AAPL","TSLA","MSFT","NVDA")) else "15m"
+    try:
+        if MARKET_DATA is None:
+            logger.error(f"_fetch_ohlcv_for_ai: MARKET_DATA is None!")
+            return None
+        bars = MARKET_DATA.get_bars_dicts(sym, interval, 80)
+        if not bars:
+            logger.warning(f"_fetch_ohlcv_for_ai: got empty bars for {sym} ({interval})")
+            return None
+        result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
+                for b in bars[-20:]]
+        logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {sym}")
+        return result
+    except Exception as e:
+        logger.error(f"_fetch_ohlcv_for_ai error: {e}")
+        return None
+
+
+# ── Price fetching ──
+def _normalize_broker_symbol(s):
+    """Strip broker suffixes & normalize to standard pair name.
+    XAUUSDc→xauusd, JPYUSD.s→jpyusd, EURUSD.pro→eurusd, etc."""
+    import re
+    # Remove suffixes: .xxx, -xxx, c, m, #, _
+    s = re.sub(r'[.\-#_].*$', '', s.strip().lower())
+    # Remove trailing letters used as contract types
+    s = re.sub(r'[cm]$', '', s)
+    return s
+
+def fetch_price(pair="gold"):
+    pair = _normalize_broker_symbol(pair.lower().strip())
     if pair in ("gold", "xauusd"):
         try:
             quote = MARKET_DATA.get_quote("GC=F")
             if quote and quote.price > 1000:
                 return quote.price
-        except: pass
-        try:
-            with urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=10) as r:
-                data = json.loads(r.read())
-                return float(data.get("price", 0))
         except: pass
     elif MARKET_DATA:
         try:
@@ -204,6 +301,19 @@ def tg_send(text, chat_id=None, reply_markup=None):
     if not BOT_TOKEN: return None
     target = chat_id or CHAT_ID
     if not target: return None
+    
+    # Telegram limit: 4096 chars. Truncate with indicator.
+    MAX_LEN = 4000
+    if len(text) > MAX_LEN:
+        text = text[:MAX_LEN-30] + "\n<i>... (dipotong)</i>"
+    
+    # HTML-safe: escape bare < > & that aren't part of tags
+    import re
+    # Protect known HTML tags first
+    text = re.sub(r'<(/?[bi][^>]*)>', r'\x00\1\x01', text)  # <b>, </b>, <i>, </i>
+    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    text = text.replace('\x00', '<').replace('\x01', '>')
+    
     try:
         payload = {"chat_id": target, "text": text, "parse_mode": "HTML"}
         if reply_markup:
@@ -213,20 +323,118 @@ def tg_send(text, chat_id=None, reply_markup=None):
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read())
     except Exception as e:
-        logger.error(f"tg_send failed: {e}")
+        # Fallback: retry without parse_mode if HTML parse failed
+        if "Bad Request" in str(e) or "can't parse" in str(e):
+            try:
+                # Strip HTML tags for plaintext fallback
+                plain = re.sub(r'<[^>]+>', '', text)
+                payload = {"chat_id": target, "text": plain[:MAX_LEN]}
+                if reply_markup:
+                    payload["reply_markup"] = json.dumps(reply_markup)
+                req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
+                    data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    return json.loads(r.read())
+            except Exception as e2:
+                logger.error(f"tg_send fallback also failed: {e2}")
+        else:
+            logger.error(f"tg_send failed: {e}")
         return None
 
 
 # ── Signal bridge ──
-def post_signal_to_bridge(sig, price):
+BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
+
+# ── Trade/Skip inline keyboard ──
+PENDING_SIGNALS = {}  # {chat_id: {"sig": ..., "price": ..., "expires": ts}}
+PENDING_SIGNAL_TTL = 300  # 5 menit
+
+def handle_trade_callback(callback_query):
+    """Handle inline keyboard: trade:<id> or skip:<id>"""
+    cb_id = callback_query.get("id", "")
+    chat_id = str(callback_query.get("from", {}).get("id", ""))
+    data = callback_query.get("data", "")
+    
+    # Answer callback (required by Telegram)
     try:
-        payload = {"action": sig.get("action","HOLD"), "entry": sig.get("entry",price),
-                   "sl": sig.get("sl",0), "tp": sig.get("tp",0), "confidence": sig.get("confidence",0),
-                   "source": sig.get("source","vilona-tradefx"), "timestamp": wib_now().isoformat()}
-        req = urllib.request.Request("http://localhost:8765/signal",
-            data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+        payload = json.dumps({"callback_query_id": cb_id}).encode()
+        req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+            data=payload, headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=5)
-    except: pass
+    except Exception:
+        pass
+    
+    if chat_id not in PENDING_SIGNALS:
+        tg_send("⏰ Sinyal kadaluarsa. Kirim /analyze lagi.", chat_id)
+        return
+    
+    pending = PENDING_SIGNALS[chat_id]
+    sig = pending.get("sig")
+    price = pending.get("price", 0)
+    
+    if not sig:
+        del PENDING_SIGNALS[chat_id]
+        return
+    
+    if data.startswith("trade:"):
+        action = sig.get("action", "HOLD")
+        if action == "HOLD":
+            tg_send("⚪️ Sinyal HOLD — tidak ada trade yang dieksekusi.", chat_id)
+        else:
+            if LAYERING_ENGINE:
+                sig = enrich_signal_with_layers(sig)
+            sig["target_user"] = chat_id  # route ke EA user ini aja
+            post_signal_to_bridge(sig, price)
+            tg_send(f"✅ <b>Sinyal {action} dikirim!</b>\nEA kamu auto-eksekusi dalam 5 detik.", chat_id)
+        del PENDING_SIGNALS[chat_id]
+        
+    elif data.startswith("skip:"):
+        tg_send("⏭ Sinyal dilewati.\nAnalisa lagi: /analyze", chat_id)
+        del PENDING_SIGNALS[chat_id]
+
+
+def answer_callback(cb_id, text=""):
+    try:
+        payload = json.dumps({"callback_query_id": cb_id, "text": text}).encode()
+        req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+            data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
+
+def post_signal_to_bridge(sig, price):
+    symbol = sig.get("symbol", sig.get("display", "XAUUSD"))
+    payload = {
+        "action": sig.get("action", "HOLD"),
+        "symbol": symbol,
+        "entry": sig.get("entry", price),
+        "sl": sig.get("sl", 0),
+        "tp": sig.get("tp", 0),
+        "tp1": sig.get("tp1", sig.get("tp", 0)),
+        "tp2": sig.get("tp2", 0),
+        "confidence": sig.get("confidence", 0),
+        "risk_percent": sig.get("risk_percent", 1.0),
+        "comment": sig.get("comment", f"VTFX/{sig.get('source', 'vilona-tradefx')}"),
+        "source": sig.get("source", "vilona-tradefx"),
+        "layers": sig.get("layers", []),  # 🔥 Smart Layering™
+        "target_user": sig.get("target_user", ""),  # 🎯 per-user routing
+        "timestamp": wib_now().isoformat(),
+    }
+    data = json.dumps(payload).encode()
+    # Track trade for win rate
+    if TRADE_TRACKER:
+        try:
+            open_trade(sig, sig.get("entry", price), symbol, sig.get("source", "ai"),
+                       sig.get("target_user", ""))
+        except Exception: pass
+    for url in BRIDGE_URLS:
+        try:
+            req = urllib.request.Request(f"{url}/signal", data=data,
+                headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+            return  # success, stop
+        except Exception:
+            continue
 
 
 # ── MECHANICAL SIGNAL DETECTION ──
@@ -402,7 +610,7 @@ def _extract_json(content):
     json_str = re.sub(r'[\x00-\x1f]+', ' ', json_str)
     try:
         return json.loads(json_str, strict=False)
-    except:
+    except Exception:
         return None
 
 
@@ -489,12 +697,13 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         f"R:R minimum 1:2. {'⚠️ FRIDAY: SL +10-15 pips extra.' if wib_now().weekday()==4 else ''}"
     )
 
-    # Try DeepSeek (primary)
+    # ── AI CONSENSUS WITH FALLBACK CHAIN ──
+    # Chain: DeepSeek (primary) → GPT-4o (secondary) → OmniRoute (last resort)
+    
     ds = _call_deepseek(prompt)
-    # Try GPT-4o (secondary)
     gpt = _call_openai(prompt)
-
-    # Consensus: both must agree
+    
+    # BEST: Both agree → dual consensus
     if ds and gpt and ds.get("action") == gpt.get("action") and ds.get("action") in ("BUY","SELL"):
         conf = (ds.get("confidence",0) + gpt.get("confidence",0)) / 2
         sig = ds.copy()
@@ -504,8 +713,22 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["_model"] = "DeepSeek+GPT-4o"
         logger.info(f"DUAL CONSENSUS: {sig['action']} conf={conf:.0%}")
         return sig
-
-    # Solo decision (DeepSeek preferred)
+    
+    # GOOD: DeepSeek (primary, paid) — prefer if it has a valid signal
+    if ds and ds.get("action") in ("BUY","SELL"):
+        ds["ensemble"] = "solo"; ds["voters"] = 1
+        ds["_model"] = "DeepSeek"
+        logger.info(f"DeepSeek solo: {ds['action']} conf={ds.get('confidence',0):.0%}")
+        return ds
+    
+    # OK: GPT-4o as secondary fallback
+    if gpt and gpt.get("action") in ("BUY","SELL"):
+        gpt["ensemble"] = "solo"; gpt["voters"] = 1
+        gpt["_model"] = "GPT-4o"
+        logger.info(f"GPT-4o fallback: {gpt['action']} conf={gpt.get('confidence',0):.0%}")
+        return gpt
+    
+    # Any signal from either (even HOLD)
     if ds:
         ds["ensemble"] = "solo"; ds["voters"] = 1
         ds["_model"] = "DeepSeek"
@@ -514,9 +737,9 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         gpt["ensemble"] = "solo"; gpt["voters"] = 1
         gpt["_model"] = "GPT-4o"
         return gpt
-
-    # Fallback: OmniRoute
-    logger.info("Falling back to OmniRoute...")
+    
+    # LAST RESORT: OmniRoute
+    logger.info("All primary AI failed — falling back to OmniRoute...")
     return _call_omniroute(prompt)
 
 
@@ -531,10 +754,25 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
     grade = sig.get("grade","D")
     conf = sig.get("confidence",0)
     rr = sig.get("rr_ratio","?")
-    entry = sig.get("entry", price)
-    sl = sig.get("sl", 0) or 0
-    tp = sig.get("tp", 0) or 0
+    entry = sig.get("entry") or price or 0
+    sl = sig.get("sl") or 0
+    tp = sig.get("tp") or 0
     reason = sig.get("reasoning","")[:300]
+
+    # Fallback SL/TP when AI returns 0 — use sensible defaults per asset
+    if (sl == 0 or tp == 0) and price and price > 0:
+        if display in ("XAUUSD", "GOLD"):
+            sl = round(price - 15, 2) if action == "BUY" else round(price + 15, 2)
+            tp = round(price + 30, 2) if action == "BUY" else round(price - 30, 2)
+        elif display in ("EURUSD", "GBPUSD", "USDJPY"):
+            sl = round(price - 0.0015, 5) if action == "BUY" else round(price + 0.0015, 5)
+            tp = round(price + 0.0030, 5) if action == "BUY" else round(price - 0.0030, 5)
+        elif display == "BTCUSD":
+            sl = round(price - 500, 2) if action == "BUY" else round(price + 500, 2)
+            tp = round(price + 1000, 2) if action == "BUY" else round(price - 1000, 2)
+        else:
+            sl = round(price * 0.995, 2) if action == "BUY" else round(price * 1.005, 2)
+            tp = round(price * 1.01, 2) if action == "BUY" else round(price * 0.99, 2)
 
     return (
         f"{emoji} <b>{action} {display}</b> | Grade:{grade} | RR 1:{rr}\n"
@@ -548,12 +786,66 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
     )
 
 
+# ── Quant Consensus UI helper ──
+def append_quant_consensus_ui(sig, quant_result, disp="XAUUSD"):
+    """Injects Quant Consensus block + guardrail into formatted signal text.
+    Returns (quant_block: str, guardrail_warnings: list[str])."""
+    if not quant_result or quant_result.get("error"):
+        return "", []
+
+    match_count = quant_result.get("match_count", 0)
+    green_pct = quant_result.get("green_pct", 0)
+    red_pct = quant_result.get("red_pct", 0)
+    doji_pct = quant_result.get("doji_pct", 0)
+    confidence = quant_result.get("confidence_score", 0)
+    verdict = quant_result.get("quant_verdict", "?")
+    dominant = quant_result.get("dominant_next", "?")
+    series_len = quant_result.get("series_length", 0)
+    pattern_size = quant_result.get("pattern_size", 5)
+
+    # Build quant consensus block
+    verdict_emoji = {
+        "BUY_BIAS_HISTORICAL": "🟢", "SELL_BIAS_HISTORICAL": "🔴",
+        "NEUTRAL_HISTORICAL": "⚪️", "NO_HISTORICAL_MATCH": "⚠️",
+        "INSUFFICIENT_DATA": "⏳"
+    }.get(verdict, "⚪️")
+
+    block = (
+        f"\n━━━━━━━━━━━━━━━━\n"
+        f"📐 <b>Quant Consensus</b> [{series_len} bars, {pattern_size}-candle pattern]\n"
+        f"{verdict_emoji} {verdict.replace('_',' ')} | {match_count} matches found\n"
+        f"🟢 G: {green_pct:.0f}%  🔴 R: {red_pct:.0f}%  ⚪ D: {doji_pct:.0f}%\n"
+        f"Confidence: {confidence:.0%} | Dominant: {dominant if dominant else '—'}"
+    )
+
+    # Guardrail logic
+    warnings = []
+    ai_action = sig.get("action", "HOLD")
+    GUARD_THRESHOLD = 40  # %
+
+    if match_count == 0:
+        warnings.append(f"⚠️ <b>No historical pattern match</b> — sinyal AI tidak dikonfirmasi data historis")
+    elif ai_action == "BUY" and green_pct < GUARD_THRESHOLD:
+        warnings.append(f"⚠️ <b>Guardrail:</b> AI bilang BUY tapi Quant cuma {green_pct:.0f}% Green — risiko tinggi!")
+    elif ai_action == "SELL" and red_pct < GUARD_THRESHOLD:
+        warnings.append(f"⚠️ <b>Guardrail:</b> AI bilang SELL tapi Quant cuma {red_pct:.0f}% Red — risiko tinggi!")
+
+    # Opposite direction warning
+    if ai_action == "BUY" and dominant == "R" and red_pct >= GUARD_THRESHOLD:
+        warnings.append(f"🚨 <b>KONFLIK:</b> AI BUY vs Quant SELL ({red_pct:.0f}% Red) — TUNGGU konfirmasi!")
+    elif ai_action == "SELL" and dominant == "G" and green_pct >= GUARD_THRESHOLD:
+        warnings.append(f"🚨 <b>KONFLIK:</b> AI SELL vs Quant BUY ({green_pct:.0f}% Green) — TUNGGU konfirmasi!")
+
+    return block, warnings
+
+
 # ── Command handler ──
 def handle_command(cmd, text, chat_id, msg):
     sub = text[len(cmd):].strip().lower() if len(text) > len(cmd) else ""
+    sub_norm = _normalize_broker_symbol(sub)  # XAUUSDc → xauusd, EURUSD.pro → eurusd
 
     if cmd == "/start":
-        welcome = "🤖 <b>Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\nAI Trading Assistant — Auto-scan XAUUSD 24/7"
+        welcome = "🤖 <b>Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\nAI Trading Assistant\n🔄 XAUUSD · BTC · EURUSD · GBPUSD · USOIL\n📊 Multi-Asset Signal Engine\n━━━━━━━━━━━━━━━━\n📡 Sinyal: Mon-Fri (auto)\n📐 Mapping: Setiap hari 10:00 WIB\n🛑 Weekend: Hemat AI, market tutup\n\n📱 /help — Semua command\n📊 /mapping — Market mapping harian"
         # Quick welcome first
         tg_send(welcome, chat_id)
         # Then load member info in background
@@ -572,16 +864,46 @@ def handle_command(cmd, text, chat_id, msg):
 
     elif cmd == "/help":
         tg_send(
-            "📋 <b>Commands</b>\n━━━━━━━━━━━━━━━━\n"
-            "/start — Info bot\n/help — Bantuan\n"
-            "/price — Cek harga XAUUSD\n/analyze — AI analisa (xauusd/btc/oil/aapl/bbca)\n"
-            "/data — Info pasar\n/killzone — Cek sesi trading\n/status — Status langganan\n"
-            "/subscribe — Upgrade VIP", chat_id)
+            "📋 <b>Commands Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\n"
+            "<b>▸ Analisa AI</b>\n"
+            "/analyze xauusd — Gold\n/analyze btc — Bitcoin\n"
+            "/analyze eurusd — EUR/USD\n/analyze gbpusd — GBP/USD\n"
+            "/analyze oil — Crude Oil\n"
+            "/analyze aapl — Apple\n/analyze bbca — BCA (IDX)\n"
+            "/analyze tlkm — Telkom (IDX)\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "<b>▸ Market</b>\n"
+            "/price — Cek harga (xauusd/btc/eurusd/bbca)\n"
+            "/data — Multi-asset overview\n"
+            "/killzone — Sesi trading\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "<b>▸ Akun</b>\n"
+            "/start — Info bot\n/status — Status VIP\n"
+            "/subscribe — Upgrade VIP\n"
+            "/autosync — Auto-trade mode\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "<b>▸ Performa & Mapping</b>\n"
+            "/winrate — Performa trading\n"
+            "/history — Riwayat trade\n"
+            "/recap — Rekap sinyal harian\n"
+            "/mapping — Market mapping & key levels\n"
+            "/mykey — Cek license EA", chat_id)
 
     elif cmd == "/price":
-        price = fetch_price()
-        dxy = fetch_dxy()
-        txt = f"💰 <b>XAUUSD</b>\n━━━━━━━━━━━━━━━━\nPrice: ${price:.2f}" if price else "❌ Price unavailable"
+        # Multi-symbol price — use normalized sub
+        price_map = {"xauusd":"gold","gold":"gold","":"gold",
+                     "btc":"btc","btcusd":"btc","eurusd":"eurusd","gbpusd":"gbpusd",
+                     "usdjpy":"usdjpy","oil":"oil","aapl":"aapl","bbca":"bbca",
+                     "bbri":"bbri","tlkm":"tlkm","asii":"asii","ihsg":"ihsg"}
+        pair = price_map.get(sub_norm, sub_norm) if sub_norm else "gold"
+        price = fetch_price(pair)
+        if not price:
+            tg_send(f"❌ Price unavailable untuk {sub_norm.upper() if sub_norm else 'XAUUSD'}", chat_id)
+            return
+        disp = sub_norm.upper() if sub_norm else "XAUUSD"
+        curr = "Rp" if pair in ("bbca","bbri","tlkm","asii","ihsg") else "$"
+        dxy = fetch_dxy() if pair == "gold" else None
+        txt = f"💰 <b>{disp}</b>\n━━━━━━━━━━━━━━━━\nPrice: {curr}{price:,.2f}" if curr == "Rp" else f"💰 <b>{disp}</b>\n━━━━━━━━━━━━━━━━\nPrice: {curr}{price:.2f}"
         if dxy: txt += f"\nDXY: {dxy:.2f}"
         txt += f"\n━━━━━━━━━━━━━━━━\n🕐 {wib_fmt()} | Session: {session()}"
         tg_send(txt, chat_id)
@@ -594,49 +916,288 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send(txt, chat_id)
 
     elif cmd == "/status":
+        # Weekend indicator
+        weekend_note = "\n🔴 WEEKEND — Market Tutup" if is_weekend() else ""
+        
         if MEMBERS_ENABLED and chat_id:
             try:
                 q = check_quota(str(chat_id))
                 is_vip = is_premium(str(chat_id))
                 txt = (f"⭐ VIP Active" if is_vip else "👤 Free") + f" | Kuota: {q.get('used',0)}/{q.get('total',0)}"
+                txt += weekend_note
                 tg_send(txt, chat_id)
-            except:
+            except Exception:
                 tg_send("❌ Gagal memuat status.", chat_id)
         else:
-            tg_send("👤 Member system not active.", chat_id)
+            txt = "👤 Member system not active." + weekend_note
+            tg_send(txt, chat_id)
 
     elif cmd == "/analyze":
+        # ── WEEKEND GATE ──
+        if is_weekend():
+            tg_send("🔴 <b>MARKET TUTUP — Weekend</b>\n━━━━━━━━━━━━━━━━\n"
+                    "Pasar forex/komoditi tutup Sabtu & Minggu.\n"
+                    "📊 /mapping — Lihat market mapping\n"
+                    "📈 /recap — Rekap performa mingguan\n"
+                    "📱 Sinyal auto lanjut Senin pagi.", chat_id)
+            return
+
         is_blackout, is_post_news, news_name = news_blackout_status()
         if is_blackout:
             tg_send(f"⚪️ <b>HOLD — Menjelang Rilis Berita</b>\n📰 {news_name}\n⏳ Tunggu 30 menit setelah rilis.", chat_id)
             return
 
-        pair_map = {"xauusd":"gold","gold":"gold","eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
-        if sub in pair_map:
+        pair_map = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","oil":"oil",
+                    "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy","jpyusd":"usdjpy",
+                    "aapl":"aapl","tsla":"tsla","msft":"msft","nvda":"nvda",
+                    "bbca":"bbca","bbri":"bbri","tlkm":"tlkm","asii":"asii",
+                    "unvr":"unvr","bmri":"bmri","adro":"adro","ihsg":"ihsg"}
+        display_map = {"gold":"XAUUSD","btc":"BTCUSD","oil":"USOIL","eurusd":"EURUSD",
+                       "gbpusd":"GBPUSD","usdjpy":"USDJPY","jpyusd":"USDJPY",
+                       "aapl":"AAPL","tsla":"TSLA","msft":"MSFT","nvda":"NVDA",
+                       "bbca":"BBCA","bbri":"BBRI","tlkm":"TLKM","asii":"ASII",
+                       "unvr":"UNVR","bmri":"BMRI","adro":"ADRO","ihsg":"IHSG"}
+        is_idx = sub_norm in ("bbca","bbri","tlkm","asii","unvr","bmri","adro","ihsg")
+        if sub_norm in pair_map:
+            disp = display_map.get(sub_norm, sub_norm.upper())
+            pair = pair_map[sub_norm]
             tg_send("🔍 Vilona Trade FX menganalisa... ~15 detik", chat_id)
-            price = fetch_price(pair_map[sub])
-            dxy = fetch_dxy() if sub in ("xauusd","gold") else None
+            price = fetch_price(pair)
+            dxy = fetch_dxy() if pair == "gold" else None
             if not price:
-                tg_send("❌ Price unavailable.", chat_id)
+                tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
                 return
-            sig = ask_ai(price, dxy, session(), str(killzone()), 0, premium=False)
+            ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+            sig = ask_ai(price, dxy, session(), str(killzone()), 0, premium=False,
+                          ohlcv=ohlcv_bars, display=disp)
             if sig:
-                tg_send(fmt_signal(sig, price, dxy, wib_now().hour, sub.upper()), chat_id)
+                curr = "Rp" if is_idx else "$"
+                # Auto-sync ON → langsung trade, OFF → keyboard
+                if is_autosync(chat_id):
+                    if LAYERING_ENGINE and sig.get("action") != "HOLD":
+                        sig = enrich_signal_with_layers(sig)
+                    sig["target_user"] = str(chat_id)
+                    post_signal_to_bridge(sig, price)
+                    action = sig.get("action", "HOLD")
+                    auto_text = f"🤖 <b>Auto Sync</b> — {action} {disp} @ {price}\n"
+                    # Quant Consensus bloc for autosync
+                    if QUANT_ENGINE and ohlcv_bars:
+                        try:
+                            qdata = [{"timestamp": b.get("t", b.get("timestamp",0)),
+                                      "open": float(b.get("o", b.get("open",0))),
+                                      "high": float(b.get("h", b.get("high",0))),
+                                      "low": float(b.get("l", b.get("low",0))),
+                                      "close": float(b.get("c", b.get("close",0))),
+                                      "volume": 0}
+                                     for b in ohlcv_bars]
+                            if qdata:
+                                quant_result = analyze_quantitative_pattern(qdata, pattern_size=5)
+                                quant_block, guard_warnings = append_quant_consensus_ui(sig, quant_result, disp)
+                                if quant_block:
+                                    auto_text += quant_block + "\n"
+                                    for w in guard_warnings:
+                                        auto_text += f"{w}\n"
+                        except: pass
+                    # 🏯 CRT/TBS for autosync
+                    if CRT_ENGINE and ohlcv_bars:
+                        try:
+                            crt_result = analyze_crt_setup(ohlcv_bars, disp)
+                            crt_block = format_crt_block(crt_result)
+                            if crt_block:
+                                auto_text += crt_block + "\n"
+                        except: pass
+                    # 🏦 SMC + 📈 Trend Break
+                    if SMC_ENGINE and ohlcv_bars:
+                        try:
+                            smc = analyze_smc_scalper(ohlcv_bars, disp)
+                            auto_text += format_smc_block(smc) or ""
+                            trend = analyze_trend_break(ohlcv_bars, disp)
+                            auto_text += format_trend_block(trend) or ""
+                        except: pass
+                    auto_text += "<i>EA auto-eksekusi... 3-5 detik</i>"
+                    tg_send(auto_text, chat_id)
+                else:
+                    PENDING_SIGNALS[str(chat_id)] = {
+                        "sig": sig, "price": price,
+                        "expires": time.time() + PENDING_SIGNAL_TTL,
+                    }
+                    text = fmt_signal(sig, price, dxy, wib_now().hour, disp, curr)
+                    # 🔥 Inject Quant Consensus + Guardrail
+                    if QUANT_ENGINE and ohlcv_bars:
+                        try:
+                            qdata = [{"timestamp": b.get("t", b.get("timestamp",0)),
+                                      "open": float(b.get("o", b.get("open",0))),
+                                      "high": float(b.get("h", b.get("high",0))),
+                                      "low": float(b.get("l", b.get("low",0))),
+                                      "close": float(b.get("c", b.get("close",0))),
+                                      "volume": 0}
+                                     for b in ohlcv_bars]
+                            if qdata:
+                                quant_result = analyze_quantitative_pattern(qdata, pattern_size=5)
+                                quant_block, guard_warnings = append_quant_consensus_ui(sig, quant_result, disp)
+                                text += quant_block
+                                for w in guard_warnings:
+                                    text += f"\n{w}"
+                        except: pass
+                    # 🏯 CRT/TBS Layer
+                    if CRT_ENGINE and ohlcv_bars:
+                        try:
+                            crt_result = analyze_crt_setup(ohlcv_bars, disp)
+                            crt_block = format_crt_block(crt_result)
+                            if crt_block:
+                                text += crt_block
+                        except: pass
+                    # 🏦 SMC Scalper + 📈 Trend Break
+                    if SMC_ENGINE and ohlcv_bars:
+                        try:
+                            smc = analyze_smc_scalper(ohlcv_bars, disp)
+                            smc_block = format_smc_block(smc)
+                            if smc_block:
+                                text += smc_block
+                            trend = analyze_trend_break(ohlcv_bars, disp)
+                            trend_block = format_trend_block(trend)
+                            if trend_block:
+                                text += trend_block
+                        except: pass
+                    text += "\n<i>⏰ Sinyal valid 5 menit</i>"
+                    keyboard = {
+                        "inline_keyboard": [[
+                            {"text": "🔥 Trade Auto", "callback_data": f"trade:{int(time.time())}"},
+                            {"text": "⏭ Skip", "callback_data": f"skip:{int(time.time())}"}
+                        ]]
+                    }
+                    tg_send(text, chat_id, reply_markup=keyboard)
             else:
                 tg_send("❌ Analisa gagal — coba lagi nanti.", chat_id)
-        elif not sub:
-            tg_send("🧠 <b>ANALISA AI — Pilih</b>\n\n/analyze xauusd — XAUUSD\n/analyze btc — Bitcoin\n"
-                    "/analyze oil — Crude Oil\n/analyze aapl — Apple\n/analyze bbca — BBCA", chat_id)
+        elif not sub_norm:
+            tg_send("🧠 <b>ANALISA AI — Pilih Aset</b>\n━━━━━━━━━━━━━━━━\n"
+                    "💎 /analyze xauusd — Gold\n₿ /analyze btc — Bitcoin\n"
+                    "💵 /analyze eurusd — EUR/USD\n🛢 /analyze oil — Crude Oil\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    "🇺🇸 /analyze aapl / tsla / nvda\n"
+                    "🇮🇩 /analyze bbca / bbri / tlkm / asii\n"
+                    "📊 /analyze ihsg — IHSG Index", chat_id)
         else:
-            tg_send(f"🔍 Menganalisa {sub.upper()}...", chat_id)
+            # Try to resolve as any known symbol
+            try:
+                price = fetch_price(sub)
+                if price:
+                    tg_send(f"🔍 Menganalisa {sub.upper()}... ~15 detik", chat_id)
+                    ohlcv_bars2 = _fetch_ohlcv_for_ai(sub)
+                    sig = ask_ai(price, None, session(), str(killzone()), 0, premium=False,
+                                  ohlcv=ohlcv_bars2, display=sub.upper())
+                    if sig:
+                        # Auto-sync ON → langsung trade, OFF → keyboard
+                        if is_autosync(chat_id):
+                            if LAYERING_ENGINE and sig.get("action") != "HOLD":
+                                sig = enrich_signal_with_layers(sig)
+                            sig["target_user"] = str(chat_id)
+                            post_signal_to_bridge(sig, price)
+                            action = sig.get("action", "HOLD")
+                            auto_text = f"🤖 <b>Auto Sync</b> — {action} {sub.upper()} @ {price}\n"
+                            if QUANT_ENGINE and ohlcv_bars2:
+                                try:
+                                    qdata = [{"timestamp": b.get("t", b.get("timestamp",0)),
+                                              "open": float(b.get("o", b.get("open",0))),
+                                              "high": float(b.get("h", b.get("high",0))),
+                                              "low": float(b.get("l", b.get("low",0))),
+                                              "close": float(b.get("c", b.get("close",0))),
+                                              "volume": 0}
+                                             for b in ohlcv_bars2]
+                                    if qdata:
+                                        quant_result = analyze_quantitative_pattern(qdata, pattern_size=5)
+                                        quant_block, guard_warnings = append_quant_consensus_ui(sig, quant_result, sub.upper())
+                                        if quant_block:
+                                            auto_text += quant_block + "\n"
+                                            for w in guard_warnings:
+                                                auto_text += f"{w}\n"
+                                except: pass
+                            # 🏯 CRT/TBS
+                            if CRT_ENGINE and ohlcv_bars2:
+                                try:
+                                    crt_result = analyze_crt_setup(ohlcv_bars2, sub.upper())
+                                    crt_block = format_crt_block(crt_result)
+                                    if crt_block:
+                                        auto_text += crt_block + "\n"
+                                except: pass
+                            auto_text += "<i>EA auto-eksekusi... 3-5 detik</i>"
+                            tg_send(auto_text, chat_id)
+                        else:
+                            PENDING_SIGNALS[str(chat_id)] = {
+                                "sig": sig, "price": price,
+                                "expires": time.time() + PENDING_SIGNAL_TTL,
+                            }
+                            text = fmt_signal(sig, price, None, wib_now().hour, sub.upper(), "$")
+                            if QUANT_ENGINE and ohlcv_bars2:
+                                try:
+                                    qdata = [{"timestamp": b.get("t", b.get("timestamp",0)),
+                                              "open": float(b.get("o", b.get("open",0))),
+                                              "high": float(b.get("h", b.get("high",0))),
+                                              "low": float(b.get("l", b.get("low",0))),
+                                              "close": float(b.get("c", b.get("close",0))),
+                                              "volume": 0}
+                                             for b in ohlcv_bars2]
+                                    if qdata:
+                                        quant_result = analyze_quantitative_pattern(qdata, pattern_size=5)
+                                        quant_block, guard_warnings = append_quant_consensus_ui(sig, quant_result, sub.upper())
+                                        text += quant_block
+                                        for w in guard_warnings:
+                                            text += f"\n{w}"
+                                except: pass
+                            # 🏯 CRT/TBS Layer
+                            if CRT_ENGINE and ohlcv_bars2:
+                                try:
+                                    crt_result = analyze_crt_setup(ohlcv_bars2, sub.upper())
+                                    crt_block = format_crt_block(crt_result)
+                                    if crt_block:
+                                        text += crt_block
+                                except: pass
+                            # 🏦 SMC Scalper + 📈 Trend Break
+                            if SMC_ENGINE and ohlcv_bars2:
+                                try:
+                                    smc = analyze_smc_scalper(ohlcv_bars2, sub.upper())
+                                    text += format_smc_block(smc) or ""
+                                    trend = analyze_trend_break(ohlcv_bars2, sub.upper())
+                                    text += format_trend_block(trend) or ""
+                                except: pass
+                            text += "\n<i>⏰ Sinyal valid 5 menit</i>"
+                            keyboard = {
+                                "inline_keyboard": [[
+                                    {"text": "🔥 Trade Auto", "callback_data": f"trade:{int(time.time())}"},
+                                    {"text": "⏭ Skip", "callback_data": f"skip:{int(time.time())}"}
+                                ]]
+                            }
+                            tg_send(text, chat_id, reply_markup=keyboard)
+                    else:
+                        tg_send("❌ Analisa gagal — coba lagi nanti.", chat_id)
+                else:
+                    tg_send(f"❌ '{sub}' tidak dikenali.\n\n"
+                            f"Gunakan aset yang didukung:\n"
+                            f"xauusd, btc, eurusd, gbpusd, oil, aapl, bbca, tlkm, ihsg\n"
+                            f"Lihat /analyze untuk daftar lengkap.", chat_id)
+            except Exception:
+                tg_send(f"❌ Gagal menganalisa {sub}.", chat_id)
 
 
     elif cmd == "/data":
-        price = fetch_price()
-        dxy = fetch_dxy()
-        txt = f"📊 <b>Market Data</b>\n━━━━━━━━━━━━━━━━\n"
-        if price: txt += f"XAUUSD: ${price:.2f}\n"
-        if dxy: txt += f"DXY: {dxy:.2f}\n"
+        txt = "📊 <b>Market Overview</b>\n━━━━━━━━━━━━━━━━\n"
+        assets = [("XAUUSD", "gold", "$"), ("BTCUSD", "btc", "$"),
+                  ("EURUSD", "eurusd", "$"), ("USOIL", "oil", "$"),
+                  ("DXY", "dxy", ""), ("BBCA", "bbca", "Rp")]
+        for name, pair, curr in assets:
+            try:
+                p = fetch_price(pair)
+                if p:
+                    if curr == "Rp":
+                        txt += f"{name}: {curr}{p:,.0f}\n"
+                    elif p > 100:
+                        txt += f"{name}: {curr}{p:,.2f}\n"
+                    else:
+                        txt += f"{name}: {curr}{p:.5f}\n"
+                else:
+                    txt += f"{name}: N/A\n"
+            except Exception:
+                txt += f"{name}: N/A\n"
         txt += f"━━━━━━━━━━━━━━━━\n🕐 {wib_fmt()}"
         tg_send(txt, chat_id)
 
@@ -649,8 +1210,59 @@ def handle_command(cmd, text, chat_id, msg):
                        f"✓ Analisa unlimited\n✓ Sinyal real-time\n✓ Priority support\n"
                        f"━━━━━━━━━━━━━━━━\nComing soon: Payment gateway")
                 tg_send(txt, chat_id)
-            except:
+            except Exception:
                 tg_send("💎 VIP upgrade system loading...", chat_id)
+
+    elif cmd == "/genkey" and LICENSE_ENGINE:
+        result = cmd_genkey(str(chat_id), sub if sub else "")
+        tg_send(result, chat_id)
+
+    elif cmd == "/listkeys" and LICENSE_ENGINE:
+        result = cmd_listkeys(str(chat_id))
+        tg_send(result, chat_id)
+
+    elif cmd == "/revokekey" and LICENSE_ENGINE:
+        result = cmd_revokekey(str(chat_id), sub if sub else "")
+        tg_send(result, chat_id)
+
+    elif cmd == "/mykey" and LICENSE_ENGINE:
+        result = cmd_mykey(str(chat_id), sub if sub else "")
+        tg_send(result, chat_id)
+
+    elif cmd == "/autosync":
+        if sub in ("on", "enable", "start", "1"):
+            set_autosync(chat_id, True)
+            tg_send("🤖 <b>Auto Sync AKTIF!</b>\n━━━━━━━━━━━━━━━━\n"
+                    "Sinyal dari /analyze akan <b>auto-trade ke EA</b> tanpa konfirmasi.\n"
+                    "Nonaktifkan: /autosync off", chat_id)
+        elif sub in ("off", "disable", "stop", "0"):
+            set_autosync(chat_id, False)
+            tg_send("⏸ <b>Auto Sync NONAKTIF</b>\n━━━━━━━━━━━━━━━━\n"
+                    "Kamu akan lihat tombol Trade/Skip setiap analisa.\n"
+                    "Aktifkan lagi: /autosync on", chat_id)
+        else:
+            status = "ON 🟢" if is_autosync(chat_id) else "OFF ⚪"
+            tg_send(f"🤖 <b>Auto Sync:</b> {status}\n━━━━━━━━━━━━━━━━\n"
+                    f"<i>Sinyal auto-trade ke EA tanpa konfirmasi.</i>\n\n"
+                    f"/autosync on  — Aktifkan\n"
+                    f"/autosync off — Nonaktifkan", chat_id)
+
+    elif cmd == "/winrate" and TRADE_TRACKER:
+        tg_send(format_winrate(), chat_id)
+
+    elif cmd == "/history" and TRADE_TRACKER:
+        tg_send(format_history(15), chat_id)
+
+    elif cmd == "/recap" and TRADE_TRACKER:
+        tg_send(format_daily_recap(sub if sub else ""), chat_id)
+
+    elif cmd == "/mapping":
+        tg_send("<i>📐 Generating market mapping...</i>", chat_id)
+        try:
+            mapping = format_daily_mapping()
+            tg_send(mapping, chat_id)
+        except Exception as e:
+            tg_send(f"❌ Mapping error: {e}", chat_id)
 
 
 # ── Signal log ──
@@ -658,7 +1270,7 @@ def load_signal_log():
     path = DATA_DIR / "signal_log.json"
     try:
         if path.exists(): return json.loads(path.read_text())
-    except: pass
+    except Exception: pass
     return {"signals_sent":0,"last_signal_time":None,"last_action":None,"last_price":0,"loss_count":0}
 
 def save_signal_log(log):
@@ -667,51 +1279,183 @@ def save_signal_log(log):
 def is_trading_session(h):
     return 7 <= h < 23
 
+def is_weekend():
+    """True if Saturday or Sunday — market closed, save AI costs."""
+    return wib_now().weekday() >= 5  # 5=Sat, 6=Sun
+
+def is_market_open():
+    """Market is open: Mon-Fri + within trading session hours."""
+    if is_weekend():
+        return False
+    return is_trading_session(wib_now().hour)
+
+# ── Mapping channel for daily insights (separate from signals) ──
+MAPPING_CHANNEL_ID = os.getenv("MAPPING_CHANNEL_ID", "")
+MAPPING_CHANNEL = f"telegram:{MAPPING_CHANNEL_ID}" if MAPPING_CHANNEL_ID else ""
+
+def send_to_channel(text):
+    """Send to mapping channel. Falls back to home if no channel configured."""
+    if MAPPING_CHANNEL_ID:
+        tg_send(text, MAPPING_CHANNEL_ID)
+    else:
+        tg_send(text)  # fallback to home
+
+
+def format_daily_mapping():
+    """Daily market mapping/insight — key levels, market structure, no trade signals.
+    Posts to channel as educational content separate from auto-signals."""
+    now = wib_now()
+    day_name = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"][now.weekday()]
+    
+    lines = [
+        f"📐 MARKET MAPPING",
+        f"🗓 {day_name}, {now.strftime('%d %B %Y')}",
+        f"━━━━━━━━━━━━━━━━",
+        f"",
+        f"🕐 Status: {'🔴 MARKET TUTUP' if is_weekend() else '🟢 MARKET BUKA'}",
+        f"",
+    ]
+    
+    # Try to get key levels for each asset
+    if MARKET_DATA:
+        for pair, disp, yahoo_sym, is_forex in AUTO_SCAN_ASSETS:
+            try:
+                bars = MARKET_DATA.get_ohlcv(yahoo_sym, "1h", 50)
+                if not bars or len(bars) < 5:
+                    continue
+                high_24h = max(b.high for b in bars[-24:]) if len(bars) >= 24 else max(b.high for b in bars)
+                low_24h = min(b.low for b in bars[-24:]) if len(bars) >= 24 else min(b.low for b in bars)
+                close = bars[-1].close
+                high_w = max(b.high for b in bars[-min(40,len(bars)):])
+                low_w = min(b.low for b in bars[-min(40,len(bars)):])
+                
+                mid = (high_24h + low_24h) / 2
+                r1 = high_24h + (high_24h - low_24h) * 0.382
+                s1 = low_24h - (high_24h - low_24h) * 0.382
+                
+                sma20 = sum(b.close for b in bars[-20:]) / min(20, len(bars))
+                trend = "📈 BULLISH" if close > sma20 else ("📉 BEARISH" if close < sma20 else "➡️ SIDEWAYS")
+                
+                lines.append(f"")
+                lines.append(f"💱 {disp}")
+                lines.append(f"   Price: {close:.2f} | {trend}")
+                lines.append(f"   Range 24H: {low_24h:.2f} — {high_24h:.2f}")
+                lines.append(f"   Resistance: {r1:.2f} | Support: {s1:.2f}")
+                lines.append(f"   Weekly High: {high_w:.2f} | Low: {low_w:.2f}")
+            except Exception:
+                pass
+    
+    lines.append(f"")
+    lines.append(f"━━━━━━━━━━━━━━━━")
+    lines.append(f"📌 Mapping ini BUKAN sinyal trading.")
+    lines.append(f"🤖 Sinyal auto hanya Mon-Fri saat market buka.")
+    lines.append(f"📱 /analyze untuk analisa manual.")
+    lines.append(f"")
+    lines.append(f"#VilonaTradeFX #MarketMapping #TechnicalAnalysis")
+    
+    return "\n".join(lines)
+
 
 # ── Auto-analyze loop ──
+# Assets to scan autonomously (forex, crypto, commodities — stocks on-demand via /analyze)
+AUTO_SCAN_ASSETS = [
+    # (internal_pair, display_name, yahoo_symbol, is_forex_metal)
+    ("gold", "XAUUSD", "GC=F", True),
+    ("btc", "BTCUSD", "BTC-USD", False),
+    ("eurusd", "EURUSD", "EURUSD=X", True),
+    ("gbpusd", "GBPUSD", "GBPUSD=X", True),
+    ("oil", "USOIL", "CL=F", False),
+]
+
 def auto_analyze_loop():
-    """Main autonomous signal loop. Runs 24/7 with mechanical + AI."""
-    logger.info("🚀 Auto-analyze loop started")
+    """Main autonomous signal loop. Mon-Fri only. Weekends: mapping only, no AI/signals."""
+    logger.info("🚀 Auto-analyze loop started (multi-asset, weekend-aware)")
     time.sleep(5)
+    asset_idx = 0
+    # Per-asset signal logs for cooldown tracking
+    asset_logs = {}
+    last_mapping_day = None  # Track when last daily mapping was sent
 
     while True:
         try:
-            h = wib_now().hour
+            now = wib_now()
+            h = now.hour
+            weekday = now.weekday()
+            today_str = now.strftime("%Y%m%d")
+
+            # ── WEEKEND GATE ──
+            if is_weekend():
+                # Daily mapping at 10:00 WIB on weekends (once per day)
+                if last_mapping_day != today_str and h >= 10:
+                    try:
+                        mapping_text = format_daily_mapping()
+                        send_to_channel(mapping_text)
+                        last_mapping_day = today_str
+                        logger.info("📊 Daily mapping sent to channel")
+                    except Exception as e:
+                        logger.error(f"Daily mapping failed: {e}")
+                time.sleep(300)  # Sleep 5 min on weekends
+                continue
+
+            # ── WEEKDAY: Reset mapping tracker ──
+            if last_mapping_day and last_mapping_day != today_str:
+                last_mapping_day = None
+
             if not is_trading_session(h):
                 time.sleep(180)
                 continue
 
-            log = load_signal_log()
-            price = fetch_price()
-            if not price:
-                time.sleep(60)
-                continue
+            # Rotate through assets
+            pair, disp, yahoo_sym, is_forex = AUTO_SCAN_ASSETS[asset_idx % len(AUTO_SCAN_ASSETS)]
+            asset_idx += 1
 
-            # ── News blackout check ──
+            # News blackout check (applies to all)
             is_blackout, is_post_news, news_name = news_blackout_status()
             if is_blackout:
                 logger.info(f"🔇 News blackout: {news_name}")
                 time.sleep(120)
                 continue
 
-            dxy = fetch_dxy()
+            # Per-asset signal log
+            log_key = f"auto_{pair}"
+            if log_key not in asset_logs:
+                asset_logs[log_key] = load_signal_log()
+            log = asset_logs[log_key]
+
+            # Fetch price for this asset
+            price = fetch_price(pair)
+            if not price:
+                time.sleep(30)
+                continue
+
+            # Check trade outcomes (TP/SL hits)
+            if TRADE_TRACKER:
+                try:
+                    closed_trades = check_outcomes({disp: price})
+                    for ct in closed_trades:
+                        try:
+                            tg_send(format_trade_close_alert(ct))
+                        except Exception: pass
+                except Exception: pass
+
+            dxy = fetch_dxy() if pair == "gold" else None
             lkz, nykz = killzone(h)
             kz = "London" if lkz else ("NY" if nykz else "Outside")
 
             # ── MECHANICAL OVERRIDE: Quant + FVG + Hermes ──
             mech_sig = None
-            if MARKET_DATA:
+            if MARKET_DATA and is_forex:
                 try:
-                    m1_bars = MARKET_DATA.get_ohlcv("GC=F", "1m", 200)
+                    m1_bars = MARKET_DATA.get_ohlcv(yahoo_sym, "1m", 200)
                     if m1_bars and len(m1_bars) >= 30:
                         ohlcv_m1 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
                                       "low": b.low, "close": b.close, "volume": b.volume} for b in m1_bars]
                         mech_sig, mech_reason = detect_mechanical_signal(
-                            "XAUUSD", "XAUUSD", price, ohlcv_m1)
+                            pair.upper(), disp, price, ohlcv_m1)
                         if mech_sig:
-                            logger.info(f"⚡ MECHANICAL: {mech_sig['action']} | {mech_sig['source']}")
+                            logger.info(f"⚡ MECHANICAL [{disp}]: {mech_sig['action']} | {mech_sig['source']}")
                 except Exception as e:
-                    logger.debug(f"Mechanical check: {e}")
+                    logger.debug(f"Mechanical check [{disp}]: {e}")
 
             if mech_sig and mech_sig["action"] in ("BUY", "SELL"):
                 action = mech_sig["action"]
@@ -725,25 +1469,26 @@ def auto_analyze_loop():
                         last_dt = datetime.fromisoformat(last_time)
                         elapsed = (wib_now() - last_dt).total_seconds()
                         if elapsed < 600 and last_action != action:
-                            logger.info(f"BLOCKED: {action} after {last_action} ({elapsed:.0f}s ago)")
-                            time.sleep(60)
+                            logger.info(f"BLOCKED [{disp}]: {action} after {last_action} ({elapsed:.0f}s ago)")
+                            time.sleep(30)
                             continue
                     except: pass
                 
-                logger.info(f"MECHANICAL PUSH: {action} XAUUSD | conf={conf:.0%}")
-                text = fmt_signal(mech_sig, price, dxy, h) + f"\n<i>[{mech_sig.get('source','mech')}] override</i>"
+                logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
+                text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp") + f"\n<i>[{mech_sig.get('source','mech')}] override</i>"
                 tg_send(text)
+                if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
+                    mech_sig = enrich_signal_with_layers(mech_sig)
                 post_signal_to_bridge(mech_sig, price)
 
                 if LEARNING_ENGINE:
-                    try: track_signal(mech_sig, price, "XAUUSD", session(h), mech_sig.get("source","mech"))
+                    try: track_signal(mech_sig, price, disp, session(h), mech_sig.get("source","mech"))
                     except: pass
 
                 log["signals_sent"] += 1
                 log["last_signal_time"] = wib_now().isoformat()
                 log["last_action"] = action
                 log["last_price"] = price
-                # Save full signal for EA consumption
                 log["last_signal"] = {
                     "action": action, "entry": mech_sig.get("entry", price),
                     "sl": mech_sig.get("sl", 0), "tp": mech_sig.get("tp", 0),
@@ -751,17 +1496,18 @@ def auto_analyze_loop():
                     "confidence": conf, "source": mech_sig.get("source", "mech"),
                     "rr_ratio": mech_sig.get("rr_ratio", 0),
                 }
-                # Write EA queue
                 _eaq = DATA_DIR / "ea_signal.json"
                 _eaq.write_text(json.dumps(log["last_signal"]))
                 save_signal_log(log)
-                time.sleep(300)  # 5 min cooldown after mechanical signal
+                asset_logs[log_key] = log
+                time.sleep(120)  # 2 min cooldown after mechanical
                 continue
 
             # ── AI Consensus ──
-            sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=(lkz or nykz))
+            sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=(lkz or nykz),
+                          ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
             if not sig:
-                time.sleep(60)
+                time.sleep(30)
                 continue
 
             action = sig.get("action","HOLD")
@@ -776,13 +1522,14 @@ def auto_analyze_loop():
                     should_push = True
 
             if should_push:
-                logger.info(f"AI PUSH: {action} | conf={conf:.0%} | model={sig.get('_model','?')}")
-                text = fmt_signal(sig, price, dxy, h)
-                tg_send(text)
+                logger.info(f"AI PUSH [{disp}]: {action} | conf={conf:.0%} | model={sig.get('_model','?')}")
+
+                if LAYERING_ENGINE:
+                    sig = enrich_signal_with_layers(sig)
                 post_signal_to_bridge(sig, price)
 
                 if LEARNING_ENGINE:
-                    try: track_signal(sig, price, "XAUUSD", session(h), "ai")
+                    try: track_signal(sig, price, disp, session(h), "ai")
                     except: pass
 
                 log["signals_sent"] += 1
@@ -790,9 +1537,10 @@ def auto_analyze_loop():
                 log["last_action"] = action
                 log["last_price"] = price
                 save_signal_log(log)
+                asset_logs[log_key] = log
                 time.sleep(90)
             else:
-                logger.info(f"   {action} | Grade:{sig.get('grade','?')} | SKC={sig.get('skc_score',{}).get('total',0)}")
+                logger.info(f"   [{disp}] {action} | Grade:{sig.get('grade','?')} | conf={conf:.0%}")
 
             time.sleep(90 if (lkz or nykz) else 120)
 
@@ -807,26 +1555,71 @@ def main():
         logger.error("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN not set!")
         sys.exit(1)
 
+    # ── Kill any orphan handler processes (PPID=1, using this token) ──
+    import subprocess
+    try:
+        my_pid = os.getpid()
+        result = subprocess.run(
+            ["pgrep", "-f", "vilona_tradefx_handler"],
+            capture_output=True, text=True, timeout=3
+        )
+        pids = [int(p) for p in result.stdout.strip().split("\n") if p.isdigit()]
+        # If another handler already running with a valid parent, exit this one
+        for pid in pids:
+            if pid != my_pid:
+                try:
+                    ppid = int(open(f"/proc/{pid}/stat").read().split()[3])
+                    if ppid == 1:
+                        os.kill(pid, 9)
+                        logger.warning(f"🧹 Killed orphan handler PID {pid}")
+                    elif ppid > 1:
+                        # Another valid instance exists — exit gracefully
+                        logger.warning(f"⚠️ Another handler running (PID {pid}) — exiting")
+                        sys.exit(0)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    # ──────────────────────────────────────────────────────────────
+
     # Start background threads
     if LEARNING_ENGINE:
         try: start_learning_engine()
-        except: pass
+        except Exception: pass
 
     # Start auto-analyze thread
     auto_thread = threading.Thread(target=auto_analyze_loop, daemon=True)
     auto_thread.start()
     logger.info("Auto-analyze thread started")
 
-    # Start bot polling
+    # Start bot polling with exponential backoff
     state = load_state()
     offset = state.get("last_update_id", 0)
     logger.info(f"Bot starting... offset={offset}")
+    poll_errors = 0
 
+    # ── Initial connection reset — clear any stale polling state ──
+    for attempt in range(3):
+        try:
+            url = f"{TELEGRAM_API}/getUpdates?offset=-1&timeout=0"
+            req = urllib.request.Request(url, headers={"Connection": "close"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                pass
+            logger.info("✅ Polling connection reset OK")
+            break
+        except Exception as e:
+            logger.warning(f"Initial reset attempt {attempt+1}: {e}")
+            time.sleep(2)
+    time.sleep(1)
+    # ──────────────────────────────────────────────────────────────
+    
     while True:
         try:
-            url = f"{TELEGRAM_API}/getUpdates?offset={offset + 1}&timeout=30"
-            with urllib.request.urlopen(url, timeout=35) as r:
+            url = f"{TELEGRAM_API}/getUpdates?offset={offset + 1}&timeout=0"
+            req = urllib.request.Request(url, headers={"Connection": "close"})
+            with urllib.request.urlopen(req, timeout=5) as r:
                 updates = json.loads(r.read()).get("result", [])
+            poll_errors = 0  # reset on success
             for upd in updates:
                 offset = upd["update_id"]
                 msg = upd.get("message", {})
@@ -834,15 +1627,35 @@ def main():
                 chat_id = msg.get("chat", {}).get("id")
                 if text and chat_id:
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/subscribe"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
                             logger.error(f"Command error: {e}")
+                # Handle inline keyboard callbacks (Trade Auto / Skip)
+                cb = upd.get("callback_query")
+                if cb:
+                    try:
+                        handle_trade_callback(cb)
+                    except Exception as e:
+                        logger.error(f"Callback error: {e}")
             save_state({"last_update_id": offset})
         except Exception as e:
-            logger.error(f"Polling error: {e}")
-            time.sleep(5)
+            err_str = str(e)
+            # 409 Conflict: quick retry without long wait
+            if "409" in err_str:
+                poll_errors += 1
+                if poll_errors <= 10:
+                    time.sleep(0.5)  # Quick retry
+                else:
+                    logger.warning(f"Persistent 409 ({poll_errors}x) — waiting 5s...")
+                    time.sleep(5)
+                continue
+            
+            poll_errors += 1
+            wait = min(5 * (2 ** min(poll_errors, 5)), 120)  # 5s→10s→20s→40s→80s→120s cap
+            logger.error(f"Polling error (#{poll_errors}, wait {wait}s): {e}")
+            time.sleep(wait)
 
 
 if __name__ == "__main__":

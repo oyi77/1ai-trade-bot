@@ -1,0 +1,17 @@
+{
+  "position": "CLOSED",
+  "id": "vtfx_1780671698121_3",
+  "symbol": "XAUUSD",
+  "action": "SELL",
+  "entry": 4375.5,
+  "close_price": 4355.5,
+  "sl": 4385.5,
+  "tp": 4355.5,
+  "confidence": 0.78,
+  "opened_at": 1780671713.3972523,
+  "closed_at": 1780671735.002875,
+  "pnl": 20.0,
+  "pnl_pct": 0.457,
+  "result": "TP_HIT",
+  "status": "DONE"
+}

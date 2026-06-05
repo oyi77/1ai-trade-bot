@@ -14,9 +14,23 @@
       "close_price": 4351.0,
       "close_time": "2026-06-05T21:43:11.365029+07:00",
       "pnl": 1701.5
+    },
+    {
+      "id": "ea_1780671167105",
+      "action": "SELL",
+      "entry": 4375.0,
+      "sl": 4385.0,
+      "tp": 4355.0,
+      "confidence": 0.78,
+      "source": "mechanical_override",
+      "open_time": "2026-06-05T21:52:47.105132+07:00",
+      "status": "TP",
+      "close_price": 4354.399902,
+      "close_time": "2026-06-05T22:15:24.180106+07:00",
+      "pnl": 20.6
     }
   ],
-  "total_pnl": 1701.5,
-  "signals_processed": 1,
-  "last_signal_id": 0.72
+  "total_pnl": 1722.1,
+  "signals_processed": 2,
+  "last_signal_id": 0.78
 }
