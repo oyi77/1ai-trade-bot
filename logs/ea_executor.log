@@ -383,3 +383,8 @@
 2026-06-05 22:15:16,923 [INFO] 💼 SELL @ $4375.00 | Current=$4361.0 | Est.PnL=$14.00 | SL=$4385.00 TP=$4355.00
 2026-06-05 22:15:20,560 [INFO] 💼 SELL @ $4375.00 | Current=$4361.0 | Est.PnL=$14.00 | SL=$4385.00 TP=$4355.00
 2026-06-05 22:15:24,180 [INFO] 🟢 CLOSED: SELL | TP | PnL=$20.60 | Entry=$4375.00 → Close=$4354.40
+2026-06-06 05:43:05,034 [INFO] ==================================================
+2026-06-06 05:43:05,034 [INFO] EA EXECUTOR STARTED | PAPER TRADING
+2026-06-06 05:43:05,035 [INFO] Signal file: /home/openclaw/projects/1ai-trade-bot/data/vilona_tradefx/ea_signal.json
+2026-06-06 05:43:05,035 [INFO] ==================================================
+2026-06-06 05:43:05,035 [INFO] State: 0 open, 2 processed, PnL=$1722.10

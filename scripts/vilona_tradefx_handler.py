@@ -18,6 +18,16 @@ try:
     LICENSE_ENGINE = True
 except ImportError:
     LICENSE_ENGINE = False
+try:
+    from subscription_manager import (
+        ensure_member, get_member, upgrade_tier,
+        check_due_reminders, check_expired, mark_expired, set_reminder,
+        SUBS_PATH,
+    )
+    SUBSCRIPTION_ENGINE = True
+except Exception as e:
+    SUBSCRIPTION_ENGINE = False
+    print(f"Subscription engine unavailable: {e}")
 
 # ── Project path ──
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -215,6 +225,7 @@ def save_state(s):
 
 # ── Auto-Sync ──
 AUTOSYNC_PATH = DATA_DIR / "autosync.json"
+AUTOSYNC_GLOBAL_ENABLED = False
 
 def load_autosync():
     try:
@@ -227,6 +238,8 @@ def save_autosync(data):
     AUTOSYNC_PATH.write_text(json.dumps(data))
 
 def is_autosync(chat_id):
+    if not AUTOSYNC_GLOBAL_ENABLED:
+        return False
     return str(chat_id) in load_autosync()
 
 def set_autosync(chat_id, enabled=True):
@@ -357,6 +370,37 @@ BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
 # ── Trade/Skip inline keyboard ──
 PENDING_SIGNALS = {}  # {chat_id: {"sig": ..., "price": ..., "expires": ts}}
 PENDING_SIGNAL_TTL = 300  # 5 menit
+
+# ── Manual-mode guard: anti-spam + anti-opposite-flip per user ──
+USER_LAST_ANALYZE = {}  # chat_id -> timestamp
+USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
+MANUAL_THROTTLE_SECONDS = 60
+DIRECTION_LOCK_SECONDS = 60
+
+def _is_manual_blocked(chat_id):
+    now = time.time()
+    # pending signal exists → must resolve first
+    if chat_id in PENDING_SIGNALS:
+        return True, "⏰ Sinyal sebelumnya masih berjalan. Tekan Trade Auto/Skip atau tunggu 5 menit."
+    ts = USER_LAST_ANALYZE.get(chat_id)
+    if ts and (now - ts) < MANUAL_THROTTLE_SECONDS:
+        wait = int(MANUAL_THROTTLE_SECONDS - (now - ts))
+        return True, f"⏳ Tunggu {wait} detik sebelum analisa berikutnya."
+    rec = USER_LAST_DIRECTION.get(chat_id)
+    if rec and rec.get("action") in ("BUY", "SELL"):
+        try:
+            last = datetime.fromisoformat(rec.get("at", ""))
+            elapsed = (datetime.now() - last).total_seconds()
+            if elapsed < DIRECTION_LOCK_SECONDS:
+                return True, f"🔒 Terdeteksi arah {rec['action']} pada {rec.get('asset','?')} {int(elapsed)} detik lalu. Menunggu {DIRECTION_LOCK_SECONDS - int(elapsed)} detik untuk menghindari flip."
+        except Exception:
+            pass
+    return False, ""
+
+def _touch_manual(chat_id, action=None, asset=""):
+    USER_LAST_ANALYZE[chat_id] = time.time()
+    if action in ("BUY", "SELL"):
+        USER_LAST_DIRECTION[chat_id] = {"action": action, "at": wib_now().isoformat(), "asset": asset}
 
 def handle_trade_callback(callback_query):
     """Handle inline keyboard: trade:<id> or skip:<id>"""
@@ -854,10 +898,67 @@ def handle_command(cmd, text, chat_id, msg):
     sub_norm = _normalize_broker_symbol(sub)  # XAUUSDc → xauusd, EURUSD.pro → eurusd
 
     if cmd == "/start":
-        welcome = "🤖 <b>Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\nAI Trading Assistant\n🔄 XAUUSD · BTC · EURUSD · GBPUSD · USOIL\n📊 Multi-Asset Signal Engine\n━━━━━━━━━━━━━━━━\n📡 Sinyal: Mon-Fri (auto)\n📐 Mapping: Setiap hari 10:00 WIB\n🛑 Weekend: Hemat AI, market tutup\n\n📱 /help — Semua command\n📊 /mapping — Market mapping harian"
-        # Quick welcome first
-        tg_send(welcome, chat_id)
-        # Then load member info in background
+        # ── Subscription / member onboarding ──
+        member_status = None
+        if SUBSCRIPTION_ENGINE and chat_id:
+            try:
+                member = ensure_member(str(chat_id))
+                member_status = member
+                # Refresh expiry status if needed
+                expired = check_expired()
+                for item in expired:
+                    if item["chat_id"] == str(chat_id):
+                        mark_expired(str(chat_id))
+                        member_status["status"] = "expired"
+                        member_status["expiry"]
+            except Exception:
+                pass
+
+        status_line = ""
+        if member_status:
+            if member_status.get("status") == "expired":
+                status_line = (
+                    "\n<b>⛔ Langganan Expired</b>\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    "Perpanjang: /subscribe\n"
+                    "Sinyal AI nonaktif sampai diperpanjang."
+                )
+                welcome = "🤖 <b>Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\n" \
+                          "Selamat datang kembali!\n\n" + status_line
+                tg_send(welcome, chat_id)
+            elif member_status.get("status") == "paid":
+                expiry = member_status.get("expiry", "")
+                tier = member_status.get("tier", "pro")
+                welcome = (
+                    f"🤖 <b>Vilona Trade FX — {tier.upper()}</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"⭐ {tier.title()} Active\n"
+                    f"📅 Expired: {expiry[:10] if expiry else '?'}\n"
+                    f"📡 Sinyal: Mon-Fri (auto)\n"
+                    "Karir: kirim /analyze xauusd"
+                )
+                tg_send(welcome, chat_id)
+            else:
+                # Trial
+                expiry = member_status.get("expiry", "")
+                welcome = (
+                    "🤖 <b>Vilona Trade FX — Free Trial</b>\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    f"⏳ 7 Hari Trial\n"
+                    f"📅 Expired: {expiry[:10] if expiry else '?'}\n\n"
+                    "📡 Sinyal: Mon-Fri (auto)\n"
+                    "📐 Mapping: Setiap hari 10:00 WIB\n"
+                    "🛑 Weekend: Hemat AI, market tutup\n\n"
+                    "📱 /help — Semua command\n"
+                    "💎 /subscribe — Upgrade VIP"
+                )
+                tg_send(welcome, chat_id)
+        else:
+            # Fallback if subscription engine unavailable
+            welcome = "🤖 <b>Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\nAI Trading Assistant\n🔄 XAUUSD · BTC · EURUSD · GBPUSD · USOIL\n📊 Multi-Asset Signal Engine\n━━━━━━━━━━━━━━━━\n📡 Sinyal: Mon-Fri (auto)\n📐 Mapping: Setiap hari 10:00 WIB\n🛑 Weekend: Hemat AI, market tutup\n\n📱 /help — Semua command\n📊 /mapping — Market mapping harian"
+            tg_send(welcome, chat_id)
+
+        # Background member info if available
         if MEMBERS_ENABLED and chat_id:
             try:
                 member = get_member(str(chat_id))
@@ -970,6 +1071,14 @@ def handle_command(cmd, text, chat_id, msg):
         if sub_norm in pair_map:
             disp = display_map.get(sub_norm, sub_norm.upper())
             pair = pair_map[sub_norm]
+
+            # ── Manual anti-flip guard ──
+            blocked, reason = _is_manual_blocked(str(chat_id))
+            if blocked:
+                tg_send(reason, chat_id)
+                return
+
+            _touch_manual(str(chat_id), asset=disp)
             tg_send("🔍 Vilona Trade FX menganalisa... ~15 detik", chat_id)
             price = fetch_price(pair)
             dxy = fetch_dxy() if pair == "gold" else None
@@ -1097,6 +1206,15 @@ def handle_command(cmd, text, chat_id, msg):
             try:
                 price = fetch_price(sub)
                 if price:
+
+                    # ── Manual anti-flip guard (unknown-symbol fallback) ──
+                    blocked, reason = _is_manual_blocked(str(chat_id))
+                    if blocked:
+                        tg_send(reason, chat_id)
+                        return
+
+                    _touch_manual(str(chat_id), asset=sub.upper())
+
                     tg_send(f"🔍 Menganalisa {sub.upper()}... ~15 detik", chat_id)
                     ohlcv_bars2 = _fetch_ohlcv_for_ai(sub)
                     sig = ask_ai(price, None, session(), str(killzone()), 0, premium=False,
@@ -1217,34 +1335,48 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send(txt, chat_id)
 
     elif cmd == "/subscribe":
-        if MEMBERS_ENABLED:
-            try:
-                info = get_pricing_info()
-                txt = (f"💎 <b>Upgrade VIP</b>\n━━━━━━━━━━━━━━━━\n"
-                       f"💰 {info.get('vip_price','75K')}/bulan\n"
-                       f"✓ Analisa unlimited\n✓ Sinyal real-time\n✓ Priority support\n"
-                       f"━━━━━━━━━━━━━━━━\nComing soon: Payment gateway")
-                tg_send(txt, chat_id)
-            except Exception:
-                tg_send("💎 VIP upgrade system loading...", chat_id)
-
-    elif cmd == "/genkey" and LICENSE_ENGINE:
-        result = cmd_genkey(str(chat_id), sub if sub else "")
-        tg_send(result, chat_id)
-
-    elif cmd == "/listkeys" and LICENSE_ENGINE:
-        result = cmd_listkeys(str(chat_id))
-        tg_send(result, chat_id)
-
-    elif cmd == "/revokekey" and LICENSE_ENGINE:
-        result = cmd_revokekey(str(chat_id), sub if sub else "")
-        tg_send(result, chat_id)
-
-    elif cmd == "/mykey" and LICENSE_ENGINE:
-        result = cmd_mykey(str(chat_id), sub if sub else "")
-        tg_send(result, chat_id)
+        if chat_id:
+            if SUBSCRIPTION_ENGINE:
+                try:
+                    member = get_member(str(chat_id)) or ensure_member(str(chat_id))
+                    member_status = member.get("status")
+                    tier = member.get("tier", "starter")
+                    expiry = member.get("expiry", "")
+                    txt = (
+                        "💎 <b>Upgrade / Perpanjang VIP</b>\n"
+                        "━━━━━━━━━━━━━━━━\n"
+                        "📦 <b>Paket Langganan</b>\n"
+                        "• Starter: gratis 7 hari trial\n"
+                        "• Pro: akses penuh + analisa unlimited\n"
+                        "• Elite: multi akun + support prioritas\n"
+                        f"📅 Status: {tier} — {member_status}\n"
+                        f"📅 Expired: {expiry[:10] if expiry else 'Belum ada'}\n\n"
+                        "💳 Payment: Tripay / Duitku\n"
+                        "🔄 Perpanjang otomatis (coming soon)\n\n"
+                        "Admin bisa bantu upgrade via /subscribe <paket>"
+                    )
+                    tg_send(txt, chat_id)
+                except Exception:
+                    tg_send("💎 VIP upgrade system loading...", chat_id)
+            elif MEMBERS_ENABLED:
+                try:
+                    info = get_pricing_info()
+                    txt = (f"💎 <b>Upgrade VIP</b>\n━━━━━━━━━━━━━━━━\n"
+                           f"💰 {info.get('vip_price','75K')}/bulan\n"
+                           f"✓ Analisa unlimited\n✓ Sinyal real-time\n✓ Priority support\n"
+                           f"━━━━━━━━━━━━━━━━\nComing soon: Payment gateway")
+                    tg_send(txt, chat_id)
+                except Exception:
+                    tg_send("💎 VIP upgrade system loading...", chat_id)
+            else:
+                tg_send("💎 Member system belum aktif.", chat_id)
 
     elif cmd == "/autosync":
+        if not AUTOSYNC_GLOBAL_ENABLED:
+            tg_send("⏸ <b>Auto Sync dinonaktifkan sementara.</b>\n"
+                    "Gunakan tombol Trade Auto / Skip pada setiap analisa.\n"
+                    "Fitur auto-trade akan diaktifkan kembali di masa depan.", chat_id)
+            return
         if sub in ("on", "enable", "start", "1"):
             set_autosync(chat_id, True)
             tg_send("🤖 <b>Auto Sync AKTIF!</b>\n━━━━━━━━━━━━━━━━\n"
@@ -1314,6 +1446,61 @@ def send_to_channel(text):
         tg_send(text, MAPPING_CHANNEL_ID)
     else:
         tg_send(text)  # fallback to home
+
+
+# ── Subscription reminders (H-7/H-3/H-1) ──
+def _process_subscription_reminders():
+    if not SUBSCRIPTION_ENGINE:
+        return
+    try:
+        due = check_due_reminders()
+        for item in due:
+            chat_id = item["chat_id"]
+            member = item["member"]
+            label = item["label"]
+            days_left = item["days_left"]
+            nama = member.get("nama", member.get("chat_id", "Kak"))
+            tier = member.get("tier", "paket")
+            if label == "h7":
+                msg = (
+                    f"⏳ <b>Pengingat Langganan</b>\n"
+                    f"Hi {nama}, langganan {tier} akan expired dalam 7 hari.\n"
+                    "Perpanjang sekarang agar sinyal tetap lanjut.\n"
+                    "/subscribe"
+                )
+            elif label == "h3":
+                msg = (
+                    f"⚠️ <b>3 Hari Lagi Expired!</b>\n"
+                    f"Jangan sampai sinyal {tier} putus, {nama}.\n"
+                    "Perpanjang sekarang: /subscribe"
+                )
+            else:
+                msg = (
+                    f"🔴 <b>BESOK EXPIRED!</b>\n"
+                    f"{nama}, langganan {tier} expired dalam <24 jam.\n"
+                    "Tanpa perpanjangan: akses sinyal AI terbatas.\n"
+                    "/subscribe"
+                )
+            try:
+                tg_send(msg, chat_id)
+            except Exception:
+                pass
+            set_reminder(chat_id, label)
+        expired = check_expired()
+        for item in expired:
+            chat_id = item["chat_id"]
+            mark_expired(chat_id)
+            try:
+                tg_send(
+                    "⛔ <b>Langganan Telah Expired</b>\n"
+                    "Sinyal AI dibatasi sampai perpanjangan.\n"
+                    "/subscribe — perpanjang sekarang",
+                    chat_id,
+                )
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.error(f"Subscription reminders failed: {exc}")
 
 
 def format_daily_mapping():
@@ -1601,6 +1788,29 @@ def main():
     if LEARNING_ENGINE:
         try: start_learning_engine()
         except Exception: pass
+
+    # Initialize subscription state from disk
+    if SUBSCRIPTION_ENGINE:
+        try:
+            check_expired()
+        except Exception:
+            pass
+
+    # Start periodic reminder/expire sweep
+    def _reminder_loop():
+        while True:
+            try:
+                _process_subscription_reminders()
+            except Exception:
+                pass
+            time.sleep(3600)
+
+    try:
+        _reminder_thread = threading.Thread(target=_reminder_loop, daemon=True)
+        _reminder_thread.start()
+        logger.info("Subscription reminder thread started")
+    except Exception:
+        pass
 
     # Start auto-analyze thread
     auto_thread = threading.Thread(target=auto_analyze_loop, daemon=True)
