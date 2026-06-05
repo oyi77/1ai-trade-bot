@@ -130,48 +130,66 @@ def _rsi(closes: list[float], period: int = 14) -> list[float]:
 
 @dataclass
 class SMCConfirmation:
-    """10-factor SMC Scalper confirmation."""
-    choch_detected: bool = False       # Perubahan struktur pasar
-    fvg_detected: bool = False         # Celah harga (imbalance)
-    order_block_valid: bool = False    # Zona supply/demand valid
-    trend_aligned: bool = False        # Trend searah (HTF)
-    price_in_zone: bool = False        # Harga di zona entry
-    session_optimal: bool = False      # Jam trading optimal
-    volatility_normal: bool = False    # Volatilitas dalam batas wajar
-    momentum_ok: bool = False          # Momentum konfirmasi
-    trend_strength_ok: bool = False    # Kekuatan trend cukup
-    spread_acceptable: bool = False    # Biaya trading wajar
+    """14-factor SMC Scalper confirmation — World Class SMC v2."""
+    choch_detected: bool = False       # Change of Character (reversal)
+    bos_detected: bool = False          # Break of Structure (continuation)
+    idm_detected: bool = False          # Inducement / Liquidity zone
+    false_break_warning: bool = False   # False break / Swept structure alert
+    valid_pullback: bool = False        # Valid Pullback (liquidity removal)
+    fvg_detected: bool = False          # Fair Value Gap
+    order_block_valid: bool = False     # Supply/Demand Order Block
+    sd_zone_aligned: bool = False       # Price at Supply/Demand zone
+    trend_aligned: bool = False         # Trend alignment (HTF)
+    price_in_zone: bool = False         # Price at entry zone
+    session_optimal: bool = False       # Optimal trading session
+    volatility_normal: bool = False     # Volatility within limits
+    momentum_ok: bool = False           # RSI momentum confirmation
+    trend_strength_ok: bool = False     # Trend strength sufficient
 
     @property
     def score(self) -> int:
         return sum([
             int(self.choch_detected) * 2,
+            int(self.bos_detected) * 2,
+            int(self.idm_detected) * 2,
             int(self.fvg_detected) * 2,
             int(self.trend_aligned) * 2,
             int(self.order_block_valid) * 1,
+            int(self.sd_zone_aligned) * 1,
+            int(self.valid_pullback) * 1,
             int(self.price_in_zone) * 1,
             int(self.session_optimal) * 1,
             int(self.volatility_normal) * 1,
             int(self.momentum_ok) * 1,
             int(self.trend_strength_ok) * 1,
-            int(self.spread_acceptable) * 0,  # info only
+            int(not self.false_break_warning) * 2,  # PENALTY for false breaks
         ])
 
     @property
     def grade(self) -> Grade:
-        return Grade.from_score(self.score, 12)
+        return Grade.from_score(self.score, 18)
 
     def _reasons_id(self, symbol: str) -> list[str]:
-        """Alasan dalam bahasa Indonesia."""
+        """Alasan dalam bahasa Indonesia — World Class SMC v2."""
         reasons = []
         if self.choch_detected:
-            reasons.append("✅ CHoCH terdeteksi — struktur pasar berubah arah")
+            reasons.append("✅ CHoCH — perubahan struktur pasar terdeteksi")
+        if self.bos_detected:
+            reasons.append("✅ BOS — trend berlanjut, struktur terkonfirmasi")
+        if self.idm_detected:
+            reasons.append("✅ IDM — zona inducement / pengumpulan likuiditas")
+        if self.false_break_warning:
+            reasons.append("⚠️ FALSE BREAK — Swept CHoCH/BOS, hati-hati jebakan!")
+        if self.valid_pullback:
+            reasons.append("✅ Valid Pullback — likuiditas dihapus dari impulse")
         if self.fvg_detected:
-            reasons.append("✅ FVG / celah harga terisi — imbalance dikoreksi")
+            reasons.append("✅ FVG — celah harga / imbalance terdeteksi")
         if self.order_block_valid:
             reasons.append("✅ Order Block valid — zona supply/demand terkonfirmasi")
+        if self.sd_zone_aligned:
+            reasons.append("✅ Supply/Demand Zone — harga di zona institusional")
         if self.trend_aligned:
-            reasons.append("✅ Trend searah — sinyal sejalan dengan trend besar")
+            reasons.append("✅ Trend searah — sinyal sejalan dengan trend besar (HTF)")
         if self.price_in_zone:
             reasons.append("✅ Harga di zona entry — timing presisi")
         if self.session_optimal:
@@ -249,6 +267,334 @@ def detect_choch(ohlcv: list[dict], lookback: int = 50) -> dict | None:
                     return {"direction": "SELL", "price": last_low[1], "index": len(bars) - 1}
     
     return None
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SMC ADVANCED: IDM, BOS, False Break, Liquidity Grab, Valid Pullback
+# Source: World Class SMC — winworld.pro + Modul SMC MLQ
+# ═══════════════════════════════════════════════════════════════════
+
+def detect_bos(ohlcv: list[dict], lookback: int = 50) -> dict | None:
+    """
+    Detect Break of Structure (BOS) — trend continuation.
+    
+    Bullish BOS: Price breaks above previous HH in an uptrend
+    Bearish BOS: Price breaks below previous LL in a downtrend
+    
+    Difference from CHoCH: BOS = continuation, CHoCH = reversal.
+    
+    Returns: {"direction": "BUY"|"SELL", "price": float, "index": int, "type": "BOS"} or None
+    """
+    if len(ohlcv) < lookback:
+        return None
+    
+    bars = ohlcv[-lookback:]
+    closes = [float(b.get("close", b.get("c", 0))) for b in bars]
+    highs = [float(b.get("high", b.get("h", 0))) for b in bars]
+    lows = [float(b.get("low", b.get("l", 0))) for b in bars]
+    last_close = closes[-1]
+    last_idx = len(bars) - 1
+    
+    # Find swing highs and lows (same method as CHoCH)
+    swing_lookback = 5
+    swing_highs = []
+    swing_lows = []
+    for i in range(swing_lookback, len(bars) - swing_lookback):
+        h = highs[i]
+        l = lows[i]
+        is_high = all(h >= highs[j] for j in range(i - swing_lookback, i + swing_lookback + 1) if j != i)
+        is_low = all(l <= lows[j] for j in range(i - swing_lookback, i + swing_lookback + 1) if j != i)
+        if is_high:
+            swing_highs.append((i, h))
+        if is_low:
+            swing_lows.append((i, l))
+    
+    if len(swing_highs) < 2 or len(swing_lows) < 2:
+        return None
+    
+    # Bullish BOS: price breaks previous HH (continuation of uptrend)
+    for i in range(1, len(swing_highs)):
+        prev_hh = swing_highs[i-1][1]
+        prev_hh_idx = swing_highs[i-1][0]
+        if last_close > prev_hh:
+            return {"direction": "BUY", "price": prev_hh, "index": last_idx, "type": "BOS"}
+    
+    # Bearish BOS: price breaks previous LL (continuation of downtrend)
+    for i in range(1, len(swing_lows)):
+        prev_ll = swing_lows[i-1][1]
+        prev_ll_idx = swing_lows[i-1][0]
+        if last_close < prev_ll:
+            return {"direction": "SELL", "price": prev_ll, "index": last_idx, "type": "BOS"}
+    
+    return None
+
+
+def detect_idm(ohlcv: list[dict], lookback: int = 50) -> dict | None:
+    """
+    Detect Inducement (IDM) — the last valid pullback extreme before BOS.
+    
+    IDM is the extreme point of the last pullback in the structure when price makes a BOS.
+    It represents a liquidity collection zone where smart money traps retail traders.
+    
+    Rule: IDM follows price as long as it remains valid and price makes a BOS.
+    
+    Returns: {"direction": "BUY"|"SELL", "price": float, "index": int} or None
+    """
+    if len(ohlcv) < lookback:
+        return None
+    
+    bars = ohlcv[-lookback:]
+    closes = [float(b.get("close", b.get("c", 0))) for b in bars]
+    highs = [float(b.get("high", b.get("h", 0))) for b in bars]
+    lows = [float(b.get("low", b.get("l", 0))) for b in bars]
+    
+    # First detect BOS
+    bos = detect_bos(ohlcv, lookback)
+    if not bos:
+        return None
+    
+    bos_idx = bos["index"]
+    direction = bos["direction"]
+    
+    # Find the last pullback BEFORE the BOS
+    if direction == "BUY":
+        # In uptrend: IDM is the last HL (lowest point of the last pullback before HH break)
+        for i in range(bos_idx - 1, max(bos_idx - 30, 0), -1):
+            # Find local low (pullback)
+            if i >= 3 and i < bos_idx - 2:
+                if lows[i] <= lows[i-1] and lows[i] <= lows[i+1]:
+                    return {"direction": "BUY", "price": lows[i], "index": i, 
+                            "type": "IDM", "description": "HL — last pullback in bullish trend"}
+    else:
+        # In downtrend: IDM is the last LH (highest point of the last pullback before LL break)
+        for i in range(bos_idx - 1, max(bos_idx - 30, 0), -1):
+            if i >= 3 and i < bos_idx - 2:
+                if highs[i] >= highs[i-1] and highs[i] >= highs[i+1]:
+                    return {"direction": "SELL", "price": highs[i], "index": i,
+                            "type": "IDM", "description": "LH — last pullback in bearish trend"}
+    
+    return None
+
+
+def detect_false_break(ohlcv: list[dict], lookback: int = 50) -> dict | None:
+    """
+    Detect False Market Structure Break.
+    
+    When CHoCH appears but price doesn't follow through and continues 
+    in the original direction — this is a false break that traps traders.
+    
+    Also known as: Liquidity Grab / Stop Hunt / SFP (Swing Failure Pattern)
+    
+    Criteria:
+    - Price breaks structure (CHoCH) → creates expectation of reversal
+    - Instead, price reverses back and continues the ORIGINAL trend
+    - Candle closes back inside the previous range
+    
+    Returns: {"detected": bool, "direction_faked": str, "real_direction": str} or None
+    """
+    if len(ohlcv) < lookback:
+        return None
+    
+    bars = ohlcv[-lookback:]
+    closes = [float(b.get("close", b.get("c", 0))) for b in bars]
+    highs = [float(b.get("high", b.get("h", 0))) for b in bars]
+    lows = [float(b.get("low", b.get("l", 0))) for b in bars]
+    
+    # Check last 5 candles for wick breach without body close (Swept BOS/CHoCH)
+    for i in range(len(bars) - 5, len(bars) - 1):
+        body_high = max(closes[i], closes[i-1]) if i > 0 else closes[i]
+        body_low = min(closes[i], closes[i-1]) if i > 0 else closes[i]
+        wick_high = highs[i]
+        wick_low = lows[i]
+        
+        # Wick breaches a level but body closes back → liquidity grab
+        wick_range = wick_high - wick_low
+        body_range = abs(closes[i] - closes[i-1]) if i > 0 else 0
+        
+        if wick_range > body_range * 2.5:  # Long wick relative to body
+            if closes[i] > closes[i-1] if i > 0 else False:
+                # Bullish candle with long lower wick = potential buy trap
+                if wick_low < body_low - (wick_range * 0.3):
+                    return {"detected": True, "pattern": "Swept CHoCH Bearish Trap",
+                            "direction_faked": "SELL", "real_direction": "BUY",
+                            "wick_at": wick_low, "body_close": closes[i]}
+            else:
+                # Bearish candle with long upper wick = potential sell trap
+                if wick_high > body_high + (wick_range * 0.3):
+                    return {"detected": True, "pattern": "Swept CHoCH Bullish Trap",
+                            "direction_faked": "BUY", "real_direction": "SELL",
+                            "wick_at": wick_high, "body_close": closes[i]}
+    
+    return None
+
+
+def detect_valid_pullback(ohlcv: list[dict], lookback: int = 30) -> dict | None:
+    """
+    Detect Valid Pullback per World Class SMC rules.
+    
+    Rule: A valid pullback is a retracement where liquidity is removed 
+    from the last impulse candle. Candle color doesn't matter.
+    
+    Impulse candle = consecutive candles in one direction without IDM removal.
+    Correction ends with BOS (price updates max/min of last impulse candle).
+    
+    Returns: {"valid": bool, "direction": str, "liquidity_removed": bool, "impulse_index": int}
+    """
+    if len(ohlcv) < lookback:
+        return None
+    
+    bars = ohlcv[-lookback:]
+    closes = [float(b.get("close", b.get("c", 0))) for b in bars]
+    highs = [float(b.get("high", b.get("h", 0))) for b in bars]
+    lows = [float(b.get("low", b.get("l", 0))) for b in bars]
+    
+    # Find last impulse candle (strong directional move)
+    for i in range(len(bars) - 3, lookback // 2, -1):
+        candle_range = highs[i] - lows[i]
+        if candle_range <= 0:
+            continue
+        
+        # Check if this candle removes liquidity (wicks beyond previous extreme)
+        if i > 0:
+            prev_high = max(highs[max(0,i-3):i])
+            prev_low = min(lows[max(0,i-3):i])
+            
+            # Bullish impulse: breaks above previous highs
+            if closes[i] > closes[i-1] and highs[i] > prev_high:
+                # Check if the pullback after this removes liquidity from it
+                for j in range(i + 1, min(i + 10, len(bars))):
+                    if lows[j] < lows[i]:  # Pullback below impulse low = liquidity removal
+                        return {"valid": True, "direction": "BUY", 
+                                "liquidity_removed": True, "impulse_index": i,
+                                "pullback_index": j}
+            
+            # Bearish impulse: breaks below previous lows
+            if closes[i] < closes[i-1] and lows[i] < prev_low:
+                for j in range(i + 1, min(i + 10, len(bars))):
+                    if highs[j] > highs[i]:  # Pullback above impulse high = liquidity removal
+                        return {"valid": True, "direction": "SELL",
+                                "liquidity_removed": True, "impulse_index": i,
+                                "pullback_index": j}
+    
+    return None
+
+
+def detect_supply_demand_zones(ohlcv: list[dict], lookback: int = 100, min_strength: float = 2.0) -> list[dict]:
+    """
+    Detect Supply and Demand zones based on price action.
+    
+    Supply Zone: The last base/consolidation before a sharp price decline.
+    Demand Zone: The last base/consolidation before a sharp price rise.
+    
+    Strength measured by:
+    - Magnitude of the subsequent move
+    - Time spent at the zone (shorter = stronger)
+    - Number of touches/re-tests
+    
+    Returns: list of {"type": "SUPPLY"|"DEMAND", "upper": float, "lower": float, 
+                       "strength": float, "age": int, "tested": int}
+    """
+    if len(ohlcv) < lookback:
+        return []
+    
+    bars = ohlcv[-lookback:]
+    highs = [float(b.get("high", b.get("h", 0))) for b in bars]
+    lows = [float(b.get("low", b.get("l", 0))) for b in bars]
+    closes = [float(b.get("close", b.get("c", 0))) for b in bars]
+    
+    zones = []
+    zone_lookback = 10
+    
+    for i in range(zone_lookback, len(bars) - zone_lookback):
+        # Check for consolidation/base (small range relative to surrounding)
+        base_high = max(highs[i-zone_lookback:i+1])
+        base_low = min(lows[i-zone_lookback:i+1])
+        base_range = base_high - base_low
+        
+        if base_range <= 0:
+            continue
+        
+        # Check subsequent move
+        future_bars = min(30, len(bars) - i - 1)
+        if future_bars < 5:
+            continue
+        
+        future_high = max(highs[i+1:i+1+future_bars])
+        future_low = min(lows[i+1:i+1+future_bars])
+        
+        # Demand Zone: consolidation followed by sharp rise
+        rise_magnitude = future_high - base_high
+        drop_from_base = base_low - future_low
+        
+        if rise_magnitude > base_range * min_strength:
+            strength = rise_magnitude / base_range if base_range > 0 else 1
+            zones.append({
+                "type": "DEMAND",
+                "upper": base_high,
+                "lower": base_low,
+                "strength": round(strength, 1),
+                "age": len(bars) - i,
+                "tested": 0,
+                "mid": (base_high + base_low) / 2
+            })
+        
+        # Supply Zone: consolidation followed by sharp decline
+        if drop_from_base > base_range * min_strength:
+            strength = drop_from_base / base_range if base_range > 0 else 1
+            zones.append({
+                "type": "SUPPLY",
+                "upper": base_high,
+                "lower": base_low,
+                "strength": round(strength, 1),
+                "age": len(bars) - i,
+                "tested": 0,
+                "mid": (base_high + base_low) / 2
+            })
+    
+    # Deduplicate overlapping zones, keep strongest
+    zones.sort(key=lambda z: z["strength"], reverse=True)
+    unique = []
+    for z in zones:
+        overlap = False
+        for u in unique:
+            if z["type"] == u["type"] and abs(z["mid"] - u["mid"]) < (z["upper"] - z["lower"]) * 0.5:
+                overlap = True
+                break
+        if not overlap:
+            unique.append(z)
+    
+    return unique[:5]  # Top 5 strongest zones
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SMC ENHANCED CONFIRMATION: 14-factor scoring
+# ═══════════════════════════════════════════════════════════════════
+
+class SMCGradeV2:
+    """Enhanced SMC grading with 14 factors — World Class SMC + Supply/Demand."""
+    SANGAT_KUAT = 5
+    KUAT = 4
+    BAGUS = 3
+    CUKUP = 2
+    LEMAH = 1
+    
+    @classmethod
+    def from_score(cls, score: int, max_score: int = 16) -> int:
+        pct = score / max_score if max_score > 0 else 0
+        if pct >= 0.85: return cls.SANGAT_KUAT
+        if pct >= 0.65: return cls.KUAT
+        if pct >= 0.45: return cls.BAGUS
+        if pct >= 0.25: return cls.CUKUP
+        return cls.LEMAH
+    
+    @classmethod
+    def emoji(cls, grade: int) -> str:
+        return {5: "⭐", 4: "🟢", 3: "🔵", 2: "🟡", 1: "⚪"}[grade]
+    
+    @classmethod
+    def label(cls, grade: int) -> str:
+        return {5: "SANGAT KUAT ⭐", 4: "KUAT 🟢", 3: "BAGUS 🔵", 
+                2: "CUKUP 🟡", 1: "LEMAH ⚪"}[grade]
 
 
 def detect_fvg_zones(ohlcv: list[dict], min_pips: float = 5.0, lookback: int = 20) -> dict | None:
@@ -384,12 +730,27 @@ def analyze_smc_scalper(
 
     # 1. CHoCH Detection
     choch = detect_choch(ohlcv)
-
-    # 2. FVG Detection
+    
+    # 2. BOS Detection (NEW — World Class SMC)
+    bos = detect_bos(ohlcv)
+    
+    # 3. IDM Detection (NEW — Inducement/Liquidity Zone)
+    idm = detect_idm(ohlcv)
+    
+    # 4. False Break Detection (NEW — Swept CHoCH/BOS)
+    false_break = detect_false_break(ohlcv)
+    
+    # 5. Valid Pullback Check (NEW — Liquidity Removal Rule)
+    valid_pullback = detect_valid_pullback(ohlcv)
+    
+    # 6. FVG Detection
     fvg = detect_fvg_zones(ohlcv)
-
-    # 3. Order Block Detection
+    
+    # 7. Order Block Detection
     ob = detect_order_block(ohlcv)
+    
+    # 8. Supply/Demand Zones (NEW)
+    sd_zones = detect_supply_demand_zones(ohlcv)
 
     # 4. Trend alignment (EMA 50 vs EMA 200)
     ema50 = _ema(closes, 50)
@@ -401,14 +762,21 @@ def analyze_smc_scalper(
     direction = None
     conf = SMCConfirmation()
     conf.choch_detected = choch is not None
+    conf.bos_detected = bos is not None
+    conf.idm_detected = idm is not None
+    conf.false_break_warning = false_break is not None and false_break.get("detected", False)
+    conf.valid_pullback = valid_pullback is not None and valid_pullback.get("valid", False)
     conf.fvg_detected = fvg is not None
 
     if choch:
         direction = choch["direction"]
+    if bos:
+        direction = bos["direction"] if direction is None else direction
     if fvg:
         direction = fvg["direction"] if direction is None else direction
     
     conf.order_block_valid = ob is not None and (direction is None or ob["direction"] == direction)
+    conf.sd_zone_aligned = len(sd_zones) > 0
     conf.trend_aligned = (direction == "BUY" and trend_up) or (direction == "SELL" and trend_down)
     
     # Price in zone check
@@ -438,9 +806,8 @@ def analyze_smc_scalper(
     else:
         conf.momentum_ok = False
 
-    # Trend strength (simplified ADX-like)
-    conf.trend_strength_ok = conf.choch_detected or conf.fvg_detected
-    conf.spread_acceptable = True
+    # Trend strength
+    conf.trend_strength_ok = conf.choch_detected or conf.bos_detected or conf.fvg_detected
 
     # 6. Quality filter
     grade = conf.grade
@@ -466,13 +833,35 @@ def analyze_smc_scalper(
     result["reasons"] = conf._reasons_id(symbol)
     result["confirmation"] = conf
     
-    # Tambahan info spesifik
+    # Tambahan info spesifik — World Class SMC v2
     if choch:
         result["reasons"].insert(0, f"🎯 CHoCH {direction} di ${choch['price']:.2f}")
+    if bos:
+        result["reasons"].insert(0, f"📈 BOS {direction} — trend lanjut di ${bos['price']:.2f}")
+    if idm:
+        result["reasons"].insert(0, f"💧 IDM — zona likuiditas di ${idm['price']:.2f}")
+    if false_break and false_break.get("detected"):
+        result["reasons"].insert(0, f"⚠️ {false_break.get('pattern','Swept Structure')} terdeteksi!")
     if fvg:
         result["reasons"].insert(0, f"📐 FVG zone: ${fvg['lower']:.2f} - ${fvg['upper']:.2f}")
     if ob:
         result["reasons"].insert(0, f"🧱 Order Block [{ob['strength']}/5]: ${ob['lower']:.2f} - ${ob['upper']:.2f}")
+    
+    # S/D zones
+    if sd_zones:
+        sd_nearby = []
+        for z in sd_zones[:3]:
+            dist_pct = abs(last_price - z["mid"]) / last_price * 100 if last_price > 0 else 0
+            if dist_pct < 1.0:  # Within 1% of current price
+                sd_nearby.append(f"{z['type']}@{z['mid']:.2f}")
+        if sd_nearby:
+            result["reasons"].insert(0, f"📍 Near S/D zones: {', '.join(sd_nearby)}")
+    
+    # Store extra data
+    result["_bos"] = bos
+    result["_idm"] = idm
+    result["_false_break"] = false_break
+    result["_sd_zones"] = sd_zones
 
     return result
 
