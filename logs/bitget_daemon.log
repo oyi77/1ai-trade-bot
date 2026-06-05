@@ -10060,3 +10060,17 @@ Traceback (most recent call last):
 FileNotFoundError: [Errno 2] No such file or directory: '/home/openclaw/projects/1ai-trade-bot/engines/bitget/logs/trading/vilona_heartbeat.txt'
 
 💤 Sleeping 15 min until 14:27:19...
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory
+/usr/bin/python3: can't open file '/home/openclaw/projects/1ai-trade-bot/engines/bitget/scripts/vilona_daemon_loop.py': [Errno 2] No such file or directory

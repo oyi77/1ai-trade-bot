@@ -1,0 +1,9 @@
+2026-06-05 21:42:41,767 [INFO] ==================================================
+2026-06-05 21:42:41,767 [INFO] EA EXECUTOR STARTED | PAPER TRADING
+2026-06-05 21:42:41,767 [INFO] Signal file: /home/openclaw/projects/1ai-trade-bot/data/vilona_tradefx/ea_signal.json
+2026-06-05 21:42:41,767 [INFO] ==================================================
+2026-06-05 21:42:41,767 [INFO] State: 0 open, 0 processed, PnL=$0.00
+2026-06-05 21:43:07,739 [INFO] 📝 PAPER: BUY XAUUSD @ $2649.50 | SL=$2644.00 TP=$2658.00 | conf=72% | manual_test
+2026-06-05 21:43:07,739 [INFO] ✅ POSITION OPEN: BUY @ $2649.50
+2026-06-05 21:43:07,739 [INFO] 💼 BUY @ $2649.50 | Current=$4351.0 | Est.PnL=$1701.50 | SL=$2644.00 TP=$2658.00
+2026-06-05 21:43:11,365 [INFO] 🟢 CLOSED: BUY | TP | PnL=$1701.50 | Entry=$2649.50 → Close=$4351.00

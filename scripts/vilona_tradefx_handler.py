@@ -743,6 +743,17 @@ def auto_analyze_loop():
                 log["last_signal_time"] = wib_now().isoformat()
                 log["last_action"] = action
                 log["last_price"] = price
+                # Save full signal for EA consumption
+                log["last_signal"] = {
+                    "action": action, "entry": mech_sig.get("entry", price),
+                    "sl": mech_sig.get("sl", 0), "tp": mech_sig.get("tp", 0),
+                    "tp1": mech_sig.get("tp1", 0), "tp2": mech_sig.get("tp2", 0),
+                    "confidence": conf, "source": mech_sig.get("source", "mech"),
+                    "rr_ratio": mech_sig.get("rr_ratio", 0),
+                }
+                # Write EA queue
+                _eaq = DATA_DIR / "ea_signal.json"
+                _eaq.write_text(json.dumps(log["last_signal"]))
                 save_signal_log(log)
                 time.sleep(300)  # 5 min cooldown after mechanical signal
                 continue
