@@ -26,6 +26,7 @@ BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
 
 # ── Tier mapping ──────────────────────────────────────────
 AMOUNT_TO_TIER = {
+    5000: ("testing", 1),
     29000: ("starter", 7),
     79000: ("pro", 30),
     149000: ("elite", 30),

@@ -1607,6 +1607,50 @@ def handle_command(cmd, text, chat_id, msg):
         else:
             tg_send("💳 Payment belum tersedia. /subscribe untuk info.", chat_id)
 
+    elif cmd == "/testpay":
+        """🧪 Test payment: Rp5,000 — verifikasi webhook Tripay."""
+        if not chat_id:
+            return
+        if not PAYMENT_ENGINE:
+            tg_send("💳 Payment gateway belum aktif.", chat_id)
+            return
+
+        username = ""
+        if msg:
+            username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
+
+        tg_send("🧪 <b>Test Payment — Rp5,000</b>\n"
+                "Membuat invoice...", chat_id)
+
+        result = create_tripay_payment(str(chat_id), username, "testing")
+        if result.get("error"):
+            tg_send(f"❌ Gagal: {result['error']}", chat_id)
+            return
+
+        pay_url = result.get("payment_url", "")
+        ref = result.get("reference", "") or result.get("merchant_ref", "")
+
+        txt = (
+            "🧪 <b>Test Payment — Rp5,000</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "💰 Total: <b>Rp5,000</b>\n"
+            "📦 Tier: Testing (1 hari, fitur Pro)\n"
+            f"🔑 Ref: <code>{ref[:16]}</code>\n"
+            "⏰ Expired: 1 jam\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "Klik tombol bayar di bawah 👇\n\n"
+            "<i>Setelah bayar, bot auto-upgrade kamu dalam 1-5 menit.</i>"
+        )
+
+        markup = {"inline_keyboard": [[
+            {"text": "💳 Bayar Rp5,000", "url": pay_url},
+        ], [
+            {"text": "🔄 Cek Status", "callback_data": f"check:{ref}"},
+            {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
+        ]]}
+
+        tg_send(txt, chat_id, reply_markup=markup)
+
     elif cmd == "/subscribe":
         if chat_id:
             if SUBSCRIPTION_ENGINE:
@@ -2183,7 +2227,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/bill","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/bill","/testpay","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:

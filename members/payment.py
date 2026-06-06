@@ -22,6 +22,10 @@ PRICING = {
         "tier": "elite", "price_idr": 149000, "label": "Elite",
         "days": 30, "features": "Multi akun • Auto-trade EA • Custom strategy • Priority support",
     },
+    "testing": {
+        "tier": "testing", "price_idr": 5000, "label": "Testing",
+        "days": 1, "features": "🧪 Test payment gateway • 1 hari • Semua fitur Pro",
+    },
 }
 
 # ── Tripay Config ─────────────────────────────────────────
