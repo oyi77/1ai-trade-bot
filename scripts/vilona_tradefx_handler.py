@@ -1154,6 +1154,18 @@ def handle_command(cmd, text, chat_id, msg):
             "/subscribe — Upgrade VIP\n"
             "/autosync — Auto-trade mode\n"
             "━━━━━━━━━━━━━━━━\n"
+            "<b>▸ Tier & Kuota</b>\n"
+            "🆓 <b>Starter</b> — Trial 7 hari\n"
+            "   /analyze max 3x/hari\n"
+            "   ❌ Auto-trade EA\n\n"
+            "⭐ <b>Pro</b> — Rp79K/bln\n"
+            "   /analyze unlimited\n"
+            "   ✅ Auto-trade EA\n\n"
+            "👑 <b>Elite</b> — Rp149K/bln\n"
+            "   /analyze unlimited\n"
+            "   ✅ Multi-akun EA\n"
+            "   ✅ Priority support\n"
+            "━━━━━━━━━━━━━━━━\n"
             "<b>▸ Performa & Mapping</b>\n"
             "/winrate — Performa trading\n"
             "/history — Riwayat trade\n"
@@ -1213,6 +1225,28 @@ def handle_command(cmd, text, chat_id, msg):
                     "📈 /recap — Rekap performa mingguan\n"
                     "📱 Sinyal auto lanjut Senin pagi.", chat_id)
             return
+
+        # ── QUOTA GATE (Starter = max 3x/hari) ──
+        if MEMBERS_ENABLED and chat_id:
+            try:
+                q = check_quota(str(chat_id))
+                quota_ok = use_quota(str(chat_id))
+                if not quota_ok:
+                    tier = q.get("tier", "starter")
+                    tg_send(
+                        f"🛑 <b>Kuota Harian Habis!</b>\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"📊 Tier: <b>{tier.upper()}</b>\n"
+                        f"📉 Used: {q.get('used',0)}/{q.get('total',0)} analisa\n\n"
+                        f"💎 <b>Upgrade ke Pro</b> untuk unlimited!\n"
+                        f"👉 /subscribe — Lihat paket\n"
+                        f"👉 /bill — Bayar langsung\n\n"
+                        f"⏰ Reset: besok jam 00:00 WIB",
+                        chat_id
+                    )
+                    return
+            except Exception:
+                pass
 
         is_blackout, is_post_news, news_name = news_blackout_status()
         if is_blackout:
@@ -1517,6 +1551,16 @@ def handle_command(cmd, text, chat_id, msg):
                     member_status = member.get("status", "trial")
                     expiry = member.get("expiry", "")
 
+                    # Sync to members.db for quota tracking
+                    try:
+                        if MEMBERS_ENABLED:
+                            from members import ensure_member as m_ensure, upgrade_tier as m_upgrade
+                            m_ensure(str(chat_id))
+                            if tier != "starter":
+                                m_upgrade(str(chat_id), tier)
+                    except Exception:
+                        pass
+
                     # Format status dengan emoji
                     tier_emoji = {"elite": "👑", "pro": "⭐", "starter": "🆓"}.get(tier, "📦")
                     status_emoji = {"paid": "🟢", "trial": "🟡", "expired": "🔴"}.get(member_status, "⚪")
@@ -1572,6 +1616,27 @@ def handle_command(cmd, text, chat_id, msg):
                     "Gunakan tombol Trade Auto / Skip pada setiap analisa.\n"
                     "Fitur auto-trade akan diaktifkan kembali di masa depan.", chat_id)
             return
+
+        # ── TIER GATE: Starter tidak bisa auto-trade ──
+        if MEMBERS_ENABLED and chat_id:
+            try:
+                member = get_member(str(chat_id))
+                tier = (member or {}).get("tier", "starter")
+                if tier == "starter":
+                    tg_send(
+                        "🔒 <b>Auto-Trade khusus Pro & Elite!</b>\n"
+                        "━━━━━━━━━━━━━━━━\n"
+                        "Fitur auto-trade ke EA hanya tersedia untuk:\n"
+                        "⭐ <b>Pro</b> — Rp79K/bln\n"
+                        "👑 <b>Elite</b> — Rp149K/bln\n\n"
+                        "Kamu saat ini: 🆓 Starter\n"
+                        "👉 /subscribe — Upgrade sekarang",
+                        chat_id
+                    )
+                    return
+            except Exception:
+                pass
+
         if sub in ("on", "enable", "start", "1"):
             set_autosync(chat_id, True)
             tg_send("🤖 <b>Auto Sync AKTIF!</b>\n━━━━━━━━━━━━━━━━\n"

@@ -33,9 +33,17 @@ def init_db():
                 joined_at TEXT DEFAULT '',
                 expiry TEXT DEFAULT '',
                 payment_ref TEXT DEFAULT '',
-                autosync INTEGER DEFAULT 0
+                autosync INTEGER DEFAULT 0,
+                quota_used INTEGER DEFAULT 0,
+                quota_date TEXT DEFAULT ''
             )
         """)
+        # Add columns if they don't exist (migration for existing DBs)
+        for col in [("quota_used", "INTEGER DEFAULT 0"), ("quota_date", "TEXT DEFAULT ''")]:
+            try:
+                db.execute(f"ALTER TABLE members ADD COLUMN {col[0]} {col[1]}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
         db.execute("""
             CREATE TABLE IF NOT EXISTS payment_orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,10 +88,20 @@ def upgrade_tier(chat_id: str, tier: str, days: int = 30, payment_ref: str = "")
     now = datetime.now(WIB)
     expiry = (now + timedelta(days=days))
     with _conn() as db:
-        db.execute(
-            "UPDATE members SET tier=?, status='paid', expiry=?, payment_ref=? WHERE chat_id=?",
-            (tier, expiry.isoformat(), payment_ref, str(chat_id))
-        )
+        existing = db.execute(
+            "SELECT chat_id FROM members WHERE chat_id = ?", (str(chat_id),)
+        ).fetchone()
+        if existing:
+            db.execute(
+                "UPDATE members SET tier=?, status='paid', expiry=?, payment_ref=? WHERE chat_id=?",
+                (tier, expiry.isoformat(), payment_ref, str(chat_id))
+            )
+        else:
+            db.execute(
+                "INSERT INTO members (chat_id, tier, status, expiry, payment_ref, joined_at) "
+                "VALUES (?, ?, 'paid', ?, ?, ?)",
+                (str(chat_id), tier, expiry.isoformat(), payment_ref, now.isoformat())
+            )
 
 
 def insert_payment_order(merchant_ref: str, chat_id: str, amount: int,
@@ -152,14 +170,62 @@ def is_premium(chat_id: str) -> bool:
 
 
 def check_quota(chat_id: str) -> dict:
-    member = get_member(str(chat_id))
-    tier = (member or {}).get("tier", "starter")
+    """Check daily quota: starter=3, pro=50, elite=999."""
     quotas = {"starter": 3, "pro": 50, "elite": 999}
-    return {"used": 0, "total": quotas.get(tier, 3)}
+    today = datetime.now(WIB).strftime("%Y-%m-%d")
+
+    with _conn() as db:
+        row = db.execute(
+            "SELECT tier, quota_used, quota_date FROM members WHERE chat_id = ?",
+            (str(chat_id),)
+        ).fetchone()
+
+    if not row:
+        return {"used": 0, "total": 3, "tier": "starter"}
+
+    tier = row["tier"] or "starter"
+    total = quotas.get(tier, 3)
+
+    # Reset if new day
+    if row["quota_date"] != today:
+        return {"used": 0, "total": total, "tier": tier}
+
+    return {"used": row["quota_used"] or 0, "total": total, "tier": tier}
 
 
 def use_quota(chat_id: str) -> bool:
-    return True  # quota tracking handled elsewhere
+    """Consume one quota slot. Returns True if still within limit."""
+    today = datetime.now(WIB).strftime("%Y-%m-%d")
+    chat_id = str(chat_id)
+
+    quotas = {"starter": 3, "pro": 50, "elite": 999}
+
+    with _conn() as db:
+        row = db.execute(
+            "SELECT tier, quota_used, quota_date FROM members WHERE chat_id = ?",
+            (chat_id,)
+        ).fetchone()
+
+        if not row:
+            # Auto-register
+            ensure_member(chat_id)
+            db.execute(
+                "UPDATE members SET quota_used=1, quota_date=? WHERE chat_id=?",
+                (today, chat_id)
+            )
+            return True
+
+        tier = row["tier"] or "starter"
+        total = quotas.get(tier, 999)
+        used = (row["quota_used"] or 0) if row["quota_date"] == today else 0
+        used += 1
+
+        db.execute(
+            "UPDATE members SET quota_used=?, quota_date=? WHERE chat_id=?",
+            (used, today, chat_id)
+        )
+
+        return used <= total
 
 
 def activate_premium(chat_id: str, tier: str = "pro", days: int = 30):
