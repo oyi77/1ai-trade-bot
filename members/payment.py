@@ -16,11 +16,11 @@ PRICING = {
     },
     "pro": {
         "tier": "pro", "price_idr": 79000, "label": "Pro",
-        "days": 30, "features": "Akses penuh • Analisa unlimited • Sinyal real-time",
+        "days": 30, "features": "Akses penuh • Analisa unlimited • Auto-trade EA • Sinyal real-time",
     },
     "elite": {
         "tier": "elite", "price_idr": 149000, "label": "Elite",
-        "days": 30, "features": "Multi akun • Priority support • Custom strategy",
+        "days": 30, "features": "Multi akun • Auto-trade EA • Custom strategy • Priority support",
     },
 }
 
