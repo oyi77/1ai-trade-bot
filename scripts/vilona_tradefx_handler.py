@@ -1245,7 +1245,7 @@ def handle_command(cmd, text, chat_id, msg):
             "/mykey — Cek license EA\n"
             "━━━━━━━━━━━━━━━━\n"
             "<b>▸ Komunitas</b>\n"
-            "👥 <a href='https://t.me/+kX8tspebrpVhMmE1'>Join Group Diskusi</a>\n"
+            "👥 <a href='https://t.me/+qLAdRGd_RiplZmU1'>Join Group Diskusi</a>\n"
             "📞 Admin: @codergaboets", chat_id)
 
     elif cmd == "/price":
@@ -1872,7 +1872,7 @@ def handle_command(cmd, text, chat_id, msg):
                             "👥 Join grup komunitas untuk diskusi & support.\n"
                         )
                         markup["inline_keyboard"].append([
-                            {"text": "👥 Join Group Komunitas", "url": "https://t.me/+kX8tspebrpVhMmE1"},
+                            {"text": "👥 Join Group Komunitas", "url": "https://t.me/+qLAdRGd_RiplZmU1"},
                         ])
 
                     tg_send(txt, chat_id, reply_markup=markup)

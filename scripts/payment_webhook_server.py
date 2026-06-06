@@ -183,7 +183,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         # ── EA download link ──
         ea_link = "https://phantomfx.aitradepulse.com/dl/ea"  # will be real later
-        group_link = "https://t.me/+kX8tspebrpVhMmE1"
+        group_link = "https://t.me/+qLAdRGd_RiplZmU1"
 
         msg = (
             f"✅ <b>Pembayaran Diterima!</b>\n"
