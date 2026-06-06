@@ -1246,6 +1246,7 @@ def handle_command(cmd, text, chat_id, msg):
             "━━━━━━━━━━━━━━━━\n"
             "<b>▸ Komunitas</b>\n"
             "📢 <a href='https://t.me/+qLAdRGd_RiplZmU1'>Join Channel Sinyal</a>\n"
+            "👥 <a href='https://t.me/+kX8tspebrpVhMmE1'>Join Group Diskusi</a>\n"
             "📞 Admin: @codergaboets", chat_id)
 
     elif cmd == "/price":
@@ -1864,15 +1865,17 @@ def handle_command(cmd, text, chat_id, msg):
                         {"text": "💳 Info Harga", "callback_data": "pricing:show"},
                         {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
                     ])
-                    # ── Join Channel button (for paid users) ──
+                    # ── Join Channel + Group buttons (for paid users) ──
                     if tier in ("pro", "elite", "testing") and member_status == "paid":
                         txt += (
                             "\n━━━━━━━━━━━━━━━━\n"
                             "🔗 <b>Akses Premium:</b>\n"
-                            "📢 Join channel sinyal untuk update real-time.\n"
                         )
                         markup["inline_keyboard"].append([
                             {"text": "📢 Join Channel Sinyal", "url": "https://t.me/+qLAdRGd_RiplZmU1"},
+                        ])
+                        markup["inline_keyboard"].append([
+                            {"text": "👥 Join Group Diskusi", "url": "https://t.me/+kX8tspebrpVhMmE1"},
                         ])
 
                     tg_send(txt, chat_id, reply_markup=markup)
@@ -2091,6 +2094,35 @@ def format_daily_mapping():
 
 # ── Auto-analyze loop ──
 # Assets to scan autonomously (forex, crypto, commodities — stocks on-demand via /analyze)
+
+# ── Channel rate limiter (prevents signal spam) ──
+_last_channel_post = {}       # {asset: timestamp} — per-asset cooldown
+_GLOBAL_CHANNEL_COOLDOWN = 300  # min 5 min between ANY channel posts
+_PER_ASSET_COOLDOWN = 900        # min 15 min per asset
+_last_global_post = None
+
+def _can_post_to_channel(asset_key: str = "") -> bool:
+    """Rate limit channel posts: min 5min global, 15min per asset."""
+    global _last_global_post
+    now = time.time()
+    # Global cooldown
+    if _last_global_post and (now - _last_global_post) < _GLOBAL_CHANNEL_COOLDOWN:
+        return False
+    # Per-asset cooldown
+    if asset_key:
+        last = _last_channel_post.get(asset_key, 0)
+        if (now - last) < _PER_ASSET_COOLDOWN:
+            return False
+    return True
+
+def _mark_channel_post(asset_key: str = ""):
+    """Record a channel post for rate limiting."""
+    global _last_global_post
+    now = time.time()
+    _last_global_post = now
+    if asset_key:
+        _last_channel_post[asset_key] = now
+
 AUTO_SCAN_ASSETS = [
     # (internal_pair, display_name, yahoo_symbol, is_forex_metal)
     ("gold", "XAUUSD", "GC=F", True),
@@ -2209,7 +2241,12 @@ def auto_analyze_loop():
                 
                 logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
                 text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp") + f"\n<i>[{mech_sig.get('source','mech')}] override</i>"
-                tg_send(text)
+                # ── Channel rate limiter ──
+                if _can_post_to_channel(pair):
+                    tg_send(text)
+                    _mark_channel_post(pair)
+                else:
+                    logger.info(f"⏳ Channel rate limited [{disp}] — signal stored, not posted")
                 if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
                     mech_sig = enrich_signal_with_layers(mech_sig)
                 post_signal_to_bridge(mech_sig, price)
