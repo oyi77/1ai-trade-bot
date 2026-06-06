@@ -183,7 +183,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         # ── EA download link ──
         ea_link = "https://phantomfx.aitradepulse.com/download/ea"  # will be real later
-        group_link = "https://t.me/+qLAdRGd_RiplZmU1"
+        channel_link = "https://t.me/+qLAdRGd_RiplZmU1"
 
         msg = (
             f"✅ <b>Pembayaran Diterima!</b>\n"
@@ -209,9 +209,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
             f"👉 /analyze xauusd — Mulai analisa"
         )
         
-        # Inline keyboard: Join Group + Download EA
+        # Inline keyboard: Join Channel + Download EA
         markup = {"inline_keyboard": [
-            [{"text": "👥 Join Group Komunitas", "url": group_link}],
+            [{"text": "📢 Join Channel Sinyal", "url": channel_link}],
             [{"text": "📥 Download EA", "url": ea_link}],
         ]}
         tg_send(msg, chat_id, reply_markup=markup)
