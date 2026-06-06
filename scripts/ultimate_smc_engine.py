@@ -21,6 +21,13 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 import math
 
+# ── Chaos Filter (non-linear edge) ──
+try:
+    from chaos_filter import chaos_gate
+    CHAOS_ENGINE = True
+except ImportError:
+    CHAOS_ENGINE = False
+
 # ═══════════════════════════════════════════════════════════════════
 # GRADING SYSTEM — Universal Signal Quality
 # ═══════════════════════════════════════════════════════════════════
@@ -625,6 +632,9 @@ class UltimateResult:
     macd: dict = field(default_factory=dict)
     bollinger: dict = field(default_factory=dict)
     london_breakout: dict = field(default_factory=dict)
+    
+    # Chaos Gate (non-linear edge)
+    chaos_gate_result: dict = field(default_factory=dict)
 
 
 def ultimate_analyze(ohlcv: list[dict], symbol: str = "XAUUSD",
@@ -663,6 +673,23 @@ def ultimate_analyze(ohlcv: list[dict], symbol: str = "XAUUSD",
     # ── 2. Anti-Range Triple Filter ──
     anti_range = anti_range_filter(ohlcv)
     result.anti_range = anti_range
+    
+    # ── 2b. Chaos Gate (non-linear edge) ──
+    if CHAOS_ENGINE:
+        try:
+            chaos_result = chaos_gate(ohlcv)
+            result.chaos_gate_result = {
+                "chaos_score": chaos_result.chaos_score,
+                "recommendation": chaos_result.recommendation,
+                "penalty": chaos_result.penalty,
+                "entropy": chaos_result.entropy,
+                "hurst": chaos_result.hurst,
+                "spoof_detected": chaos_result.spoof.get("spoof_detected", False),
+                "reasons": chaos_result.reasons,
+            }
+        except Exception:
+            # Graceful degradation — chaos gate is bonus, not critical
+            result.chaos_gate_result = {"chaos_score": 0, "recommendation": "DISABLED", "penalty": 0}
     
     # ── 3. Fibonacci Retracement ──
     swings = detect_swing_points(ohlcv)
@@ -745,9 +772,20 @@ def ultimate_analyze(ohlcv: list[dict], symbol: str = "XAUUSD",
         elif ob:
             result.direction = ob.get("direction", "")
     
+    # ── 11b. Chaos Gate SKIP override ──
+    if result.chaos_gate_result.get("recommendation") == "SKIP":
+        result.direction = "HOLD"
+        result.signal = "HOLD"
+    
     # ── 12. Combined Scoring ──
     total = (result.fibonacci_score + result.sd_strength_score + result.liquidity_score +
              result.order_block_score + result.technical_score + result.bias_score)
+    
+    # Apply Chaos Gate penalty (non-linear edge)
+    chaos_penalty = result.chaos_gate_result.get("penalty", 0)
+    chaos_rec = result.chaos_gate_result.get("recommendation", "TRADE")
+    total = max(0, total - chaos_penalty)
+    
     result.score = min(total, 24)
     result.max_score = 24
     result.grade = Grade.from_score(result.score, 24)
@@ -771,6 +809,17 @@ def ultimate_analyze(ohlcv: list[dict], symbol: str = "XAUUSD",
         reasons.append("✅ Anti-Range Filter: PASS — market trending")
     elif anti_range.get("reasons"):
         reasons.append(f"⚠️ Anti-Range: {anti_range['reasons'][0]}")
+    
+    # Chaos Gate status
+    if result.chaos_gate_result:
+        chaos_score = result.chaos_gate_result.get("chaos_score", 0)
+        chaos_rec = result.chaos_gate_result.get("recommendation", "TRADE")
+        chaos_penalty = result.chaos_gate_result.get("penalty", 0)
+        if chaos_penalty > 0:
+            reasons.append(f"🔬 Chaos Gate: score={chaos_score}/10 [{chaos_rec}] (penalty: -{chaos_penalty} pts)")
+            # Add key chaos reasons (limit 2)
+            for cr in result.chaos_gate_result.get("reasons", [])[1:3]:  # skip summary line [0]
+                reasons.append(f"   └ {cr}")
     
     if result.fib_levels:
         fib_618 = result.fib_levels.get("0.618")

@@ -27,6 +27,18 @@ class MarketQuote:
     change: float = 0.0
     change_pct: float = 0.0
     timestamp: float = 0.0
+    
+    @property
+    def bid(self) -> float:
+        return self.price
+    
+    @property
+    def ask(self) -> float:
+        return self.price
+    
+    @property
+    def spread(self) -> float:
+        return 0.0
 
 
 class OHLCVBar:
@@ -44,25 +56,29 @@ class UnifiedMarketData:
 
     # Symbol mapping for common assets
     SYMBOL_MAP = {
-        "XAUUSD": "GC=F",
-        "XAU/USD": "GC=F",
-        "gold": "GC=F",
-        "GOLD": "GC=F",
-        "silver": "SI=F",
-        "SILVER": "SI=F",
-        "oil": "CL=F",
-        "OIL": "CL=F",
-        "btc": "BTC-USD",
-        "BTC": "BTC-USD",
-        "eth": "ETH-USD",
-        "ETH": "ETH-USD",
-        "spx": "^GSPC",
-        "dxy": "DX-Y.NYB",
-        "DXY": "DX-Y.NYB",
+        # Gold/Silver
+        "XAUUSD": "GC=F", "XAU/USD": "GC=F", "gold": "GC=F", "GOLD": "GC=F",
+        "silver": "SI=F", "SILVER": "SI=F",
+        # Oil
+        "oil": "CL=F", "OIL": "CL=F", "USOIL": "CL=F", "usoil": "CL=F",
+        # Crypto
+        "btc": "BTC-USD", "BTC": "BTC-USD", "BTCUSD": "BTC-USD", "btcusd": "BTC-USD",
+        "eth": "ETH-USD", "ETH": "ETH-USD", "ETHUSD": "ETH-USD", "ethusd": "ETH-USD",
+        # Forex Majors
+        "eurusd": "EURUSD=X", "EURUSD": "EURUSD=X",
+        "gbpusd": "GBPUSD=X", "GBPUSD": "GBPUSD=X",
+        "usdjpy": "JPY=X", "USDJPY": "JPY=X",
+        "usdcad": "CAD=X", "USDCAD": "CAD=X",
+        "audusd": "AUDUSD=X", "AUDUSD": "AUDUSD=X",
+        "nzdusd": "NZDUSD=X", "NZDUSD": "NZDUSD=X",
+        # Indices
+        "spx": "^GSPC", "dxy": "DX-Y.NYB", "DXY": "DX-Y.NYB",
     }
 
     def _resolve_symbol(self, symbol: str) -> str:
-        return self.SYMBOL_MAP.get(symbol, symbol)
+        """Case-insensitive symbol resolution."""
+        sym_lower = symbol.lower().strip()
+        return self.SYMBOL_MAP.get(sym_lower, self.SYMBOL_MAP.get(symbol, symbol))
 
     def get_quote(self, symbol: str) -> Optional[MarketQuote]:
         sym = self._resolve_symbol(symbol)

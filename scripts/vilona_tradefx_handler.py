@@ -143,6 +143,7 @@ WIB = timezone(timedelta(hours=7))
 BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
 DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 CLAUDE_KEY = os.environ.get("CLAUDE_API_KEY", "")
 CHAT_ID = os.environ.get("VILONA_TRADEFX_CHAT_ID", "")
 OMNIROUTE_URL = os.environ.get("OMNIROUTE_URL", "http://localhost:20129/v1/chat/completions")
@@ -162,10 +163,11 @@ def load_env():
                 key, val = key.strip(), val.strip().strip('"').strip("'")
                 if key not in os.environ or not os.environ.get(key):
                     os.environ[key] = val
-    global BOT_TOKEN, DEEPSEEK_KEY, OPENAI_KEY, CLAUDE_KEY, CHAT_ID, TELEGRAM_API
+    global BOT_TOKEN, DEEPSEEK_KEY, OPENAI_KEY, GEMINI_KEY, CLAUDE_KEY, CHAT_ID, TELEGRAM_API
     BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", BOT_TOKEN)
     DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY", DEEPSEEK_KEY)
     OPENAI_KEY = os.environ.get("OPENAI_API_KEY", OPENAI_KEY)
+    GEMINI_KEY = os.environ.get("GEMINI_API_KEY", GEMINI_KEY)
     CLAUDE_KEY = os.environ.get("CLAUDE_API_KEY", CLAUDE_KEY)
     CHAT_ID = os.environ.get("VILONA_TRADEFX_CHAT_ID", CHAT_ID)
     TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
@@ -694,22 +696,50 @@ def _call_deepseek(prompt):
         return None
 
 
-def _call_openai(prompt):
+def _call_openai(prompt, model="gpt-4o-mini"):
+    """Call OpenAI. Model can be overridden: gpt-4o-mini, o3-mini, gpt-4.1, etc."""
     if not OPENAI_KEY: return None
     try:
+        # o3-mini doesn't support system messages or temperature
+        is_o3 = "o3" in model
+        messages = [{"role": "user", "content": f"{SYSTEM_PROMPT}\n\n{prompt}"}] if is_o3 else \
+                   [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
+        body = {"model": model, "max_tokens": 800, "messages": messages}
+        if not is_o3:
+            body["temperature"] = 0.3
+        
         req = urllib.request.Request("https://api.openai.com/v1/chat/completions",
-            data=json.dumps({
-                "model":"gpt-4o-mini","max_tokens":800,"temperature":0.3,
-                "messages":[{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":prompt}]
-            }).encode(),
-            headers={"Content-Type":"application/json","Authorization":f"Bearer {OPENAI_KEY}"})
-        with urllib.request.urlopen(req, timeout=45) as r:
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {OPENAI_KEY}"})
+        with urllib.request.urlopen(req, timeout=60) as r:
             data = json.loads(r.read())
             content = data["choices"][0]["message"]["content"]
-            logger.info(f"GPT-4o: {len(content)} chars")
+            logger.info(f"OpenAI/{model}: {len(content)} chars")
             return _extract_json(content)
     except Exception as e:
-        logger.warning(f"OpenAI error: {e}")
+        logger.warning(f"OpenAI/{model} error: {e}")
+        return None
+
+
+def _call_gemini(prompt):
+    """Call Gemini 2.5 Pro via Google AI API."""
+    if not GEMINI_KEY: return None
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
+        body = {
+            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 800}
+        }
+        req = urllib.request.Request(url, data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = json.loads(r.read())
+            content = data["candidates"][0]["content"]["parts"][0]["text"]
+            logger.info(f"Gemini 2.5 Pro: {len(content)} chars")
+            return _extract_json(content)
+    except Exception as e:
+        logger.warning(f"Gemini error: {e}")
         return None
 
 
@@ -730,7 +760,7 @@ def _call_omniroute(prompt, models=None):
 
 
 def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_data=None, display="XAUUSD"):
-    """Dual AI consensus: DeepSeek + GPT-4o. Fallback to OmniRoute."""
+    """Multi-AI consensus: DeepSeek + o3-mini + GPT-4o-mini + Gemini 2.5 Pro. Fallback chain."""
     # Build analysis prompt
     data_section = f"💰 Current Price: ${price:.2f}"
     if ohlcv_data:
@@ -758,49 +788,71 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         f"R:R minimum 1:2. {'⚠️ FRIDAY: SL +10-15 pips extra.' if wib_now().weekday()==4 else ''}"
     )
 
-    # ── AI CONSENSUS WITH FALLBACK CHAIN ──
-    # Chain: DeepSeek (primary) → GPT-4o (secondary) → OmniRoute (last resort)
+    # ── MULTI-AI CONSENSUS — 4 models in parallel ──
+    # Chain: DeepSeek → o3-mini → GPT-4o-mini → Gemini → OmniRoute
     
-    ds = _call_deepseek(prompt)
-    gpt = _call_openai(prompt)
+    deepseek = _call_deepseek(prompt)
+    o3 = _call_openai(prompt, model="o3-mini")       # reasoning model
+    gpt4o = _call_openai(prompt, model="gpt-4o-mini") # fast model
+    gemini = _call_gemini(prompt)                      # Google model
     
-    # BEST: Both agree → dual consensus
-    if ds and gpt and ds.get("action") == gpt.get("action") and ds.get("action") in ("BUY","SELL"):
-        conf = (ds.get("confidence",0) + gpt.get("confidence",0)) / 2
-        sig = ds.copy()
-        sig["confidence"] = conf
-        sig["ensemble"] = "dual"
-        sig["voters"] = 2
-        sig["_model"] = "DeepSeek+GPT-4o"
-        logger.info(f"DUAL CONSENSUS: {sig['action']} conf={conf:.0%}")
+    # Collect all valid signals
+    signals = []
+    if deepseek and deepseek.get("action") in ("BUY", "SELL"):
+        signals.append({"sig": deepseek, "name": "DeepSeek", "weight": 1.0})
+    if o3 and o3.get("action") in ("BUY", "SELL"):
+        signals.append({"sig": o3, "name": "o3-mini", "weight": 1.2})  # reasoning bonus
+    if gpt4o and gpt4o.get("action") in ("BUY", "SELL"):
+        signals.append({"sig": gpt4o, "name": "GPT-4o", "weight": 0.9})
+    if gemini and gemini.get("action") in ("BUY", "SELL"):
+        signals.append({"sig": gemini, "name": "Gemini", "weight": 1.0})
+    
+    # Count votes per direction
+    buy_votes = [s for s in signals if s["sig"]["action"] == "BUY"]
+    sell_votes = [s for s in signals if s["sig"]["action"] == "SELL"]
+    
+    # BEST: 3+ models agree → super consensus
+    if len(buy_votes) >= 3 or len(sell_votes) >= 3:
+        winner = buy_votes if len(buy_votes) >= 3 else sell_votes
+        conf = sum(s["sig"].get("confidence", 0) * s["weight"] for s in winner) / sum(s["weight"] for s in winner)
+        sig = winner[0]["sig"].copy()
+        sig["confidence"] = min(conf, 1.0)
+        sig["ensemble"] = "super"
+        sig["voters"] = len(winner)
+        sig["_model"] = "+".join(s["name"] for s in winner)
+        logger.info(f"SUPER CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%}")
         return sig
     
-    # GOOD: DeepSeek (primary, paid) — prefer if it has a valid signal
-    if ds and ds.get("action") in ("BUY","SELL"):
-        ds["ensemble"] = "solo"; ds["voters"] = 1
-        ds["_model"] = "DeepSeek"
-        logger.info(f"DeepSeek solo: {ds['action']} conf={ds.get('confidence',0):.0%}")
-        return ds
+    # GOOD: 2 models agree → dual consensus
+    if len(buy_votes) >= 2 or len(sell_votes) >= 2:
+        winner = buy_votes if len(buy_votes) >= 2 else sell_votes
+        conf = sum(s["sig"].get("confidence", 0) * s["weight"] for s in winner) / sum(s["weight"] for s in winner)
+        sig = winner[0]["sig"].copy()
+        sig["confidence"] = min(conf, 1.0)
+        sig["ensemble"] = "dual"
+        sig["voters"] = len(winner)
+        sig["_model"] = "+".join(s["name"] for s in winner)
+        logger.info(f"DUAL CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%}")
+        return sig
     
-    # OK: GPT-4o as secondary fallback
-    if gpt and gpt.get("action") in ("BUY","SELL"):
-        gpt["ensemble"] = "solo"; gpt["voters"] = 1
-        gpt["_model"] = "GPT-4o"
-        logger.info(f"GPT-4o fallback: {gpt['action']} conf={gpt.get('confidence',0):.0%}")
-        return gpt
+    # OK: 1 model with strong signal → solo
+    if signals:
+        best = max(signals, key=lambda s: s["sig"].get("confidence", 0) * s["weight"])
+        sig = best["sig"].copy()
+        sig["ensemble"] = "solo"
+        sig["voters"] = 1
+        sig["_model"] = best["name"]
+        logger.info(f"SOLO [{best['name']}]: {sig['action']} conf={sig.get('confidence', 0):.0%}")
+        return sig
     
-    # Any signal from either (even HOLD)
-    if ds:
-        ds["ensemble"] = "solo"; ds["voters"] = 1
-        ds["_model"] = "DeepSeek"
-        return ds
-    if gpt:
-        gpt["ensemble"] = "solo"; gpt["voters"] = 1
-        gpt["_model"] = "GPT-4o"
-        return gpt
+    # Any signal from any model (even HOLD)
+    for s, name in [(deepseek, "DeepSeek"), (o3, "o3-mini"), (gpt4o, "GPT-4o"), (gemini, "Gemini")]:
+        if s:
+            s["ensemble"] = "solo"; s["voters"] = 1; s["_model"] = name
+            return s
     
     # LAST RESORT: OmniRoute
-    logger.info("All primary AI failed — falling back to OmniRoute...")
+    logger.info("All 4 AI models failed — falling back to OmniRoute...")
     return _call_omniroute(prompt)
 
 
@@ -1848,9 +1900,9 @@ def main():
     
     while True:
         try:
-            url = f"{TELEGRAM_API}/getUpdates?offset={offset + 1}&timeout=0"
+            url = f"{TELEGRAM_API}/getUpdates?offset={offset + 1}&timeout=5"
             req = urllib.request.Request(url, headers={"Connection": "close"})
-            with urllib.request.urlopen(req, timeout=5) as r:
+            with urllib.request.urlopen(req, timeout=10) as r:
                 updates = json.loads(r.read()).get("result", [])
             poll_errors = 0  # reset on success
             for upd in updates:
@@ -1879,6 +1931,7 @@ def main():
                     except Exception as e:
                         logger.error(f"Callback error: {e}")
             save_state({"last_update_id": offset})
+            time.sleep(0.3)  # Prevent hammering Telegram API
         except Exception as e:
             err_str = str(e)
             # 409 Conflict: quick retry without long wait

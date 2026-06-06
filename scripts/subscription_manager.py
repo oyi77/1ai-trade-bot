@@ -8,19 +8,15 @@ Subscription Manager — Vilona Trade FX
 """
 
 import json, logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-try:
-    from vilona_tradefx_handler import wib_now, DATA_DIR
-    _HANDLER_IMPORT = True
-except Exception:
-    from datetime import timezone, timedelta as td
-    WIB = timezone(td(hours=7))
-    def wib_now():
-        return datetime.now(WIB)
-    DATA_DIR = Path("/home/openclaw/projects/1ai-trade-bot/data/vilona_tradefx")
-    _HANDLER_IMPORT = False
+WIB = timezone(timedelta(hours=7))
+
+def wib_now():
+    return datetime.now(WIB)
+
+DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "vilona_tradefx"
 
 logger = logging.getLogger("subscription-manager")
 
