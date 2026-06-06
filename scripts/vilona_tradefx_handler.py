@@ -8,6 +8,11 @@ Commands: /start /help /price /analyze /data /killzone /status /subscribe /autos
 import json, logging, os, re, sys, threading, time, urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+
+# ── Project path (MUST be before any local imports) ──
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_DIR))
+
 try:
     from layering import enrich_signal_with_layers
     LAYERING_ENGINE = True
@@ -46,10 +51,6 @@ try:
 except Exception as e:
     SECRET_SANITIZER = False
     print(f"Secret sanitizer unavailable: {e}")
-
-# ── Project path ──
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_DIR))
 
 # ── Market data layer ──
 try:
