@@ -341,10 +341,12 @@ def tg_send(text, chat_id=None, reply_markup=None):
     
     # HTML-safe: escape bare < > & that aren't part of tags
     import re
-    # Protect known HTML tags first
-    text = re.sub(r'<(/?[bi][^>]*)>', r'\x00\1\x01', text)  # <b>, </b>, <i>, </i>
+    # Use unique Unicode placeholder markers (safe across Python 3.11-3.13)
+    TAG_OPEN = "\ue000"   # Private Use Area — won't appear in normal text
+    TAG_CLOSE = "\ue001"
+    text = re.sub(r'<(/?[bi][^>]*)>', TAG_OPEN + r'\1' + TAG_CLOSE, text)
     text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-    text = text.replace('\x00', '<').replace('\x01', '>')
+    text = text.replace(TAG_OPEN, '<').replace(TAG_CLOSE, '>')
     
     try:
         payload = {"chat_id": target, "text": text, "parse_mode": "HTML"}
