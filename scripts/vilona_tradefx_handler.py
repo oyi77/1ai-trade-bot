@@ -962,6 +962,31 @@ def ask_ai(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv=None, disp
 
 
 # ── Signal formatting ──
+def apply_elite_params(sig: dict, params: dict, price: float, display: str = "XAUUSD") -> dict:
+    """Apply Elite custom params (risk%, tf) to a signal dict."""
+    if not params or not sig:
+        return sig
+
+    sig = dict(sig)  # don't mutate original
+
+    if "risk" in params:
+        sig["risk_percent"] = params["risk"]
+        # Adjust SL/TP proportionally if they exist
+        mult = params["risk"] / 1.0  # relative to default 1%
+        if sig.get("sl") and sig.get("entry") and sig.get("entry") != 0:
+            base_sl = abs(sig["sl"] - sig["entry"])
+            sig["sl"] = sig["entry"] - (base_sl * mult)
+        if sig.get("tp") and sig.get("entry") and sig.get("entry") != 0:
+            base_tp = abs(sig["tp"] - sig["entry"])
+            sig["tp"] = sig["entry"] + (base_tp * mult)
+
+    if "tf" in params:
+        sig["timeframe"] = params["tf"]
+
+    sig["elite_custom"] = True
+    return sig
+
+
 def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
     action = sig.get("action","HOLD")
     emoji = {"BUY":"🟢","SELL":"🔴","HOLD":"⚪️"}.get(action,"⚪️")
@@ -1248,6 +1273,41 @@ def handle_command(cmd, text, chat_id, msg):
             except Exception:
                 pass
 
+        # ── ELITE CUSTOM PARAMS ──
+        elite_params = {}
+        if sub:
+            import re as _re
+            risk_match = _re.search(r'risk=(\d+(?:\.\d+)?)', sub)
+            tf_match = _re.search(r'tf=(\w+)', sub)
+            if risk_match or tf_match:
+                # Check if user is Elite
+                is_elite = False
+                if MEMBERS_ENABLED and chat_id:
+                    try:
+                        member = get_member(str(chat_id))
+                        is_elite = (member or {}).get("tier") == "elite"
+                    except Exception:
+                        pass
+                if not is_elite:
+                    tg_send(
+                        "👑 <b>Custom Parameter khusus Elite!</b>\n"
+                        "━━━━━━━━━━━━━━━━\n"
+                        "Fitur risk= dan tf= hanya untuk Elite (Rp149K/bln).\n\n"
+                        "👉 /subscribe — Upgrade ke Elite\n"
+                        "👉 /bill — Lihat harga",
+                        chat_id
+                    )
+                    return
+                # Elite user: parse params
+                if risk_match:
+                    elite_params["risk"] = float(risk_match.group(1))
+                if tf_match:
+                    elite_params["tf"] = tf_match.group(1).lower()
+                # Strip params from sub for symbol lookup
+                sub = _re.sub(r'\s*(risk|tf)=\S+', '', sub).strip()
+                sub_norm = _normalize_broker_symbol(sub)
+                logger.info(f"Elite params: {elite_params} | symbol: {sub_norm}")
+
         is_blackout, is_post_news, news_name = news_blackout_status()
         if is_blackout:
             tg_send(f"⚪️ <b>HOLD — Menjelang Rilis Berita</b>\n📰 {news_name}\n⏳ Tunggu 30 menit setelah rilis.", chat_id)
@@ -1285,6 +1345,8 @@ def handle_command(cmd, text, chat_id, msg):
             sig = ask_ai(price, dxy, session(), str(killzone()), 0, premium=False,
                           ohlcv=ohlcv_bars, display=disp)
             if sig:
+                # Apply Elite custom params
+                sig = apply_elite_params(sig, elite_params, price, disp)
                 curr = "Rp" if is_idx else "$"
                 # Auto-sync ON → langsung trade, OFF → keyboard
                 if is_autosync(chat_id):
@@ -1416,6 +1478,8 @@ def handle_command(cmd, text, chat_id, msg):
                     sig = ask_ai(price, None, session(), str(killzone()), 0, premium=False,
                                   ohlcv=ohlcv_bars2, display=sub.upper())
                     if sig:
+                        # Apply Elite custom params
+                        sig = apply_elite_params(sig, elite_params, price, sub.upper())
                         # Auto-sync ON → langsung trade, OFF → keyboard
                         if is_autosync(chat_id):
                             if LAYERING_ENGINE and sig.get("action") != "HOLD":
@@ -2118,7 +2182,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/bill","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
@@ -2128,6 +2192,33 @@ def main():
                         try:
                             tg_send("📋 <b>Command tidak dikenal</b>\n"
                                     "Ketik /help untuk lihat daftar command.", chat_id)
+                        except Exception:
+                            pass
+                    elif text and not cmd.startswith("/"):
+                        # Plain text message (bukan command) → Priority Support check
+                        try:
+                            if MEMBERS_ENABLED and chat_id:
+                                member = get_member(str(chat_id))
+                                if member and member.get("tier") == "elite":
+                                    # Forward to admin
+                                    admin_id = os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID",
+                                                os.environ.get("VILONA_TRADEFX_CHAT_ID", ""))
+                                    if admin_id and str(admin_id) != str(chat_id):
+                                        username = msg.get("chat", {}).get("username", "")
+                                        first_name = msg.get("chat", {}).get("first_name", "")
+                                        name = f"@{username}" if username else first_name or "Unknown"
+                                        tg_send(
+                                            f"👑 <b>Elite Support Request</b>\n"
+                                            f"━━━━━━━━━━━━━━━━\n"
+                                            f"👤 {name} (<code>{chat_id}</code>)\n\n"
+                                            f"💬 {text[:500]}",
+                                            admin_id
+                                        )
+                                        tg_send(
+                                            "👑 Pesan kamu sudah diteruskan ke <b>Priority Support</b>.\n"
+                                            "Admin akan merespon secepatnya.",
+                                            chat_id
+                                        )
                         except Exception:
                             pass
                 # Handle inline keyboard callbacks (Trade Auto / Skip / Payment)
