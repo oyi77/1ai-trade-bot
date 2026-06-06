@@ -1925,6 +1925,13 @@ def main():
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
                             logger.error(f"Command error: {e}")
+                    elif cmd.startswith("/"):
+                        # Unknown command — give helpful response
+                        try:
+                            tg_send("📋 <b>Command tidak dikenal</b>\n"
+                                    "Ketik /help untuk lihat daftar command.", chat_id)
+                        except Exception:
+                            pass
                 # Handle inline keyboard callbacks (Trade Auto / Skip)
                 cb = upd.get("callback_query")
                 if cb:
