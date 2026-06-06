@@ -29,6 +29,16 @@ except Exception as e:
     SUBSCRIPTION_ENGINE = False
     print(f"Subscription engine unavailable: {e}")
 
+# ── Payment gateway ──
+try:
+    from members.payment import get_pricing_info, get_pricing_table, PRICING, create_tripay_payment
+    PAYMENT_ENGINE = True
+except Exception as e:
+    PAYMENT_ENGINE = False
+    get_pricing_info = lambda: {"packages": {}, "methods": [], "gateways": []}
+    PRICING = {}
+    print(f"Payment engine unavailable: {e}")
+
 # ── Security: Secret Sanitization Middleware ──
 try:
     from secret_sanitizer import sanitize_telegram_input
@@ -53,7 +63,7 @@ except Exception as e:
 try:
     from members import register_member, get_member, get_member_stats, mark_paid, get_due_members
     from members import is_premium, check_quota, use_quota, activate_premium, deactivate_premium
-    from members.payment import get_pricing_info
+    from members.payment import get_pricing_info, create_tripay_payment
     MEMBERS_ENABLED = True
 except Exception as e:
     MEMBERS_ENABLED = False
@@ -456,6 +466,95 @@ def handle_trade_callback(callback_query):
     elif data.startswith("skip:"):
         tg_send("⏭ Sinyal dilewati.\nAnalisa lagi: /analyze", chat_id)
         del PENDING_SIGNALS[chat_id]
+
+
+def handle_payment_callback(callback_query):
+    """Handle inline keyboard: pay:<tier> or bill:<chat_id>"""
+    cb_id = callback_query.get("id", "")
+    chat_id = str(callback_query.get("from", {}).get("id", ""))
+    username = callback_query.get("from", {}).get("username", "")
+    data = callback_query.get("data", "")
+
+    # Answer callback immediately
+    try:
+        payload = json.dumps({"callback_query_id": cb_id}).encode()
+        req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+            data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
+
+    if not chat_id or not data:
+        return
+
+    if data.startswith("pay:"):
+        tier = data.split(":", 1)[1] if ":" in data else "pro"
+        if not PAYMENT_ENGINE or tier not in PRICING:
+            tg_send("💳 Payment gateway belum tersedia.\nHubungi admin untuk upgrade manual.", chat_id)
+            return
+
+        pkg = PRICING[tier]
+        tg_send(f"⏳ <b>Membuat invoice...</b>\n"
+                f"Paket: {pkg['label']} — Rp{pkg['price_idr']:,}", chat_id)
+
+        result = create_tripay_payment(chat_id, username, tier)
+        if result.get("error"):
+            tg_send(f"❌ <b>Gagal membuat pembayaran</b>\n"
+                    f"{result['error']}\n\n"
+                    f"Silakan hubungi admin: @codergaboets", chat_id)
+            return
+
+        # Send payment details with inline button
+        pay_url = result.get("payment_url", "")
+        pay_code = result.get("pay_code", "")
+        ref = result.get("reference", "")
+        amount = result.get("amount", 0)
+
+        txt = (
+            f"💳 <b>Invoice — {pkg['label']}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"💰 Total: <b>Rp{amount:,}</b>\n"
+            f"📦 Paket: {pkg['label']} ({pkg['days']} hari)\n"
+            f"🔑 Ref: <code>{ref[:16]}</code>\n"
+        )
+        if pay_code:
+            txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
+        txt += (
+            f"⏰ Expired: 1 jam\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"Klik tombol di bawah untuk bayar:"
+        )
+
+        markup = {"inline_keyboard": [[
+            {"text": f"💳 Bayar Rp{amount:,}", "url": pay_url} if pay_url
+            else {"text": "💳 Bayar Sekarang", "callback_data": f"check:{ref}"}
+        ], [
+            {"text": "🔄 Cek Status", "callback_data": f"check:{ref}"},
+            {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
+        ]]}
+
+        tg_send(txt, chat_id, reply_markup=markup)
+
+    elif data.startswith("check:"):
+        ref = data.split(":", 1)[1] if ":" in data else ""
+        tg_send(
+            "🔍 <b>Cek Status Pembayaran</b>\n━━━━━━━━━━━━━━━━\n"
+            f"Ref: <code>{ref[:16]}</code>\n\n"
+            "⏳ Pembayaran sedang diproses.\n"
+            "Biasanya butuh 1-5 menit setelah transfer.\n\n"
+            "Kalau sudah bayar dan belum upgrade, kirim bukti ke admin.",
+            chat_id
+        )
+
+    elif data.startswith("pricing:"):
+        # Show pricing table
+        txt = get_pricing_table() if PAYMENT_ENGINE else "💎 Info harga belum tersedia."
+        markup = {"inline_keyboard": [
+            [{"text": f"⭐ Pro — Rp79K", "callback_data": "pay:pro"},
+             {"text": f"👑 Elite — Rp149K", "callback_data": "pay:elite"}],
+            [{"text": "📞 Tanya Admin", "url": "https://t.me/codergaboets"}],
+        ]}
+        tg_send(txt, chat_id, reply_markup=markup)
 
 
 def answer_callback(cb_id, text=""):
@@ -1051,6 +1150,7 @@ def handle_command(cmd, text, chat_id, msg):
             "━━━━━━━━━━━━━━━━\n"
             "<b>▸ Akun</b>\n"
             "/start — Info bot\n/status — Status VIP\n"
+            "/bill — Lihat harga & bayar\n"
             "/subscribe — Upgrade VIP\n"
             "/autosync — Auto-trade mode\n"
             "━━━━━━━━━━━━━━━━\n"
@@ -1396,42 +1496,75 @@ def handle_command(cmd, text, chat_id, msg):
         txt += f"━━━━━━━━━━━━━━━━\n🕐 {wib_fmt()}"
         tg_send(txt, chat_id)
 
+    elif cmd == "/bill":
+        if chat_id and PAYMENT_ENGINE:
+            txt = get_pricing_table()
+            markup = {"inline_keyboard": [
+                [{"text": "⭐ Pro — Rp79K", "callback_data": "pay:pro"},
+                 {"text": "👑 Elite — Rp149K", "callback_data": "pay:elite"}],
+                [{"text": "📞 Tanya Admin", "url": "https://t.me/codergaboets"}],
+            ]}
+            tg_send(txt, chat_id, reply_markup=markup)
+        else:
+            tg_send("💳 Payment belum tersedia. /subscribe untuk info.", chat_id)
+
     elif cmd == "/subscribe":
         if chat_id:
             if SUBSCRIPTION_ENGINE:
                 try:
                     member = get_member(str(chat_id)) or ensure_member(str(chat_id))
-                    member_status = member.get("status")
                     tier = member.get("tier", "starter")
+                    member_status = member.get("status", "trial")
                     expiry = member.get("expiry", "")
+
+                    # Format status dengan emoji
+                    tier_emoji = {"elite": "👑", "pro": "⭐", "starter": "🆓"}.get(tier, "📦")
+                    status_emoji = {"paid": "🟢", "trial": "🟡", "expired": "🔴"}.get(member_status, "⚪")
+
                     txt = (
                         "💎 <b>Upgrade / Perpanjang VIP</b>\n"
                         "━━━━━━━━━━━━━━━━\n"
-                        "📦 <b>Paket Langganan</b>\n"
-                        "• Starter: gratis 7 hari trial\n"
-                        "• Pro: akses penuh + analisa unlimited\n"
-                        "• Elite: multi akun + support prioritas\n"
-                        f"📅 Status: {tier} — {member_status}\n"
-                        f"📅 Expired: {expiry[:10] if expiry else 'Belum ada'}\n\n"
-                        "💳 Payment: Tripay / Duitku\n"
-                        "🔄 Perpanjang otomatis (coming soon)\n\n"
-                        "Admin bisa bantu upgrade via /subscribe <paket>"
+                        f"{tier_emoji} Status: <b>{tier.upper()}</b> — {status_emoji} {member_status}\n"
                     )
-                    tg_send(txt, chat_id)
-                except Exception:
-                    tg_send("💎 VIP upgrade system loading...", chat_id)
-            elif MEMBERS_ENABLED:
-                try:
-                    info = get_pricing_info()
-                    txt = (f"💎 <b>Upgrade VIP</b>\n━━━━━━━━━━━━━━━━\n"
-                           f"💰 {info.get('vip_price','75K')}/bulan\n"
-                           f"✓ Analisa unlimited\n✓ Sinyal real-time\n✓ Priority support\n"
-                           f"━━━━━━━━━━━━━━━━\nComing soon: Payment gateway")
-                    tg_send(txt, chat_id)
+                    if expiry:
+                        txt += f"📅 Expired: {expiry[:10]}\n"
+                    txt += (
+                        "━━━━━━━━━━━━━━━━\n"
+                        "💳 <b>Pilih Paket:</b>\n"
+                    )
+
+                    markup = {"inline_keyboard": []}
+
+                    if PAYMENT_ENGINE and PRICING:
+                        # Tier buttons
+                        if tier != "pro":
+                            markup["inline_keyboard"].append([
+                                {"text": "⭐ Pro — Rp79K/bln", "callback_data": "pay:pro"},
+                            ])
+                        if tier != "elite":
+                            markup["inline_keyboard"].append([
+                                {"text": "👑 Elite — Rp149K/bln", "callback_data": "pay:elite"},
+                            ])
+                        if tier == "elite":
+                            txt += "👑 Kamu sudah <b>Elite</b> — tier tertinggi!\n"
+                        elif tier == "pro":
+                            txt += "⭐ Kamu <b>Pro</b>. Upgrade ke Elite?\n"
+                        else:
+                            txt += "🆓 Trial aktif. Upgrade untuk akses penuh!\n"
+                    else:
+                        txt += "⚠️ Payment gateway belum aktif.\n"
+                        txt += "Hubungi admin: @codergaboets\n"
+
+                    markup["inline_keyboard"].append([
+                        {"text": "💳 Info Harga", "callback_data": "pricing:show"},
+                        {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
+                    ])
+
+                    tg_send(txt, chat_id, reply_markup=markup)
                 except Exception:
                     tg_send("💎 VIP upgrade system loading...", chat_id)
             else:
-                tg_send("💎 Member system belum aktif.", chat_id)
+                tg_send("💎 Member system belum aktif.\nHubungi admin: @codergaboets", chat_id)
 
     elif cmd == "/autosync":
         if not AUTOSYNC_GLOBAL_ENABLED:
@@ -1932,11 +2065,15 @@ def main():
                                     "Ketik /help untuk lihat daftar command.", chat_id)
                         except Exception:
                             pass
-                # Handle inline keyboard callbacks (Trade Auto / Skip)
+                # Handle inline keyboard callbacks (Trade Auto / Skip / Payment)
                 cb = upd.get("callback_query")
                 if cb:
                     try:
-                        handle_trade_callback(cb)
+                        data = cb.get("data", "")
+                        if data.startswith(("pay:", "check:", "pricing:")):
+                            handle_payment_callback(cb)
+                        else:
+                            handle_trade_callback(cb)
                     except Exception as e:
                         logger.error(f"Callback error: {e}")
             save_state({"last_update_id": offset})
