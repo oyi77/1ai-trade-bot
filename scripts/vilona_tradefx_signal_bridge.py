@@ -212,19 +212,19 @@ class SignalHandler(BaseHTTPRequestHandler):
         elif path == "/history":
             with LOCK:
                 self._json({"count": len(HISTORY), "signals": list(HISTORY)})
-        elif path == "/download/ea" or path == "/download/ea.mq5":
+        elif path == "/download/ea" or path == "/download/ea.ex5":
             # Serve EA file for download
-            ea_path = os.path.join(PROJECT_DIR, "experts", "VilonaTradeFX_EA.mq5")
+            ea_path = os.path.join(PROJECT_DIR, "ea", "VilonaTradeFX_EA.ex5")
             try:
-                with open(ea_path, "r") as f:
+                with open(ea_path, "rb") as f:
                     content = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
-                self.send_header("Content-Disposition", "attachment; filename=VilonaTradeFX_EA.mq5")
+                self.send_header("Content-Disposition", "attachment; filename=VilonaTradeFX_EA.ex5")
                 self.send_header("Access-Control-Allow-Origin", "*")
-                self.send_header("Content-Length", str(len(content.encode())))
+                self.send_header("Content-Length", str(len(content)))
                 self.end_headers()
-                self.wfile.write(content.encode())
+                self.wfile.write(content)
             except FileNotFoundError:
                 self._json({"error": "file not found"}, 404)
         else:
