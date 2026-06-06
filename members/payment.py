@@ -29,10 +29,19 @@ PRICING = {
 }
 
 # ── Tripay Config ─────────────────────────────────────────
-TRIPAY_MERCHANT = os.environ.get("TRIPAY_MERCHANT_CODE", "T23409")
-TRIPAY_API_KEY = os.environ.get("TRIPAY_API_KEY", "")
+_TRIPAY_KEY = os.environ.get("TRIPAY_API_KEY", "")
+_TRIPAY_SANDBOX = _TRIPAY_KEY.startswith("DEV-")
+
+TRIPAY_MERCHANT = os.environ.get(
+    "TRIPAY_MERCHANT_CODE",
+    "T22632" if _TRIPAY_SANDBOX else "T23409"
+)
+TRIPAY_API_KEY = _TRIPAY_KEY
 TRIPAY_PRIVATE_KEY = os.environ.get("TRIPAY_PRIVATE_KEY", "")
-TRIPAY_BASE = os.environ.get("TRIPAY_BASE_URL", "https://tripay.co.id/api")
+TRIPAY_BASE = os.environ.get(
+    "TRIPAY_BASE_URL",
+    "https://tripay.co.id/api-sandbox" if _TRIPAY_SANDBOX else "https://tripay.co.id/api"
+)
 TRIPAY_CALLBACK = os.environ.get(
     "TRIPAY_CALLBACK_URL",
     "https://phantomfx.aitradepulse.com/webhook/tripay"
@@ -142,7 +151,11 @@ def create_tripay_payment(chat_id: str, username: str, tier: str,
     except urllib.error.HTTPError as e:
         body = e.read().decode()[:500]
         logger.error("Tripay HTTP %s: %s", e.code, body)
-        return {"error": f"Payment error ({e.code}). Coba lagi nanti."}
+        if "Invalid signature" in body:
+            return {"error": "Tripay: Invalid signature — cek TRIPAY_PRIVATE_KEY di .env"}
+        elif "Sandbox credential" in body:
+            return {"error": "Tripay: Sandbox key tapi URL production — coba lagi"}
+        return {"error": f"Tripay error ({e.code}). Cek API key di dashboard Tripay."}
     except Exception as e:
         logger.error("Tripay exception: %s", e)
         return {"error": f"Payment error: {str(e)[:100]}"}

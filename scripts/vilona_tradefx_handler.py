@@ -13,6 +13,17 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
+# ── Load .env BEFORE local imports (Tripay keys needed) ──
+_env_path = PROJECT_DIR / "strategies" / "vilona_tradefx" / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text().split('\n'):
+        _line = _line.strip()
+        if _line and not _line.startswith('#') and '=' in _line:
+            _k, _v = _line.split('=', 1)
+            _k, _v = _k.strip(), _v.strip().strip('"').strip("'")
+            if _k not in os.environ or not os.environ.get(_k):
+                os.environ[_k] = _v
+
 try:
     from layering import enrich_signal_with_layers
     LAYERING_ENGINE = True
