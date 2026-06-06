@@ -872,8 +872,13 @@ def _call_omniroute(prompt, models=None):
     return None
 
 
-def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_data=None, display="XAUUSD"):
-    """Multi-AI consensus: DeepSeek + o3-mini + GPT-4o-mini + Gemini 2.5 Pro. Fallback chain."""
+def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_data=None, display="XAUUSD", tier="starter"):
+    """Multi-AI consensus — tier-based model selection.
+    
+    🆓 Starter (free):  DeepSeek + Gemini (2 models, zero cost)
+    ⭐ Pro (premium):    All 4 models — DeepSeek + o3-mini + GPT-4o-mini + Gemini
+    👑 Elite (premium):  All 4 models + weighted voting (o3-mini 1.2x weight)
+    """
     # Build analysis prompt
     data_section = f"💰 Current Price: ${price:.2f}"
     if ohlcv_data:
@@ -901,24 +906,36 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         f"R:R minimum 1:2. {'⚠️ FRIDAY: SL +10-15 pips extra.' if wib_now().weekday()==4 else ''}"
     )
 
-    # ── MULTI-AI CONSENSUS — 4 models in parallel ──
-    # Chain: DeepSeek → o3-mini → GPT-4o-mini → Gemini → OmniRoute
-    
+    # ── TIER-BASED MODEL SELECTION ──
+    is_elite = (tier == "elite")
+    is_premium = premium or is_elite or (tier in ("pro", "elite", "testing"))
+
+    # Always use free models
     deepseek = _call_deepseek(prompt)
-    o3 = _call_openai(prompt, model="o3-mini")       # reasoning model
-    gpt4o = _call_openai(prompt, model="gpt-4o-mini") # fast model
-    gemini = _call_gemini(prompt)                      # Google model
-    
+    gemini = _call_gemini(prompt)
+
+    # Paid models only for premium tiers
+    o3 = None
+    gpt4o = None
+    if is_premium:
+        o3 = _call_openai(prompt, model="o3-mini")
+        gpt4o = _call_openai(prompt, model="gpt-4o-mini")
+
     # Collect all valid signals
     signals = []
     if deepseek and deepseek.get("action") in ("BUY", "SELL"):
         signals.append({"sig": deepseek, "name": "DeepSeek", "weight": 1.0})
     if o3 and o3.get("action") in ("BUY", "SELL"):
-        signals.append({"sig": o3, "name": "o3-mini", "weight": 1.2})  # reasoning bonus
+        # Elite gets 1.2x reasoning bonus; Pro gets 1.0
+        w = 1.2 if is_elite else 1.0
+        signals.append({"sig": o3, "name": "o3-mini", "weight": w})
     if gpt4o and gpt4o.get("action") in ("BUY", "SELL"):
         signals.append({"sig": gpt4o, "name": "GPT-4o", "weight": 0.9})
     if gemini and gemini.get("action") in ("BUY", "SELL"):
         signals.append({"sig": gemini, "name": "Gemini", "weight": 1.0})
+
+    model_count = len(signals)
+    tier_label = {"starter": "🆓 Free", "pro": "⭐ Pro", "elite": "👑 Elite", "testing": "🧪 Testing"}.get(tier, tier.upper())
     
     # Count votes per direction
     buy_votes = [s for s in signals if s["sig"]["action"] == "BUY"]
@@ -933,6 +950,8 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["ensemble"] = "super"
         sig["voters"] = len(winner)
         sig["_model"] = "+".join(s["name"] for s in winner)
+        sig["_tier"] = tier_label
+        sig["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
         logger.info(f"SUPER CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%}")
         return sig
     
@@ -945,6 +964,8 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["ensemble"] = "dual"
         sig["voters"] = len(winner)
         sig["_model"] = "+".join(s["name"] for s in winner)
+        sig["_tier"] = tier_label
+        sig["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
         logger.info(f"DUAL CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%}")
         return sig
     
@@ -955,6 +976,8 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["ensemble"] = "solo"
         sig["voters"] = 1
         sig["_model"] = best["name"]
+        sig["_tier"] = tier_label
+        sig["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
         logger.info(f"SOLO [{best['name']}]: {sig['action']} conf={sig.get('confidence', 0):.0%}")
         return sig
     
@@ -962,6 +985,8 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     for s, name in [(deepseek, "DeepSeek"), (o3, "o3-mini"), (gpt4o, "GPT-4o"), (gemini, "Gemini")]:
         if s:
             s["ensemble"] = "solo"; s["voters"] = 1; s["_model"] = name
+            s["_tier"] = tier_label
+            s["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
             return s
     
     # LAST RESORT: OmniRoute
@@ -969,8 +994,8 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     return _call_omniroute(prompt)
 
 
-def ask_ai(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv=None, display="XAUUSD"):
-    return ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium, ohlcv, display)
+def ask_ai(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv=None, display="XAUUSD", tier="starter"):
+    return ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium, ohlcv, display, tier=tier)
 
 
 # ── Signal formatting ──
@@ -1025,10 +1050,18 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
             sl = round(price * 0.995, 2) if action == "BUY" else round(price * 1.005, 2)
             tp = round(price * 1.01, 2) if action == "BUY" else round(price * 0.99, 2)
 
+    tier_display = sig.get("_tier", "")
+    models_display = sig.get("_models", "")
+    ai_line = f"Confidence: {conf:.0%} | Ensemble: {sig.get('ensemble','?')}"
+    if models_display:
+        ai_line += f" | Models: {models_display}"
+    if tier_display:
+        ai_line += f" | {tier_display}"
+
     return (
         f"{emoji} <b>{action} {display}</b> | Grade:{grade} | RR 1:{rr}\n"
         f"━━━━━━━━━━━━━━━━\n"
-        f"Confidence: {conf:.0%} | Ensemble: {sig.get('ensemble','?')}\n"
+        f"{ai_line}\n"
         f"Entry: {currency}{entry:.2f} | SL: {currency}{sl:.2f} | TP: {currency}{tp:.2f}\n"
         f"━━━━━━━━━━━━━━━━\n"
         f"📊 {reason}\n"
@@ -1357,8 +1390,16 @@ def handle_command(cmd, text, chat_id, msg):
                 tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
                 return
             ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+            # Detect user tier for AI model selection
+            user_tier = "starter"
+            if MEMBERS_ENABLED and chat_id:
+                try:
+                    m = get_member(str(chat_id))
+                    user_tier = (m or {}).get("tier", "starter")
+                except Exception:
+                    pass
             sig = ask_ai(price, dxy, session(), str(killzone()), 0, premium=False,
-                          ohlcv=ohlcv_bars, display=disp)
+                          ohlcv=ohlcv_bars, display=disp, tier=user_tier)
             if sig:
                 # Apply Elite custom params
                 sig = apply_elite_params(sig, elite_params, price, disp)
@@ -1490,8 +1531,16 @@ def handle_command(cmd, text, chat_id, msg):
 
                     tg_send(f"🔍 Menganalisa {sub.upper()}... ~15 detik", chat_id)
                     ohlcv_bars2 = _fetch_ohlcv_for_ai(sub)
+                    # Detect user tier for AI model selection
+                    user_tier2 = "starter"
+                    if MEMBERS_ENABLED and chat_id:
+                        try:
+                            m2 = get_member(str(chat_id))
+                            user_tier2 = (m2 or {}).get("tier", "starter")
+                        except Exception:
+                            pass
                     sig = ask_ai(price, None, session(), str(killzone()), 0, premium=False,
-                                  ohlcv=ohlcv_bars2, display=sub.upper())
+                                  ohlcv=ohlcv_bars2, display=sub.upper(), tier=user_tier2)
                     if sig:
                         # Apply Elite custom params
                         sig = apply_elite_params(sig, elite_params, price, sub.upper())
