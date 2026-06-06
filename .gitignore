@@ -7,3 +7,4 @@ logs/*
 strategies/vilona_tradefx/.env
 *.env
 data/
+db
