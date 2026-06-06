@@ -1242,7 +1242,11 @@ def handle_command(cmd, text, chat_id, msg):
             "/history — Riwayat trade\n"
             "/recap — Rekap sinyal harian\n"
             "/mapping — Market mapping & key levels\n"
-            "/mykey — Cek license EA", chat_id)
+            "/mykey — Cek license EA\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "<b>▸ Komunitas</b>\n"
+            "👥 <a href='https://t.me/+kX8tspebrpVhMmE1'>Join Group Diskusi</a>\n"
+            "📞 Admin: @codergaboets", chat_id)
 
     elif cmd == "/price":
         # Multi-symbol price — use normalized sub
@@ -1860,6 +1864,16 @@ def handle_command(cmd, text, chat_id, msg):
                         {"text": "💳 Info Harga", "callback_data": "pricing:show"},
                         {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
                     ])
+                    # ── Join Group button (for paid users) ──
+                    if tier in ("pro", "elite", "testing") and member_status == "paid":
+                        txt += (
+                            "\n━━━━━━━━━━━━━━━━\n"
+                            "🔗 <b>Akses Premium:</b>\n"
+                            "👥 Join grup komunitas untuk diskusi & support.\n"
+                        )
+                        markup["inline_keyboard"].append([
+                            {"text": "👥 Join Group Komunitas", "url": "https://t.me/+kX8tspebrpVhMmE1"},
+                        ])
 
                     tg_send(txt, chat_id, reply_markup=markup)
                 except Exception:

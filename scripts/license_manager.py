@@ -30,6 +30,7 @@ KEYS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 
 ADMIN_CHAT_IDS = {
     "157228659": "Andik",
+    "5220170786": "Paijo",
 }
 
 def is_admin(chat_id):

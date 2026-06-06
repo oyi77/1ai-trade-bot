@@ -33,19 +33,21 @@ AMOUNT_TO_TIER = {
 }
 
 
-def tg_send(text: str, chat_id: str, bot_token: str = None):
+def tg_send(text: str, chat_id: str, bot_token: str = None, reply_markup=None):
     """Send Telegram message via API."""
     token = bot_token or BOT_TOKEN
     if not token or not chat_id:
         return None
     try:
-        payload = json.dumps({
+        payload = {
             "chat_id": chat_id, "text": text,
             "parse_mode": "HTML",
-        }).encode()
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
         req = urllib.request.Request(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            data=payload, headers={"Content-Type": "application/json"},
+            data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"},
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read())
@@ -181,6 +183,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         # ── EA download link ──
         ea_link = "https://phantomfx.aitradepulse.com/dl/ea"  # will be real later
+        group_link = "https://t.me/+kX8tspebrpVhMmE1"
 
         msg = (
             f"✅ <b>Pembayaran Diterima!</b>\n"
@@ -205,7 +208,13 @@ class WebhookHandler(BaseHTTPRequestHandler):
             f"👉 /mykey — Cek license key\n"
             f"👉 /analyze xauusd — Mulai analisa"
         )
-        tg_send(msg, chat_id)
+        
+        # Inline keyboard: Join Group + Download EA
+        markup = {"inline_keyboard": [
+            [{"text": "👥 Join Group Komunitas", "url": group_link}],
+            [{"text": "📥 Download EA", "url": ea_link}],
+        ]}
+        tg_send(msg, chat_id, reply_markup=markup)
 
         # Notify admin
         if ADMIN_CHAT_ID and ADMIN_CHAT_ID != chat_id:
