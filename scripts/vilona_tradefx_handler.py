@@ -1782,7 +1782,7 @@ def handle_command(cmd, text, chat_id, msg):
                     f"🔐 <b>License Key:</b>\n"
                     f"<code>{license_key}</code>\n"
                     f"━━━━━━━━━━━━━━━━\n"
-                    f"📥 EA: https://phantomfx.aitradepulse.com/dl/ea\n"
+                    f"📥 EA: https://phantomfx.aitradepulse.com/download/ea\n"
                     f"📖 Copy key, paste ke <code>API_Key</code> di EA MT5.\n\n"
                     f"👉 /help — Lihat command\n"
                     f"👉 /mykey — Cek license"

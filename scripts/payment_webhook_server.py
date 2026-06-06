@@ -182,7 +182,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
             log.warning(f"License gen failed: {e}")
 
         # ── EA download link ──
-        ea_link = "https://phantomfx.aitradepulse.com/dl/ea"  # will be real later
+        ea_link = "https://phantomfx.aitradepulse.com/download/ea"  # will be real later
         group_link = "https://t.me/+qLAdRGd_RiplZmU1"
 
         msg = (
