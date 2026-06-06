@@ -1148,7 +1148,7 @@ def handle_command(cmd, text, chat_id, msg):
                     "📐 Mapping: Setiap hari 10:00 WIB\n"
                     "🛑 Weekend: Hemat AI, market tutup\n\n"
                     "📱 /help — Semua command\n"
-                    "💎 /subscribe — Upgrade VIP"
+                    "💎 /subscribe — Upgrade Pro/Elite\n"
                 )
                 tg_send(welcome, chat_id)
         else:
@@ -1163,11 +1163,12 @@ def handle_command(cmd, text, chat_id, msg):
                 is_vip = is_premium(str(chat_id))
                 quota = check_quota(str(chat_id))
                 if is_vip:
-                    tg_send(f"⭐ <b>VIP Active</b> | Kuota: {quota.get('used',0)}/{quota.get('total',5)}\n"
+                    tier_name = member.get("tier", "pro").upper()
+                    tg_send(f"⭐ <b>{tier_name} Active</b> | Kuota: {quota.get('used',0)}/{quota.get('total',5)}\n"
                             f"Kirim /analyze xauusd untuk mulai.", chat_id)
                 else:
                     tg_send(f"👤 <b>Free User</b> | Kuota: {quota.get('used',0)}/{quota.get('total',3)}\n"
-                            f"Upgrade ke VIP via /subscribe", chat_id)
+                            f"Upgrade ke Pro/Elite via /subscribe", chat_id)
             except: pass
 
     elif cmd == "/help":
@@ -1186,9 +1187,9 @@ def handle_command(cmd, text, chat_id, msg):
             "/killzone — Sesi trading\n"
             "━━━━━━━━━━━━━━━━\n"
             "<b>▸ Akun</b>\n"
-            "/start — Info bot\n/status — Status VIP\n"
+            "/start — Info bot\n/status — Status Langganan\n"
             "/bill — Lihat harga & bayar\n"
-            "/subscribe — Upgrade VIP\n"
+            "💎 /subscribe — Upgrade Pro/Elite\n"
             "/autosync — Auto-trade mode\n"
             "━━━━━━━━━━━━━━━━\n"
             "<b>▸ Tier & Kuota</b>\n"
@@ -1244,7 +1245,9 @@ def handle_command(cmd, text, chat_id, msg):
             try:
                 q = check_quota(str(chat_id))
                 is_vip = is_premium(str(chat_id))
-                txt = (f"⭐ VIP Active" if is_vip else "👤 Free") + f" | Kuota: {q.get('used',0)}/{q.get('total',0)}"
+                member = get_member(str(chat_id))
+                tier_name = member.get("tier", "starter").upper() if member else "FREE"
+                txt = (f"⭐ {tier_name} Active" if is_vip else "👤 Free") + f" | Kuota: {q.get('used',0)}/{q.get('total',0)}"
                 txt += weekend_note
                 tg_send(txt, chat_id)
             except Exception:
@@ -1305,7 +1308,7 @@ def handle_command(cmd, text, chat_id, msg):
                         "👑 <b>Custom Parameter khusus Elite!</b>\n"
                         "━━━━━━━━━━━━━━━━\n"
                         "Fitur risk= dan tf= hanya untuk Elite (Rp149K/bln).\n\n"
-                        "👉 /subscribe — Upgrade ke Elite\n"
+                        "💎 /subscribe — Upgrade Pro/Elite\n"
                         "👉 /bill — Lihat harga",
                         chat_id
                     )
@@ -1662,6 +1665,91 @@ def handle_command(cmd, text, chat_id, msg):
 
         tg_send(txt, chat_id, reply_markup=markup)
 
+    elif cmd == "/activate":
+        """Admin: Manual activation when Tripay is down but payment verified."""
+        if not chat_id:
+            return
+        if not LICENSE_ENGINE:
+            tg_send("🔒 License system belum aktif.", chat_id)
+            return
+        if not is_admin(chat_id):
+            tg_send("⛔ Admin only.", chat_id)
+            return
+
+        # Parse: /activate <user_id> <tier> [days]
+        parts = text.split()
+        if len(parts) < 3:
+            tg_send("📋 <b>Usage:</b> /activate &lt;user_id&gt; &lt;tier&gt; [days]\n"
+                    "Contoh: /activate 5220170786 pro 30\n"
+                    "Tier: starter | pro | elite", chat_id)
+            return
+
+        target_id = parts[1]
+        tier = parts[2].lower()
+        if tier not in ("starter", "pro", "elite"):
+            tg_send("❌ Invalid tier. Gunakan: starter | pro | elite", chat_id)
+            return
+
+        days = int(parts[3]) if len(parts) > 3 else 30
+
+        try:
+            # Check if user exists in members
+            from members import ensure_member as m_ensure, upgrade_tier as m_upgrade, get_member as m_get
+
+            # Upgrade in members.db
+            ref = f"VTFX-{target_id}-MANUAL"
+            m_ensure(target_id)
+            m_upgrade(target_id, tier, days, ref)
+
+            # Generate license key
+            license_key, _ = cmd_genkey(target_id, f"{tier} {target_id}")
+
+            tier_emoji = {"starter": "🆓", "pro": "⭐", "elite": "👑"}.get(tier, "📦")
+
+            # Notify admin
+            tg_send(
+                f"✅ <b>Manual Activation Berhasil</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"👤 User: <code>{target_id}</code>\n"
+                f"{tier_emoji} Tier: <b>{tier.upper()}</b>\n"
+                f"📅 {days} hari\n"
+                f"🔑 Ref: {ref[:24]}\n"
+                f"🔐 Key: <code>{license_key}</code>",
+                chat_id
+            )
+
+            # DM the activated user
+            if BOT_TOKEN:
+                user_msg = (
+                    f"✅ <b>Akun Kamu Sudah Diaktivasi!</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"{tier_emoji} Tier: <b>{tier.upper()}</b>\n"
+                    f"📅 {days} hari\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"🔐 <b>License Key:</b>\n"
+                    f"<code>{license_key}</code>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"📥 EA: https://phantomfx.aitradepulse.com/dl/ea\n"
+                    f"📖 Copy key, paste ke <code>API_Key</code> di EA MT5.\n\n"
+                    f"👉 /help — Lihat command\n"
+                    f"👉 /mykey — Cek license"
+                )
+                try:
+                    payload = json.dumps({
+                        "chat_id": target_id, "text": user_msg, "parse_mode": "HTML"
+                    }).encode()
+                    req = urllib.request.Request(
+                        f"{TELEGRAM_API}/sendMessage",
+                        data=payload, headers={"Content-Type": "application/json"}
+                    )
+                    urllib.request.urlopen(req, timeout=10)
+                    tg_send(f"📨 DM terkirim ke user {target_id}", chat_id)
+                except Exception as e:
+                    tg_send(f"⚠️ Gagal kirim DM ke user: {e}", chat_id)
+
+        except Exception as e:
+            tg_send(f"❌ Activation gagal: {e}", chat_id)
+
     elif cmd == "/subscribe":
         if chat_id:
             if SUBSCRIPTION_ENGINE:
@@ -1686,7 +1774,7 @@ def handle_command(cmd, text, chat_id, msg):
                     status_emoji = {"paid": "🟢", "trial": "🟡", "expired": "🔴"}.get(member_status, "⚪")
 
                     txt = (
-                        "💎 <b>Upgrade / Perpanjang VIP</b>\n"
+                        "💎 <b>Upgrade / Perpanjang Langganan</b>\n"
                         "━━━━━━━━━━━━━━━━\n"
                         f"{tier_emoji} Status: <b>{tier.upper()}</b> — {status_emoji} {member_status}\n"
                     )
@@ -1726,7 +1814,7 @@ def handle_command(cmd, text, chat_id, msg):
 
                     tg_send(txt, chat_id, reply_markup=markup)
                 except Exception:
-                    tg_send("💎 VIP upgrade system loading...", chat_id)
+                    tg_send("💎 Langganan system loading...", chat_id)
             else:
                 tg_send("💎 Member system belum aktif.\nHubungi admin: @codergaboets", chat_id)
 
@@ -2238,7 +2326,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/bill","/testpay","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/bill","/testpay","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping","/activate"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:

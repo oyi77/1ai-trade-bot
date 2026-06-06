@@ -169,16 +169,40 @@ class WebhookHandler(BaseHTTPRequestHandler):
         upgrade_member(chat_id, tier, days, merchant_ref)
 
         # DM user
-        tier_emoji = {"starter": "🆓", "pro": "⭐", "elite": "👑"}.get(tier, "📦")
+        tier_emoji = {"starter": "🆓", "pro": "⭐", "elite": "👑", "testing": "🧪"}.get(tier, "📦")
+
+        # ── Auto-generate license key ──
+        license_key = ""
+        try:
+            from license_manager import generate_key as gen_lic_key
+            license_key, _ = gen_lic_key(tier=tier, label=f"{chat_id}-auto")
+        except Exception as e:
+            log.warning(f"License gen failed: {e}")
+
+        # ── EA download link ──
+        ea_link = "https://phantomfx.aitradepulse.com/dl/ea"  # will be real later
+
         msg = (
             f"✅ <b>Pembayaran Diterima!</b>\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"💰 Rp{total_amount:,}\n"
             f"{tier_emoji} Tier: <b>{tier.upper()}</b>\n"
             f"📅 Durasi: {days} hari\n"
-            f"🔑 Ref: <code>{merchant_ref[:16]}</code>\n\n"
+            f"🔑 Ref: <code>{merchant_ref[:16]}</code>\n"
+        )
+        if license_key:
+            msg += (
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🔐 <b>License Key:</b>\n"
+                f"<code>{license_key}</code>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"📥 <b>Download EA:</b> {ea_link}\n"
+                f"📖 <b>Cara pakai:</b> Copy key di atas, paste ke input <code>API_Key</code> di EA MT5.\n\n"
+            )
+        msg += (
             f"Selamat! Semua fitur {tier.upper()} sudah aktif.\n"
             f"👉 /help — Lihat command\n"
+            f"👉 /mykey — Cek license key\n"
             f"👉 /analyze xauusd — Mulai analisa"
         )
         tg_send(msg, chat_id)
