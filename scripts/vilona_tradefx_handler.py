@@ -373,7 +373,7 @@ def tg_send(text, chat_id=None, reply_markup=None):
     try:
         payload = {"chat_id": target, "text": text, "parse_mode": "HTML"}
         if reply_markup:
-            payload["reply_markup"] = json.dumps(reply_markup)
+            payload["reply_markup"] = reply_markup
         req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
             data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -386,7 +386,7 @@ def tg_send(text, chat_id=None, reply_markup=None):
                 plain = re.sub(r'<[^>]+>', '', text)
                 payload = {"chat_id": target, "text": plain[:MAX_LEN]}
                 if reply_markup:
-                    payload["reply_markup"] = json.dumps(reply_markup)
+                    payload["reply_markup"] = reply_markup
                 req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
                     data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=15) as r:
