@@ -17,12 +17,13 @@ TRIPAY_BASE_URL      = os.environ.get("TRIPAY_BASE_URL", "https://tripay.co.id/a
 TRIPAY_CALLBACK_URL  = os.environ.get("TRIPAY_CALLBACK_URL", "")
 DEFAULT_METHOD       = os.environ.get("TRIPAY_DEFAULT_METHOD", "QRIS2")
 
-# Product → Tier mapping
+# Donation model — "Dukung Server AI" (pay-what-you-want)
+# Any amount above minimum → DONATUR status
 PRODUCT_TIERS = {
-    "vtfx-starter":  {"tier": "starter", "price": 29000,  "label_prefix": "Starter"},
-    "vtfx-pro":      {"tier": "pro",     "price": 79000,  "label_prefix": "Pro"},
-    "vtfx-elite":    {"tier": "elite",   "price": 149000, "label_prefix": "Elite"},
+    "vtfx-donasi": {"tier": "donor", "price": 0, "label_prefix": "Donatur"},
 }
+
+MIN_DONATION = 10000  # Minimum Rp10.000
 
 PAYMENT_STORE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                    "data", "payments.json")
@@ -63,16 +64,9 @@ def create_transaction(user_id: str, username: str, amount: int,
     if method is None:
         method = DEFAULT_METHOD
 
-    # Cari product dari amount
-    product_key = None
-    for key, info in PRODUCT_TIERS.items():
-        if info["price"] == amount:
-            product_key = key
-            break
-
-    if not product_key:
-        # Auto-detect from amount
-        product_key = f"vtfx-custom-{amount}"
+    # Open-amount donation model — any amount valid
+    product_key = "vtfx-donasi"
+    label = "Dukung Server AI - VilonaTradeFX"
 
     merchant_ref = f"VTFX-{user_id}-{int(time.time())}"
     payload = {
@@ -83,7 +77,7 @@ def create_transaction(user_id: str, username: str, amount: int,
         "customer_email": customer_email or f"{user_id}@telegram.user",
         "customer_phone": customer_phone or "08123456789",
         "order_items": order_items or [
-            {"name": f"VilonaTradeFX - {product_key}", "price": amount, "quantity": 1}
+            {"name": label, "price": amount, "quantity": 1}
         ],
         "callback_url": TRIPAY_CALLBACK_URL or "https://phantomfx.aitradepulse.com/webhook/tripay",
         "return_url": "https://t.me/berkahkaryaforexbotbot",

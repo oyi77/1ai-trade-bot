@@ -8,25 +8,16 @@ from pathlib import Path
 
 logger = logging.getLogger("vtfx-payment")
 
-# ── Pricing ──────────────────────────────────────────────
+# ── Donation Model — "Dukung Server AI" ────────────────────
+# Pay-what-you-want, minimum Rp10.000
 PRICING = {
-    "starter": {
-        "tier": "starter", "price_idr": 29000, "label": "Starter",
-        "days": 7, "features": "Trial 7 hari • Sinyal dasar • /analyze 3x/hari",
-    },
-    "pro": {
-        "tier": "pro", "price_idr": 79000, "label": "Pro",
-        "days": 30, "features": "Akses penuh • Analisa unlimited • Auto-trade EA • Sinyal real-time",
-    },
-    "elite": {
-        "tier": "elite", "price_idr": 149000, "label": "Elite",
-        "days": 30, "features": "Multi akun • Auto-trade EA • Custom strategy • Priority support",
-    },
-    "testing": {
-        "tier": "testing", "price_idr": 5000, "label": "Testing",
-        "days": 1, "features": "🧪 Test payment gateway • 1 hari • Semua fitur Pro",
+    "donor": {
+        "tier": "donor", "price_idr": 0, "label": "Donatur",
+        "days": 9999, "features": "👑 Akses penuh • /analyze UNLIMITED • Auto-trade EA • Bridge sinyal • Dukung server AI",
     },
 }
+
+MIN_DONATION = 10000  # Minimum donasi Rp10.000
 
 # ── Tripay Config ─────────────────────────────────────────
 _TRIPAY_KEY = os.environ.get("TRIPAY_API_KEY", "")
@@ -58,30 +49,39 @@ def get_pricing_info() -> dict:
 
 
 def get_pricing_table() -> str:
-    """Return formatted pricing text."""
-    lines = ["💎 <b>Harga Langganan</b>", "━━━━━━━━━━━━━━━━"]
-    for key, pkg in PRICING.items():
-        emoji = {"starter": "🆓", "pro": "⭐", "elite": "👑"}.get(key, "📦")
-        lines.append(f"{emoji} <b>{pkg['label']}</b> — Rp{pkg['price_idr']:,}/bln")
-        lines.append(f"   {pkg['features']}")
-    lines.append("━━━━━━━━━━━━━━━━")
-    lines.append("💳 Bayar via QRIS, VA, atau Retail")
-    return "\n".join(lines)
+    """Return formatted donation info."""
+    return (
+        "🔥 <b>Dukung Server AI</b>\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "💰 <b>Dukung seikhlasnya</b> (min Rp10.000)\n"
+        "👑 Status <b>DONATUR VIP</b> — AKTIF PERMANEN\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "✅ /analyze UNLIMITED\n"
+        "✅ EA Auto-Trade\n"
+        "✅ Bridge Sinyal\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "💳 QRIS, VA, Retail — otomatis aktif!\n"
+    )
 
 
-def create_tripay_payment(chat_id: str, username: str, tier: str,
-                          method: str = "QRIS2") -> dict:
-    """Create Tripay transaction. Returns dict with payment_url."""
+def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
+                          method: str = "QRIS2", amount: int = None) -> dict:
+    """Create Tripay donation transaction. Returns dict with payment_url.
+    
+    tier is now 'donor' by default. amount overrides the donation amount.
+    """
     import hashlib, hmac
-
-    pkg = PRICING.get(tier)
-    if not pkg:
-        return {"error": f"Paket '{tier}' tidak ditemukan"}
 
     if not TRIPAY_API_KEY or not TRIPAY_PRIVATE_KEY:
         return {"error": "Payment gateway belum dikonfigurasi. Hubungi admin."}
 
-    amount = pkg["price_idr"]
+    if amount is None:
+        # Default donation amount (Rp50.000 suggested)
+        amount = int(os.environ.get("DONATION_DEFAULT_AMOUNT", "50000"))
+
+    if amount < MIN_DONATION:
+        return {"error": f"Minimum donasi Rp{MIN_DONATION:,}"}
+
     merchant_ref = f"VTFX-{chat_id}-{int(time.time())}"
 
     # Build payload
@@ -93,7 +93,7 @@ def create_tripay_payment(chat_id: str, username: str, tier: str,
         "customer_email": f"{chat_id}@telegram.user",
         "customer_phone": "08123456789",
         "order_items": [{
-            "name": f"VilonaTradeFX - {pkg['label']}",
+            "name": "Dukung Server AI - VilonaTradeFX",
             "price": amount,
             "quantity": 1,
         }],
@@ -123,7 +123,7 @@ def create_tripay_payment(chat_id: str, username: str, tier: str,
             data = json.loads(resp.read().decode())
 
         if data.get("success"):
-            result = data["data"]
+            result = data.get("data", {})
             # Record payment order in members DB
             try:
                 from members import insert_payment_order

@@ -9,9 +9,10 @@
 //   ★ Manual Mode — user sets entries manually
 //   ★ Hybrid Mode — AI signals + manual confirmation
 //   ★ Circuit Breaker — max consecutive losses + daily $ limit
-//   ★ Trailing Stop & Breakeven (Elite tier)
+//   ★ Trailing Stop & Breakeven
 //   ★ Killzone Filter — trade only during active sessions
 //   ★ Spread Protection — skip if spread too wide
+//   ★ Instance Identity — auto-sends MT5 login for multi-terminal broadcasting
 //   ★ Clean Chart Panel — real-time status display
 //
 //  USAGE:
@@ -19,6 +20,7 @@
 //   2. Choose TradingMode
 //   3. Attach to XAUUSDc M15 chart
 //   4. EA auto-polls bridge every PollInterval seconds
+//   5. EA sends account_id=MT5-{login} automatically — one API Key, many MT5 terminals
 //+------------------------------------------------------------------+
 #property copyright "BerkahKarya — VilonaTradeFX"
 #property link      "https://phantomfx.aitradepulse.com"
@@ -197,7 +199,8 @@ void OnTick() {
 //| POLL BRIDGE & PROCESS SIGNAL                                       |
 //+------------------------------------------------------------------+
 void PollBridge() {
-   string url = BridgeURL + "/signal?api_key=" + API_Key;
+   string accountId = GetAccountIdStr();
+   string url = BridgeURL + "/signal?api_key=" + API_Key + "&account_id=" + accountId;
    char reqData[];
    char resData[];
    string resHeaders;
@@ -635,7 +638,8 @@ int CountMyPositions() {
 //| SEND ACKNOWLEDGMENT TO BRIDGE                                      |
 //+------------------------------------------------------------------+
 void SendAck(string signalId) {
-   string url = BridgeURL + "/ack/" + signalId + "?api_key=" + API_Key;
+   string accountId = GetAccountIdStr();
+   string url = BridgeURL + "/ack/" + signalId + "?api_key=" + API_Key + "&account_id=" + accountId;
    char ackData[];
    char ackRes[];
    string ackHeaders = "Content-Type: application/json\r\n";
@@ -758,6 +762,11 @@ void ParseRiskSplit() {
    for(int i = 0; i < cnt; i++) {
       g_riskSplit[i] = StringToDouble(parts[i]);
    }
+}
+
+//── Instance Identity: unique MT5 account ID for multi-terminal broadcasting ──
+string GetAccountIdStr() {
+   return "MT5-" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
 }
 
 bool IsWeekend() {

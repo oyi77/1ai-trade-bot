@@ -1,5 +1,20 @@
 {
-  "positions": [],
+  "positions": [
+    {
+      "id": "ea_1780828225070",
+      "action": "SELL",
+      "entry": 4370.0,
+      "sl": 4385.0,
+      "tp": 4345.0,
+      "tp1": 4360.0,
+      "tp2": 4350.0,
+      "tp3": 4345.0,
+      "confidence": 0.78,
+      "source": "fallback_test",
+      "open_time": "2026-06-07T17:30:25.070544+07:00",
+      "status": "OPEN"
+    }
+  ],
   "closed": [
     {
       "id": "ea_1780670587739",
@@ -31,6 +46,6 @@
     }
   ],
   "total_pnl": 1722.1,
-  "signals_processed": 2,
-  "last_signal_id": 0.78
+  "signals_processed": 3,
+  "last_signal_id": "SELL_4370.00"
 }

@@ -48,10 +48,22 @@ def save_state(s):
     STATE_FILE.write_text(json.dumps(s, indent=2, default=str))
 
 def fetch_price():
+    """Fetch real-time XAUUSD price via UnifiedMarketData (yfinance GC=F)."""
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+        from market_data import UnifiedMarketData
+        md = UnifiedMarketData()
+        q = md.get_quote("gold", force=True)
+        if q and q.price > 1000:
+            return q.price
+    except Exception:
+        pass
+    # Fallback: REST API
     try:
         r = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=10)
         return float(json.loads(r.read()).get("price", 0))
-    except:
+    except Exception:
         return None
 
 def read_signal():
@@ -62,13 +74,20 @@ def read_signal():
 
 def check_position(pos, price):
     if not price: return None
-    entry, sl, tp, action = pos["entry"], pos["sl"], pos.get("tp", pos.get("tp1", 0)), pos["action"]
+    entry = pos["entry"]
+    sl = pos["sl"]
+    # Use the primary TP (for EA, we use tp1 as first target, tp as final)
+    tp = pos.get("tp", 0)  # Final TP from signal
+    tp1 = pos.get("tp1", tp)  # First TP target
+    # For position monitoring, use tp1 as the close target
+    target_tp = tp1 if tp1 and tp1 > 0 else tp
+    action = pos["action"]
     if action == "BUY":
         if price <= sl: return ("SL", price)
-        if price >= tp: return ("TP", price)
+        if price >= target_tp: return ("TP", price)
     else:
         if price >= sl: return ("SL", price)
-        if price <= tp: return ("TP", price)
+        if price <= target_tp: return ("TP", price)
     return None
 
 
@@ -120,9 +139,10 @@ def main():
                     last_mtime = mtime
                     sig = read_signal()
                     if sig and sig.get("action") in ("BUY", "SELL"):
-                        sig_id = sig.get("confidence", 0)
-                        # Skip if already processed
-                        if state["last_signal_id"] and abs(state["last_signal_id"] - sig_id) < 0.001:
+                        # Use entry price + action as signal fingerprint (not confidence)
+                        sig_fp = f"{sig.get('action','')}_{sig.get('entry',0):.2f}"
+                        # Skip if already processed this exact signal
+                        if state["last_signal_id"] == sig_fp:
                             continue
 
                         # Max 1 position
@@ -136,7 +156,10 @@ def main():
                             "action": sig["action"],
                             "entry": sig.get("entry", price or 0),
                             "sl": sig.get("sl", 0),
-                            "tp": sig.get("tp", sig.get("tp1", 0)),
+                            "tp": sig.get("tp", 0),
+                            "tp1": sig.get("tp1", sig.get("tp", 0)),
+                            "tp2": sig.get("tp2", 0),
+                            "tp3": sig.get("tp3", sig.get("tp", 0)),
                             "confidence": sig.get("confidence", 0),
                             "source": sig.get("source", "unknown"),
                             "open_time": wib_now().isoformat(),
@@ -149,7 +172,7 @@ def main():
                                         f"conf={sig.get('confidence',0):.0%} | {sig.get('source','?')}")
                             state["positions"].append(pos)
                             state["signals_processed"] += 1
-                            state["last_signal_id"] = sig_id
+                            state["last_signal_id"] = sig_fp
                             save_state(state)
                             logger.info(f"✅ POSITION OPEN: {pos['action']} @ ${pos['entry']:.2f}")
 

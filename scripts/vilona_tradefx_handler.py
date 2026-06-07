@@ -34,16 +34,16 @@ try:
     LICENSE_ENGINE = True
 except ImportError:
     LICENSE_ENGINE = False
-try:
-    from subscription_manager import (
-        ensure_member, get_member, upgrade_tier,
-        check_due_reminders, check_expired, mark_expired, set_reminder,
-        SUBS_PATH,
-    )
-    SUBSCRIPTION_ENGINE = True
-except Exception as e:
-    SUBSCRIPTION_ENGINE = False
-    print(f"Subscription engine unavailable: {e}")
+# Legacy subscription system — deprecated, all features now free
+SUBSCRIPTION_ENGINE = False
+ensure_member = lambda cid, *a, **kw: None
+get_member = lambda cid, *a, **kw: {}
+_upgrade_tier = lambda cid, *a, **kw: None
+check_due_reminders = lambda: []
+check_expired = lambda: []
+mark_expired = lambda cid: None
+set_reminder = lambda cid, label: None
+SUBS_PATH = ""
 
 # ── Payment gateway ──
 try:
@@ -135,6 +135,7 @@ except Exception as e:
 try:
     from trade_tracker import (open_trade, check_outcomes, get_stats,
                                 format_winrate, format_history, format_trade_close_alert,
+                                format_trade_close_with_cta,
                                 format_daily_recap, format_mini_recap)
     TRADE_TRACKER = True
 except Exception as e:
@@ -287,6 +288,7 @@ def _fetch_ohlcv_for_ai(pair="gold"):
     """Fetch OHLCV bars for AI analysis prompt."""
     pair = pair.lower().strip()
     sym_map = {"gold":"GC=F","xauusd":"GC=F","btc":"BTC-USD","btcusd":"BTC-USD",
+               "eth":"ETH-USD","ethusd":"ETH-USD",
                "oil":"CL=F","eurusd":"EURUSD=X","gbpusd":"GBPUSD=X",
                "usdjpy":"JPY=X","jpyusd":"JPY=X",
                "aapl":"AAPL","tsla":"TSLA","msft":"MSFT","nvda":"NVDA",
@@ -332,6 +334,18 @@ def fetch_price(pair="gold"):
             if quote and quote.price > 1000:
                 return quote.price
         except: pass
+    elif pair in ("btc", "btcusd"):
+        try:
+            quote = MARKET_DATA.get_quote("BTC-USD")
+            if quote and quote.price > 100:
+                return quote.price
+        except: pass
+    elif pair in ("eth", "ethusd"):
+        try:
+            quote = MARKET_DATA.get_quote("ETH-USD")
+            if quote and quote.price > 10:
+                return quote.price
+        except: pass
     elif MARKET_DATA:
         try:
             quote = MARKET_DATA.get_quote(pair.upper())
@@ -339,7 +353,6 @@ def fetch_price(pair="gold"):
                 return quote.price
         except: pass
     return None
-
 
 def fetch_dxy():
     try:
@@ -401,6 +414,50 @@ def tg_send(text, chat_id=None, reply_markup=None):
 # ── Signal bridge ──
 BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
 
+
+def _fetch_json_url(url, timeout=5):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return json.loads(r.read().decode("utf-8", errors="replace"))
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def format_bridge_status():
+    health = _fetch_json_url("http://localhost:8765/health")
+    accounts = _fetch_json_url("http://localhost:8765/accounts")
+    webhook = _fetch_json_url("http://localhost:8787/health")
+
+    bridge_ok = health.get("status") == "ok"
+    webhook_ok = webhook.get("status") == "ok"
+    instances = accounts.get("total_instances", 0) if isinstance(accounts, dict) else 0
+    master_keys = accounts.get("master_keys_count", 0) if isinstance(accounts, dict) else 0
+    queue_size = health.get("queue_size", 0)
+    uptime = int(float(health.get("uptime_seconds", 0) or 0))
+    uptime_txt = f"{uptime // 3600}j {(uptime % 3600) // 60}m"
+
+    txt = (
+        "🛡️ <b>VILONA BRIDGE STATUS</b>\n"
+        "━━━━━━━━━━━━━━━━\n"
+        f"🌐 Bridge: {'🟢 ONLINE' if bridge_ok else '🔴 DOWN'}\n"
+        f"💳 Webhook: {'🟢 ONLINE' if webhook_ok else '🔴 DOWN'}\n"
+        f"⏱️ Uptime: {uptime_txt}\n"
+        f"📦 Queue: {queue_size}\n"
+        "━━━━━━━━━━━━━━━━\n"
+        f"🔑 Master Key Aktif: {master_keys}\n"
+        f"🖥️ EA Instance Online: {instances}\n"
+    )
+
+    if isinstance(accounts, dict) and accounts.get("instances"):
+        online = 0
+        for data in accounts.get("instances", {}).values():
+            if data.get("online"):
+                online += 1
+        txt += f"🟢 Instance Live: {online}/{instances}\n"
+
+    txt += f"━━━━━━━━━━━━━━━━\n{wib_fmt()}"
+    return txt
+
 # ── Trade/Skip inline keyboard ──
 PENDING_SIGNALS = {}  # {chat_id: {"sig": ..., "price": ..., "expires": ts}}
 PENDING_SIGNAL_TTL = 300  # 5 menit
@@ -410,6 +467,9 @@ USER_LAST_ANALYZE = {}  # chat_id -> timestamp
 USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
 MANUAL_THROTTLE_SECONDS = 60
 DIRECTION_LOCK_SECONDS = 60
+
+# ── Custom donation input state ──
+DONATION_INPUT_STATE = {}  # chat_id -> True (waiting for user to type amount)
 
 def _is_manual_blocked(chat_id):
     now = time.time()
@@ -499,6 +559,19 @@ def handle_payment_callback(callback_query):
     if not chat_id or not data:
         return
 
+    if data == "none":
+        # Separator button — do nothing
+        return
+
+    if data == "cancel_input":
+        # ── Cancel custom amount input, return to /donate ──
+        DONATION_INPUT_STATE.pop(str(chat_id), None)
+        tg_send("❌ Input dibatalkan.", chat_id)
+        # Re-send donate menu
+        username = callback_query.get("from", {}).get("username", "")
+        _send_donate_menu(chat_id, username)
+        return
+
     if data.startswith("pay:"):
         tier = data.split(":", 1)[1] if ":" in data else "pro"
         if not PAYMENT_ENGINE or tier not in PRICING:
@@ -526,8 +599,7 @@ def handle_payment_callback(callback_query):
             f"💳 <b>Invoice — {pkg['label']}</b>\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"💰 Total: <b>Rp{amount:,}</b>\n"
-            f"📦 Paket: {pkg['label']} ({pkg['days']} hari)\n"
-            f"🔑 Ref: <code>{ref[:16]}</code>\n"
+            f"📦 Paket: {pkg['label']}\n"
         )
         if pay_code:
             txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
@@ -551,7 +623,6 @@ def handle_payment_callback(callback_query):
         ref = data.split(":", 1)[1] if ":" in data else ""
         tg_send(
             "🔍 <b>Cek Status Pembayaran</b>\n━━━━━━━━━━━━━━━━\n"
-            f"Ref: <code>{ref[:16]}</code>\n\n"
             "⏳ Pembayaran sedang diproses.\n"
             "Biasanya butuh 1-5 menit setelah transfer.\n\n"
             "Kalau sudah bayar dan belum upgrade, kirim bukti ke admin.",
@@ -559,13 +630,106 @@ def handle_payment_callback(callback_query):
         )
 
     elif data.startswith("pricing:"):
-        # Show pricing table
-        txt = get_pricing_table() if PAYMENT_ENGINE else "💎 Info harga belum tersedia."
+        # Show donation info — no more old tiers
+        txt = get_pricing_table() if PAYMENT_ENGINE else "💎 Info dukung server AI belum tersedia."
         markup = {"inline_keyboard": [
-            [{"text": f"⭐ Pro — Rp79K", "callback_data": "pay:pro"},
-             {"text": f"👑 Elite — Rp149K", "callback_data": "pay:elite"}],
+            [{"text": "☕️ Traktir Kopi (Rp15k)", "callback_data": "donate:coffee"},
+             {"text": "🚀 Nominal Bebas", "callback_data": "donate:fuel"}],
             [{"text": "📞 Tanya Admin", "url": "https://t.me/codergaboets"}],
         ]}
+        tg_send(txt, chat_id, reply_markup=markup)
+
+    elif data.startswith("donate:"):
+        donate_type = data.split(":", 1)[1] if ":" in data else "info"
+        
+        if donate_type == "coffee":
+            # ── Fixed Rp15,000 ──
+            amount = 15000
+            label = "☕️ Kopi untuk Server AI"
+        elif donate_type == "fuel":
+            # ── Fixed Rp50,000 ──
+            amount = 50000
+            label = "🚀 Bensin Full Server AI"
+        elif donate_type == "learn":
+            # ── Fixed Rp25,000 ──
+            amount = 25000
+            label = "🍱 Makan Siang Server AI"
+        elif donate_type == "custom":
+            # ── Custom amount — wait for user to type ──
+            DONATION_INPUT_STATE[str(chat_id)] = True
+            tg_send(
+                "💰 <b>Input Nominal Bebas</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "Silakan ketik nominal dukungan yang kamu\n"
+                "inginkan (minimal Rp10,000).\n\n"
+                "<i>Contoh: ketik 100000 untuk Rp100K</i>",
+                chat_id,
+                reply_markup={"inline_keyboard": [[
+                    {"text": "❌ Batal", "callback_data": "cancel_input"},
+                ]]}
+            )
+            return
+        else:
+            # Generic — show options
+            tg_send(
+                "💚 <b>Dukung Server AI</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "Pilih nominal dukungan:\n\n"
+                "☕️ Rp15K — Traktir kopi\n"
+                "📚 Rp25K — Dukung AI belajar\n"
+                "🚀 Nominal bebas — Isi bensin\n\n"
+                "Semua dukungan = DONATUR VIP AKTIF PERMANEN.",
+                chat_id
+            )
+            return
+
+        if not PAYMENT_ENGINE:
+            tg_send(
+                "💳 <b>Payment gateway belum aktif.</b>\n\n"
+                "Untuk saat ini, dukungan bisa via:\n"
+                "📞 DM Admin: @codergaboets\n\n"
+                "Kirim bukti transfer + user ID kamu.",
+                chat_id
+            )
+            return
+
+        tg_send(f"⏳ <b>Membuat link pembayaran...</b>\n{label} — Rp{amount:,}", chat_id)
+
+        result = create_tripay_payment(str(chat_id), username, tier="donor", amount=amount)
+        if result.get("error"):
+            tg_send(
+                f"❌ <b>Gagal membuat pembayaran</b>\n"
+                f"{result['error']}\n\n"
+                f"📞 Silakan hubungi admin: @codergaboets",
+                chat_id
+            )
+            return
+
+        pay_url = result.get("payment_url", "")
+        pay_code = result.get("pay_code", "")
+        ref = result.get("reference", "") or result.get("merchant_ref", "")
+
+        txt = (
+            f"💚 <b>{label}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"💰 Total: <b>Rp{amount:,}</b>\n"
+        )
+        if pay_code:
+            txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
+        txt += (
+            f"⏰ Expired: 1 jam\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"Klik tombol di bawah untuk bayar 👇\n\n"
+            f"<i>Setelah bayar, bot auto-upgrade kamu ke 🟢 DONATUR dalam 1-5 menit.</i>"
+        )
+
+        markup = {"inline_keyboard": [
+            [{"text": f"💳 Bayar Rp{amount:,}", "url": pay_url}],
+            [{"text": "🔄 Cek Status", "callback_data": f"check:{ref}"},
+             {"text": "📞 Admin", "url": "https://t.me/codergaboets"}],
+            [{"text": "🔙 Kembali", "callback_data": "cancel_input"}],
+        ]}
+
         tg_send(txt, chat_id, reply_markup=markup)
 
 
@@ -1123,136 +1287,344 @@ def append_quant_consensus_ui(sig, quant_result, disp="XAUUSD"):
     return block, warnings
 
 
+# ── Ultimatum System ──
+ULTIMATUM_ACCEPTED_PATH = DATA_DIR / "ultimatum_accepted"
+ULTIMATUM_ACCEPTED_PATH.mkdir(parents=True, exist_ok=True)
+VIDEO_FILE_ID_PATH = PROJECT_DIR / "media" / "ultimatum_file_id.txt"
+ULTIMATUM_VIDEO_LOCAL = PROJECT_DIR / "media" / "Server_room_with_trading_charts_202606071902.mp4"
+ADMIN_CHAT_ID = os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", os.environ.get("VILONA_TRADEFX_CHAT_ID", ""))
+
+
+def _load_file_id():
+    """Load cached Telegram video file_id."""
+    try:
+        if VIDEO_FILE_ID_PATH.exists():
+            return VIDEO_FILE_ID_PATH.read_text().strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _save_file_id(file_id):
+    """Save Telegram video file_id for reuse."""
+    try:
+        VIDEO_FILE_ID_PATH.write_text(file_id)
+    except Exception:
+        pass
+
+
+def _has_accepted_ultimatum(chat_id):
+    """Check if user has accepted the ultimatum."""
+    return (ULTIMATUM_ACCEPTED_PATH / f"{chat_id}.json").exists()
+
+
+def _save_ultimatum(chat_id):
+    """Mark user as having accepted the ultimatum."""
+    try:
+        (ULTIMATUM_ACCEPTED_PATH / f"{chat_id}.json").write_text(
+            json.dumps({"accepted_at": wib_now().isoformat(), "chat_id": str(chat_id)})
+        )
+    except Exception:
+        pass
+
+
+def send_ultimatum_video(chat_id):
+    """Send ultimatum: video (short caption) + text message (full copy + keyboard)."""
+    ultimatum_text = (
+        "🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "Selamat datang di markas besar Vilona Trade FX.\n"
+        "Seluruh infrastruktur di sini — dari analisa teknikal\n"
+        "hingga eksekusi sinyal — dijalankan oleh\n"
+        "<b>FULL AI AGENTS 24/7.</b> Mesin ini mengonsumsi\n"
+        "resource besar untuk satu tujuan: <b>MENCETAK PROFIT.</b>\n"
+        "\n"
+        "<b>KAMI TIDAK MENJUAL TIKET MASUK.</b>\n"
+        "Akses ini GRATIS. Tapi ekosistem ini dibangun\n"
+        "dengan mental <b>GOTONG ROYONG.</b> Jika AI kami\n"
+        "memberi Anda profit, kami menuntut apresiasi\n"
+        "Anda untuk menyiram bahan bakar server.\n"
+        "\n"
+        "Jika Anda hanya ingin menjadi parasit, silakan keluar.\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "Apakah Anda setuju dengan aturan main ini? 👇"
+    )
+    markup = {
+        "inline_keyboard": [[
+            {"text": "✅ SAYA SETUJU", "callback_data": "ultimatum:setuju"},
+            {"text": "❌ DECLINE", "callback_data": "ultimatum:decline"}
+        ]]
+    }
+
+    # ── Step 1: Send video with short elegant caption ──
+    video_caption = "⚙️ <b>VILONA TRADE FX</b> — Institutional-Grade AI Server"
+    video_sent = False
+    file_id = _load_file_id()
+    if file_id:
+        try:
+            payload = json.dumps({
+                "chat_id": chat_id, "video": file_id,
+                "caption": video_caption, "parse_mode": "HTML"
+            }).encode()
+            req = urllib.request.Request(f"{TELEGRAM_API}/sendVideo", data=payload, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                resp = json.loads(r.read())
+            if resp.get("ok"):
+                video_sent = True
+        except Exception:
+            pass
+
+    if not video_sent and ULTIMATUM_VIDEO_LOCAL.exists():
+        try:
+            import io
+            boundary = "----VilonaBoundary" + str(int(time.time()))
+            body = io.BytesIO()
+            body.write(f"--{boundary}\r\n".encode())
+            body.write(b'Content-Disposition: form-data; name="chat_id"\r\n\r\n')
+            body.write(f"{chat_id}\r\n".encode())
+            body.write(f"--{boundary}\r\n".encode())
+            body.write(b'Content-Disposition: form-data; name="caption"\r\n\r\n')
+            body.write(video_caption.encode() + b"\r\n")
+            body.write(f"--{boundary}\r\n".encode())
+            body.write(b'Content-Disposition: form-data; name="parse_mode"\r\n\r\n')
+            body.write(b"HTML\r\n")
+            body.write(f"--{boundary}\r\n".encode())
+            body.write(f'Content-Disposition: form-data; name="video"; filename="ultimatum.mp4"\r\n'.encode())
+            body.write(b"Content-Type: video/mp4\r\n\r\n")
+            with open(ULTIMATUM_VIDEO_LOCAL, "rb") as vf:
+                body.write(vf.read())
+            body.write(f"\r\n--{boundary}--\r\n".encode())
+            req = urllib.request.Request(
+                f"{TELEGRAM_API}/sendVideo",
+                data=body.getvalue(),
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}
+            )
+            with urllib.request.urlopen(req, timeout=30) as r:
+                resp = json.loads(r.read())
+            if resp.get("ok"):
+                video_sent = True
+        except Exception:
+            pass
+
+    # ── Step 2: GUARANTEED — full ultimatum text + keyboard ──
+    tg_send(ultimatum_text, chat_id, reply_markup=markup)
+
+
+def handle_ultimatum_callback(cb):
+    """Handle ultimatum accept/decline callbacks."""
+    cb_id = cb.get("id", "")
+    chat_id = str(cb.get("from", {}).get("id", ""))
+    data = cb.get("data", "")
+
+    # Answer callback to stop spinner
+    try:
+        payload = json.dumps({"callback_query_id": cb_id}).encode()
+        urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery", data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery", data=payload, headers={"Content-Type": "application/json"}), timeout=5)
+    except Exception:
+        pass
+
+    if data == "ultimatum:setuju":
+        _save_ultimatum(chat_id)
+        # Register as free_member
+        try:
+            from members import register_member as m_register
+            m_register(str(chat_id), tier="free_member")
+        except Exception:
+            pass
+        welcome = (
+            "🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Selamat bergabung di markas besar Vilona Trade FX.\n"
+            "Seluruh infrastruktur di sini dijalankan oleh\n"
+            "<b>FULL AI AGENTS 24/7.</b>\n"
+            "\n"
+            "<b>KAMI TIDAK MENJUAL TIKET MASUK.</b>\n"
+            "Akses ini GRATIS dengan mental GOTONG ROYONG.\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ <b>WAJIB BACA SEBELUM TRADING:</b>\n"
+            "📖 Baca Panduan Markas:\n"
+            "https://telegra.ph/Kolom-Title-Judul-VILONA-AI-TRADING-PROTOCOL-Panduan-Eksekusi--Aturan-Markas-06-07\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📊 XAUUSD · BTC · EURUSD · GBPUSD · USOIL\n"
+            "📐 Mapping harian: 10:00 WIB\n"
+            "⚡️ Kuota AI: 3x analisa/hari\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📱 /help — Semua command\n"
+            "📊 /analyze xauusd — Mulai analisa\n"
+            "💚 /donate — Dukung server AI\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📞 Admin: @codergaboets"
+        )
+        tg_send(welcome, chat_id)
+        # Send channel links
+        tg_send(
+            "🔗 <b>Gabung Komunitas:</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "📢 Channel Sinyal: https://t.me/+qLAdRGd_RiplZmU1\n"
+            "👥 Group Diskusi: https://t.me/+kX8tspebrpVhMmE1",
+            chat_id
+        )
+    elif data == "ultimatum:decline":
+        tg_send(
+            "👋 <b>Sayonara!</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "Kamu memilih untuk tidak melanjutkan.\n"
+            "Kalau berubah pikiran, kirim /start lagi kapan saja.\n\n"
+            "Sampai jumpa! 👋",
+            chat_id
+        )
+
+
+def auto_capture_video_file_id(chat_id, message):
+    """Admin-only: capture video file_id from a sent message."""
+    if str(chat_id) != str(ADMIN_CHAT_ID):
+        return
+    video = message.get("video")
+    if video:
+        file_id = video.get("file_id", "")
+        if file_id:
+            _save_file_id(file_id)
+            tg_send(f"✅ Video file_id captured: <code>{file_id[:30]}...</code>", chat_id)
+
+
+# ── Quota System ──
+FREE_QUOTA_PER_DAY = 3
+QUOTA_DIR = DATA_DIR / "quota_cache"
+QUOTA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _get_quota(chat_id):
+    """Read daily quota for a user. Returns dict with used, remaining, date."""
+    path = QUOTA_DIR / f"{chat_id}.json"
+    today = wib_now().strftime("%Y-%m-%d")
+    try:
+        if path.exists():
+            data = json.loads(path.read_text())
+            if data.get("date") == today:
+                return data
+    except Exception:
+        pass
+    return {"date": today, "used": 0, "remaining": FREE_QUOTA_PER_DAY}
+
+
+def _deduct_quota(chat_id):
+    """Deduct one from quota. Returns (ok, remaining)."""
+    quota = _get_quota(chat_id)
+    quota["used"] += 1
+    quota["remaining"] = max(0, FREE_QUOTA_PER_DAY - quota["used"])
+    path = QUOTA_DIR / f"{chat_id}.json"
+    try:
+        path.write_text(json.dumps(quota))
+    except Exception:
+        pass
+    return quota["remaining"] > 0, quota["remaining"]
+
+
+def _is_donor(chat_id):
+    """Check if user has donor/paid status in members DB."""
+    try:
+        from members import get_member as m_get
+        member = m_get(str(chat_id))
+        if member:
+            status = member.get("status", "")
+            tier = member.get("tier", "")
+            return status in ("paid", "donor") or tier in ("pro", "elite", "paid", "donor")
+    except Exception:
+        pass
+    return False
+
+
+# ── Reusable donate menu ──
+def _send_donate_menu(chat_id, username=""):
+    """Reusable donate menu — used by cancel_input and redirects."""
+    txt = (
+        "💚 <b>SIRAM BAHAN BAKAR MESIN AI 🚀</b>\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "Server AI ini mengolah jutaan data market\n"
+        "secara real-time dan membutuhkan biaya API\n"
+        "& GPU yang masif setiap detiknya.\n"
+        "\n"
+        "Jika sinyal AI ini telah mengubah portofolio\n"
+        "Anda menjadi hijau, mari bergotong royong\n"
+        "menjaga mesin ini tetap hidup dan semakin buas!\n"
+        "\n"
+        "Pilih dukunganmu hari ini:\n"
+        "\n"
+        "💼 <b>EKSKLUSIF: PROGRAM INVESTOR AI</b>\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "Apakah Anda big player/investor yang ingin\n"
+        "ikut andil dalam pengembangan ekosistem\n"
+        "kuantitatif ini secara makro? Kami membuka\n"
+        "jalur pendanaan privat. Hubungi Chief\n"
+        "Architect kami di bawah."
+    )
+    markup = {"inline_keyboard": [
+        [{"text": "☕️ Traktir Kopi (Rp 15K)", "callback_data": "donate:coffee"},
+         {"text": "🍱 Makan Siang Server (Rp 25K)", "callback_data": "donate:learn"}],
+        [{"text": "🚀 Isi Bensin Full (Rp 50K)", "callback_data": "donate:fuel"}],
+        [{"text": "💰 Input Nominal Bebas", "callback_data": "donate:custom"}],
+        [{"text": "🤝 HUBUNGI CHIEF ARCHITECT", "url": "https://t.me/codergaboets"}],
+    ]}
+    tg_send(txt, chat_id, reply_markup=markup)
+
+
 # ── Command handler ──
 def handle_command(cmd, text, chat_id, msg):
     sub = text[len(cmd):].strip().lower() if len(text) > len(cmd) else ""
     sub_norm = _normalize_broker_symbol(sub)  # XAUUSDc → xauusd, EURUSD.pro → eurusd
 
     if cmd == "/start":
-        # ── Subscription / member onboarding ──
-        member_status = None
-        if SUBSCRIPTION_ENGINE and chat_id:
-            try:
-                member = ensure_member(str(chat_id))
-                member_status = member
-                # Refresh expiry status if needed
-                expired = check_expired()
-                for item in expired:
-                    if item["chat_id"] == str(chat_id):
-                        mark_expired(str(chat_id))
-                        member_status["status"] = "expired"
-                        member_status["expiry"]
-            except Exception:
-                pass
-
-        status_line = ""
-        if member_status:
-            if member_status.get("status") == "expired":
-                status_line = (
-                    "\n<b>⛔ Langganan Expired</b>\n"
-                    "━━━━━━━━━━━━━━━━\n"
-                    "Perpanjang: /subscribe\n"
-                    "Sinyal AI nonaktif sampai diperpanjang."
-                )
-                welcome = "🤖 <b>Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\n" \
-                          "Selamat datang kembali!\n\n" + status_line
-                tg_send(welcome, chat_id)
-            elif member_status.get("status") == "paid":
-                expiry = member_status.get("expiry", "")
-                tier = member_status.get("tier", "pro")
-                welcome = (
-                    f"🤖 <b>Vilona Trade FX — {tier.upper()}</b>\n"
-                    f"━━━━━━━━━━━━━━━━\n"
-                    f"⭐ {tier.title()} Active\n"
-                    f"📅 Expired: {expiry[:10] if expiry else '?'}\n"
-                    f"📡 Sinyal: Mon-Fri (auto)\n"
-                    "Karir: kirim /analyze xauusd"
-                )
-                tg_send(welcome, chat_id)
-            else:
-                # Trial
-                expiry = member_status.get("expiry", "")
-                welcome = (
-                    "🤖 <b>Vilona Trade FX — Free Trial</b>\n"
-                    "━━━━━━━━━━━━━━━━\n"
-                    f"⏳ 7 Hari Trial\n"
-                    f"📅 Expired: {expiry[:10] if expiry else '?'}\n\n"
-                    "📡 Sinyal: Mon-Fri (auto)\n"
-                    "📐 Mapping: Setiap hari 10:00 WIB\n"
-                    "🛑 Weekend: Hemat AI, market tutup\n\n"
-                    "📱 /help — Semua command\n"
-                    "💎 /subscribe — Upgrade Pro/Elite\n"
-                )
-                tg_send(welcome, chat_id)
-        else:
-            # Fallback if subscription engine unavailable
-            welcome = "🤖 <b>Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\nAI Trading Assistant\n🔄 XAUUSD · BTC · EURUSD · GBPUSD · USOIL\n📊 Multi-Asset Signal Engine\n━━━━━━━━━━━━━━━━\n📡 Sinyal: Mon-Fri (auto)\n📐 Mapping: Setiap hari 10:00 WIB\n🛑 Weekend: Hemat AI, market tutup\n\n📱 /help — Semua command\n📊 /mapping — Market mapping harian"
+        # ── Two-Tier Gate: Ultimatum for new users, Welcome for returning ──
+        if _has_accepted_ultimatum(chat_id):
+            # Returning user → show welcome
+            is_donor = _is_donor(chat_id)
+            tier_label = "👑 DONATUR SULTAN (VIP)" if is_donor else "👤 Kawan Seperjuangan (Free Member)"
+            quota = _get_quota(chat_id)
+            quota_line = "UNLIMITED ♾️" if is_donor else f"{quota['remaining']}/{FREE_QUOTA_PER_DAY}"
+            welcome = (
+                f"🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Selamat datang di markas besar Vilona Trade FX.\n"
+                f"Seluruh infrastruktur di sini — dari analisa teknikal\n"
+                f"hingga eksekusi sinyal — dijalankan oleh\n"
+                f"<b>FULL AI AGENTS 24/7.</b>\n"
+                f"\n"
+                f"Mesin ini mengonsumsi resource besar untuk\n"
+                f"satu tujuan: <b>MENCETAK PROFIT.</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"{tier_label}\n"
+                f"⚡️ Kuota AI: {quota_line}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📊 /analyze xauusd — Mulai analisa\n"
+                f"📱 /help — Semua command\n"
+                f"💚 /donate — Siram bahan bakar AI"
+            )
             tg_send(welcome, chat_id)
-
-        # Background member info if available
-        if MEMBERS_ENABLED and chat_id:
-            try:
-                member = get_member(str(chat_id))
-                is_vip = is_premium(str(chat_id))
-                quota = check_quota(str(chat_id))
-                if is_vip:
-                    tier_name = member.get("tier", "pro").upper()
-                    tg_send(f"⭐ <b>{tier_name} Active</b> | Kuota: {quota.get('used',0)}/{quota.get('total',5)}\n"
-                            f"Kirim /analyze xauusd untuk mulai.", chat_id)
-                else:
-                    tg_send(f"👤 <b>Free User</b> | Kuota: {quota.get('used',0)}/{quota.get('total',3)}\n"
-                            f"Upgrade ke Pro/Elite via /subscribe", chat_id)
-            except: pass
+        else:
+            # New user → ultimatum video (single message)
+            send_ultimatum_video(chat_id)
 
     elif cmd == "/help":
         tg_send(
-            "📋 <b>Commands Vilona Trade FX</b>\n━━━━━━━━━━━━━━━━\n"
-            "<b>▸ Analisa AI</b>\n"
-            "/analyze xauusd — Gold\n/analyze btc — Bitcoin\n"
-            "/analyze eurusd — EUR/USD\n/analyze gbpusd — GBP/USD\n"
-            "/analyze oil — Crude Oil\n"
-            "/analyze aapl — Apple\n/analyze bbca — BCA (IDX)\n"
-            "/analyze tlkm — Telkom (IDX)\n"
+            "⚙️ <b>VILONA AI — COMMAND CENTER</b>\n"
+            "━━━━━━━━━━━━━━━━\n\n"
+            "👑 <b>PILAR UTAMA</b>\n"
+            "/start — Reboot Markas Komando\n"
+            "/analyze — Perintahkan AI Scan Market\n"
+            "/status — Cek Kuota & Akses VIP\n"
+            "/donate — Siram Bensin Server AI\n\n"
+            "📊 <b>ADVANCED TOOLS</b>\n"
+            "/mapping — Tarik data mapping harian\n"
+            "/killzone — Radar sesi market aktif\n"
             "━━━━━━━━━━━━━━━━\n"
-            "<b>▸ Market</b>\n"
-            "/price — Cek harga (xauusd/btc/eurusd/bbca)\n"
-            "/data — Multi-asset overview\n"
-            "/killzone — Sesi trading\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "<b>▸ Akun</b>\n"
-            "/start — Info bot\n/status — Status Langganan\n"
-            "/bill — Lihat harga & bayar\n"
-            "💎 /subscribe — Upgrade Pro/Elite\n"
-            "/autosync — Auto-trade mode\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "<b>▸ Tier & Kuota</b>\n"
-            "🆓 <b>Starter</b> — Trial 7 hari\n"
-            "   /analyze max 3x/hari\n"
-            "   ❌ Auto-trade EA\n\n"
-            "⭐ <b>Pro</b> — Rp79K/bln\n"
-            "   /analyze unlimited\n"
-            "   ✅ Auto-trade EA\n\n"
-            "👑 <b>Elite</b> — Rp149K/bln\n"
-            "   /analyze unlimited\n"
-            "   ✅ Multi-akun EA\n"
-            "   ✅ Priority support\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "<b>▸ Performa & Mapping</b>\n"
-            "/winrate — Performa trading\n"
-            "/history — Riwayat trade\n"
-            "/recap — Rekap sinyal harian\n"
-            "/mapping — Market mapping & key levels\n"
-            "/mykey — Cek license EA\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "<b>▸ Komunitas</b>\n"
-            "📢 <a href='https://t.me/+qLAdRGd_RiplZmU1'>Join Channel Sinyal</a>\n"
-            "👥 <a href='https://t.me/+kX8tspebrpVhMmE1'>Join Group Diskusi</a>\n"
-            "📞 Admin: @codergaboets", chat_id)
+            "📞 Jalur Privat Investor: @codergaboets",
+            chat_id)
 
     elif cmd == "/price":
         # Multi-symbol price — use normalized sub
         price_map = {"xauusd":"gold","gold":"gold","":"gold",
-                     "btc":"btc","btcusd":"btc","eurusd":"eurusd","gbpusd":"gbpusd",
+                     "btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","eurusd":"eurusd","gbpusd":"gbpusd",
                      "usdjpy":"usdjpy","oil":"oil","aapl":"aapl","bbca":"bbca",
                      "bbri":"bbri","tlkm":"tlkm","asii":"asii","ihsg":"ihsg"}
         pair = price_map.get(sub_norm, sub_norm) if sub_norm else "gold"
@@ -1275,56 +1647,81 @@ def handle_command(cmd, text, chat_id, msg):
         txt += f"━━━━━━━━━━━━━━━━\n{wib_fmt()}"
         tg_send(txt, chat_id)
 
+    elif cmd == "/bridge_status":
+        tg_send(format_bridge_status(), chat_id)
+
     elif cmd == "/status":
         # Weekend indicator
-        weekend_note = "\n🔴 WEEKEND — Market Tutup" if is_weekend() else ""
-        
-        if MEMBERS_ENABLED and chat_id:
-            try:
-                q = check_quota(str(chat_id))
-                is_vip = is_premium(str(chat_id))
-                member = get_member(str(chat_id))
-                tier_name = member.get("tier", "starter").upper() if member else "FREE"
-                txt = (f"⭐ {tier_name} Active" if is_vip else "👤 Free") + f" | Kuota: {q.get('used',0)}/{q.get('total',0)}"
-                txt += weekend_note
-                tg_send(txt, chat_id)
-            except Exception:
-                tg_send("❌ Gagal memuat status.", chat_id)
+        weekend_note = weekend_status_text()
+
+        is_donor = _is_donor(chat_id)
+        quota = _get_quota(chat_id)
+
+        if is_donor:
+            txt = (
+                f"👑 <b>STATUS: DONATUR SULTAN (VIP)</b>\n"
+                f"⚡️ Kuota AI: UNLIMITED ♾️\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Terima kasih telah menghidupi mesin AI ini! 🥂\n"
+                f"Seluruh fitur VIP, Auto-Trade, dan Bridge\n"
+                f"telah TERBUKA untukmu.\n"
+                f"\n"
+                f"🔑 <b>AKSES EA & BRIDGE:</b>\n"
+                f"📥 Download EA MT5: phantomfx.aitradepulse.com/ea/download/\n"
+                f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Mari cetak profit hari ini!"
+            )
         else:
-            txt = "👤 Member system not active." + weekend_note
-            tg_send(txt, chat_id)
+            txt = (
+                f"👤 <b>STATUS: Kawan Seperjuangan (Free Member)</b>\n"
+                f"⚡️ Kuota AI: {quota['remaining']}/{FREE_QUOTA_PER_DAY} (Reset 00:00 WIB)\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Kamu punya {FREE_QUOTA_PER_DAY}x peluru analisa AI setiap harinya.\n"
+                f"👉 Buka akses Auto-Trade & Unlimited AI?\n"
+                f"Ketik /donate"
+            )
+        txt += weekend_note
+        tg_send(txt, chat_id)
 
     elif cmd == "/analyze":
-        # ── WEEKEND GATE ──
-        if is_weekend():
-            tg_send("🔴 <b>MARKET TUTUP — Weekend</b>\n━━━━━━━━━━━━━━━━\n"
-                    "Pasar forex/komoditi tutup Sabtu & Minggu.\n"
-                    "📊 /mapping — Lihat market mapping\n"
-                    "📈 /recap — Rekap performa mingguan\n"
-                    "📱 Sinyal auto lanjut Senin pagi.", chat_id)
+        # ── ULTIMATUM GATE ──
+        if not _has_accepted_ultimatum(chat_id):
+            tg_send("⚠️ <b>Akses Ditolak</b>\n━━━━━━━━━━━━━━━━\n"
+                    "Kamu belum menyetujui Terms of Service.\n"
+                    "Kirim /start untuk lihat dan setujui dulu ya.", chat_id)
             return
 
-        # ── QUOTA GATE (Starter = max 3x/hari) ──
-        if MEMBERS_ENABLED and chat_id:
-            try:
-                q = check_quota(str(chat_id))
-                quota_ok = use_quota(str(chat_id))
-                if not quota_ok:
-                    tier = q.get("tier", "starter")
-                    tg_send(
-                        f"🛑 <b>Kuota Harian Habis!</b>\n"
-                        f"━━━━━━━━━━━━━━━━\n"
-                        f"📊 Tier: <b>{tier.upper()}</b>\n"
-                        f"📉 Used: {q.get('used',0)}/{q.get('total',0)} analisa\n\n"
-                        f"💎 <b>Upgrade ke Pro</b> untuk unlimited!\n"
-                        f"👉 /subscribe — Lihat paket\n"
-                        f"👉 /bill — Bayar langsung\n\n"
-                        f"⏰ Reset: besok jam 00:00 WIB",
-                        chat_id
-                    )
-                    return
-            except Exception:
-                pass
+        # ── QUOTA GATE ──
+        if not _is_donor(chat_id):
+            ok, remaining = _deduct_quota(chat_id)
+            if not ok:
+                tg_send(
+                    "🛑 <b>Kuota Harian Habis!</b>\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    f"📊 Free Member: {FREE_QUOTA_PER_DAY}x analisa/hari\n"
+                    f"📉 Sisa: 0/{FREE_QUOTA_PER_DAY}\n\n"
+                    "💚 <b>Dukung server AI kami!</b>\n"
+                    "Donasi sukarela untuk akses unlimited:\n"
+                    "👉 /donate — Info donasi\n\n"
+                    "⏰ Reset: besok jam 00:00 WIB",
+                    chat_id
+                )
+                return
+
+        # ── WEEKEND GATE ──
+        pair_check = sub_norm if sub_norm else "xauusd"
+        if is_weekend() and not is_crypto_pair(pair_check):
+            tg_send(
+                "🔴 <b>MARKET FOREX/GOLD TUTUP (WEEKEND)</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "Sinyal manual hanya tersedia untuk aset Crypto.\n"
+                "Contoh: /analyze btc\n\n"
+                "🤖 AI akan kembali berburu di XAUUSD hari Senin.\n"
+                "Selamat berakhir pekan!",
+                chat_id
+            )
+            return
 
         # ── ELITE CUSTOM PARAMS ──
         elite_params = {}
@@ -1333,21 +1730,15 @@ def handle_command(cmd, text, chat_id, msg):
             risk_match = _re.search(r'risk=(\d+(?:\.\d+)?)', sub)
             tf_match = _re.search(r'tf=(\w+)', sub)
             if risk_match or tf_match:
-                # Check if user is Elite
-                is_elite = False
-                if MEMBERS_ENABLED and chat_id:
-                    try:
-                        member = get_member(str(chat_id))
-                        is_elite = (member or {}).get("tier") == "elite"
-                    except Exception:
-                        pass
+                # Check if user is Donor
+                is_elite = _is_donor(str(chat_id)) if chat_id else False
                 if not is_elite:
                     tg_send(
-                        "👑 <b>Custom Parameter khusus Elite!</b>\n"
+                        "👑 <b>Custom Parameter khusus Donatur!</b>\n"
                         "━━━━━━━━━━━━━━━━\n"
-                        "Fitur risk= dan tf= hanya untuk Elite (Rp149K/bln).\n\n"
-                        "💎 /subscribe — Upgrade Pro/Elite\n"
-                        "👉 /bill — Lihat harga",
+                        "Fitur risk= dan tf= hanya untuk Donatur.\n\n"
+                        "💚 /donate — Dukung server AI\n"
+                        "👉 /bill — Lihat info",
                         chat_id
                     )
                     return
@@ -1366,12 +1757,12 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"⚪️ <b>HOLD — Menjelang Rilis Berita</b>\n📰 {news_name}\n⏳ Tunggu 30 menit setelah rilis.", chat_id)
             return
 
-        pair_map = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","oil":"oil",
+        pair_map = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
                     "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy","jpyusd":"usdjpy",
                     "aapl":"aapl","tsla":"tsla","msft":"msft","nvda":"nvda",
                     "bbca":"bbca","bbri":"bbri","tlkm":"tlkm","asii":"asii",
                     "unvr":"unvr","bmri":"bmri","adro":"adro","ihsg":"ihsg"}
-        display_map = {"gold":"XAUUSD","btc":"BTCUSD","oil":"USOIL","eurusd":"EURUSD",
+        display_map = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD",
                        "gbpusd":"GBPUSD","usdjpy":"USDJPY","jpyusd":"USDJPY",
                        "aapl":"AAPL","tsla":"TSLA","msft":"MSFT","nvda":"NVDA",
                        "bbca":"BBCA","bbri":"BBRI","tlkm":"TLKM","asii":"ASII",
@@ -1663,20 +2054,57 @@ def handle_command(cmd, text, chat_id, msg):
         txt += f"━━━━━━━━━━━━━━━━\n🕐 {wib_fmt()}"
         tg_send(txt, chat_id)
 
-    elif cmd == "/bill":
-        if chat_id and PAYMENT_ENGINE:
-            txt = get_pricing_table()
-            markup = {"inline_keyboard": [
-                [{"text": "⭐ Pro — Rp79K", "callback_data": "pay:pro"},
-                 {"text": "👑 Elite — Rp149K", "callback_data": "pay:elite"}],
-                [{"text": "📞 Tanya Admin", "url": "https://t.me/codergaboets"}],
-            ]}
-            tg_send(txt, chat_id, reply_markup=markup)
-        else:
-            tg_send("💳 Payment belum tersedia. /subscribe untuk info.", chat_id)
+    elif cmd == "/bill" or cmd == "/subscribe":
+        # ── Legacy commands → redirect to /donate ──
+        if not chat_id:
+            return
+        username = ""
+        if msg:
+            username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
+        _send_donate_menu(chat_id, username)
+
+    elif cmd == "/donate":
+        # ── /donate — Siram Bahan Bakar Mesin AI ──
+        if not chat_id:
+            return
+        # Clear any stale donation input state
+        DONATION_INPUT_STATE.pop(str(chat_id), None)
+        username = ""
+        if msg:
+            username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
+
+        txt = (
+            "💚 <b>SIRAM BAHAN BAKAR MESIN AI 🚀</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "Server AI ini mengolah jutaan data market\n"
+            "secara real-time dan membutuhkan biaya API\n"
+            "& GPU yang masif setiap detiknya.\n"
+            "\n"
+            "Jika sinyal AI ini telah mengubah portofolio\n"
+            "Anda menjadi hijau, mari bergotong royong\n"
+            "menjaga mesin ini tetap hidup dan semakin buas!\n"
+            "\n"
+            "Pilih dukunganmu hari ini:\n"
+            "\n"
+            "💼 <b>EKSKLUSIF: PROGRAM INVESTOR AI</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "Apakah Anda big player/investor yang ingin\n"
+            "ikut andil dalam pengembangan ekosistem\n"
+            "kuantitatif ini secara makro? Kami membuka\n"
+            "jalur pendanaan privat. Hubungi Chief\n"
+            "Architect kami di bawah."
+        )
+        markup = {"inline_keyboard": [
+            [{"text": "☕️ Traktir Kopi (Rp 15K)", "callback_data": "donate:coffee"},
+             {"text": "🍱 Makan Siang Server (Rp 25K)", "callback_data": "donate:learn"}],
+            [{"text": "🚀 Isi Bensin Full (Rp 50K)", "callback_data": "donate:fuel"}],
+            [{"text": "💰 Input Nominal Bebas", "callback_data": "donate:custom"}],
+            [{"text": "🤝 HUBUNGI CHIEF ARCHITECT", "url": "https://t.me/codergaboets"}],
+        ]}
+        tg_send(txt, chat_id, reply_markup=markup)
 
     elif cmd == "/testpay":
-        """🧪 Test payment: Rp5,000 — verifikasi webhook Tripay."""
+        """🧪 Test payment: donasi minimal — verifikasi webhook Tripay."""
         if not chat_id:
             return
         if not PAYMENT_ENGINE:
@@ -1687,10 +2115,9 @@ def handle_command(cmd, text, chat_id, msg):
         if msg:
             username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
 
-        tg_send("🧪 <b>Test Payment — Rp5,000</b>\n"
-                "Membuat invoice...", chat_id)
+        tg_send("🧪 <b>Test Dukung Server AI — Rp10,000</b>\nMembuat invoice...", chat_id)
 
-        result = create_tripay_payment(str(chat_id), username, "testing")
+        result = create_tripay_payment(str(chat_id), username, tier="donor", amount=10000)
         if result.get("error"):
             tg_send(f"❌ Gagal: {result['error']}", chat_id)
             return
@@ -1699,11 +2126,10 @@ def handle_command(cmd, text, chat_id, msg):
         ref = result.get("reference", "") or result.get("merchant_ref", "")
 
         txt = (
-            "🧪 <b>Test Payment — Rp5,000</b>\n"
+            "🧪 <b>Test Dukung Server AI — Rp10,000</b>\n"
             "━━━━━━━━━━━━━━━━\n"
-            "💰 Total: <b>Rp5,000</b>\n"
-            "📦 Tier: Testing (1 hari, fitur Pro)\n"
-            f"🔑 Ref: <code>{ref[:16]}</code>\n"
+            "💰 Total: <b>Rp10,000</b>\n"
+            "👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
             "⏰ Expired: 1 jam\n"
             "━━━━━━━━━━━━━━━━\n"
             "Klik tombol bayar di bawah 👇\n\n"
@@ -1711,7 +2137,7 @@ def handle_command(cmd, text, chat_id, msg):
         )
 
         markup = {"inline_keyboard": [[
-            {"text": "💳 Bayar Rp5,000", "url": pay_url},
+            {"text": "💳 Bayar Rp10,000", "url": pay_url},
         ], [
             {"text": "🔄 Cek Status", "callback_data": f"check:{ref}"},
             {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
@@ -1720,73 +2146,54 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send(txt, chat_id, reply_markup=markup)
 
     elif cmd == "/activate":
-        """Admin: Manual activation when Tripay is down but payment verified."""
+        """Admin: Manual activation — set user ke DONATUR."""
         if not chat_id:
             return
-        if not LICENSE_ENGINE:
-            tg_send("🔒 License system belum aktif.", chat_id)
-            return
-        if not is_admin(chat_id):
+        # Admin check: use chat_id list
+        admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
+        if str(chat_id) not in admin_ids:
             tg_send("⛔ Admin only.", chat_id)
             return
 
-        # Parse: /activate <user_id> <tier> [days]
+        # Parse: /activate <user_id> [days]
         parts = text.split()
-        if len(parts) < 3:
-            tg_send("📋 <b>Usage:</b> /activate &lt;user_id&gt; &lt;tier&gt; [days]\n"
-                    "Contoh: /activate 5220170786 pro 30\n"
-                    "Tier: starter | pro | elite", chat_id)
+        if len(parts) < 2:
+            tg_send("📋 <b>Usage:</b> /activate &lt;user_id&gt; [days]\n"
+                    "Contoh: /activate 5220170786 9999\n"
+                    "Default: AKTIF PERMANEN", chat_id)
             return
 
         target_id = parts[1]
-        tier = parts[2].lower()
-        if tier not in ("starter", "pro", "elite"):
-            tg_send("❌ Invalid tier. Gunakan: starter | pro | elite", chat_id)
-            return
-
-        days = int(parts[3]) if len(parts) > 3 else 30
+        days = int(parts[2]) if len(parts) > 2 else 9999
 
         try:
-            # Check if user exists in members
-            from members import ensure_member as m_ensure, upgrade_tier as m_upgrade, get_member as m_get
+            from members import ensure_member as m_ensure, upgrade_tier as m_upgrade
 
-            # Upgrade in members.db
             ref = f"VTFX-{target_id}-MANUAL"
             m_ensure(target_id)
-            m_upgrade(target_id, tier, days, ref)
-
-            # Generate license key
-            license_key, _ = cmd_genkey(target_id, f"{tier} {target_id}")
-
-            tier_emoji = {"starter": "🆓", "pro": "⭐", "elite": "👑"}.get(tier, "📦")
+            m_upgrade(target_id, "donor", days, ref)
 
             # Notify admin
             tg_send(
                 f"✅ <b>Manual Activation Berhasil</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"👤 User: <code>{target_id}</code>\n"
-                f"{tier_emoji} Tier: <b>{tier.upper()}</b>\n"
-                f"📅 {days} hari\n"
-                f"🔑 Ref: {ref[:24]}\n"
-                f"🔐 Key: <code>{license_key}</code>",
+                f"👑 Status: <b>DONATUR VIP — AKTIF PERMANEN</b>",
                 chat_id
             )
 
             # DM the activated user
             if BOT_TOKEN:
                 user_msg = (
-                    f"✅ <b>Akun Kamu Sudah Diaktivasi!</b>\n"
+                    f"🔥 <b>BOOM! Kamu sekarang DONATUR VIP!</b>\n"
                     f"━━━━━━━━━━━━━━━━\n"
-                    f"{tier_emoji} Tier: <b>{tier.upper()}</b>\n"
-                    f"📅 {days} hari\n"
+                    f"👑 Status: <b>DONATUR VIP — AKTIF PERMANEN</b>\n"
                     f"━━━━━━━━━━━━━━━━\n"
-                    f"🔐 <b>License Key:</b>\n"
-                    f"<code>{license_key}</code>\n"
-                    f"━━━━━━━━━━━━━━━━\n"
-                    f"📥 EA: https://phantomfx.aitradepulse.com/download/ea\n"
-                    f"📖 Copy key, paste ke <code>API_Key</code> di EA MT5.\n\n"
+                    f"✅ /analyze UNLIMITED\n"
+                    f"✅ EA Auto-Trade\n"
+                    f"✅ Bridge Sinyal\n\n"
                     f"👉 /help — Lihat command\n"
-                    f"👉 /mykey — Cek license"
+                    f"👉 /analyze xauusd — Mulai analisa"
                 )
                 try:
                     payload = json.dumps({
@@ -1804,86 +2211,6 @@ def handle_command(cmd, text, chat_id, msg):
         except Exception as e:
             tg_send(f"❌ Activation gagal: {e}", chat_id)
 
-    elif cmd == "/subscribe":
-        if chat_id:
-            if SUBSCRIPTION_ENGINE:
-                try:
-                    member = get_member(str(chat_id)) or ensure_member(str(chat_id))
-                    tier = member.get("tier", "starter")
-                    member_status = member.get("status", "trial")
-                    expiry = member.get("expiry", "")
-
-                    # Sync to members.db for quota tracking
-                    try:
-                        if MEMBERS_ENABLED:
-                            from members import ensure_member as m_ensure, upgrade_tier as m_upgrade
-                            m_ensure(str(chat_id))
-                            if tier != "starter":
-                                m_upgrade(str(chat_id), tier)
-                    except Exception:
-                        pass
-
-                    # Format status dengan emoji
-                    tier_emoji = {"elite": "👑", "pro": "⭐", "starter": "🆓"}.get(tier, "📦")
-                    status_emoji = {"paid": "🟢", "trial": "🟡", "expired": "🔴"}.get(member_status, "⚪")
-
-                    txt = (
-                        "💎 <b>Upgrade / Perpanjang Langganan</b>\n"
-                        "━━━━━━━━━━━━━━━━\n"
-                        f"{tier_emoji} Status: <b>{tier.upper()}</b> — {status_emoji} {member_status}\n"
-                    )
-                    if expiry:
-                        txt += f"📅 Expired: {expiry[:10]}\n"
-                    txt += (
-                        "━━━━━━━━━━━━━━━━\n"
-                        "💳 <b>Pilih Paket:</b>\n"
-                    )
-
-                    markup = {"inline_keyboard": []}
-
-                    if PAYMENT_ENGINE and PRICING:
-                        # Tier buttons
-                        if tier != "pro":
-                            markup["inline_keyboard"].append([
-                                {"text": "⭐ Pro — Rp79K/bln", "callback_data": "pay:pro"},
-                            ])
-                        if tier != "elite":
-                            markup["inline_keyboard"].append([
-                                {"text": "👑 Elite — Rp149K/bln", "callback_data": "pay:elite"},
-                            ])
-                        if tier == "elite":
-                            txt += "👑 Kamu sudah <b>Elite</b> — tier tertinggi!\n"
-                        elif tier == "pro":
-                            txt += "⭐ Kamu <b>Pro</b>. Upgrade ke Elite?\n"
-                        else:
-                            txt += "🆓 Trial aktif. Upgrade untuk akses penuh!\n"
-                    else:
-                        txt += "⚠️ Payment gateway belum aktif.\n"
-                        txt += "Hubungi admin: @codergaboets\n"
-
-                    markup["inline_keyboard"].append([
-                        {"text": "💳 Info Harga", "callback_data": "pricing:show"},
-                        {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
-                    ])
-                    # ── Join Channel + Group buttons (for paid users) ──
-                    if tier in ("pro", "elite", "testing") and member_status == "paid":
-                        txt += (
-                            "\n━━━━━━━━━━━━━━━━\n"
-                            "🔗 <b>Akses Premium:</b>\n"
-                        )
-                        markup["inline_keyboard"].append([
-                            {"text": "📢 Join Channel Sinyal", "url": "https://t.me/+qLAdRGd_RiplZmU1"},
-                        ])
-                        markup["inline_keyboard"].append([
-                            {"text": "👥 Join Group Diskusi", "url": "https://t.me/+kX8tspebrpVhMmE1"},
-                        ])
-
-                    tg_send(txt, chat_id, reply_markup=markup)
-                except Exception:
-                    tg_send("💎 Langganan system loading...", chat_id)
-            else:
-                tg_send("💎 Member system belum aktif.\nHubungi admin: @codergaboets", chat_id)
-
     elif cmd == "/autosync":
         if not AUTOSYNC_GLOBAL_ENABLED:
             tg_send("⏸ <b>Auto Sync dinonaktifkan sementara.</b>\n"
@@ -1891,25 +2218,18 @@ def handle_command(cmd, text, chat_id, msg):
                     "Fitur auto-trade akan diaktifkan kembali di masa depan.", chat_id)
             return
 
-        # ── TIER GATE: Starter tidak bisa auto-trade ──
-        if MEMBERS_ENABLED and chat_id:
-            try:
-                member = get_member(str(chat_id))
-                tier = (member or {}).get("tier", "starter")
-                if tier == "starter":
-                    tg_send(
-                        "🔒 <b>Auto-Trade khusus Pro & Elite!</b>\n"
-                        "━━━━━━━━━━━━━━━━\n"
-                        "Fitur auto-trade ke EA hanya tersedia untuk:\n"
-                        "⭐ <b>Pro</b> — Rp79K/bln\n"
-                        "👑 <b>Elite</b> — Rp149K/bln\n\n"
-                        "Kamu saat ini: 🆓 Starter\n"
-                        "👉 /subscribe — Upgrade sekarang",
-                        chat_id
-                    )
-                    return
-            except Exception:
-                pass
+        # ── DONOR GATE: Only donors can auto-trade ──
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "🔒 <b>Auto-Trade khusus Donatur!</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "Fitur auto-trade ke EA hanya tersedia untuk\n"
+                "👑 <b>Donatur</b> — yang sudah dukung server AI.\n\n"
+                "💚 /donate — Dukung server AI sekarang\n"
+                "📞 @codergaboets — Tanya admin",
+                chat_id
+            )
+            return
 
         if sub in ("on", "enable", "start", "1"):
             set_autosync(chat_id, True)
@@ -1961,18 +2281,54 @@ def is_trading_session(h):
     return 7 <= h < 23
 
 def is_weekend():
-    """True if Saturday or Sunday — market closed, save AI costs."""
-    return wib_now().weekday() >= 5  # 5=Sat, 6=Sun
+    """True if Sat/Sun, OR Monday before 05:00 WIB (crypto mode extended)."""
+    now = wib_now()
+    if now.weekday() >= 5:  # 5=Sat, 6=Sun
+        return True
+    if now.weekday() == 0 and now.hour < 5:  # Mon 00:00-05:00
+        return True
+    return False
+
+# ── Asset classification for weekend mode ──
+CRYPTO_PAIRS = {"btc", "btcusd", "eth", "ethusd", "crypto"}
+FOREX_COMMO_PAIRS = {"xauusd", "gold", "eurusd", "gbpusd", "usdjpy", "oil", "usoil"}
+
+def is_crypto_pair(pair: str) -> bool:
+    """Check if a pair is crypto (trades 24/7 including weekends)."""
+    return pair.lower() in CRYPTO_PAIRS
+
+def is_forex_commo_pair(pair: str) -> bool:
+    """Check if a pair is forex/commodity (closed weekends)."""
+    return pair.lower() in FOREX_COMMO_PAIRS
+
+def weekend_status_text() -> str:
+    """Return weekend mode indicator text."""
+    if is_weekend():
+        return "\n🟡 WEEKEND MODE: Forex/Gold Tutup | Crypto (BTC/ETH) BUKA 24/7"
+    return ""
 
 def is_market_open():
-    """Market is open: Mon-Fri + within trading session hours."""
+    """Market is open: Mon-Fri + trading hours, OR crypto pairs (24/7 including weekends)."""
     if is_weekend():
-        return False
+        # On weekends, only crypto is "open" — this function returns True for crypto contexts
+        # The caller should check is_crypto_pair() if they need to filter
+        return True  # crypto is always open
     return is_trading_session(wib_now().hour)
 
 # ── Mapping channel for daily insights (separate from signals) ──
 MAPPING_CHANNEL_ID = os.getenv("MAPPING_CHANNEL_ID", "")
 MAPPING_CHANNEL = f"telegram:{MAPPING_CHANNEL_ID}" if MAPPING_CHANNEL_ID else ""
+
+# ── Group forward (optional — set GROUP_CHAT_ID to forward signals/mapping to group) ──
+GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID", "")
+
+def _broadcast_to_group(text):
+    """Forward signal/mapping text to the discussion group if GROUP_CHAT_ID is configured."""
+    if GROUP_CHAT_ID:
+        try:
+            tg_send(text, GROUP_CHAT_ID)
+        except Exception:
+            pass
 
 def send_to_channel(text):
     """Send to mapping channel. Falls back to home if no channel configured."""
@@ -1980,6 +2336,7 @@ def send_to_channel(text):
         tg_send(text, MAPPING_CHANNEL_ID)
     else:
         tg_send(text)  # fallback to home
+    _broadcast_to_group(text)  # forward to discussion group
 
 
 # ── Subscription reminders (H-7/H-3/H-1) ──
@@ -2048,9 +2405,23 @@ def format_daily_mapping():
         f"🗓 {day_name}, {now.strftime('%d %B %Y')}",
         f"━━━━━━━━━━━━━━━━",
         f"",
-        f"🕐 Status: {'🔴 MARKET TUTUP' if is_weekend() else '🟢 MARKET BUKA'}",
+        f"🕐 Status: {'🟡 WEEKEND CRYPTO MODE — Forex Tutup, Crypto BUKA' if is_weekend() else '🟢 MARKET BUKA'}",
         f"",
     ]
+
+    # ── Monday Sentiment ──
+    if now.weekday() == 0:
+        # Fetch DXY for sentiment direction
+        dxy_val = None
+        try:
+            if MARKET_DATA:
+                dxy_q = MARKET_DATA.get_quote("DX-Y.NYB", force=True)
+                dxy_val = dxy_q.price if dxy_q else None
+        except Exception:
+            pass
+        sent_label = "BULLISH" if (dxy_val is not None and dxy_val < 103) else "BEARISH"
+        lines.append(f"📅 Monday Sentiment: {sent_label} — Waspadai Gaps & Volatilitas Pembukaan.")
+        lines.append(f"")
     
     # Try to get key levels for each asset
     if MARKET_DATA:
@@ -2096,50 +2467,95 @@ def format_daily_mapping():
 # Assets to scan autonomously (forex, crypto, commodities — stocks on-demand via /analyze)
 
 # ── Channel rate limiter (prevents signal spam) ──
-_last_channel_post = {}       # {asset: timestamp} — per-asset cooldown
-_GLOBAL_CHANNEL_COOLDOWN = 300  # min 5 min between ANY channel posts
-_PER_ASSET_COOLDOWN = 900        # min 15 min per asset
+# Tiered anti-spam: global, per-asset, same-direction, daily cap
+_last_channel_post = {}         # {(asset, direction): timestamp} — per-asset+direction cooldown
+_GLOBAL_CHANNEL_COOLDOWN = 300   # min 5 min between ANY channel posts
+_PER_ASSET_COOLDOWN = 1800        # min 30 min per asset (any direction)
+_SAME_DIR_COOLDOWN = 3600         # min 60 min for same-direction on same asset
+_MAX_PER_ASSET_PER_DAY = 3        # max 3 signals per asset per day
+_daily_signal_counts = {}         # {(date, asset): count}
 _last_global_post = None
+_last_tpsl_alert = {}             # {(trade_id): timestamp} — prevent duplicate TP/SL alerts
 
-def _can_post_to_channel(asset_key: str = "") -> bool:
-    """Rate limit channel posts: min 5min global, 15min per asset."""
+def _can_post_to_channel(asset_key: str = "", direction: str = "") -> bool:
+    """Rate limit channel posts: 5min global, 30min per asset, 60min same-dir, max 3/day per asset."""
     global _last_global_post
     now = time.time()
-    # Global cooldown
+    today = wib_now().strftime("%Y%m%d")
+
+    # 1. Global cooldown
     if _last_global_post and (now - _last_global_post) < _GLOBAL_CHANNEL_COOLDOWN:
         return False
-    # Per-asset cooldown
+
+    # 2. Daily cap per asset
     if asset_key:
-        last = _last_channel_post.get(asset_key, 0)
-        if (now - last) < _PER_ASSET_COOLDOWN:
+        daily_key = f"{today}:{asset_key}"
+        if _daily_signal_counts.get(daily_key, 0) >= _MAX_PER_ASSET_PER_DAY:
             return False
+
+        # 3. Same-direction cooldown (60 min)
+        if direction:
+            dir_key = f"{asset_key}:{direction}"
+            last = _last_channel_post.get(dir_key, 0)
+            if (now - last) < _SAME_DIR_COOLDOWN:
+                return False
+
+        # 4. Any-direction per-asset cooldown (30 min)
+        any_key = f"{asset_key}:*"
+        last_any = _last_channel_post.get(any_key, 0)
+        if (now - last_any) < _PER_ASSET_COOLDOWN:
+            return False
+
     return True
 
-def _mark_channel_post(asset_key: str = ""):
+def _mark_channel_post(asset_key: str = "", direction: str = ""):
     """Record a channel post for rate limiting."""
     global _last_global_post
     now = time.time()
+    today = wib_now().strftime("%Y%m%d")
     _last_global_post = now
     if asset_key:
-        _last_channel_post[asset_key] = now
+        _last_channel_post[f"{asset_key}:*"] = now  # any-direction tracker
+        if direction:
+            _last_channel_post[f"{asset_key}:{direction}"] = now  # same-direction tracker
+        daily_key = f"{today}:{asset_key}"
+        _daily_signal_counts[daily_key] = _daily_signal_counts.get(daily_key, 0) + 1
+
+def _can_post_tpsl_alert(trade_id: str) -> bool:
+    """Prevent duplicate TP/SL alerts within 5 min for the same trade."""
+    now = time.time()
+    last = _last_tpsl_alert.get(trade_id, 0)
+    if (now - last) < 300:
+        return False
+    _last_tpsl_alert[trade_id] = now
+    return True
 
 AUTO_SCAN_ASSETS = [
     # (internal_pair, display_name, yahoo_symbol, is_forex_metal)
     ("gold", "XAUUSD", "GC=F", True),
     ("btc", "BTCUSD", "BTC-USD", False),
+    ("eth", "ETHUSD", "ETH-USD", False),
     ("eurusd", "EURUSD", "EURUSD=X", True),
     ("gbpusd", "GBPUSD", "GBPUSD=X", True),
     ("oil", "USOIL", "CL=F", False),
 ]
 
 def auto_analyze_loop():
-    """Main autonomous signal loop. Mon-Fri only. Weekends: mapping only, no AI/signals."""
+    """Main autonomous signal loop. Weekdays: all assets. Weekends: crypto only (BTC/ETH)."""
     logger.info("🚀 Auto-analyze loop started (multi-asset, weekend-aware)")
     time.sleep(5)
     asset_idx = 0
     # Per-asset signal logs for cooldown tracking
     asset_logs = {}
-    last_mapping_day = None  # Track when last daily mapping was sent
+    # ── Persistent mapping tracker (survives restarts) ──
+    MAPPING_TRACKER = DATA_DIR / ".last_mapping_date"
+    def _get_last_mapping():
+        try:
+            return MAPPING_TRACKER.read_text().strip()
+        except: return ""
+    def _set_last_mapping(date_str):
+        MAPPING_TRACKER.write_text(date_str)
+    last_mapping_day = _get_last_mapping()  # init from disk
 
     while True:
         try:
@@ -2156,17 +2572,135 @@ def auto_analyze_loop():
                         mapping_text = format_daily_mapping()
                         send_to_channel(mapping_text)
                         last_mapping_day = today_str
+                        _set_last_mapping(today_str)
                         logger.info("📊 Daily mapping sent to channel")
                     except Exception as e:
                         logger.error(f"Daily mapping failed: {e}")
-                time.sleep(300)  # Sleep 5 min on weekends
-                continue
 
-            # ── WEEKDAY: Reset mapping tracker ──
+                # ── WEEKEND CRYPTO MODE: skip forex/commodities, allow crypto ──
+                # Rotate through assets but skip non-crypto
+                for _ in range(len(AUTO_SCAN_ASSETS)):
+                    pair, disp, yahoo_sym, is_forex = AUTO_SCAN_ASSETS[asset_idx % len(AUTO_SCAN_ASSETS)]
+                    asset_idx += 1
+                    if is_crypto_pair(pair):
+                        break  # found a crypto pair to scan
+                else:
+                    time.sleep(300)
+                    continue  # no crypto in rotation (shouldn't happen)
+
+                # For crypto on weekends: skip session/trading-hour checks, scan 24/7
+                logger.info(f"🟡 WEEKEND CRYPTO [{disp}] — scanning...")
+                # ── Inline signal pipeline for weekend crypto ──
+                # (copies weekday flow: check outcomes → mechanical → AI consensus)
+                
+                # Check trade outcomes (TP/SL hits)
+                if TRADE_TRACKER:
+                    try:
+                        closed_trades = check_outcomes({disp: None})
+                        price = fetch_price(pair)
+                        if price: closed_trades = check_outcomes({disp: price})
+                        for ct in closed_trades:
+                            try:
+                                trade_id = ct.get("id", ct.get("trade_id", ""))
+                                if trade_id and not _can_post_tpsl_alert(str(trade_id)):
+                                    continue
+                                text, markup = format_trade_close_with_cta(ct)
+                                tg_send(text, reply_markup=markup)
+                            except Exception: pass
+                    except Exception: pass
+
+                price = fetch_price(pair)
+                if not price:
+                    time.sleep(60)
+                    continue
+
+                dxy = fetch_dxy() if pair == "gold" else None
+                lkz, nykz = killzone(h)
+                kz = "London" if lkz else ("NY" if nykz else "Outside")
+
+                # Mechanical signal detection
+                mech_sig = None
+                if MARKET_DATA and is_forex:
+                    try:
+                        m1_bars = MARKET_DATA.get_ohlcv(yahoo_sym, "1m", 200)
+                        if m1_bars and len(m1_bars) >= 30:
+                            ohlcv_m1 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
+                                          "low": b.low, "close": b.close, "volume": b.volume} for b in m1_bars]
+                            mech_sig, mech_reason = detect_mechanical_signal(
+                                pair.upper(), disp, price, ohlcv_m1)
+                            if mech_sig:
+                                logger.info(f"⚡ MECHANICAL [{disp}]: {mech_sig['action']} | {mech_sig['source']}")
+                    except Exception as e:
+                        logger.debug(f"Mechanical check [{disp}]: {e}")
+
+                if mech_sig and mech_sig["action"] in ("BUY", "SELL"):
+                    action = mech_sig["action"]
+                    conf = mech_sig["confidence"]
+                    log_key = f"auto_{pair}"
+                    log = asset_logs.get(log_key, load_signal_log())
+                    last_time = log.get("last_signal_time")
+                    last_action = log.get("last_action")
+                    if last_time and last_action:
+                        try:
+                            last_dt = datetime.fromisoformat(last_time)
+                            if (wib_now() - last_dt).total_seconds() < 600 and last_action != action:
+                                logger.info(f"BLOCKED [{disp}]: {action} after {last_action}")
+                                time.sleep(60)
+                                continue
+                        except: pass
+                    logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
+                    text = fmt_signal(mech_sig, price, dxy, h, disp, "$") + f"\n<i>[{mech_sig.get('source','mech')}] weekend-crypto</i>"
+                    if _can_post_to_channel(pair, action):
+                        tg_send(text)
+                        _mark_channel_post(pair, action)
+                        _broadcast_to_group(text)
+                    if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
+                        mech_sig = enrich_signal_with_layers(mech_sig)
+                    post_signal_to_bridge(mech_sig, price)
+                    log["signals_sent"] = log.get("signals_sent", 0) + 1
+                    log["last_signal_time"] = wib_now().isoformat()
+                    log["last_action"] = action
+                    log["last_price"] = price
+                    log["last_signal"] = {"action": action, "entry": mech_sig.get("entry", price),
+                        "sl": mech_sig.get("sl", 0), "tp": mech_sig.get("tp", 0),
+                        "tp1": mech_sig.get("tp1", 0), "tp2": mech_sig.get("tp2", 0),
+                        "confidence": conf, "source": mech_sig.get("source", "mech"),
+                        "rr_ratio": mech_sig.get("rr_ratio", 0)}
+                    asset_logs[log_key] = log
+                    (DATA_DIR / "ea_signal.json").write_text(json.dumps(log["last_signal"]))
+                    save_signal_log(log)
+                else:
+                    # AI consensus (simplified for weekend - just DeepSeek/OmniRoute)
+                    sig = ask_ai(price, dxy, "WeekendCrypto", kz, 0, premium=False,
+                                  ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
+                    if sig and sig.get("action") in ("BUY", "SELL") and sig.get("confidence", 0) >= 0.60:
+                        logger.info(f"AI PUSH [{disp}]: {sig['action']} | conf={sig.get('confidence',0):.0%}")
+                        if LAYERING_ENGINE:
+                            sig = enrich_signal_with_layers(sig)
+                        post_signal_to_bridge(sig, price)
+                        log_key = f"auto_{pair}"
+                        log = asset_logs.get(log_key, load_signal_log())
+                        log["signals_sent"] = log.get("signals_sent", 0) + 1
+                        log["last_signal_time"] = wib_now().isoformat()
+                        log["last_action"] = sig["action"]
+                        log["last_price"] = price
+                        save_signal_log(log)
+                        asset_logs[log_key] = log
+                        text = fmt_signal(sig, price, dxy, h, disp, "$") + "\n<i>[weekend-crypto]</i>"
+                        if _can_post_to_channel(pair, sig["action"]):
+                            tg_send(text)
+                            _mark_channel_post(pair, sig["action"])
+                            _broadcast_to_group(text)
+
+                time.sleep(120)  # 2 min between weekend crypto scans
+                continue  # back to top of while loop
+
+            # ── WEEKDAY: Reset mapping tracker for new day ──
             if last_mapping_day and last_mapping_day != today_str:
-                last_mapping_day = None
+                last_mapping_day = ""
+                _set_last_mapping("")  # clear persistent tracker
 
-            if not is_trading_session(h):
+            if not is_weekend() and not is_trading_session(h):
                 time.sleep(180)
                 continue
 
@@ -2193,13 +2727,17 @@ def auto_analyze_loop():
                 time.sleep(30)
                 continue
 
-            # Check trade outcomes (TP/SL hits)
+            # Check trade outcomes (TP/SL hits) — with donation CTA
             if TRADE_TRACKER:
                 try:
                     closed_trades = check_outcomes({disp: price})
                     for ct in closed_trades:
                         try:
-                            tg_send(format_trade_close_alert(ct))
+                            trade_id = ct.get("id", ct.get("trade_id", ""))
+                            if trade_id and not _can_post_tpsl_alert(str(trade_id)):
+                                continue
+                            text, markup = format_trade_close_with_cta(ct)
+                            tg_send(text, reply_markup=markup)
                         except Exception: pass
                 except Exception: pass
 
@@ -2241,10 +2779,11 @@ def auto_analyze_loop():
                 
                 logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
                 text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp") + f"\n<i>[{mech_sig.get('source','mech')}] override</i>"
-                # ── Channel rate limiter ──
-                if _can_post_to_channel(pair):
+                # ── Channel rate limiter (tiered: 5min global / 30min asset / 60min same-dir / 3/day cap) ──
+                if _can_post_to_channel(pair, action):
                     tg_send(text)
-                    _mark_channel_post(pair)
+                    _mark_channel_post(pair, action)
+                    _broadcast_to_group(text)  # forward to discussion group
                 else:
                     logger.info(f"⏳ Channel rate limited [{disp}] — signal stored, not posted")
                 if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
@@ -2325,31 +2864,8 @@ def main():
         logger.error("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN not set!")
         sys.exit(1)
 
-    # ── Kill any orphan handler processes (PPID=1, using this token) ──
+    # ── PID check disabled (simplified for Phase 1) ──
     import subprocess
-    try:
-        my_pid = os.getpid()
-        result = subprocess.run(
-            ["pgrep", "-f", "vilona_tradefx_handler"],
-            capture_output=True, text=True, timeout=3
-        )
-        pids = [int(p) for p in result.stdout.strip().split("\n") if p.isdigit()]
-        # If another handler already running with a valid parent, exit this one
-        for pid in pids:
-            if pid != my_pid:
-                try:
-                    ppid = int(open(f"/proc/{pid}/stat").read().split()[3])
-                    if ppid == 1:
-                        os.kill(pid, 9)
-                        logger.warning(f"🧹 Killed orphan handler PID {pid}")
-                    elif ppid > 1:
-                        # Another valid instance exists — exit gracefully
-                        logger.warning(f"⚠️ Another handler running (PID {pid}) — exiting")
-                        sys.exit(0)
-                except Exception:
-                    pass
-    except Exception:
-        pass
     # ──────────────────────────────────────────────────────────────
 
     # Start background threads
@@ -2389,6 +2905,31 @@ def main():
     state = load_state()
     offset = state.get("last_update_id", 0)
     logger.info(f"Bot starting... offset={offset}")
+
+    # ── Set Telegram bot commands menu ──
+    try:
+        commands = [
+            {"command": "start",   "description": "🚀 Reboot Markas Komando"},
+            {"command": "analyze", "description": "🧠 Perintahkan AI Scan Market"},
+            {"command": "status",  "description": "🛡 Cek Kuota & Akses VIP"},
+            {"command": "donate",  "description": "⛽ Siram Bensin Server AI"},
+            {"command": "mapping", "description": "📐 Tarik data mapping harian"},
+            {"command": "killzone","description": "🎯 Radar sesi market aktif"},
+        ]
+        payload = json.dumps({"commands": commands}).encode()
+        req = urllib.request.Request(
+            f"{TELEGRAM_API}/setMyCommands",
+            data=payload, headers={"Content-Type": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            resp = json.loads(r.read())
+        if resp.get("ok"):
+            logger.info("✅ Bot commands menu updated")
+        else:
+            logger.warning(f"setMyCommands failed: {resp}")
+    except Exception as e:
+        logger.warning(f"setMyCommands error: {e}")
+
     poll_errors = 0
 
     # ── Initial connection reset — clear any stale polling state ──
@@ -2426,7 +2967,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/status","/bill","/testpay","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping","/activate"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping","/activate"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
@@ -2439,6 +2980,49 @@ def main():
                         except Exception:
                             pass
                     elif text and not cmd.startswith("/"):
+                        # ── Custom donation amount input ──
+                        if DONATION_INPUT_STATE.get(str(chat_id)):
+                            DONATION_INPUT_STATE.pop(str(chat_id), None)
+                            try:
+                                amount = int(text.strip().replace(",", "").replace(".", "").replace(" ", ""))
+                                if amount < 10000:
+                                    tg_send("❌ Minimal dukungan Rp10,000. Coba lagi ya.", chat_id)
+                                elif PAYMENT_ENGINE:
+                                    username = msg.get("chat", {}).get("username", "")
+                                    tg_send(f"⏳ <b>Membuat invoice Rp{amount:,}...</b>", chat_id)
+                                    result = create_tripay_payment(str(chat_id), username, tier="donor", amount=amount)
+                                    if result.get("error"):
+                                        tg_send(f"❌ Gagal: {result['error']}\n📞 Hubungi @codergaboets", chat_id)
+                                    else:
+                                        pay_url = result.get("payment_url", "")
+                                        pay_code = result.get("pay_code", "")
+                                        ref = result.get("reference", "") or result.get("merchant_ref", "")
+                                        txt = (
+                                            f"💚 <b>Dukung Server AI Rp{amount:,}</b>\n"
+                                            f"━━━━━━━━━━━━━━━━\n"
+                                            f"👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
+                                        )
+                                        if pay_code:
+                                            txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
+                                        txt += (
+                                            f"⏰ Expired: 1 jam\n"
+                                            f"━━━━━━━━━━━━━━━━\n"
+                                            f"Klik tombol di bawah untuk bayar 👇\n\n"
+                                            f"<i>Auto-upgrade dalam 1-5 menit.</i>"
+                                        )
+                                        markup = {"inline_keyboard": [
+                                            [{"text": f"💳 Bayar Rp{amount:,}", "url": pay_url}],
+                                            [{"text": "🔄 Cek Status", "callback_data": f"check:{ref}"},
+                                             {"text": "📞 Admin", "url": "https://t.me/codergaboets"}],
+                                            [{"text": "🔙 Kembali", "callback_data": "cancel_input"}],
+                                        ]}
+                                        tg_send(txt, str(chat_id), reply_markup=markup)
+                                else:
+                                    tg_send("💳 Payment gateway belum aktif.\n📞 Hubungi @codergaboets", chat_id)
+                            except ValueError:
+                                tg_send("❌ Masukkan angka yang valid ya. Contoh: 50000", chat_id)
+                            return
+
                         # Plain text message (bukan command) → Priority Support check
                         try:
                             if MEMBERS_ENABLED and chat_id:
@@ -2470,7 +3054,9 @@ def main():
                 if cb:
                     try:
                         data = cb.get("data", "")
-                        if data.startswith(("pay:", "check:", "pricing:")):
+                        if data.startswith("ultimatum:"):
+                            handle_ultimatum_callback(cb)
+                        elif data.startswith(("pay:", "check:", "pricing:", "donate:", "cancel_input")):
                             handle_payment_callback(cb)
                         else:
                             handle_trade_callback(cb)

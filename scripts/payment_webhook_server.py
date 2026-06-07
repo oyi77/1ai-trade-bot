@@ -24,13 +24,9 @@ TRIPAY_MERCHANT_CODE = os.environ.get("TRIPAY_MERCHANT_CODE", "T23409")
 ADMIN_CHAT_ID = os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", os.environ.get("VILONA_TRADEFX_CHAT_ID", ""))
 BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
 
-# ── Tier mapping ──────────────────────────────────────────
-AMOUNT_TO_TIER = {
-    5000: ("testing", 1),
-    29000: ("starter", 7),
-    79000: ("pro", 30),
-    149000: ("elite", 30),
-}
+# ── Donation model: ANY amount → donor (LIFETIME) ─────────
+# No more fixed tiers. "Dukung Server AI" = pay-what-you-want.
+DONOR_DAYS = 9999  # Lifetime access — bukan subscription
 
 
 def tg_send(text: str, chat_id: str, bot_token: str = None, reply_markup=None):
@@ -68,16 +64,7 @@ def verify_tripay_signature(body: bytes, callback_sig: str) -> bool:
 
 
 def upgrade_member(chat_id: str, tier: str, days: int, merchant_ref: str = ""):
-    """Upgrade member in both subscription_manager (JSON) and members (SQLite)."""
-    # subscription_manager (JSON)
-    try:
-        from subscription_manager import upgrade_tier as sub_upgrade
-        sub_upgrade(chat_id, tier, days)
-        log.info(f"Upgraded in subscription_manager: {chat_id} → {tier}")
-    except Exception as e:
-        log.warning(f"subscription_manager upgrade failed: {e}")
-
-    # members.db (SQLite)
+    """Upgrade member ke DONATUR via members.db (SQLite)."""
     try:
         from members import upgrade_tier as mem_upgrade, mark_payment_paid
         mem_upgrade(chat_id, tier, days, merchant_ref)
@@ -160,78 +147,68 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self._json({"error": "invalid merchant_ref"}, 400)
             return
 
-        # Map amount to tier
-        tier, days = "pro", 30
-        for amt, (t, d) in AMOUNT_TO_TIER.items():
-            if abs(total_amount - amt) < 5000:
-                tier, days = t, d
-                break
+        # ALL payments → donor (pay-what-you-want model)
+        tier, days = "donor", DONOR_DAYS
 
-        # Upgrade member
+        # Upgrade member to DONOR
         upgrade_member(chat_id, tier, days, merchant_ref)
 
-        # DM user
-        tier_emoji = {"starter": "🆓", "pro": "⭐", "elite": "👑", "testing": "🧪"}.get(tier, "📦")
-
-        # ── Auto-generate license key ──
-        license_key = ""
-        try:
-            from license_manager import generate_key as gen_lic_key
-            license_key, _ = gen_lic_key(tier=tier, label=f"{chat_id}-auto")
-        except Exception as e:
-            log.warning(f"License gen failed: {e}")
-
-        # ── EA download link ──
-        ea_link = "https://phantomfx.aitradepulse.com/download/ea"  # will be real later
+        # ── DONATUR message (no subscription, no ref display) ──
         channel_link = "https://t.me/+qLAdRGd_RiplZmU1"
         group_link = "https://t.me/+kX8tspebrpVhMmE1"
+        ea_link = "https://phantomfx.aitradepulse.com/ea/download/"
 
         msg = (
-            f"✅ <b>Pembayaran Diterima!</b>\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"💰 Rp{total_amount:,}\n"
-            f"{tier_emoji} Tier: <b>{tier.upper()}</b>\n"
-            f"📅 Durasi: {days} hari\n"
-            f"🔑 Ref: <code>{merchant_ref[:16]}</code>\n"
+            f"🔥 <b>BOOM! Bahan bakar server sudah masuk.</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💰 <b>Rp{total_amount:,}</b> — Makasih Bro!\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+            f"\n"
+            f"Sebagai bentuk terima kasih karena kamu ikut\n"
+            f"menghidupi Server AI Vilona, akses VIP kamu\n"
+            f"sudah <b>AKTIF PERMANEN</b>.\n"
+            f"\n"
+            f"Akses ini bukan langganan sementara.\n"
+            f"Selama ekosistem ini hidup, kamu adalah bagian\n"
+            f"dari keluarga inti Vilona AI. 🥂\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ <b>/analyze</b> — UNLIMITED\n"
+            f"✅ <b>EA Auto-Trade</b> — AKTIF\n"
+            f"✅ <b>EA Bridge</b> — AKTIF PERMANEN\n"
+            f"✅ <b>Master API Key</b> — bisa dipakai multi MT5\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📥 <b>Download EA MT5:</b>\n{ea_link}\n"
+            f"\n"
+            f"📢 Channel: {channel_link}\n"
+            f"👥 Grup: {group_link}"
         )
-        if license_key:
-            msg += (
-                f"━━━━━━━━━━━━━━━━\n"
-                f"🔐 <b>License Key:</b>\n"
-                f"<code>{license_key}</code>\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"📥 <b>Download EA:</b> {ea_link}\n"
-                f"📖 <b>Cara pakai:</b> Copy key di atas, paste ke input <code>API_Key</code> di EA MT5.\n\n"
-            )
-        msg += (
-            f"Selamat! Semua fitur {tier.upper()} sudah aktif.\n"
-            f"👉 /help — Lihat command\n"
-            f"👉 /mykey — Cek license key\n"
-            f"👉 /analyze xauusd — Mulai analisa"
-        )
-        
-        # Inline keyboard: Join Channel + Join Group + Download EA
+
         markup = {"inline_keyboard": [
+            [{"text": "📥 Download EA MT5", "url": ea_link}],
             [{"text": "📢 Join Channel Sinyal", "url": channel_link}],
             [{"text": "👥 Join Group Diskusi", "url": group_link}],
-            [{"text": "📥 Download EA", "url": ea_link}],
         ]}
         tg_send(msg, chat_id, reply_markup=markup)
 
-        # Notify admin
+        # Notify admin/channel — Social Proof format
         if ADMIN_CHAT_ID and ADMIN_CHAT_ID != chat_id:
             admin_msg = (
-                f"💰 <b>Pembayaran Baru!</b>\n"
+                f"🔥 <b>BOOM! BAHAN BAKAR MASUK! 🚀</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"👤 User: <code>{chat_id}</code>\n"
-                f"{tier_emoji} Tier: <b>{tier.upper()}</b>\n"
-                f"💰 Rp{total_amount:,}\n"
-                f"📅 {days} hari"
+                f"👤 Kawan kita: <code>{chat_id}</code>\n"
+                f"💰 Menyiram server sebesar: <b>Rp{total_amount:,}</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Terima kasih orang baik! Mesin AI kita\n"
+                f"makin buas hari ini berkat dukunganmu. 🥂\n"
+                f"\n"
+                f"👉 Mau akses AI tanpa batas?\n"
+                f"Yuk ikut udunan bensin server: /donate"
             )
             tg_send(admin_msg, ADMIN_CHAT_ID)
 
-        log.info(f"✅ Payment complete: {chat_id} → {tier} ({days}d)")
-        self._json({"status": "ok", "tier": tier, "chat_id": chat_id})
+        log.info(f"✅ Donation complete: {chat_id} → DONATUR (ref={merchant_ref[:16]} amount={total_amount})")
+        self._json({"status": "ok", "chat_id": chat_id, "donor": True})
 
     def _handle_duitku(self, body: bytes):
         """Process Duitku payment callback."""
@@ -264,11 +241,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
             return
 
         amount = data.get("amount", 0)
-        tier, days = "pro", 30
-        for amt, (t, d) in AMOUNT_TO_TIER.items():
-            if abs(int(amount) - amt) < 5000:
-                tier, days = t, d
-                break
+        # ALL payments → donor
+        tier, days = "donor", DONOR_DAYS
 
         upgrade_member(chat_id, tier, days, merchant_order_id)
         self._json({"status": "ok", "tier": tier})

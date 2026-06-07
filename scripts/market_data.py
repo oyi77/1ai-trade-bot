@@ -109,12 +109,17 @@ class UnifiedMarketData:
     # ── helpers ──────────────────────────────────────────────────────
 
     def _resolve(self, pair: str) -> str:
-        """Map internal name → Yahoo ticker.  Case-insensitive, strips broker suffixes."""
+        """Map internal name → Yahoo ticker. Checks symbol map first, then strips broker suffixes."""
         import re
         p = pair.lower().strip()
+        # Check symbol map directly first (handles BTC-USD, GC=F, etc.)
+        if p in self.SYMBOL_MAP:
+            return self.SYMBOL_MAP[p]
         # Strip broker suffixes: XAUUSDc → xauusd, EURUSD.pro → eurusd
-        p = re.sub(r'[.\-#_].*$', '', p)
-        p = re.sub(r'[cm]$', '', p)
+        stripped = re.sub(r'[.\-#_].*$', '', p)
+        stripped = re.sub(r'[cm]$', '', stripped)
+        if stripped in self.SYMBOL_MAP:
+            return self.SYMBOL_MAP[stripped]
         return self.SYMBOL_MAP.get(p, p.upper())
 
     def _fetch_ticker(self, yahoo_symbol: str):
@@ -177,11 +182,24 @@ class UnifiedMarketData:
             ask = info.get("ask") or price
             chg = info.get("regularMarketChangePercent") or 0
 
+            # Per-symbol decimal precision
+            sym_upper = yahoo_symbol.upper()
+            if "XAU" in sym_upper:
+                dec = 2
+            elif any(x in sym_upper for x in (".JK", "IDX", "IHSG")):
+                dec = 0
+            elif "BTC" in sym_upper:
+                dec = 1
+            elif any(x in sym_upper for x in ("JPY", "GBP", "EUR", "AUD", "NZD", "CHF", "CAD")):
+                dec = 5
+            else:
+                dec = 2
+
             return Quote(
                 symbol=yahoo_symbol,
-                price=round(float(price), 2),
-                bid=round(float(bid), 2),
-                ask=round(float(ask), 2),
+                price=round(float(price), dec),
+                bid=round(float(bid), dec),
+                ask=round(float(ask), dec),
                 change_pct=round(float(chg), 4),
             )
         except Exception:
@@ -242,13 +260,25 @@ class UnifiedMarketData:
                 return None
 
             bars = []
+            # Per-symbol decimal precision
+            sym_upper = yahoo_symbol.upper()
+            if "XAU" in sym_upper:
+                dec = 2
+            elif any(x in sym_upper for x in (".JK", "IDX", "IHSG")):
+                dec = 0
+            elif "BTC" in sym_upper:
+                dec = 1
+            elif any(x in sym_upper for x in ("JPY", "GBP", "EUR", "AUD", "NZD", "CHF", "CAD")):
+                dec = 5
+            else:
+                dec = 2
             for idx, row in df.iterrows():
                 bars.append(OHLCVBar(
                     timestamp=idx,
-                    open_=round(float(row["Open"]), 2),
-                    high=round(float(row["High"]), 2),
-                    low=round(float(row["Low"]), 2),
-                    close=round(float(row["Close"]), 2),
+                    open_=round(float(row["Open"]), dec),
+                    high=round(float(row["High"]), dec),
+                    low=round(float(row["Low"]), dec),
+                    close=round(float(row["Close"]), dec),
                     volume=int(row.get("Volume", 0)),
                 ))
             return bars

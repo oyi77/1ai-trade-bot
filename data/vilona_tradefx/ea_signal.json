@@ -1,1 +1,13 @@
-{"action": "SELL", "entry": 4375.00, "sl": 4385.00, "tp": 4355.00, "tp1": 4365.00, "tp2": 4355.00, "confidence": 0.78, "source": "mechanical_override", "rr_ratio": 2.0}
+{
+  "action": "SELL",
+  "symbol": "XAUUSD",
+  "entry": 4370.0,
+  "sl": 4385.0,
+  "tp": 4345.0,
+  "tp1": 4360.0,
+  "tp2": 4350.0,
+  "confidence": 0.78,
+  "source": "fallback_test",
+  "layers": [],
+  "target_user": ""
+}

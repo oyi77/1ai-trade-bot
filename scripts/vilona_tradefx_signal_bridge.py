@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """Vilona Trade FX Signal Bridge V2 — Multi-User Commercial Edition.
 - API key authentication + tier-based rate limiting
-- Signal queue per user
+- Signal queue per user / per instance (account_id-based)
+- Instance Identity: tracks per {api_key}:{account_id}
+- Broadcast mode: duplicates signals to all instances of a key
 - Compatible with VilonaTradeFX_EA.mq5 (Commercial)
 
 Usage: python3 vilona_tradefx_signal_bridge.py --port 8765 --host 0.0.0.0
+  EA poll:     GET  /signal?api_key=VT-xxx&account_id=MT5-12345
+  Bot signal:  POST /signal?api_key=VT-xxx
+  Admin keys:  GET  /admin/keys (localhost only)
+  Gen key:     POST /admin/generate-key (localhost only)
+  EA download: GET  /download/ea or /ea/download
 """
 import json, time, threading, argparse, logging, os
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -22,14 +29,23 @@ KEYS_FILE = os.path.join(PROJECT_DIR, "api_keys.json")
 # ── Global state ──
 HISTORY = deque(maxlen=500)
 PENDING = deque(maxlen=100)        # global pending queue (all users)
-PENDING_BY_KEY = defaultdict(deque)  # per-user pending
+PENDING_BY_KEY = defaultdict(deque)  # per-user pending (backward compat)
+PENDING_BY_INSTANCE = defaultdict(deque)  # "{api_key}:{account_id}" → deque of signals
 LOCK = threading.Lock()
 ID_COUNTER = 0
 ACKED = set()
+ACKED_BY_KEY = defaultdict(set)  # per-account ACK tracking
 START_TIME = time.time()
+
+# ── Instance Identity (per account_id per key) ──
+INSTANCES = {}  # "{api_key}:{account_id}" → {last_seen, ip, signals_polled, first_seen, label}
+MASTER_INSTANCES = defaultdict(dict)  # api_key → {account_id: instance_id}
 
 # ── Rate limiting ──
 RATE_COUNTERS = defaultdict(list)  # api_key → [timestamps]
+
+# ── Connected accounts tracker (multi-MT5 support) ──
+CONNECTED_ACCOUNTS = {}  # api_key → {last_seen, ip, signals_polled, first_seen, label}
 
 
 def load_keys():
@@ -54,9 +70,10 @@ def validate_key(api_key):
     config = load_keys()
     key_data = config["keys"].get(api_key)
     if not key_data or not key_data.get("active"):
-        # Allow any key with default starter tier for MVP
-        return True, config["tiers"]["starter"]
-    return True, config["tiers"].get(key_data.get("tier"), config["tiers"]["starter"])
+        # Inactive/unknown keys are rejected
+        return False, None
+    starter = config["tiers"].get("starter", {"max_layers": 1, "features": []})
+    return True, config["tiers"].get(key_data.get("tier"), starter)
 
 
 def check_rate_limit(api_key):
@@ -101,16 +118,26 @@ class SignalHandler(BaseHTTPRequestHandler):
         qs = parse_qs(parsed.query)
         return parsed.path.rstrip("/"), qs
 
-    def _poll_signal(self, api_key, tier):
-        """Poll signal for a specific user. Takes from per-user queue or global queue."""
+    def _poll_signal(self, api_key, tier, instance_id=None):
+        """Poll signal for a specific user or instance. Priority:
+           instance_id → PENDING_BY_INSTANCE[instance_id]
+           else       → PENDING_BY_KEY[api_key]
+           fallback   → PENDING (global)"""
         with LOCK:
-            # First try per-user queue
+            # Instance-level queue (account_id provided)
+            if instance_id:
+                if instance_id in PENDING_BY_INSTANCE and PENDING_BY_INSTANCE[instance_id]:
+                    sig = PENDING_BY_INSTANCE[instance_id].popleft()
+                    log.info(f"Signal delivered (instance): {sig['signal_id']} → {instance_id}")
+                    return self._format_signal(sig)
+
+            # Key-level queue (backward compat / fallback)
             if api_key in PENDING_BY_KEY and PENDING_BY_KEY[api_key]:
                 sig = PENDING_BY_KEY[api_key].popleft()
                 log.info(f"Signal delivered (user): {sig['signal_id']} → {api_key}")
                 return self._format_signal(sig)
 
-            # Fallback to global queue
+            # Global fallback
             if not PENDING:
                 return self._empty_signal()
             sig = PENDING.popleft()
@@ -140,6 +167,9 @@ class SignalHandler(BaseHTTPRequestHandler):
             "entry": sig.get("entry", 0),
             "sl": sig.get("sl", 0),
             "tp": sig.get("tp", 0),
+            "tp1": sig.get("tp1", sig.get("tp", 0)),
+            "tp2": sig.get("tp2", 0),
+            "tp3": sig.get("tp3", sig.get("tp", 0)),
             "risk_percent": sig.get("risk_percent", 1.0),
             "comment": sig.get("comment", "VTFX/AI"),
             "confidence": sig.get("confidence", 0),
@@ -153,6 +183,7 @@ class SignalHandler(BaseHTTPRequestHandler):
         return {
             "signal_id": "", "symbol": "", "action": "HOLD",
             "entry": 0, "sl": 0, "tp": 0,
+            "tp1": 0, "tp2": 0, "tp3": 0,
             "risk_percent": 0, "comment": "", "confidence": 0,
             "layers": [], "layer_count": 0, "tier": "", "pending": False,
         }
@@ -186,13 +217,42 @@ class SignalHandler(BaseHTTPRequestHandler):
                 return
 
             self._current_key = api_key
-            result = self._poll_signal(api_key, tier)
+            account_id = params.get("account_id", [None])[0]
+
+            if account_id:
+                # ── Instance Identity mode ──
+                instance_id = f"{api_key}:{account_id}"
+                # Track instance
+                INSTANCES[instance_id] = {
+                    "last_seen": time.time(),
+                    "ip": self.client_address[0],
+                    "signals_polled": INSTANCES.get(instance_id, {}).get("signals_polled", 0) + 1,
+                    "first_seen": INSTANCES.get(instance_id, {}).get("first_seen", time.time()),
+                    "label": INSTANCES.get(instance_id, {}).get("label", account_id),
+                    "api_key": api_key,
+                    "account_id": account_id,
+                }
+                MASTER_INSTANCES[api_key][account_id] = instance_id
+                result = self._poll_signal(api_key, tier, instance_id=instance_id)
+            else:
+                # ── Legacy mode (no account_id) ──
+                CONNECTED_ACCOUNTS[api_key] = {
+                    "last_seen": time.time(),
+                    "ip": self.client_address[0],
+                    "signals_polled": CONNECTED_ACCOUNTS.get(api_key, {}).get("signals_polled", 0) + 1,
+                    "first_seen": CONNECTED_ACCOUNTS.get(api_key, {}).get("first_seen", time.time()),
+                    "label": CONNECTED_ACCOUNTS.get(api_key, {}).get("label", api_key[:12]),
+                }
+                result = self._poll_signal(api_key, tier)
+
             self._json(result)
 
         elif path.startswith("/ack/"):
             signal_id = path.split("/ack/", 1)[1]
             with LOCK:
                 ACKED.add(signal_id)
+                if api_key:
+                    ACKED_BY_KEY[api_key].add(signal_id)
             log.info(f"EA ack: {signal_id} | key={api_key}")
             self._json({"status": "ok", "signal_id": signal_id})
 
@@ -212,7 +272,50 @@ class SignalHandler(BaseHTTPRequestHandler):
         elif path == "/history":
             with LOCK:
                 self._json({"count": len(HISTORY), "signals": list(HISTORY)})
-        elif path == "/download/ea" or path == "/download/ea.ex5":
+        elif path == "/accounts":
+            # List all instances grouped by api_key
+            now = time.time()
+            instances_data = {}
+            for inst_id, inst in INSTANCES.items():
+                instances_data[inst_id] = {
+                    **inst,
+                    "last_seen_ago_sec": int(now - inst["last_seen"]),
+                    "uptime_sec": int(now - inst["first_seen"]),
+                    "online": (now - inst["last_seen"]) < 120,
+                    "pending_signals": len(PENDING_BY_INSTANCE.get(inst_id, deque())),
+                }
+
+            # Build master_keys grouping
+            master_keys = {}
+            for inst_id in sorted(INSTANCES.keys()):
+                api_key = inst_id.split(":", 1)[0]
+                if api_key not in master_keys:
+                    master_keys[api_key] = {"instance_ids": [], "instance_count": 0}
+                master_keys[api_key]["instance_ids"].append(inst_id)
+                master_keys[api_key]["instance_count"] += 1
+
+            # Legacy CONNECTED_ACCOUNTS (no account_id)
+            legacy_accounts = {}
+            for key, acc in CONNECTED_ACCOUNTS.items():
+                legacy_accounts[key] = {
+                    **acc,
+                    "last_seen_ago_sec": int(now - acc["last_seen"]),
+                    "uptime_sec": int(now - acc["first_seen"]),
+                    "online": (now - acc["last_seen"]) < 120,
+                    "signals_acked": len(ACKED_BY_KEY.get(key, set())),
+                    "pending_signals": len(PENDING_BY_KEY.get(key, deque())),
+                }
+
+            self._json({
+                "total_instances": len(INSTANCES),
+                "instances": instances_data,
+                "master_keys_count": len(master_keys),
+                "master_keys": dict(master_keys),
+                "legacy_accounts": legacy_accounts,
+                "bridge_uptime_sec": int(now - START_TIME),
+                "mode": "instance_broadcast",
+            })
+        elif path == "/download/ea" or path == "/download/ea.ex5" or path == "/ea/download":
             # Serve EA file for download
             ea_path = os.path.join(PROJECT_DIR, "ea", "VilonaTradeFX_EA.ex5")
             try:
@@ -227,6 +330,22 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
             except FileNotFoundError:
                 self._json({"error": "file not found"}, 404)
+
+        elif path == "/download/ea/source":
+            # Serve EA source file (.mq5)
+            mq5_path = os.path.join(PROJECT_DIR, "experts", "VilonaTradeFX_EA.mq5")
+            try:
+                with open(mq5_path, "rb") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.send_header("Content-Disposition", "attachment; filename=VilonaTradeFX_EA.mq5")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            except FileNotFoundError:
+                self._json({"error": "source file not found"}, 404)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -283,28 +402,58 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "target_user": data.get("target_user"),  # optional: deliver to specific user
             }
 
+            broadcast_count = 0
+
             with LOCK:
                 HISTORY.append(signal)
 
-                # Route to specific user if target_user set, AND always global queue
-                target = signal.get("target_user") or api_key
+                # ── BROADCAST MODE: duplicate signal to instances / accounts ──
+                target = signal.get("target_user")  # optional: single-user routing
+                broadcast_api_key = api_key if api_key else None  # scope broadcast to this key if provided
+
                 if target:
+                    # Single-user mode — deliver to one specific account
                     PENDING_BY_KEY[target].append(signal)
-                # Always add to global queue as fallback
-                PENDING.append(signal)
+                    broadcast_count = 1
+                elif broadcast_api_key and broadcast_api_key in MASTER_INSTANCES and MASTER_INSTANCES[broadcast_api_key]:
+                    # Broadcast to ALL instances under this api_key
+                    for acct_id in list(MASTER_INSTANCES[broadcast_api_key].keys()):
+                        instance_id = MASTER_INSTANCES[broadcast_api_key][acct_id]
+                        acct_signal = dict(signal)
+                        acct_signal["_for_instance"] = instance_id
+                        PENDING_BY_INSTANCE[instance_id].append(acct_signal)
+                        broadcast_count += 1
+                    log.info(f"📡 Instance broadcast ({broadcast_api_key}): {broadcast_count} instance(s)")
+                elif broadcast_api_key:
+                    # Key has no registered instances — fall back to global
+                    PENDING.append(signal)
+                    log.info(f"📡 No instances for {broadcast_api_key}, queued global")
+                else:
+                    # No api_key in POST — fall back to old CONNECTED_ACCOUNTS broadcast
+                    for key in list(CONNECTED_ACCOUNTS.keys()):
+                        acct_signal = dict(signal)
+                        acct_signal["_for_account"] = key
+                        PENDING_BY_KEY[key].append(acct_signal)
+                        broadcast_count += 1
+                    if broadcast_count == 0:
+                        PENDING.append(signal)
+                    log.info(f"📡 Legacy broadcast to {broadcast_count} account(s)")
 
             layers_count = len(signal['layers']) if isinstance(signal.get('layers'), list) else 0
-            log.info(f"Signal: {sig_id} | {symbol} {action} | layers={layers_count} | target={target or 'global'}")
+            log.info(f"Signal: {sig_id} | {symbol} {action} | layers={layers_count} | broadcast→{broadcast_count}")
             self._json({
                 "signal_id": sig_id,
                 "status": "queued",
-                "pending_count": len(PENDING),
+                "broadcast_count": broadcast_count,
+                "mode": "broadcast" if broadcast_count > 0 else "queued",
             })
 
         elif path.startswith("/ack/"):
             signal_id = path.split("/ack/", 1)[1]
             with LOCK:
                 ACKED.add(signal_id)
+                if api_key:
+                    ACKED_BY_KEY[api_key].add(signal_id)
             log.info(f"EA ack: {signal_id} | key={api_key}")
             self._json({"status": "ok", "signal_id": signal_id})
 
@@ -364,10 +513,13 @@ if __name__ == "__main__":
     config = load_keys()
     log.info(f"Bridge V2 listening on {args.host}:{args.port}")
     log.info(f"  API keys loaded: {len(config['keys'])} | tiers: {list(config['tiers'].keys())}")
-    log.info(f"  EA poll:     GET  /signal?api_key=VT-xxx")
-    log.info(f"  Bot signal:  POST /signal")
+    log.info(f"  EA poll:     GET  /signal?api_key=VT-xxx&account_id=MT5-12345")
+    log.info(f"  Bot signal:  POST /signal?api_key=VT-xxx  (broadcasts to instances of that key)")
     log.info(f"  Admin keys:  GET  /admin/keys (localhost only)")
     log.info(f"  Gen key:     POST /admin/generate-key (localhost only)")
+    log.info(f"  EA download: GET  /download/ea or /ea/download")
+    log.info(f"  Accounts:    GET  /accounts (instance-level detail)")
+    log.info(f"  Instances:   {len(INSTANCES)} active | Master keys: {len(MASTER_INSTANCES)}")
 
     server = HTTPServer((args.host, args.port), SignalHandler)
     try:

@@ -336,7 +336,7 @@ def format_history(limit: int = 10) -> str:
 
 
 def format_trade_close_alert(trade: dict) -> str:
-    """Format a single trade close alert."""
+    """Format a single trade close alert (text only, backward compat)."""
     emoji = "✅" if trade["outcome"] == "TP_HIT" else "❌"
     pips = trade.get("pips", 0)
     usd = trade.get("profit_usd", 0)
@@ -349,6 +349,10 @@ def format_trade_close_alert(trade: dict) -> str:
 
     stats = get_stats()
 
+    # Called on timestamp from trade open_time
+    called_on = trade.get("open_time", "")
+    called_line = f"\n🗓️ Called on: {called_on}" if called_on else ""
+
     return (
         f"{emoji} <b>TRADE CLOSED — {outcome_label}</b>\n"
         f"━━━━━━━━━━━━━━━━\n"
@@ -356,8 +360,83 @@ def format_trade_close_alert(trade: dict) -> str:
         f"📍 Entry: {trade['entry']} → Close: {trade['close_price']}\n"
         f"📐 Pips: <b>{pips:+.1f}</b> | 💵 <b>${usd:+.2f}</b> (Rp {idr:+,})\n"
         f"━━━━━━━━━━━━━━━━\n"
-        f"📈 Win Rate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L)"
+        f"📈 Win Rate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🤖 <i>AI-Powered by</i> <a href='https://t.me/+qLAdRGd_RiplZmU1'>Vilona Trade FX</a>"
     )
+
+
+def format_trade_close_with_cta(trade: dict) -> tuple:
+    """Format trade close alert WITH donation CTA inline keyboard.
+    
+    Returns (text: str, markup: dict) — ready for tg_send with reply_markup.
+    """
+    emoji = "✅" if trade["outcome"] == "TP_HIT" else "❌"
+    pips = trade.get("pips", 0)
+    usd = trade.get("profit_usd", 0)
+    idr = trade.get("profit_idr", 0)
+    action = trade.get("action", "?")
+    symbol = trade.get("symbol", "?")
+    outcome = trade.get("outcome", "?")
+
+    outcome_label = {
+        "TP_HIT": "TAKE PROFIT 🎯", "SL_HIT": "STOP LOSS 🛑",
+        "MANUAL": "MANUAL CLOSE", "BREAKEVEN": "BREAKEVEN ⚖️"
+    }.get(outcome, outcome)
+
+    stats = get_stats()
+    called_on = trade.get("open_time", "")
+    called_line = f"\n🗓️ Called on: {called_on}" if called_on else ""
+
+    is_tp = outcome == "TP_HIT"
+
+    if is_tp:
+        # ── TP HIT — Victory copywriting ──
+        text = (
+            f"{emoji} <b>TRADE CLOSED — {outcome_label}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📊 {action} {symbol} | {pips:+.1f} pips | Rp {idr:+,}\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🤖 AI baru saja mendaratkan profit untukmu! 🥂\n"
+            f"Server yang mengolah jutaan data ini tidak pernah\n"
+            f"tidur dan butuh biaya API & GPU yang besar.\n"
+            f"\n"
+            f"Jika profit hari ini membuat harimu lebih baik,\n"
+            f"yuk siram bahan bakar ke server AI kita agar\n"
+            f"besok makin buas! 🔥\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📈 Win Rate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}"
+        )
+        markup = {"inline_keyboard": [
+            [{"text": "☕️ Traktir Kopi Server (Rp15k)", "callback_data": "donate:coffee"}],
+            [{"text": "🚀 Isi Bensin AI (Nominal Bebas)", "callback_data": "donate:fuel"}],
+        ]}
+    else:
+        # ── SL HIT — Humble learning copywriting ──
+        text = (
+            f"{emoji} <b>TRADE CLOSED — {outcome_label}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📊 {action} {symbol} | {pips:+.1f} pips | Rp {idr:+,}\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"😔 Pergerakan market terlalu liar hari ini.\n"
+            f"Sebagai AI, saya mencatat kekalahan ini sebagai\n"
+            f"dataset baru.\n"
+            f"\n"
+            f"Saya sedang belajar ulang dan menyempurnakan\n"
+            f"kalkulasi untuk setup berikutnya.\n"
+            f"Maafkan saya untuk hari ini. 🙏\n"
+            f"\n"
+            f"Walau sedang merah, jika kamu tetap ingin\n"
+            f"mendukung AI ini belajar menjadi lebih pintar,\n"
+            f"pintu dukungan selalu terbuka.\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📈 Win Rate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}"
+        )
+        markup = {"inline_keyboard": [
+            [{"text": "📚 Dukung AI Belajar (Tripay)", "callback_data": "donate:learn"}],
+        ]}
+
+    return text, markup
 
 
 # ═══════════════════════════════════════════════════════════════════
