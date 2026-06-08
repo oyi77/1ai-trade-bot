@@ -906,21 +906,47 @@ async function fetchAll(){
     var eaCount=sd.ea_count||0;
     $('bridge-info').textContent='Online · '+eaCount+' EA'+(eaCount===1?'':'s')+' connected · '+h+'h '+m+'m uptime';
 
-    // Signal
+    // Signal — fetch from trade-log first, then bridge pending
     try{
-      var sr=await fetch(BRIDGE+'/signal/pending?api_key='+API_KEY,{signal:AbortSignal.timeout(4000)});
-      var sig=await sr.json();
+      var slr=await fetch(BRIDGE+'/api/trade-log',{signal:AbortSignal.timeout(4000)});
+      var slog=await slr.json();
+      var latestSig=slog&&slog.length?slog[slog.length-1]:null;
       var sigEl=$('sig-content');
-      if(sig&&sig.action&&sig.action!=='HOLD'&&sig.pending){
-        var isBuy=sig.action==='BUY';
-        var confidence=sig.confidence?(sig.confidence>1?Math.round(sig.confidence/100*100):Math.round(sig.confidence*100))+'%':'--';
-        var rr=sig.rr_ratio?parseFloat(sig.rr_ratio).toFixed(1):'--';
+      if(latestSig&&latestSig.action){
+        var isBuy=latestSig.action==='BUY';
+        var grade=latestSig.grade||'B';
+        var entry=latestSig.entry||0;
+        var sl=latestSig.sl||0;
+        var tp1=latestSig.tp1||0;
+        var rr=latestSig.rr||1.5;
+        var price=latestSig.price||entry;
+        var orderType='';
+        var diff=entry-price;
+        if(Math.abs(diff)>0.5){
+          if(latestSig.action==='SELL') orderType=diff>0?' SELL LIMIT':' SELL STOP';
+          else orderType=diff<0?' BUY LIMIT':' BUY STOP';
+        }
         $('sig-time').textContent=ts();
-        sigEl.innerHTML='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap"><span style="font-weight:700;color:'+(isBuy?'var(--green)':'var(--red)')+'">'+sig.action+'</span><span>'+(sig.symbol||'XAUUSD')+'</span><span>Conf: '+confidence+'</span><span>RR 1:'+rr+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(sig.entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sig.sl)+'</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(sig.tp)+'</div></div><div class="si fl"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">1:'+rr+'</div></div></div>';
+        sigEl.innerHTML='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between"><span style="font-weight:700;font-size:14px;color:'+(isBuy?'var(--green)':'var(--red)')+'">'+(isBuy?'🟢':'🔴')+' '+(latestSig.symbol||'XAUUSD')+orderType+'</span><span style="background:rgba(245,158,11,.12);padding:2px 8px;border-radius:4px;font-weight:600;font-size:10px;color:var(--gold)">Grade '+grade+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sl)+'</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(tp1)+'</div></div><div class="si fl"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">1:'+rr.toFixed(1)+'</div></div></div>';
       }else{
-        sigEl.innerHTML='<div class="sig-e"><div class="si" style="font-size:16px">🔍</div><p style="font-size:11px">AI menganalisis market — sinyal berikutnya dalam beberapa menit</p></div>';
+        throw new Error('no trade log signal');
       }
-    }catch(e){/* no signal */}
+    }catch(e){
+      // Fallback to bridge pending queue
+      try{
+        var sr=await fetch(BRIDGE+'/signal/pending?api_key='+API_KEY,{signal:AbortSignal.timeout(4000)});
+        var sig=await sr.json();
+        if(sig&&sig.action&&sig.action!=='HOLD'&&sig.pending){
+          var isBuy=sig.action==='BUY';
+          var confidence=sig.confidence?(sig.confidence>1?Math.round(sig.confidence/100*100):Math.round(sig.confidence*100))+'%':'--';
+          var rr=sig.rr_ratio?parseFloat(sig.rr_ratio).toFixed(1):'--';
+          $('sig-time').textContent=ts();
+          sigEl.innerHTML='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap"><span style="font-weight:700;color:'+(isBuy?'var(--green)':'var(--red)')+'">'+sig.action+'</span><span>'+(sig.symbol||'XAUUSD')+'</span><span>Conf: '+confidence+'</span><span>RR 1:'+rr+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(sig.entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sig.sl)+'</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(sig.tp)+'</div></div><div class="si fl"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">1:'+rr+'</div></div></div>';
+        }else{
+          sigEl.innerHTML='<div class="sig-e"><div class="si" style="font-size:16px">🔍</div><p style="font-size:11px">AI menganalisis market — sinyal berikutnya dalam beberapa menit</p></div>';
+        }
+      }catch(e2){/* no signal */}
+    }
 
     // Trade table with aggregate summary
     var tbody=$('th-body');
