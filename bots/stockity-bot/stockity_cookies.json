@@ -1,0 +1,686 @@
+[
+  {
+    "name": "locale",
+    "value": "id",
+    "domain": "stockity.com",
+    "path": "/",
+    "expires": 1815425631.806045,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_ga",
+    "value": "GA1.1.1135610074.1780865631",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1815425647.537142,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "CLID",
+    "value": "22505e3c469b44e78da1f85e672ed5dc.20260607.20270607",
+    "domain": "www.clarity.ms",
+    "path": "/",
+    "expires": 1812401631.490714,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "home_page_geo",
+    "value": "en",
+    "domain": "stockity.com",
+    "path": "/",
+    "expires": 1815425631.806149,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "userId",
+    "value": "",
+    "domain": "stockity.com",
+    "path": "/",
+    "expires": 1791233647,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "receive-cookie-deprecation",
+    "value": "1",
+    "domain": ".d.adroll.com",
+    "path": "/",
+    "expires": 1814993647.99074,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://stockity.com",
+    "_crHasCrossSiteAncestor": true
+  },
+  {
+    "name": "receive-cookie-deprecation",
+    "value": "1",
+    "domain": ".adroll.com",
+    "path": "/",
+    "expires": 1814993647.990777,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://stockity.com",
+    "_crHasCrossSiteAncestor": true
+  },
+  {
+    "name": "IDE",
+    "value": "AHWqTUkplxSy2rnjTqzyad879CdzYtxT1SqUvh1oAWKPHxTUqL4dMoY3n6KVIkuJcA8",
+    "domain": ".doubleclick.net",
+    "path": "/",
+    "expires": 1815425632.097905,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_clck",
+    "value": "re4zb3%5E2%5Eg6p%5E0%5E2349",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1812401632,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "__adroll_fpc",
+    "value": "a7d4879837e44d40b709e66bf95bb0b6-1780865632432",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1812423247,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_fbp",
+    "value": "fb.1.1780865632608.613102659151653920",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1788641647,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "__adroll",
+    "value": "0663c8944e5ef2f04fd5a6a9f61ceb02-g_1780865632-a_1780865631",
+    "domain": ".d.adroll.com",
+    "path": "/",
+    "expires": 1814993647.990664,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "__adroll_shared",
+    "value": "0663c8944e5ef2f04fd5a6a9f61ceb02-g_1780865632-a_1780865631",
+    "domain": ".adroll.com",
+    "path": "/",
+    "expires": 1814993647.990811,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "CMID",
+    "value": "aiXaYIsFVoMAC3UEAXSSOwAA",
+    "domain": ".casalemedia.com",
+    "path": "/",
+    "expires": 1812401648.032437,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "CMPS",
+    "value": "5321",
+    "domain": ".casalemedia.com",
+    "path": "/",
+    "expires": 1788641632.803375,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "CMPRO",
+    "value": "5321",
+    "domain": ".casalemedia.com",
+    "path": "/",
+    "expires": 1788641648.032591,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "pi",
+    "value": "3517532130648260743",
+    "domain": ".ml314.com",
+    "path": "/",
+    "expires": 1812401648.045305,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "KRTBCOOKIE_10",
+    "value": "22808-MDY2M2M4OTQ0ZTVlZjJmMDRmZDVhNmE5ZjYxY2ViMDI&KRTB&22883-MDY2M2M4OTQ0ZTVlZjJmMDRmZDVhNmE5ZjYxY2ViMDI&KRTB&23504-MDY2M2M4OTQ0ZTVlZjJmMDRmZDVhNmE5ZjYxY2ViMDI&KRTB&23680-MDY2M2M4OTQ0ZTVlZjJmMDRmZDVhNmE5ZjYxY2ViMDI",
+    "domain": ".pubmatic.com",
+    "path": "/",
+    "expires": 1788641648.017803,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "mako_uid",
+    "value": "19ea3dd0a04-5232000001084d5e",
+    "domain": ".eyeota.net",
+    "path": "/",
+    "expires": 1812401632.825598,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "SERVERID",
+    "value": "19806~DM",
+    "domain": ".eyeota.net",
+    "path": "/",
+    "expires": 1780866248.390575,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "tluid",
+    "value": "876602811716747059542",
+    "domain": ".3lift.com",
+    "path": "/",
+    "expires": 1788641648.019717,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "TapAd_TS",
+    "value": "1780865632766",
+    "domain": ".tapad.com",
+    "path": "/",
+    "expires": 1786049648.061398,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "TapAd_DID",
+    "value": "af5a76a6-711b-4caf-8464-b17a8b800454",
+    "domain": ".tapad.com",
+    "path": "/",
+    "expires": 1786049648.061479,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "khaos",
+    "value": "MQ49F0NY-1K-DKW1",
+    "domain": ".rubiconproject.com",
+    "path": "/",
+    "expires": 1812401648.018835,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "khaos_p",
+    "value": "MQ49F0NY-1K-DKW1",
+    "domain": ".rubiconproject.com",
+    "path": "/",
+    "expires": 1812401648.018856,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://stockity.com",
+    "_crHasCrossSiteAncestor": true
+  },
+  {
+    "name": "receive-cookie-deprecation",
+    "value": "1",
+    "domain": ".rubiconproject.com",
+    "path": "/",
+    "expires": 1788641648.018894,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://stockity.com",
+    "_crHasCrossSiteAncestor": true
+  },
+  {
+    "name": "TDID",
+    "value": "c1d405cd-26b0-44a2-a10e-808bde0a8be4",
+    "domain": ".adsrvr.org",
+    "path": "/",
+    "expires": 1812401633.059043,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "tuuid",
+    "value": "207ed031-796c-493e-b760-f5996562e0b1",
+    "domain": ".bidswitch.net",
+    "path": "/",
+    "expires": 1812401633.144098,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "c",
+    "value": "1780865632",
+    "domain": ".bidswitch.net",
+    "path": "/",
+    "expires": 1812401633.036019,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "TDCPM",
+    "value": "CAESFAoFdGFwYWQSCwjK_tWnnbiiPxAFGAUgASgCMgsIvsyw1LO4oj8QBTgB",
+    "domain": ".adsrvr.org",
+    "path": "/",
+    "expires": 1812401633.059117,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "TapAd_3WAY_SYNCS",
+    "value": "1!3812",
+    "domain": ".tapad.com",
+    "path": "/",
+    "expires": 1786049648.061514,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "tuuid_lu",
+    "value": "1780865633",
+    "domain": ".bidswitch.net",
+    "path": "/",
+    "expires": 1812401633.144165,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "did",
+    "value": "YbuPE0Jog55hibRL",
+    "domain": ".pippio.com",
+    "path": "/",
+    "expires": 1812401633.561522,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "didts",
+    "value": "1780865633",
+    "domain": ".pippio.com",
+    "path": "/",
+    "expires": 1812401633.56158,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "nnls",
+    "value": "",
+    "domain": ".pippio.com",
+    "path": "/",
+    "expires": 1786049633.561596,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "pxrc",
+    "value": "CAA=",
+    "domain": ".pippio.com",
+    "path": "/",
+    "expires": 1786049633.561609,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "MUID",
+    "value": "10E67FB910A56EDC3B2068C8119A6F3B",
+    "domain": ".bing.com",
+    "path": "/",
+    "expires": 1814561633.932454,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "MR",
+    "value": "0",
+    "domain": ".c.bing.com",
+    "path": "/",
+    "expires": 1781470433.932535,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "SRM_B",
+    "value": "10E67FB910A56EDC3B2068C8119A6F3B",
+    "domain": ".c.bing.com",
+    "path": "/",
+    "expires": 1814561633.932572,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "SM",
+    "value": "C",
+    "domain": ".c.clarity.ms",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "MUID",
+    "value": "10E67FB910A56EDC3B2068C8119A6F3B",
+    "domain": ".clarity.ms",
+    "path": "/",
+    "expires": 1814561634.018906,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "MR",
+    "value": "0",
+    "domain": ".c.clarity.ms",
+    "path": "/",
+    "expires": 1781470434.01895,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "ANONCHK",
+    "value": "0",
+    "domain": ".c.clarity.ms",
+    "path": "/",
+    "expires": 1780866234.018976,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_gcl_au",
+    "value": "1.1.1739690491.1780865631.155970545.1780865638.1780865638",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1788641631,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "device_type",
+    "value": "web",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1791233644,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "device_id",
+    "value": "296ad9db8a7c9fc31e21d4420a9ed5fa",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1791233644,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "__Secure-YNID",
+    "value": "19.YT=Ea-6YNnrw7bBkrnb8Tdu8OnZZVaXBaqux2d-edtedxFeI_K61_iHTZJl-qM2wDR9iFh-rvOzK-60_wOoq4CuREITKAfRCgeYPvhnXA9uGNteSWcQ7Wk9Ar5TwUu7rZ7xu1a5bRc7_vf_ZH4sh8gjj6RmSIMhs6MbER-iMhmX8PGhcIORHs4Z6TyrYOG3EzZCwlsTR9N3b-7ss9olGAEBDTnM2_0RSPCNLVu3jPnWb7EBuAYGdLyb3c_4-bPUoUOFJtgs3pxNbjOZkkBOC123gCd9-UYl6o3LF7uC72D4W6F387FTCL11PbLLUL7owJSszqUEZpEXxpOR26Jv9SG-nw",
+    "domain": ".youtube.com",
+    "path": "/",
+    "expires": 1796417644.193982,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://stockity.com",
+    "_crHasCrossSiteAncestor": true
+  },
+  {
+    "name": "YSC",
+    "value": "l41JnhRDxJs",
+    "domain": ".youtube.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "VISITOR_INFO1_LIVE",
+    "value": "phQhwFQ5mh8",
+    "domain": ".youtube.com",
+    "path": "/",
+    "expires": 1796417644.19409,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "VISITOR_PRIVACY_METADATA",
+    "value": "CgJJRBIEGgAgVQ%3D%3D",
+    "domain": ".youtube.com",
+    "path": "/",
+    "expires": 1796417644.194103,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "__Secure-ROLLOUT_TOKEN",
+    "value": "CPKmq7HE8bS3ZBCe2fHAgfaUAxie2fHAgfaUAw%3D%3D",
+    "domain": ".youtube.com",
+    "path": "/",
+    "expires": 1796417644.194117,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://stockity.com",
+    "_crHasCrossSiteAncestor": true
+  },
+  {
+    "name": "user_timezone",
+    "value": "Asia%2FJakarta",
+    "domain": "stockity.com",
+    "path": "/",
+    "expires": 1791233645,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "user_language",
+    "value": "id",
+    "domain": "stockity.com",
+    "path": "/",
+    "expires": 1791233647,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_ga_3Q4T3038T3",
+    "value": "GS2.1.s1780865631$o1$g1$t1780865647$j44$l0$h0",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1815425647.68278,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "g_state",
+    "value": "{\"i_l\":0,\"i_ll\":1780865647851,\"i_b\":\"Vnu+5YFabDmkSWQJp50Quoy+3NCbH7xx4KdqnRcDPOs\",\"i_e\":{\"enable_itp_optimization\":0},\"i_et\":1780865632458}",
+    "domain": "stockity.com",
+    "path": "/",
+    "expires": 1796417647,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "__ar_v4",
+    "value": "Y422IZENHBAW7PQYHX2ZB4%3A20260607%3A2%7C7OP3HZOQBNGI5FYGCUY6IH%3A20260607%3A2%7CA6U4IXGNPJAAPCREM363J7%3A20260607%3A2",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1812401647,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "PugT",
+    "value": "1780865647",
+    "domain": ".pubmatic.com",
+    "path": "/",
+    "expires": 1783457648.017881,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "audit_p",
+    "value": "1|mW8gxJ5rf12G7kSCi4NuqXLiixO6WuR+/OUT3pl3jDrXEw/9XWpP2PySZCMlCh6/gm0yG71/IPQwHTRO1/p4iGlty70eE65yR164mUDQhphJnKuoXdYGNqr+bFt5Y20jSlqauIJlk06+gMkNT2STN2B8ed06xbQFZwyKiYGCMoP2vE7O2nUq0r0BfMI+7AFEhEtZT8gQU1NA19Uy18rCHHyAeYcmRhQqDMxk72OwxoKma+WVcS1g3g==",
+    "domain": ".rubiconproject.com",
+    "path": "/",
+    "expires": 1812401648.018778,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None",
+    "partitionKey": "https://stockity.com",
+    "_crHasCrossSiteAncestor": true
+  },
+  {
+    "name": "audit",
+    "value": "1|mW8gxJ5rf12G7kSCi4NuqXLiixO6WuR+/OUT3pl3jDrXEw/9XWpP2PySZCMlCh6/gm0yG71/IPQwHTRO1/p4iGlty70eE65yR164mUDQhphJnKuoXdYGNqr+bFt5Y20jSlqauIJlk06+gMkNT2STN2B8ed06xbQFZwyKiYGCMoP2vE7O2nUq0r0BfMI+7AFEhEtZT8gQU1NA19Uy18rCHHyAeYcmRhQqDMxk72OwxoKma+WVcS1g3g==",
+    "domain": ".rubiconproject.com",
+    "path": "/",
+    "expires": 1812401648.018875,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "u",
+    "value": "aHR0cHM6Ly9zdG9ja2l0eS5jb20v",
+    "domain": ".ml314.com",
+    "path": "/",
+    "expires": 1780865663.04525,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "uid",
+    "value": "8438521024774342140",
+    "domain": ".turn.com",
+    "path": "/",
+    "expires": 1796417649.187427,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "rlas3",
+    "value": "SW+UbT7i1FhtoEeF0UXvo2pxHgATQxawY3TCHmLZOwU=",
+    "domain": ".rlcdn.com",
+    "path": "/",
+    "expires": 1812401648.553315,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "pxrc",
+    "value": "COG0l9EGEgUI6AcQABIFCOhHEAASBgi46wEQDw==",
+    "domain": ".rlcdn.com",
+    "path": "/",
+    "expires": 1786049648.553384,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "i",
+    "value": "8408ef75-dea6-4372-8d5f-016485f7813d|1780865648",
+    "domain": ".openx.net",
+    "path": "/",
+    "expires": 1812401648.302751,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "demdex",
+    "value": "60336796201376340270972827695828141423",
+    "domain": ".demdex.net",
+    "path": "/",
+    "expires": 1796417648.359037,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "dpm",
+    "value": "60336796201376340270972827695828141423",
+    "domain": ".dpm.demdex.net",
+    "path": "/",
+    "expires": 1796417648.359115,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_clsk",
+    "value": "12erse1%5E1780865648410%5E2%5E1%5El.clarity.ms%2Fcollect",
+    "domain": ".stockity.com",
+    "path": "/",
+    "expires": 1780952048,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]

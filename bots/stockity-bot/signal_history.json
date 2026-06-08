@@ -1,0 +1,762 @@
+[
+  {
+    "ts": "19:28 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 63,
+    "price": 63.91,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI30\u2193; midLo"
+  },
+  {
+    "ts": "19:33 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 70,
+    "price": 61375.02,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; midLo"
+  },
+  {
+    "ts": "19:38 UTC",
+    "sym": "ETH-USD",
+    "action": "CALL",
+    "conf": 75,
+    "price": 1610.06,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX; RSI65\u2191; midHi"
+  },
+  {
+    "ts": "19:38 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 68,
+    "price": 1.1251,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX"
+  },
+  {
+    "ts": "19:43 UTC",
+    "sym": "XRP-USD",
+    "action": "PUT",
+    "conf": 75,
+    "price": 1.1229,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI28\u2193; midLo"
+  },
+  {
+    "ts": "19:58 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 75,
+    "price": 61278.85,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI22\u2193; midLo"
+  },
+  {
+    "ts": "20:03 UTC",
+    "sym": "SOL-USD",
+    "action": "CALL",
+    "conf": 70,
+    "price": 63.98,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX; midHi"
+  },
+  {
+    "ts": "20:27 UTC",
+    "sym": "BTC-USD",
+    "action": "CALL",
+    "conf": 63,
+    "price": 61789.19,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI66\u2191; midHi"
+  },
+  {
+    "ts": "20:29 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 64,
+    "price": 1.1334,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI21 OS"
+  },
+  {
+    "ts": "20:36 UTC",
+    "sym": "ETH-USD",
+    "action": "PUT",
+    "conf": 63,
+    "price": 1624.22,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; rangeBot"
+  },
+  {
+    "ts": "20:36 UTC",
+    "sym": "XRP-USD",
+    "action": "PUT",
+    "conf": 62,
+    "price": 1.1318,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI16 OS; midLo"
+  },
+  {
+    "ts": "20:41 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 69,
+    "price": 61729.99,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI27\u2193; pinTop; midLo"
+  },
+  {
+    "ts": "20:41 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 63,
+    "price": 64.45,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI29\u2193; midLo"
+  },
+  {
+    "ts": "20:46 UTC",
+    "sym": "ETH-USD",
+    "action": "CALL",
+    "conf": 70,
+    "price": 1624.74,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX; midHi"
+  },
+  {
+    "ts": "20:56 UTC",
+    "sym": "XRP-USD",
+    "action": "PUT",
+    "conf": 81,
+    "price": 1.1317,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI26\u2193; pinTop; midLo"
+  },
+  {
+    "ts": "21:16 UTC",
+    "sym": "EURUSD=X",
+    "action": "CALL",
+    "conf": 64,
+    "price": 1.152738,
+    "expiry": "1m",
+    "source": "forex",
+    "reason": "EMA5\u2191EMA10; RSI0 OS"
+  },
+  {
+    "ts": "21:16 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 64,
+    "price": 1.1316,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; pinBot; midHi"
+  },
+  {
+    "ts": "21:16 UTC",
+    "sym": "BTC-USD",
+    "action": "CALL",
+    "conf": 63,
+    "price": 61918.01,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI76\u2191; midHi"
+  },
+  {
+    "ts": "21:16 UTC",
+    "sym": "ETH-USD",
+    "action": "CALL",
+    "conf": 63,
+    "price": 1629.68,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI75\u2191; midHi"
+  },
+  {
+    "ts": "21:16 UTC",
+    "sym": "SOL-USD",
+    "action": "CALL",
+    "conf": 63,
+    "price": 64.75,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI67\u2191; midHi"
+  },
+  {
+    "ts": "21:18 UTC",
+    "sym": "EURUSD=X",
+    "action": "CALL",
+    "conf": 64,
+    "price": 1.152738,
+    "expiry": "1m",
+    "source": "forex",
+    "reason": "EMA5\u2191EMA10; RSI0 OS"
+  },
+  {
+    "ts": "21:23 UTC",
+    "sym": "ETH-USD",
+    "action": "CALL",
+    "conf": 68,
+    "price": 1629.44,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX"
+  },
+  {
+    "ts": "21:23 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 63,
+    "price": 61793.84,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI30\u2193; midLo"
+  },
+  {
+    "ts": "21:28 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 64,
+    "price": 64.65,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; pinTop; midLo"
+  },
+  {
+    "ts": "21:38 UTC",
+    "sym": "BTC-USD",
+    "action": "CALL",
+    "conf": 70,
+    "price": 61824.0,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX; midHi"
+  },
+  {
+    "ts": "21:38 UTC",
+    "sym": "XRP-USD",
+    "action": "PUT",
+    "conf": 63,
+    "price": 1.1276,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI23\u2193; midLo"
+  },
+  {
+    "ts": "21:53 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 84,
+    "price": 1.1269,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX; RSI15 OS; pinBot; midHi"
+  },
+  {
+    "ts": "22:28 UTC",
+    "sym": "ETH-USD",
+    "action": "PUT",
+    "conf": 75,
+    "price": 1674.38,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI30\u2193; midLo"
+  },
+  {
+    "ts": "22:28 UTC",
+    "sym": "GC=F",
+    "action": "CALL",
+    "conf": 66,
+    "price": 4353.0,
+    "expiry": "1m",
+    "source": "yahoo",
+    "reason": "EMA5\u2191EMA10; bullX; RSI82 OB; pinBot"
+  },
+  {
+    "ts": "22:48 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 76,
+    "price": 66.29,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; pinTop; midLo"
+  },
+  {
+    "ts": "22:53 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 75,
+    "price": 63112.27,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI23\u2193; midLo"
+  },
+  {
+    "ts": "23:28 UTC",
+    "sym": "EURUSD=X",
+    "action": "CALL",
+    "conf": 69,
+    "price": 1.152206,
+    "expiry": "1m",
+    "source": "forex",
+    "reason": "EMA5\u2191EMA10; RSI0 OS; rangeBot"
+  },
+  {
+    "ts": "03:40 UTC",
+    "sym": "GC=F",
+    "action": "PUT",
+    "conf": 81,
+    "price": 4331.5,
+    "expiry": "1m",
+    "source": "yahoo",
+    "reason": "EMA5\u2193EMA10; bearX; RSI25\u2193; pinTop; midLo"
+  },
+  {
+    "ts": "04:35 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 81,
+    "price": 62826.84,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI23\u2193; pinTop; midLo"
+  },
+  {
+    "ts": "06:45 UTC",
+    "sym": "EURUSD=X",
+    "action": "CALL",
+    "conf": 78,
+    "price": 1.152206,
+    "expiry": "1m",
+    "source": "forex",
+    "reason": "EMA5\u2191EMA10; bullX; RSI5 OS; midHi"
+  },
+  {
+    "ts": "10:14 UTC",
+    "sym": "ETH-USD",
+    "action": "PUT",
+    "conf": 70,
+    "price": 1669.92,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; midLo"
+  },
+  {
+    "ts": "10:14 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 63,
+    "price": 63406.0,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI33\u2193; midLo"
+  },
+  {
+    "ts": "10:14 UTC",
+    "sym": "XRP-USD",
+    "action": "PUT",
+    "conf": 62,
+    "price": 1.1495,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI17 OS; midLo"
+  },
+  {
+    "ts": "10:37 UTC",
+    "sym": "GC=F",
+    "action": "CALL",
+    "conf": 76,
+    "price": 4317.5,
+    "expiry": "1m",
+    "source": "yahoo",
+    "reason": "EMA5\u2191EMA10; bullX; pinBot; midHi"
+  },
+  {
+    "ts": "10:42 UTC",
+    "sym": "EURUSD=X",
+    "action": "CALL",
+    "conf": 66,
+    "price": 1.152605,
+    "expiry": "1m",
+    "source": "forex",
+    "reason": "EMA5\u2191EMA10; RSI3 OS; midHi"
+  },
+  {
+    "ts": "10:42 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 64,
+    "price": 1.1476,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI18 OS"
+  },
+  {
+    "ts": "10:42 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 62,
+    "price": 63193.99,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI19 OS; midLo"
+  },
+  {
+    "ts": "10:42 UTC",
+    "sym": "ETH-USD",
+    "action": "CALL",
+    "conf": 62,
+    "price": 1670.64,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; pinBot"
+  },
+  {
+    "ts": "10:47 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 75,
+    "price": 63145.19,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI33\u2193; midLo"
+  },
+  {
+    "ts": "10:47 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 70,
+    "price": 66.13,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; midLo"
+  },
+  {
+    "ts": "10:57 UTC",
+    "sym": "ETH-USD",
+    "action": "PUT",
+    "conf": 70,
+    "price": 1671.08,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; midLo"
+  },
+  {
+    "ts": "11:03 UTC",
+    "sym": "EURUSD=X",
+    "action": "CALL",
+    "conf": 76,
+    "price": 1.152871,
+    "expiry": "1m",
+    "source": "forex",
+    "reason": "EMA5\u2191EMA10; bullX; RSI3 OS"
+  },
+  {
+    "ts": "11:32 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 62,
+    "price": 1.1604,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI7 OS; midLo"
+  },
+  {
+    "ts": "11:32 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 62,
+    "price": 1.1605,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI7 OS; midLo"
+  },
+  {
+    "ts": "11:33 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 62,
+    "price": 1.1603,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI7 OS; midLo"
+  },
+  {
+    "ts": "11:33 UTC",
+    "sym": "ETH-USD",
+    "action": "PUT",
+    "conf": 75,
+    "price": 1688.0,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI24\u2193; midLo"
+  },
+  {
+    "ts": "11:33 UTC",
+    "sym": "GC=F",
+    "action": "CALL",
+    "conf": 63,
+    "price": 4348.399902,
+    "expiry": "1m",
+    "source": "yahoo",
+    "reason": "EMA5\u2191EMA10; RSI66\u2191; midHi"
+  },
+  {
+    "ts": "11:33 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 62,
+    "price": 1.1603,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI7 OS; midLo"
+  },
+  {
+    "ts": "11:38 UTC",
+    "sym": "BTC-USD",
+    "action": "CALL",
+    "conf": 63,
+    "price": 63814.0,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; RSI70\u2191; midHi"
+  },
+  {
+    "ts": "11:48 UTC",
+    "sym": "CRYPTO_IDX",
+    "action": "CALL",
+    "conf": 66,
+    "price": 641.867411,
+    "expiry": "1m",
+    "source": "stockity",
+    "reason": "EMA5\u2191EMA10; RSI0 OS; midHi"
+  },
+  {
+    "ts": "11:48 UTC",
+    "sym": "BTC_IDX",
+    "action": "CALL",
+    "conf": 66,
+    "price": 641.867411,
+    "expiry": "1m",
+    "source": "stockity",
+    "reason": "EMA5\u2191EMA10; RSI0 OS; midHi"
+  },
+  {
+    "ts": "11:48 UTC",
+    "sym": "ETH_IDX",
+    "action": "CALL",
+    "conf": 66,
+    "price": 641.867411,
+    "expiry": "1m",
+    "source": "stockity",
+    "reason": "EMA5\u2191EMA10; RSI0 OS; midHi"
+  },
+  {
+    "ts": "11:48 UTC",
+    "sym": "GOLD_IDX",
+    "action": "CALL",
+    "conf": 66,
+    "price": 641.867411,
+    "expiry": "1m",
+    "source": "stockity",
+    "reason": "EMA5\u2191EMA10; RSI0 OS; midHi"
+  },
+  {
+    "ts": "11:53 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 62,
+    "price": 66.78,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI79 OB; midHi"
+  },
+  {
+    "ts": "11:58 UTC",
+    "sym": "XRP-USD",
+    "action": "PUT",
+    "conf": 69,
+    "price": 1.1576,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI33\u2193; pinTop; midLo"
+  },
+  {
+    "ts": "11:58 UTC",
+    "sym": "EURUSD=X",
+    "action": "CALL",
+    "conf": 66,
+    "price": 1.154068,
+    "expiry": "1m",
+    "source": "forex",
+    "reason": "EMA5\u2191EMA10; RSI5 OS; midHi"
+  },
+  {
+    "ts": "12:03 UTC",
+    "sym": "BTC-USD",
+    "action": "PUT",
+    "conf": 68,
+    "price": 63109.74,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI23\u2193; rangeBot"
+  },
+  {
+    "ts": "12:03 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 68,
+    "price": 66.42,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI26\u2193; rangeBot"
+  },
+  {
+    "ts": "12:34 UTC",
+    "sym": "GC=F",
+    "action": "CALL",
+    "conf": 75,
+    "price": 4351.899902,
+    "expiry": "1m",
+    "source": "yahoo",
+    "reason": "EMA5\u2191EMA10; bullX; RSI77\u2191; midHi"
+  },
+  {
+    "ts": "12:44 UTC",
+    "sym": "EURUSD=X",
+    "action": "CALL",
+    "conf": 71,
+    "price": 1.154601,
+    "expiry": "1m",
+    "source": "forex",
+    "reason": "EMA5\u2191EMA10; bullX; RSI7 OS; rangeTop"
+  },
+  {
+    "ts": "13:39 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 76,
+    "price": 1.1621,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX; pinBot; midHi"
+  },
+  {
+    "ts": "13:42 UTC",
+    "sym": "ETH-USD",
+    "action": "PUT",
+    "conf": 63,
+    "price": 1685.22,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI31\u2193; midLo"
+  },
+  {
+    "ts": "13:42 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 63,
+    "price": 66.69,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; RSI32\u2193; midLo"
+  },
+  {
+    "ts": "13:47 UTC",
+    "sym": "BTC-USD",
+    "action": "CALL",
+    "conf": 68,
+    "price": 63589.47,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX"
+  },
+  {
+    "ts": "13:47 UTC",
+    "sym": "XRP-USD",
+    "action": "CALL",
+    "conf": 68,
+    "price": 1.1604,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX"
+  },
+  {
+    "ts": "13:47 UTC",
+    "sym": "CRYPTO_IDX",
+    "action": "CALL",
+    "conf": 64,
+    "price": 641.867406,
+    "expiry": "1m",
+    "source": "stockity",
+    "reason": "EMA5\u2191EMA10; RSI0 OS"
+  },
+  {
+    "ts": "13:47 UTC",
+    "sym": "BTC_IDX",
+    "action": "CALL",
+    "conf": 64,
+    "price": 641.867406,
+    "expiry": "1m",
+    "source": "stockity",
+    "reason": "EMA5\u2191EMA10; RSI0 OS"
+  },
+  {
+    "ts": "13:47 UTC",
+    "sym": "ETH_IDX",
+    "action": "CALL",
+    "conf": 64,
+    "price": 641.867406,
+    "expiry": "1m",
+    "source": "stockity",
+    "reason": "EMA5\u2191EMA10; RSI0 OS"
+  },
+  {
+    "ts": "13:47 UTC",
+    "sym": "GOLD_IDX",
+    "action": "CALL",
+    "conf": 64,
+    "price": 641.867406,
+    "expiry": "1m",
+    "source": "stockity",
+    "reason": "EMA5\u2191EMA10; RSI0 OS"
+  },
+  {
+    "ts": "13:52 UTC",
+    "sym": "ETH-USD",
+    "action": "CALL",
+    "conf": 70,
+    "price": 1686.26,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2191EMA10; bullX; midHi"
+  },
+  {
+    "ts": "14:03 UTC",
+    "sym": "SOL-USD",
+    "action": "PUT",
+    "conf": 68,
+    "price": 66.67,
+    "expiry": "1m",
+    "source": "binance",
+    "reason": "EMA5\u2193EMA10; bearX; RSI32\u2193; rangeBot"
+  }
+]

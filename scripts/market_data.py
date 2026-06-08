@@ -7,9 +7,16 @@ Authoritative for: XAUUSD (GC=F), BTCUSD (BTC-USD), USOIL (CL=F), DXY (DX-Y.NYB)
 
 import time
 import threading
+import json
+import urllib.request
+import ssl
+import logging
 from datetime import datetime, timezone, timedelta
 
 import yfinance as yf
+
+# ── Suppress yfinance internal warnings (e.g. "$BT: possibly delisted") ──
+logging.getLogger('yfinance').setLevel(logging.CRITICAL)
 
 
 class Quote:
@@ -49,9 +56,9 @@ class UnifiedMarketData:
 
     SYMBOL_MAP = {
         # Forex
-        "gold": "GC=F",
-        "xauusd": "GC=F",
-        "gld": "GC=F",
+        "gold": "XAUUSD_SPOT",       # ← use spot XAUUSD, not GC=F futures
+        "xauusd": "XAUUSD_SPOT",
+        "gld": "XAUUSD_SPOT",
         "eurusd": "EURUSD=X",
         "gbpusd": "GBPUSD=X",
         "usdjpy": "JPY=X",
@@ -105,6 +112,34 @@ class UnifiedMarketData:
         self._lock = threading.Lock()
         self._quote_ttl = 15   # seconds
         self._ohlcv_ttl = 60   # seconds
+
+    # ── XAUUSD Spot ──────────────────────────────────────────────────
+
+    _xauusd_spot_cache: tuple[float, float] | None = None  # (timestamp, price)
+
+    def _fetch_xauusd_spot(self) -> float | None:
+        """Fetch XAU/USD spot price from free currency API (no key needed)."""
+        now = time.time()
+        if self._xauusd_spot_cache and (now - self._xauusd_spot_cache[0]) < 30:
+            return self._xauusd_spot_cache[1]
+
+        try:
+            url = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/xau.json"
+            req = urllib.request.Request(url, headers={"User-Agent": "VilonaTFX/1.0"})
+            ctx = ssl.create_default_context()
+            resp = urllib.request.urlopen(req, timeout=5, context=ctx)
+            data = json.loads(resp.read())
+            usd_rate = data.get("xau", {}).get("usd", 0)
+            if usd_rate and usd_rate > 100:
+                self._xauusd_spot_cache = (now, float(usd_rate))
+                return float(usd_rate)
+        except Exception as e:
+            pass
+
+        # Return stale if available
+        if self._xauusd_spot_cache:
+            return self._xauusd_spot_cache[1]
+        return None
 
     # ── helpers ──────────────────────────────────────────────────────
 
@@ -162,6 +197,20 @@ class UnifiedMarketData:
 
     def _fetch_quote(self, yahoo_symbol: str) -> Quote | None:
         """Raw network fetch for a single quote."""
+        # ── XAUUSD Spot: use free currency API instead of Yahoo ──
+        if yahoo_symbol == "XAUUSD_SPOT":
+            spot_price = self._fetch_xauusd_spot()
+            if spot_price:
+                return Quote(
+                    symbol="XAUUSD_SPOT",
+                    price=round(spot_price, 2),
+                    bid=round(spot_price, 2),
+                    ask=round(spot_price, 2),
+                    change_pct=0,
+                )
+            # Fallback to GC=F if spot API fails
+            yahoo_symbol = "GC=F"
+
         try:
             tk = self._fetch_ticker(yahoo_symbol)
             if tk is None:

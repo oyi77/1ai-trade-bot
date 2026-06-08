@@ -277,8 +277,16 @@ def detect_sweep(
                         candle_rejection=c < asian_range.high,
                     )
 
-    # Pick the most recent sweep
-    sweep = sweep_low or sweep_high
+    # Pick the most recent sweep (or the higher quality one if both exist)
+    if sweep_low and sweep_high:
+        # Use the sweep with higher quality/depth or most recent
+        # Depth prioritization: deeper sweep = more significant manipulation
+        if sweep_high.depth_pips > sweep_low.depth_pips:
+            sweep = sweep_high
+        else:
+            sweep = sweep_low
+    else:
+        sweep = sweep_low or sweep_high
     if not sweep:
         return SweepSignal()
 

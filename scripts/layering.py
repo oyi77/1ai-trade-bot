@@ -48,22 +48,38 @@ def generate_layers(action, entry, sl, tp, symbol="XAUUSD",
         # Default TP: semakin jauh entry, semakin lebar TP
         tp_pips = [(i + 1) * layer_spacing_pips * 2 for i in range(layer_count)]
 
+    # ── Symbol-aware pip size ──
+    sym = symbol.upper()
+    if sym in ("XAUUSD", "GOLD"):
+        pip_value = 0.1
+    elif sym in ("BTCUSD", "BTC"):
+        pip_value = 1.0
+    elif sym.endswith("JPY"):
+        pip_value = 0.01
+    elif sym in ("USOIL", "OIL", "CL"):
+        pip_value = 0.01
+    elif sym.startswith(("BBCA", "BBRI", "TLKM", "ASII", "IHSG")):
+        pip_value = 1.0
+    else:
+        pip_value = 0.0001  # standard forex
+
     layers = []
     is_buy = action.upper() == "BUY"
 
     for i in range(layer_count):
         # Entry: semakin jauh dari harga utama
+        offset = i * layer_spacing_pips * pip_value
         if is_buy:
-            layer_entry = entry + (i * layer_spacing_pips * 0.1)  # convert pips to price
+            layer_entry = entry + offset
         else:
-            layer_entry = entry - (i * layer_spacing_pips * 0.1)
+            layer_entry = entry - offset
 
         # TP: berdasarkan tp_pips dari entry layer
         layer_tp_pips = tp_pips[i] if i < len(tp_pips) else tp_pips[-1]
         if is_buy:
-            layer_tp = layer_entry + (layer_tp_pips * 0.1)
+            layer_tp = layer_entry + (layer_tp_pips * pip_value)
         else:
-            layer_tp = layer_entry - (layer_tp_pips * 0.1)
+            layer_tp = layer_entry - (layer_tp_pips * pip_value)
 
         risk = risk_split[i] if i < len(risk_split) else risk_split[-1]
 

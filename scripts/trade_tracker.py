@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 WIB = timezone(timedelta(hours=7))
 DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
 
-# USD → IDR rate (update periodically)
-USD_IDR = 16250
+# USD → IDR rate (update periodically — last: Jun 2026)
+USD_IDR = 16350
 
 
 def _load() -> dict:
@@ -43,6 +43,7 @@ def _pip_value(symbol: str) -> float:
     s = symbol.upper()
     if s in ("XAUUSD", "GOLD"): return 1.0    # $1 per 0.1 pip = $10 per pip for 1 lot
     if s in ("BTCUSD", "BTC"): return 1.0
+    if s in ("ETHUSD", "ETH"): return 0.01     # $0.01 per 0.01 pip = $1 per pip
     if s.endswith("JPY"): return 9.0
     return 10.0  # standard forex
 
@@ -51,6 +52,7 @@ def _pip_size(symbol: str) -> float:
     s = symbol.upper()
     if s in ("XAUUSD", "GOLD"): return 0.1
     if s in ("BTCUSD", "BTC"): return 1.0
+    if s in ("ETHUSD", "ETH"): return 0.01
     if s.endswith("JPY"): return 0.01
     if s in ("USOIL", "OIL", "CL"): return 0.01
     return 0.0001
@@ -58,7 +60,7 @@ def _pip_size(symbol: str) -> float:
 
 def _to_pips(price_diff: float, symbol: str) -> float:
     ps = _pip_size(symbol)
-    return abs(price_diff) / ps if ps > 0 else 0.0
+    return price_diff / ps if ps > 0 else 0.0
 
 
 def open_trade(signal: dict, entry_price: float, symbol: str = "XAUUSD",
@@ -68,6 +70,18 @@ def open_trade(signal: dict, entry_price: float, symbol: str = "XAUUSD",
     Returns trade_id or None.
     """
     if not signal or signal.get("action") not in ("BUY", "SELL"):
+        return None
+
+    # ── Price sanity: reject entries >10% off typical range for the symbol ──
+    entry_price = float(entry_price) if entry_price else 0
+    if symbol.upper() in ("XAUUSD", "GOLD") and (entry_price < 2000 or entry_price > 6000):
+        logger.warning(f"open_trade REJECTED [{symbol}]: entry={entry_price} outside valid range (2000-6000)")
+        return None
+    if symbol.upper() in ("BTCUSD", "BTC") and (entry_price < 10000 or entry_price > 200000):
+        logger.warning(f"open_trade REJECTED [{symbol}]: entry={entry_price} outside valid range")
+        return None
+    if symbol.upper() in ("ETHUSD", "ETH") and (entry_price < 500 or entry_price > 10000):
+        logger.warning(f"open_trade REJECTED [{symbol}]: entry={entry_price} outside valid range")
         return None
 
     data = _load()
@@ -170,7 +184,8 @@ def check_outcomes(current_prices: dict[str, float] | None = None) -> list[dict]
 
         is_win = hit == "TP_HIT"
         pip_val = _pip_value(symbol)
-        profit_loss = pip_diff * pip_val if is_win else -pip_diff * pip_val
+        # pip_diff is now signed: positive=profit, negative=loss
+        profit_loss = pip_diff * pip_val
 
         trade["outcome"] = hit
         trade["close_time"] = datetime.now(WIB).isoformat()
@@ -182,18 +197,19 @@ def check_outcomes(current_prices: dict[str, float] | None = None) -> list[dict]
         # Update stats
         s = data["stats"]
         s["total"] += 1
-        s["total_pips"] += pip_diff if is_win else -pip_diff
+        s["total_pips"] += pip_diff  # signed: wins add, losses subtract
 
         if is_win:
             s["wins"] += 1
-            s["total_profit_usd"] += abs(profit_loss)
+            s["total_profit_usd"] += profit_loss
             if pip_diff > s["best_win_pips"]:
                 s["best_win_pips"] = round(pip_diff, 1)
         else:
             s["losses"] += 1
-            s["total_profit_usd"] -= abs(profit_loss)
-            if pip_diff > s["worst_loss_pips"]:
-                s["worst_loss_pips"] = round(pip_diff, 1)
+            s["total_profit_usd"] += profit_loss  # profit_loss already negative
+            loss_pips = abs(pip_diff)
+            if loss_pips > s["worst_loss_pips"]:
+                s["worst_loss_pips"] = round(loss_pips, 1)
 
         closed.append(trade)
         emoji = "✅" if is_win else "❌"
@@ -220,7 +236,8 @@ def close_trade_manually(trade_id: str, close_price: float, symbol: str = "XAUUS
 
             is_win = pip_diff > 0
             pip_val = _pip_value(symbol)
-            profit_loss = pip_diff * pip_val if is_win else -pip_diff * pip_val
+            # pip_diff is now signed: positive=profit, negative=loss
+            profit_loss = pip_diff * pip_val
 
             trade["outcome"] = "MANUAL"
             trade["close_time"] = datetime.now(WIB).isoformat()
@@ -231,13 +248,13 @@ def close_trade_manually(trade_id: str, close_price: float, symbol: str = "XAUUS
 
             s = data["stats"]
             s["total"] += 1
-            s["total_pips"] += pip_diff if is_win else -pip_diff
+            s["total_pips"] += pip_diff  # signed
             if is_win:
                 s["wins"] += 1
-                s["total_profit_usd"] += abs(profit_loss)
+                s["total_profit_usd"] += profit_loss
             else:
                 s["losses"] += 1
-                s["total_profit_usd"] -= abs(profit_loss)
+                s["total_profit_usd"] += profit_loss  # profit_loss already negative
 
             _save(data)
             return trade
@@ -336,11 +353,15 @@ def format_history(limit: int = 10) -> str:
 
 
 def format_trade_close_alert(trade: dict) -> str:
-    """Format a single trade close alert (text only, backward compat)."""
+    """Format a single trade close alert — clean, GMFX-style."""
     emoji = "✅" if trade["outcome"] == "TP_HIT" else "❌"
     pips = trade.get("pips", 0)
     usd = trade.get("profit_usd", 0)
     idr = trade.get("profit_idr", 0)
+    action = trade.get("action", "?")
+    symbol = trade.get("symbol", "?")
+    entry = trade.get("entry", 0)
+    close_p = trade.get("close_price", 0)
 
     outcome_label = {
         "TP_HIT": "TAKE PROFIT 🎯", "SL_HIT": "STOP LOSS 🛑",
@@ -348,21 +369,30 @@ def format_trade_close_alert(trade: dict) -> str:
     }.get(trade["outcome"], trade["outcome"])
 
     stats = get_stats()
+    wr = stats.get("win_rate", 0)
+    wins = stats.get("wins", 0)
+    losses = stats.get("losses", 0)
+    total = stats.get("total", 0)
 
-    # Called on timestamp from trade open_time
+    # Format timestamp cleanly
     called_on = trade.get("open_time", "")
-    called_line = f"\n🗓️ Called on: {called_on}" if called_on else ""
+    if called_on:
+        try:
+            dt = datetime.fromisoformat(called_on.replace("Z", "+00:00"))
+            called_on = dt.strftime("%d/%m %H:%M WIB")
+        except Exception:
+            pass
+    called_line = f" | 🕐 {called_on}" if called_on else ""
 
     return (
         f"{emoji} <b>TRADE CLOSED — {outcome_label}</b>\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"📊 {trade['action']} {trade['symbol']}\n"
-        f"📍 Entry: {trade['entry']} → Close: {trade['close_price']}\n"
-        f"📐 Pips: <b>{pips:+.1f}</b> | 💵 <b>${usd:+.2f}</b> (Rp {idr:+,})\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"📈 Win Rate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"🤖 <i>AI-Powered by</i> <a href='https://t.me/+qLAdRGd_RiplZmU1'>Vilona Trade FX</a>"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 {action} {symbol} | Entry: {entry} → Close: {close_p}\n"
+        f"📐 Pips: <b>{pips:+.1f}</b> | P&L: <b>${usd:+.2f}</b> (Rp {idr:+,})\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📈 Winrate: {wr:.1f}% ({wins}W/{losses}L — {total} sinyal){called_line}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot"
     )
 
 

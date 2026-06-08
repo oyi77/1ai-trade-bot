@@ -217,24 +217,39 @@
         "ai_consensus",
         "killzone_filter"
       ]
+    },
+    "VT-MASTER-734AD731F5FB": {
+      "active": true,
+      "tier": "elite",
+      "label": "Master Key - Bro",
+      "created": "2026-06-08T10:15:04.873031",
+      "rate_limit": 0
     }
   },
   "default_tier": "starter",
   "tiers": {
     "starter": {
-      "max_layers": 1,
-      "min_confidence": 0.6,
-      "signal_cooldown_minutes": 15
+      "max_layers": 0,
+      "features": [
+        "signal_poll"
+      ]
     },
     "pro": {
       "max_layers": 3,
-      "min_confidence": 0.55,
-      "signal_cooldown_minutes": 5
+      "features": [
+        "signal_poll",
+        "layering",
+        "auto_trade"
+      ]
     },
     "elite": {
       "max_layers": 5,
-      "min_confidence": 0.5,
-      "signal_cooldown_minutes": 2
+      "features": [
+        "signal_poll",
+        "layering",
+        "auto_trade",
+        "priority"
+      ]
     }
   }
 }

@@ -1,0 +1,240 @@
+{
+  "_description": "VilonaTradeFX API Key Database \u2014 manage via admin endpoint",
+  "_created": "2026-06-05",
+  "keys": {
+    "VT-FREE-DEMO": {
+      "tier": "starter",
+      "label": "Demo Key (Starter)",
+      "rate_limit": 0,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": true,
+      "features": [
+        "layering",
+        "multi_pair",
+        "ai_consensus",
+        "killzone_filter"
+      ]
+    },
+    "VT-ELITE-INTERNAL": {
+      "tier": "elite",
+      "label": "Internal Elite Key",
+      "rate_limit": 0,
+      "rate_window_seconds": 86400,
+      "expires": "2027-06-05",
+      "active": true,
+      "features": [
+        "layering",
+        "multi_pair",
+        "ai_consensus",
+        "killzone_filter",
+        "priority_signal",
+        "news_filter",
+        "trailing_stop",
+        "custom_risk"
+      ]
+    },
+    "VT-PRO-Y61BSHXG": {
+      "tier": "pro",
+      "label": "Test Customer",
+      "rate_limit": 50,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:37:12"
+    },
+    "VT-PRO-NVHJFDMF": {
+      "tier": "pro",
+      "label": "TestBot",
+      "rate_limit": 50,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:37:51"
+    },
+    "VT-PRO-PWNTVZJG": {
+      "tier": "pro",
+      "label": "Pro - unknown",
+      "rate_limit": 50,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:44:17"
+    },
+    "VT-ELITE-XPXF0N87": {
+      "tier": "elite",
+      "label": "Elite - unknown",
+      "rate_limit": 200,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:44:25"
+    },
+    "VT-PRO-92MCX300": {
+      "tier": "pro",
+      "label": "Pro - unknown",
+      "rate_limit": 50,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:54:41"
+    },
+    "VT-ELITE-2J0L4CQY": {
+      "tier": "elite",
+      "label": "Elite - unknown",
+      "rate_limit": 200,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:54:55"
+    },
+    "VT-ELITE-10SAZS5D": {
+      "tier": "elite",
+      "label": "Elite - unknown",
+      "rate_limit": 200,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:55:12"
+    },
+    "VT-ELITE-BVO3CPW1": {
+      "tier": "elite",
+      "label": "Elite - unknown",
+      "rate_limit": 200,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:55:28"
+    },
+    "VT-PRO-3WI8OMKJ": {
+      "tier": "pro",
+      "label": "Pro - unknown",
+      "rate_limit": 50,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:56:13"
+    },
+    "VT-PRO-ERHZBANG": {
+      "tier": "pro",
+      "label": "Pro - unknown",
+      "rate_limit": 50,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:56:36"
+    },
+    "VT-PRO-8HA8YVJ5": {
+      "tier": "pro",
+      "label": "Pro - unknown",
+      "rate_limit": 50,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:57:40"
+    },
+    "VT-ELITE-7RV65MQP": {
+      "tier": "elite",
+      "label": "Elite - unknown",
+      "rate_limit": 200,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:57:50"
+    },
+    "VT-PRO-TE63FNOH": {
+      "tier": "pro",
+      "label": "Pro - unknown",
+      "rate_limit": 50,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:58:53"
+    },
+    "VT-ELITE-9DNLGZJR": {
+      "tier": "elite",
+      "label": "Elite - unknown",
+      "rate_limit": 200,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:59:23"
+    },
+    "VT-ELITE-IMETAMLZ": {
+      "tier": "elite",
+      "label": "Elite - unknown",
+      "rate_limit": 200,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 22:59:30"
+    },
+    "VT-ELITE-1BZKX19H": {
+      "tier": "elite",
+      "label": "Elite - unknown",
+      "rate_limit": 200,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": false,
+      "features": [],
+      "created_at": "2026-06-05 23:00:11"
+    },
+    "VT-PRO-SXRJ2C9O": {
+      "tier": "pro",
+      "label": "Test - direct",
+      "rate_limit": 0,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": true,
+      "features": [],
+      "created_at": "2026-06-05 23:00:34"
+    },
+    "VT-PRO-LAUNCH": {
+      "tier": "pro",
+      "label": "Launch Pro Key",
+      "rate_limit": 0,
+      "rate_window_seconds": 86400,
+      "expires": "2026-12-31",
+      "active": true,
+      "features": [
+        "layering",
+        "multi_pair",
+        "ai_consensus",
+        "killzone_filter"
+      ]
+    }
+  },
+  "default_tier": "starter",
+  "tiers": {
+    "starter": {
+      "max_layers": 1,
+      "min_confidence": 0.6,
+      "signal_cooldown_minutes": 15
+    },
+    "pro": {
+      "max_layers": 3,
+      "min_confidence": 0.55,
+      "signal_cooldown_minutes": 5
+    },
+    "elite": {
+      "max_layers": 5,
+      "min_confidence": 0.5,
+      "signal_cooldown_minutes": 2
+    }
+  }
+}

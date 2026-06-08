@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Payment Webhook Server — Vilona Trade FX
-Listens on port 8787. Receives Tripay/Duitku callbacks forwarded from bridge.
+Listens on port 8787. Receives Tripay callbacks forwarded from bridge.
 Verifies signature → upgrades member → DMs user.
 """
 import hashlib, hmac, json, logging, os, sys, time, urllib.request
@@ -22,6 +22,7 @@ PORT = int(os.environ.get("PAYMENT_WEBHOOK_PORT", "8787"))
 TRIPAY_PRIVATE_KEY = os.environ.get("TRIPAY_PRIVATE_KEY", "")
 TRIPAY_MERCHANT_CODE = os.environ.get("TRIPAY_MERCHANT_CODE", "T23409")
 ADMIN_CHAT_ID = os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", os.environ.get("VILONA_TRADEFX_CHAT_ID", ""))
+GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID", "")
 BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
 
 # ── Donation model: ANY amount → donor (LIFETIME) ─────────
@@ -98,8 +99,6 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         if path in ("/webhook/tripay", "/tripay/callback"):
             self._handle_tripay(body)
-        elif path in ("/webhook/duitku", "/duitku/callback"):
-            self._handle_duitku(body)
         elif path == "/health":
             self._json({"status": "ok"})
         else:
@@ -154,7 +153,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         upgrade_member(chat_id, tier, days, merchant_ref)
 
         # ── DONATUR message (no subscription, no ref display) ──
-        channel_link = "https://t.me/+qLAdRGd_RiplZmU1"
+        channel_link = "https://t.me/vilonaaichanel"
         group_link = "https://t.me/+kX8tspebrpVhMmE1"
         ea_link = "https://phantomfx.aitradepulse.com/ea/download/"
 
@@ -191,61 +190,24 @@ class WebhookHandler(BaseHTTPRequestHandler):
         ]}
         tg_send(msg, chat_id, reply_markup=markup)
 
-        # Notify admin/channel — Social Proof format
-        if ADMIN_CHAT_ID and ADMIN_CHAT_ID != chat_id:
-            admin_msg = (
-                f"🔥 <b>BOOM! BAHAN BAKAR MASUK! 🚀</b>\n"
+        # Notify group — Social Proof (semangat gotong royong)
+        if GROUP_CHAT_ID:
+            group_msg = (
+                f"🔥 <b>BAHAN BAKAR AI MASUK! 🚀</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"👤 Kawan kita: <code>{chat_id}</code>\n"
-                f"💰 Menyiram server sebesar: <b>Rp{total_amount:,}</b>\n"
-                f"━━━━━━━━━━━━━━━━\n"
+                f"💰 Ada kawan yang baru men-support server AI\n"
+                f"sebesar <b>Rp{total_amount:,}</b>!\n"
+                f"\n"
                 f"Terima kasih orang baik! Mesin AI kita\n"
                 f"makin buas hari ini berkat dukunganmu. 🥂\n"
-                f"\n"
-                f"👉 Mau akses AI tanpa batas?\n"
-                f"Yuk ikut udunan bensin server: /donate"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"💚 Mau ikut bensin server? /donate\n"
+                f"📢 Signal real-time: @vilonaaichanel"
             )
-            tg_send(admin_msg, ADMIN_CHAT_ID)
+            tg_send(group_msg, GROUP_CHAT_ID)
 
         log.info(f"✅ Donation complete: {chat_id} → DONATUR (ref={merchant_ref[:16]} amount={total_amount})")
         self._json({"status": "ok", "chat_id": chat_id, "donor": True})
-
-    def _handle_duitku(self, body: bytes):
-        """Process Duitku payment callback."""
-        try:
-            data = json.loads(body) if body else {}
-        except json.JSONDecodeError:
-            self._json({"error": "invalid json"}, 400)
-            return
-
-        merchant_order_id = data.get("merchantOrderId", "")
-        result_code = str(data.get("resultCode", ""))
-
-        log.info(f"Duitku callback: order={merchant_order_id} result={result_code}")
-
-        if result_code != "00":
-            self._json({"status": "ignored", "reason": f"resultCode={result_code}"})
-            return
-
-        # Extract chat_id from merchantOrderId: VTFX-{chat_id}-{timestamp}
-        chat_id = ""
-        try:
-            parts = merchant_order_id.split("-")
-            if len(parts) >= 2 and parts[0] == "VTFX":
-                chat_id = parts[1]
-        except Exception:
-            pass
-
-        if not chat_id:
-            self._json({"error": "invalid merchantOrderId"}, 400)
-            return
-
-        amount = data.get("amount", 0)
-        # ALL payments → donor
-        tier, days = "donor", DONOR_DAYS
-
-        upgrade_member(chat_id, tier, days, merchant_order_id)
-        self._json({"status": "ok", "tier": tier})
 
     def log_message(self, format, *args):
         log.info(f"{self.client_address[0]} — {format % args}")
@@ -271,7 +233,6 @@ def main():
     server = HTTPServer(("127.0.0.1", PORT), WebhookHandler)
     log.info(f"💰 Payment webhook listening on :{PORT}")
     log.info(f"   Tripay:  /webhook/tripay")
-    log.info(f"   Duitku:  /webhook/duitku")
     log.info(f"   Health:  /health")
 
     try:

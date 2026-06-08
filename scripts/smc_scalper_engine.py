@@ -252,7 +252,7 @@ def detect_choch(ohlcv: list[dict], lookback: int = 50) -> dict | None:
             mid_highs = [h for h in swing_highs 
                         if swing_lows[i][0] < h[0] < swing_lows[i+1][0]]
             if mid_highs:
-                last_high = max(mid_highs, key=lambda x: x[0])
+                last_high = max(mid_highs, key=lambda x: x[1])  # highest PRICE, not index
                 if last_close > last_high[1]:
                     return {"direction": "BUY", "price": last_high[1], "index": len(bars) - 1}
     
@@ -312,19 +312,19 @@ def detect_bos(ohlcv: list[dict], lookback: int = 50) -> dict | None:
     if len(swing_highs) < 2 or len(swing_lows) < 2:
         return None
     
-    # Bullish BOS: price breaks previous HH (continuation of uptrend)
-    for i in range(1, len(swing_highs)):
-        prev_hh = swing_highs[i-1][1]
-        prev_hh_idx = swing_highs[i-1][0]
-        if last_close > prev_hh:
-            return {"direction": "BUY", "price": prev_hh, "index": last_idx, "type": "BOS"}
+    # Bullish BOS: price breaks the highest swing high (not just previous)
+    all_highs = [(idx, h) for idx, h in swing_highs if idx < last_idx - 3]
+    if all_highs:
+        max_sh = max(all_highs, key=lambda x: x[1])  # highest price
+        if last_close > max_sh[1]:
+            return {"direction": "BUY", "price": max_sh[1], "index": last_idx, "type": "BOS"}
     
-    # Bearish BOS: price breaks previous LL (continuation of downtrend)
-    for i in range(1, len(swing_lows)):
-        prev_ll = swing_lows[i-1][1]
-        prev_ll_idx = swing_lows[i-1][0]
-        if last_close < prev_ll:
-            return {"direction": "SELL", "price": prev_ll, "index": last_idx, "type": "BOS"}
+    # Bearish BOS: price breaks the lowest swing low (not just previous)
+    all_lows = [(idx, l) for idx, l in swing_lows if idx < last_idx - 3]
+    if all_lows:
+        min_sl = min(all_lows, key=lambda x: x[1])  # lowest price
+        if last_close < min_sl[1]:
+            return {"direction": "SELL", "price": min_sl[1], "index": last_idx, "type": "BOS"}
     
     return None
 
