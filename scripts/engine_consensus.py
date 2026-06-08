@@ -40,6 +40,7 @@ _crt_engine = None
 _smc_engine = None
 _ultimate_engine = None
 _sequoia_math = None
+_tv_engine = None
 
 # ── yfinance OHLCV cache ──
 _YF_CACHE: dict[str, dict] = {}
@@ -49,7 +50,7 @@ _YF_CACHE_TIME: dict[str, float] = {}
 def _load_engines():
     """Lazy-load all engine modules."""
     global _engines_loaded, _quant_engine, _fvg_detector, _hermes_pipeline
-    global _crt_engine, _smc_engine, _ultimate_engine, _sequoia_math
+    global _crt_engine, _smc_engine, _ultimate_engine, _sequoia_math, _tv_engine
     if _engines_loaded:
         return
     try:
@@ -85,6 +86,11 @@ def _load_engines():
     try:
         from sequoia_math import turtle_breakout, turtle_trend_filter
         _sequoia_math = (turtle_breakout, turtle_trend_filter)
+    except Exception:
+        pass
+    try:
+        from tv_engine import analyze as _tv_analyze
+        _tv_engine = _tv_analyze
     except Exception:
         pass
     _engines_loaded = True
@@ -132,7 +138,7 @@ def _has_mt5_data(symbol: str, tf: str) -> bool:
 def _fetch_yf_bars(symbol: str, tf: str) -> list[dict] | None:
     """Fetch OHLCV from yfinance with smart caching."""
     import yfinance as yf
-    yf_sym = "GC=F" if symbol == "XAUUSD" else symbol
+    yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD"}.get(symbol, symbol)
     interval = TF_YF_INTERVAL[tf]
     period = TF_YF_PERIOD[tf]
     min_bars = TF_ENGINE_MIN[tf]
@@ -188,7 +194,7 @@ def fetch_mtf_ohlcv(symbol: str = "XAUUSD") -> dict[str, list[dict]]:
             logger.info(f"MT5/{symbol} {tf}: {len(result[tf])} bars")
         else:
             # Check cache first
-            yf_sym = "GC=F" if symbol == "XAUUSD" else symbol
+            yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD"}.get(symbol, symbol)
             cache_key = f"{yf_sym}/{tf}"
             ttl = TF_CACHE_TTL[tf]
             now = time.time()
@@ -204,7 +210,7 @@ def fetch_mtf_ohlcv(symbol: str = "XAUUSD") -> dict[str, list[dict]]:
     # Parallel fetch remaining TFs from yfinance
     if yf_tfs:
         import concurrent.futures as cf
-        yf_sym = "GC=F" if symbol == "XAUUSD" else symbol
+        yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD"}.get(symbol, symbol)
         with cf.ThreadPoolExecutor(max_workers=5) as exe:
             future_map = {exe.submit(_fetch_yf_bars, symbol, tf): tf for tf in yf_tfs}
             for future in cf.as_completed(future_map, timeout=90):
@@ -424,6 +430,24 @@ def _run_engines_on_tf(ohlcv: list[dict], price: float, symbol: str, tf: str) ->
                 engines["sequoia"] = {"direction": "HOLD", "confidence": 0, "details": "no signal"}
         except Exception as e:
             engines["sequoia"] = {"direction": "ERROR", "confidence": 0, "details": str(e)[:50]}
+
+    # ── 9. TradingView TA Engine ──
+    if _tv_engine:
+        try:
+            tv_result = _tv_engine(symbol, ohlcv)
+            tv_dir = tv_result.get("direction", "HOLD")
+            tv_conf = tv_result.get("confidence", 0.5)
+            tv_detail = tv_result.get("details", "")
+            engines["tv"] = {
+                "direction": tv_dir,
+                "confidence": tv_conf,
+                "details": tv_detail,
+            }
+            if tv_dir == "BUY": buys += 1
+            elif tv_dir == "SELL": sells += 1
+            active += 1
+        except Exception as e:
+            engines["tv"] = {"direction": "ERROR", "confidence": 0, "details": str(e)[:50]}
 
     # ── TF-local verdict ──
     verdict = "HOLD"

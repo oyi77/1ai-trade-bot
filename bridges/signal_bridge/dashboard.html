@@ -463,10 +463,12 @@ async function fetchEnginePulse() {
     const tfKeys = Object.keys(tfs);
 
     // Hierarchical verdict bar
-    const macroEmoji = d.macro_trend === 'BULLISH' ? '🟢' : d.macro_trend === 'BEARISH' ? '🔴' : '⚪️';
-    const alignEmoji = d.mtf_alignment === 'ALIGNED' ? '✅' : d.mtf_alignment === 'CONFLICT' ? '🔴' : '⚠️';
+    const macro = hier.macro_trend || 'NEUTRAL';
+    const align = hier.mtf_alignment || 'NONE';
+    const macroEmoji = macro === 'BULLISH' ? '🟢' : macro === 'BEARISH' ? '🔴' : '⚪️';
+    const alignEmoji = align === 'ALIGNED' ? '✅' : align === 'CONFLICT' ? '🔴' : '⚠️';
     const vCls = hier.verdict === 'BUY' ? 'buy' : hier.verdict === 'SELL' ? 'sell' : 'hold';
-    $('ep-verdict').innerHTML = `<span style="color:var(--text-muted)">🏛 ${macroEmoji} ${d.macro_trend} | ${alignEmoji} ${d.mtf_alignment} | </span><span class="${vCls}" style="font-weight:700">${hier.verdict||'HOLD'} (${((hier.consensus_score||0)*100).toFixed(0)}%)</span>`;
+    $('ep-verdict').innerHTML = `<span style="color:var(--text-muted)">🏛 ${macroEmoji} ${macro} | ${alignEmoji} ${align} | </span><span class="${vCls}" style="font-weight:700">${hier.verdict||'HOLD'} (${((hier.consensus_score||0)*100).toFixed(0)}%)</span>`;
 
     if (tfKeys.length) {
       // Per-timeframe panels
@@ -484,7 +486,7 @@ async function fetchEnginePulse() {
           const eDir = e.direction||'HOLD';
           const eCls = eDir === 'BUY' ? 'buy' : eDir === 'SELL' ? 'sell' : 'hold';
           const eConf = e.confidence ? (e.confidence > 1 ? e.confidence.toFixed(0) : (e.confidence*100).toFixed(0)) : '--';
-          const names = {quant:'Q', fvg:'FV', crt:'CR', smc:'SM', trend:'Tr', ultimate:'Ul', hermes:'He', sequoia:'Se'};
+          const names = {quant:'Q', fvg:'FV', crt:'CR', smc:'SM', trend:'Tr', ultimate:'Ul', hermes:'He', sequoia:'Se', tv:'TV'};
           const lbl = names[k.toLowerCase()] || k.charAt(0).toUpperCase();
           return `<span class="eng-dot ${eCls}" title="${k}: ${eDir} ${eConf}%">${lbl}</span>`;
         }).join('');
