@@ -3590,6 +3590,26 @@ def auto_analyze_loop():
                 except Exception as e:
                     logger.warning(f"Market Pulse error: {e}")
 
+            # ── Active Signal: quality gate → post if valid ──
+            try:
+                if pair == "gold" and result and result.get("hierarchical", {}).get("verdict") != "HOLD" and result.get("hierarchical", {}).get("consensus_score", 0) >= 0.5:
+                    from signal_calculator import compute_signal as _compute_sig, format_signal_telegram as _fmt_sig, log_signal as _log_sig
+                    sig = _compute_sig(result)
+                    if sig and sig.get("grade") in ("A", "B"):
+                        text = _fmt_sig(sig)
+                        _send(text, parse_mode="HTML", target_channel=CHANNEL_ID)
+                        # log to bridge + trade log
+                        try:
+                            from scripts.vilona_tradefx_signal_bridge import PROJECT_DIR
+                            import requests
+                            requests.post(f"https://phantomfx.aitradepulse.com/signal?api_key=VT-DONOR-0", json=sig, timeout=5)
+                        except Exception:
+                            pass
+                        _log_sig(sig)
+                        logger.info(f"🔥 ACTIVE SIGNAL posted: {sig['action']} {sig['symbol']} Grade {sig['grade']} RR 1:{sig['rr']}")
+            except Exception as e:
+                logger.warning(f"Signal generator error: {e}")
+
             time.sleep(90 if (lkz or nykz) else 120)
 
         except Exception as e:

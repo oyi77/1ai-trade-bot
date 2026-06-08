@@ -358,6 +358,13 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content.encode())
             except FileNotFoundError:
                 self._json({"error": "dashboard not found"}, 404)
+        elif path == "/api/trade-log":
+            log_path = os.path.join(PROJECT_DIR, "data", "trade_log.json")
+            try:
+                with open(log_path) as f:
+                    self._json(json.load(f))
+            except (FileNotFoundError, json.JSONDecodeError):
+                self._json([])
         elif path == "/api/dash-stats":
             stats = {"total": 0, "win_rate": 0, "total_profit": 0, "trades": [], "uptime": "", "ea_count": 0}
             try:
@@ -449,6 +456,27 @@ class SignalHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 log.error(f"/api/engine-readings error: {e}")
                 self._json({"error": str(e), "engines": {}, "verdict": "N/A", "timeframes": {}})
+        elif path == "/api/news":
+            """Fetch latest XAUUSD/news from RSS."""
+            try:
+                import urllib.request as ur
+                import xml.etree.ElementTree as ET
+                items = []
+                url = "https://finance.yahoo.com/rss/headline?s=GC=F"
+                req = ur.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with ur.urlopen(req, timeout=8) as resp:
+                    xml = resp.read()
+                    root = ET.fromstring(xml)
+                    for item in root.iter("item"):
+                        title = item.findtext("title", "")
+                        link = item.findtext("link", "")
+                        pubdate = item.findtext("pubDate", "")
+                        if title:
+                            items.append({"title": title, "link": link, "date": pubdate})
+                self._json({"items": items[:12]})
+            except Exception as e:
+                log.error(f"News fetch error: {e}")
+                self._json({"items": [], "error": str(e)})
         else:
             self._json({"error": "not found"}, 404)
 
