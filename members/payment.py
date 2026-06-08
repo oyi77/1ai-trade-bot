@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Vilona Trade FX — Payment Integration
-Tripay + Duitku pricing info + transaction creation.
+Tripay pricing info + transaction creation.
 """
 import json, logging, os, sys, time, urllib.request, urllib.error
 from pathlib import Path
@@ -44,7 +44,7 @@ def get_pricing_info() -> dict:
     return {
         "packages": PRICING,
         "methods": ["QRIS", "BRIVA", "BCAVA", "MYBVA"],
-        "gateways": ["Tripay", "Duitku"],
+        "gateways": ["Tripay"],
     }
 
 

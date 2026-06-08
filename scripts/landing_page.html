@@ -10,7 +10,8 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#070b14;--surface:#0d1225;--card:#131b30;--card-hover:#1a2440;--border:#1e2d4a;--text:#e4e9f2;--text-dim:#5a6e8a;--txt2:#7a8ea8;--blue:#1e90ff;--cyan:#00d4ff;--green:#22c55e;--red:#ef4444;--gold:#f5a623;--violet:#7b5ea7;--rad:12px;--rad-sm:8px;--shadow:0 4px 30px rgba(0,0,0,.5);--w:1120px}
 html{scroll-behavior:smooth}
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;line-height:1.5;padding-top:48px}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;line-height:1.5;padding-top:48px;padding-bottom:60px}
+@media(min-width:601px){body{padding-bottom:0}}
 a{color:var(--cyan);text-decoration:none}
 
 /* ── UTILITY ── */
@@ -402,8 +403,8 @@ td.pn{color:var(--red)}
       <div id="sig-content">
         <div class="sig-e">
           <div class="si">📡</div>
-          <p data-lang="id">Menunggu setup pasar...</p>
-          <p class="hidden" data-lang="en">Waiting for market setup...</p>
+          <p data-lang="id">🔍 AI sedang menganalisis — sinyal muncul saat setup terkonfirmasi</p>
+          <p class="hidden" data-lang="en">🔍 AI analyzing market — signal appears when setup confirms</p>
         </div>
       </div>
     </div>
@@ -464,9 +465,9 @@ td.pn{color:var(--red)}
       <div class="n">2</div>
       <h4 data-lang="id">Dapatkan Token</h4>
       <h4 class="hidden" data-lang="en">Get Token</h4>
-      <p data-lang="id">Hubungi @codergaboets di Telegram untuk API key gratis</p>
-      <p class="hidden" data-lang="en">Contact @codergaboets on Telegram for your free API key</p>
-      <div style="margin-top:6px"><a href="https://t.me/codergaboets" class="btn btn-s" style="padding:8px 16px;font-size:11px" target="_blank">📩 Telegram</a></div>
+      <p data-lang="id">Hubungi bot Telegram untuk API key gratis</p>
+      <p class="hidden" data-lang="en">Contact the Telegram bot for your free API key</p>
+      <div style="margin-top:6px"><a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s" style="padding:8px 16px;font-size:11px" target="_blank">📩 Bot Telegram</a></div>
     </div>
     <div class="ea-s">
       <div class="n">3</div>
@@ -559,8 +560,8 @@ td.pn{color:var(--red)}
         <li>Free EA Bridge</li>
         <li>Name on donor wall</li>
       </ul>
-      <a href="https://t.me/codergaboets" class="btn btn-s" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
-      <a href="https://t.me/codergaboets" class="btn btn-s hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
+      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
+      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
     </div>
     <div class="dn-c feat">
       <div class="dn-l" data-lang="id">Montir Kepercayaan</div>
@@ -580,8 +581,8 @@ td.pn{color:var(--red)}
         <li>VIP Telegram group</li>
         <li>Daily performance report</li>
       </ul>
-      <a href="https://t.me/codergaboets" class="btn btn-p" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
-      <a href="https://t.me/codergaboets" class="btn btn-p hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
+      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-p" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
+      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-p hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
     </div>
     <div class="dn-c">
       <div class="dn-l" data-lang="id">Sultan Server</div>
@@ -603,8 +604,23 @@ td.pn{color:var(--red)}
         <li>1-on-1 setup support</li>
         <li>Sultan badge 👑</li>
       </ul>
-      <a href="https://t.me/codergaboets" class="btn btn-s" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
-      <a href="https://t.me/codergaboets" class="btn btn-s hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
+      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
+      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
+    </div>
+  </div>
+
+  <!-- Direct Payment Row -->
+  <div style="margin-bottom:12px">
+    <div class="cd-sm" style="text-align:center">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:6px" data-lang="id">⚡ Atau bayar langsung via QRIS/VA tanpa ribet:</div>
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:6px;display:none" data-lang="en">⚡ Or pay directly via QRIS/VA — no hassle:</div>
+      <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+        <button onclick="directPay(50000)" class="btn btn-s" style="padding:8px 14px;font-size:11px">💚 Rp50.000</button>
+        <button onclick="directPay(150000)" class="btn btn-p" style="padding:8px 14px;font-size:11px">💚 Rp150.000 ★</button>
+        <button onclick="directPay(500000)" class="btn btn-s" style="padding:8px 14px;font-size:11px">💚 Rp500.000</button>
+        <button onclick="directPayCustom()" class="btn btn-s" style="padding:8px 14px;font-size:11px">💰 Custom</button>
+      </div>
+      <div id="pay-status" style="font-size:10px;color:var(--txt2);margin-top:6px"></div>
     </div>
   </div>
 
@@ -662,6 +678,15 @@ td.pn{color:var(--red)}
     <a href="#donate" class="btn btn-s hidden" style="padding:14px 36px;font-size:15px" data-lang="en">💚 Fuel the Server</a>
   </div>
 </section>
+
+<!-- ═══ STICKY BOTTOM CTA (mobile only) ═══ -->
+<div id="sticky-cta" style="position:fixed;bottom:0;left:0;right:0;z-index:99;display:flex;gap:6px;padding:8px 12px;background:rgba(7,11,20,.95);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--border)">
+  <a href="#ea" class="btn btn-p" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="id">🤖 Download EA Gratis</a>
+  <a href="#ea" class="btn btn-p hidden" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="en">🤖 Download Free EA</a>
+  <a href="#donate" class="btn btn-s" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="id">💚 Isi Bensin</a>
+  <a href="#donate" class="btn btn-s hidden" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="en">💚 Fuel Up</a>
+</div>
+<style>@media(min-width:601px){#sticky-cta{display:none!important}}</style>
 
 <footer class="ft">
   <div>Vilona AI Trading System · <span id="refresh-msg" data-lang="id">Update tiap 5 detik</span><span id="refresh-msg" class="hidden" data-lang="en">Updates every 5s</span></div>
@@ -899,35 +924,67 @@ async function fetchAll(){
         $('sig-time').textContent=ts();
         sigEl.innerHTML='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap"><span style="font-weight:700;color:'+(isBuy?'var(--green)':'var(--red)')+'">'+sig.action+'</span><span>'+(sig.symbol||'XAUUSD')+'</span><span>Conf: '+confidence+'</span><span>RR 1:'+rr+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(sig.entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sig.sl)+'</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(sig.tp)+'</div></div><div class="si fl"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">1:'+rr+'</div></div></div>';
       }else{
-        sigEl.innerHTML='<div class="sig-e"><div class="si" style="font-size:20px">📡</div><p>Waiting for market setup...</p></div>';
+        sigEl.innerHTML='<div class="sig-e"><div class="si" style="font-size:16px">🔍</div><p style="font-size:11px">AI menganalisis market — sinyal berikutnya dalam beberapa menit</p></div>';
       }
     }catch(e){/* no signal */}
 
-    // Trade table
+    // Trade table with aggregate summary
     var tbody=$('th-body');
     $('th-count').textContent=total+' total';
     if(trades.length){
-      tbody.innerHTML=trades.slice(0,15).map(function(t){
+      // Aggregate stats
+      var winCnt = trades.filter(function(t){var o=(t.outcome||t.result||'').toUpperCase();return o.includes('TP')||o==='WIN'}).length;
+      var lossCnt = trades.filter(function(t){var o=(t.outcome||t.result||'').toUpperCase();return o.includes('SL')||o==='LOSS'}).length;
+      var pendCnt = total - winCnt - lossCnt;
+      var totalPips = trades.reduce(function(s,t){return s+(parseFloat(t.pips)||0)},0);
+      // Summary bar
+      var summaryHtml = '<div style="display:flex;gap:12px;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:6px;flex-wrap:wrap">'+
+        '<div><span style="font-size:9px;color:var(--txt2)">Total</span><div style="font-size:14px;font-weight:700">'+total+'</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">Win</span><div style="font-size:14px;font-weight:700;color:var(--green)">'+winCnt+'</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">Loss</span><div style="font-size:14px;font-weight:700;color:var(--red)">'+lossCnt+'</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">P&L Pips</span><div style="font-size:14px;font-weight:700;color:'+(totalPips>=0?'var(--green)':'var(--red)')+'">'+(totalPips>=0?'+':'')+totalPips.toFixed(1)+'</div></div>'+
+        (pendCnt>0?'<div><span style="font-size:9px;color:var(--txt2)">Pending</span><div style="font-size:14px;font-weight:700;color:var(--gold)">'+pendCnt+'</div></div>':'')+
+        '</div>';
+      // Last 5 trades
+      var rowsHtml = trades.slice(0,5).map(function(t){
         var isBuy=(t.action||'').toUpperCase()==='BUY';
         var pipStr=t.pips?fmtPips(t.pips):'--';
         var pnlVal=t.pnl||t.profit_usd||0;
-        var result=(t.result||t.outcome||'').toUpperCase();
+        var result=(t.outcome||t.result||'').toUpperCase();
         var rCls=result.includes('TP')||result==='WIN'?'rw':'rl';
         var rIcon=result.includes('TP')?'✅':result.includes('SL')?'❌':'⏳';
         return '<tr><td style="color:var(--txt2)">'+(t.open_time?new Date(t.open_time).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}):'--')+'</td><td class="'+(isBuy?'ab':'as')+'">'+(isBuy?'BUY':'SELL')+'</td><td>'+fmtPrice(t.entry)+'</td><td>'+fmtPrice(t.close_price||t.close||t.closePrice)+'</td><td style="font-weight:600">'+pipStr+'</td><td>'+fmtPnL(pnlVal)+'</td><td class="'+rCls+'">'+rIcon+' '+(result||'PENDING')+'</td></tr>';
       }).join('');
+      tbody.innerHTML=summaryHtml+rowsHtml;
     }
 
     // AI Fundamental Analysis
     calcFundamental(xauPrice, trades);
 
-    // Server Cost Progress — from actual donations or zero
+    // Server Cost Progress — donor-based (fallback ke messaging kalo blm ada)
     var target=2500000;
-    var raised=Math.max(0,Math.min(Math.round(parseFloat(pnl||0)*10000),target));
-    var pct=Math.round(raised/target*100);
-    $('sc-raised').textContent='Rp'+raised.toLocaleString('id-ID');
-    $('sc-pct').textContent=pct+'%';
-    $('sc-bar').style.width=pct+'%';
+    // Default: "AI masih tanggung sendiri" until first donation
+    var raised=0;
+    var pct=0;
+    // Try to fetch from payment orders API
+    try{
+      var pr=await fetch(BRIDGE+'/api/donations',{signal:AbortSignal.timeout(3000)});
+      var pd=await pr.json();
+      if(pd && pd.total_raised){
+        raised=Math.min(parseInt(pd.total_raised)||0, target);
+        pct=Math.round(raised/target*100);
+      }
+    }catch(e){/* fallback */}
+    if(raised>0){
+      $('sc-raised').textContent='Rp'+raised.toLocaleString('id-ID');
+      $('sc-pct').textContent=pct+'%';
+      $('sc-bar').style.width=pct+'%';
+    }else{
+      $('sc-raised').innerHTML='<span style="color:var(--txt2);font-size:10px" data-lang="id">AI masih tanggung sendiri</span><span class="hidden" style="color:var(--txt2);font-size:10px" data-lang="en">Self-funded by AI</span>';
+      $('sc-pct').textContent='0%';
+      $('sc-bar').style.width='2%';
+      $('sc-bar').style.background='var(--border)';
+    }
 
   }catch(e){console.error('Fetch error:',e)}
   firstRun=false;
@@ -955,6 +1012,31 @@ async function fetchNews(){
   }catch(e){
     $('news-container').innerHTML='<div style="color:var(--txt2);font-size:11px;padding:8px">News unavailable</div>';
   }
+}
+
+// ─── DIRECT PAYMENT ───
+function directPay(amount){
+  var ps=$('pay-status');
+  ps.innerHTML='⏳ Membuat invoice...';
+  fetch(BRIDGE+'/api/create-payment?amount='+amount+'&method=QRIS2',{signal:AbortSignal.timeout(10000)})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.error){ps.innerHTML='❌ '+d.error;return}
+      if(d.payment_url){
+        ps.innerHTML='✅ Invoice siap! <a href="'+d.payment_url+'" target="_blank" style="color:var(--cyan);font-weight:600">Klik bayar via QRIS/VA</a>';
+        window.open(d.payment_url,'_blank');
+      }else if(d.qr_url){
+        ps.innerHTML='✅ Scan QRIS: <br><img src="'+d.qr_url+'" style="width:140px;border-radius:8px;margin-top:6px">';
+      }
+    })
+    .catch(function(e){ps.innerHTML='❌ Gagal: '+e.message});
+}
+function directPayCustom(){
+  var amount=prompt(document.body.lang==='id'?'Masukkan nominal donasi (min Rp10.000):':'Enter donation amount (min Rp10,000):','50000');
+  if(!amount)return;
+  var n=parseInt(amount.replace(/[^0-9]/g,''));
+  if(!n||n<10000){alert('Minimal Rp10.000');return}
+  directPay(n);
 }
 
 // ─── REFRESH LOOP ───

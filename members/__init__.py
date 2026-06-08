@@ -241,4 +241,13 @@ def mark_expired(chat_id: str):
         db.execute("UPDATE members SET status='expired' WHERE chat_id=?", (str(chat_id),))
 
 
+def get_total_donations() -> int:
+    """Return sum of all paid donation amounts."""
+    with _conn() as db:
+        row = db.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM payment_orders WHERE status='paid'"
+        ).fetchone()
+        return row[0] if row else 0
+
+
 init_db()

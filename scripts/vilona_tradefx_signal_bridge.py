@@ -480,6 +480,48 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self._json({"items": [], "error": str(e)})
         elif path == "/api/config":
             self._json({"api_key": "VT-MASTER-734AD731F5FB"})
+        elif path == "/api/donations":
+            """Return total donations from payment orders."""
+            try:
+                if PROJECT_DIR not in sys.path:
+                    sys.path.insert(0, PROJECT_DIR)
+                from members import get_total_donations
+                self._json({"total_raised": get_total_donations(), "currency": "IDR"})
+            except Exception as e:
+                log.error(f"/api/donations error: {e}")
+                self._json({"total_raised": 0, "error": str(e)})
+        elif path == "/api/create-payment":
+            """Create Tripay payment for LP visitor. Params: amount (int), method (str, default QRIS2)."""
+            try:
+                amount = int(params.get("amount", ["50000"])[0])
+                method = params.get("method", ["QRIS2"])[0]
+            except ValueError:
+                self._json({"error": "Invalid amount"}, 400)
+                return
+
+            # Generate web session ID for LP visitors
+            import secrets
+            session_id = f"web_{int(time.time())}_{secrets.token_hex(4)}"
+
+            try:
+                # Add project root to path so members module can be imported
+                if PROJECT_DIR not in sys.path:
+                    sys.path.insert(0, PROJECT_DIR)
+                from members.payment import create_tripay_payment
+                result = create_tripay_payment(
+                    chat_id=session_id,
+                    username="LP_Visitor",
+                    tier="donor",
+                    method=method,
+                    amount=amount,
+                )
+                if "error" in result:
+                    self._json({"error": result["error"]}, 500)
+                else:
+                    self._json(result)
+            except Exception as e:
+                log.error(f"/api/create-payment error: {e}")
+                self._json({"error": str(e)}, 500)
         else:
             self._json({"error": "not found"}, 404)
 
@@ -652,6 +694,16 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--host", default="0.0.0.0")
     args = parser.parse_args()
+
+    # Load .env for Tripay credentials
+    env_path = os.path.join(PROJECT_DIR, "strategies", "vilona_tradefx", ".env")
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k, v)
 
     config = load_keys()
     log.info(f"Bridge V2 listening on {args.host}:{args.port}")
