@@ -2061,7 +2061,8 @@ def handle_command(cmd, text, chat_id, msg):
                 f"{tier_label}\n"
                 f"⚡️ Kuota AI: {quota_line}\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📊 /analyze xauusd — Mulai analisa\n"
+                f"🧠 /signal — Signal dari 9 engines\n"
+                f"📊 /dashboard — Live dashboard web\n"
                 f"📱 /help — Semua command\n"
                 f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot"
             )
@@ -2074,6 +2075,11 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send(
             "⚙️ <b>VILONA AI — COMMAND CENTER</b>\n"
             "━━━━━━━━━━━━━━━━\n\n"
+            "🧠 <b>AI SIGNAL SYSTEM 🔥</b>\n"
+            "/signal — Generate sinyal dari MTF + 9 engines\n"
+            "/mtf — Matrix 5TF × 9 engines (top-down)\n"
+            "/engines — Engine readings per strategi\n"
+            "/dashboard — Buka live dashboard web\n\n"
             "👑 <b>PILAR UTAMA</b>\n"
             "/start — Reboot Markas Komando\n"
             "/analyze — Perintahkan AI Scan Market\n"
@@ -2089,7 +2095,7 @@ def handle_command(cmd, text, chat_id, msg):
             "/recap — Rekap harian\n\n"
             "🔧 <b>POWER TOOLS</b>\n"
             "/autosync — Auto-trade ke EA\n"
-            "/bridge_status — Cek koneksi EA"
+            "/bridge_status — Cek koneksi EA\n"
             "━━━━━━━━━━━━━━━━\n"
             "📞 Jalur Privat Investor: @codergaboets",
             chat_id)
@@ -2824,6 +2830,186 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(mapping, chat_id)
         except Exception as e:
             tg_send(f"❌ Mapping error: {e}", chat_id)
+
+    # ── NEW: Signal System Commands ──
+    elif cmd == "/signal":
+        """Run MTF engine + signal calculator, show formatted signal."""
+        tg_send("<i>🧠 Scanning MTF Matrix + 9 engines...</i>", chat_id)
+        try:
+            from engine_consensus import run_engine_consensus
+            from signal_calculator import compute_signal, format_signal_telegram
+            
+            result = run_engine_consensus(symbol="XAUUSD")
+            if not result:
+                tg_send("❌ Engine consensus gagal — coba lagi nanti.", chat_id)
+                return
+            
+            hier = result.get("hierarchical", {})
+            verdict = hier.get("verdict", "HOLD")
+            score = hier.get("consensus_score", 0) * 100
+            align = hier.get("mtf_alignment", "NONE")
+            macro = hier.get("macro_trend", "NEUTRAL")
+            
+            msg = (
+                f"🏛 <b>MTF TOP-DOWN MATRIX</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Macro: {macro}\n"
+                f"Alignment: {align}\n"
+                f"Consensus: {score:.0f}%\n"
+                f"Verdict: <b>{verdict}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+            )
+            
+            # Show per-TF summary
+            tfs = result.get("timeframes", {})
+            for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
+                tf = tfs.get(tf_name, {})
+                if tf:
+                    v = tf.get("verdict", "?")
+                    c = tf.get("consensus_pct", 0) * 100
+                    msg += f"{tf_name}: {v} ({c:.0f}%)\n"
+            
+            sig = compute_signal(result)
+            if sig:
+                msg += f"━━━━━━━━━━━━━━━━━━━━━\n"
+                msg += format_signal_telegram(sig)
+                tg_send(msg, chat_id)
+                
+                # Log to trade log
+                try:
+                    from signal_calculator import log_signal
+                    log_signal(sig)
+                except: pass
+            else:
+                msg += f"\n⚠️ Quality gate blocked — belum memenuhi syarat entry."
+                tg_send(msg, chat_id)
+                
+        except Exception as e:
+            tg_send(f"❌ Signal error: {e}", chat_id)
+
+    elif cmd == "/mtf":
+        """Show MTF matrix (5TF × 9 engines)."""
+        tg_send("<i>🧬 Loading MTF engine readings...</i>", chat_id)
+        try:
+            from engine_consensus import run_engine_consensus
+            
+            result = run_engine_consensus(symbol="XAUUSD")
+            if not result:
+                tg_send("❌ Engine data unavailable.", chat_id)
+                return
+            
+            hier = result.get("hierarchical", {})
+            tfs = result.get("timeframes", {})
+            macro = hier.get("macro_trend", "?")
+            align = hier.get("mtf_alignment", "?")
+            verdict = hier.get("verdict", "HOLD")
+            score = hier.get("consensus_score", 0) * 100
+            
+            msg = (
+                f"🧬 <b>MTF ENGINE MATRIX — XAUUSD</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🏛 {macro} | {align} | {verdict} ({score:.0f}%)\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+            )
+            
+            engine_names = {"quant":"Q","fvg":"FV","hermes":"He","crt":"CR",
+                           "smc":"SM","trend":"Tr","ultimate":"Ul","sequoia":"Se","tv":"TV"}
+            
+            for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
+                tf = tfs.get(tf_name, {})
+                if tf:
+                    v = tf.get("verdict", "?")
+                    c = tf.get("consensus_pct", 0) * 100
+                    engs = tf.get("engines", {})
+                    eng_line = " ".join(
+                        f"{engine_names.get(k,k[:2])}:{e.get('direction','?')[:1]}"
+                        for k, e in engs.items()
+                    )
+                    msg += f"\n<b>{tf_name}</b> {v} ({c:.0f}%)\n{eng_line}\n"
+            
+            msg += (
+                f"\n━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📊 Dashboard: phantomfx.aitradepulse.com/dashboard"
+            )
+            tg_send(msg, chat_id)
+            
+        except Exception as e:
+            tg_send(f"❌ MTF error: {e}", chat_id)
+
+    elif cmd == "/engines":
+        """Show live engine readings for all 9 strategies."""
+        tg_send("<i>🔧 Loading engine readings...</i>", chat_id)
+        try:
+            from engine_consensus import run_engine_consensus
+            
+            result = run_engine_consensus(symbol="XAUUSD")
+            if not result:
+                tg_send("❌ Engine data unavailable.", chat_id)
+                return
+            
+            tfs = result.get("timeframes", {})
+            hier = result.get("hierarchical", {})
+            
+            # Aggregate engine votes across all TFs
+            engine_votes = {}
+            for tf_name, tf in tfs.items():
+                for eng_name, eng in tf.get("engines", {}).items():
+                    if eng_name not in engine_votes:
+                        engine_votes[eng_name] = {"BUY": 0, "SELL": 0, "HOLD": 0}
+                    d = eng.get("direction", "HOLD")
+                    engine_votes[eng_name][d] = engine_votes[eng_name].get(d, 0) + 1
+            
+            display_names = {
+                "quant": "📊 Quant", "fvg": "🕳 FVG", "hermes": "⚡ Hermes",
+                "crt": "🔀 CRT/TBS", "smc": "🏦 SMC", "trend": "📈 Trend",
+                "ultimate": "🎯 Ultimate", "sequoia": "🌲 Sequoia", "tv": "📺 TV"
+            }
+            
+            msg = (
+                f"🔧 <b>ENGINE READINGS — XAUUSD</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🏛 {hier.get('macro_trend','?')} | {hier.get('mtf_alignment','?')}\n"
+                f"Verdict: <b>{hier.get('verdict','HOLD')}</b> ({hier.get('consensus_score',0)*100:.0f}%)\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+            )
+            
+            for eng_name, votes in engine_votes.items():
+                total = sum(votes.values())
+                buy_pct = votes["BUY"] / total * 100 if total else 0
+                sell_pct = votes["SELL"] / total * 100 if total else 0
+                direction = max(votes, key=votes.get)
+                emoji = "🟢" if direction == "BUY" else "🔴" if direction == "SELL" else "⚪️"
+                
+                msg += (
+                    f"{emoji} {display_names.get(eng_name, eng_name)}: "
+                    f"<b>{direction}</b> "
+                    f"(🟢{votes['BUY']} 🔴{votes['SELL']} ⚪️{votes['HOLD']})\n"
+                )
+            
+            msg += (
+                f"\n━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🔥 /signal — Generate signal dari matrix ini"
+            )
+            tg_send(msg, chat_id)
+            
+        except Exception as e:
+            tg_send(f"❌ Engine error: {e}", chat_id)
+
+    elif cmd == "/dashboard":
+        """Show link to live dashboard."""
+        tg_send(
+            f"📊 <b>VILONA AI — LIVE DASHBOARD</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Pantau market real-time:\n"
+            f"• MTF Matrix 5TF × 9 Engines\n"
+            f"• Signal History & Grade\n"
+            f"• Trade Tracker & Win Rate\n"
+            f"• Live Price XAUUSD + Chart TV\n\n"
+            f"🌐 <a href='https://phantomfx.aitradepulse.com/dashboard'>Buka Dashboard →</a>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔥 /signal — Cek signal sekarang",
+            chat_id
+        )
 
     elif cmd == "/restart_bot":
         """Admin-only: Exit so systemd auto-restarts."""
@@ -3670,12 +3856,16 @@ def main():
     # ── Set Telegram bot commands menu ──
     try:
         commands = [
-            {"command": "start",   "description": "🚀 Reboot Markas Komando"},
-            {"command": "analyze", "description": "🧠 Perintahkan AI Scan Market"},
-            {"command": "status",  "description": "🛡 Cek Kuota & Akses VIP"},
-            {"command": "donate",  "description": "⚡ Isi Bahan Bakar AI"},
-            {"command": "mapping", "description": "📐 Tarik data mapping harian"},
-            {"command": "killzone","description": "🎯 Radar sesi market aktif"},
+            {"command": "signal",   "description": "🧠 Generate sinyal MTF + 9 engines"},
+            {"command": "mtf",      "description": "🧬 Matrix 5TF × 9 engines (top-down)"},
+            {"command": "engines",  "description": "🔧 Engine readings per strategi"},
+            {"command": "dashboard","description": "📊 Buka live dashboard web"},
+            {"command": "analyze",  "description": "🧠 Perintahkan AI Scan Market"},
+            {"command": "price",    "description": "💰 Cek harga real-time"},
+            {"command": "mapping",  "description": "📐 Mapping harian + level S/R"},
+            {"command": "killzone", "description": "🎯 Radar sesi market aktif"},
+            {"command": "donate",   "description": "⚡ Isi Bahan Bakar AI"},
+            {"command": "status",   "description": "🛡 Cek Kuota & Akses VIP"},
         ]
         payload = json.dumps({"commands": commands}).encode()
         req = urllib.request.Request(
