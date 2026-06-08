@@ -467,16 +467,40 @@ def _grade_signal(mtf_result: dict, action: str, qg: dict) -> tuple:
 # ═══════════════════════════════════════════════════════════════════
 
 
+def _get_order_type(action: str, entry: float, price: float, threshold: float = 0.5) -> str:
+    """Determine pending order type based on entry vs current price.
+    
+    For SELL:
+      entry > price → SELL LIMIT (nunggu harga naik)
+      entry < price → SELL STOP  (kejar harga turun)
+      entry ≈ price → SELL
+      
+    For BUY:
+      entry < price → BUY LIMIT (nunggu harga turun)
+      entry > price → BUY STOP  (kejar harga naik)
+      entry ≈ price → BUY
+    """
+    diff = entry - price
+    if abs(diff) <= threshold:
+        return action  # MARKET / near market
+    if action == "SELL":
+        return "SELL LIMIT" if diff > 0 else "SELL STOP"
+    else:  # BUY
+        return "BUY LIMIT" if diff < 0 else "BUY STOP"
+
+
 def format_signal_telegram(signal: dict) -> str:
     """Format signal for Telegram channel posting."""
     if not signal:
         return ""
 
     action = signal["action"]
-    emoji = "🟢" if action == "BUY" else "🔴"
     symbol = signal["symbol"]
-    grade = signal["grade"]
     entry = signal["entry"]
+    price = signal.get("price", entry)
+    order_type = _get_order_type(action, entry, price)
+    emoji = "🟢" if action == "BUY" else "🔴"
+    grade = signal["grade"]
     sl = signal["sl"]
     tp1 = signal["tp1"]
     tp2 = signal["tp2"]
@@ -492,7 +516,7 @@ def format_signal_telegram(signal: dict) -> str:
     wib = now.strftime("%Y.%m.%d %H:%M")
 
     lines = [
-        f"{emoji} <b>{action} {symbol}</b>",
+        f"{emoji} <b>{order_type} {symbol}</b>",
         f"━━━━━━━━━━━━━━━━━━━━━━",
         f"🕐 {wib} WIB | Grade: <b>{grade}</b> | Conf: {conf*100:.0f}%",
         f"",
