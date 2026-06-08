@@ -933,6 +933,30 @@ def run_engine_consensus(
     if price is None:
         price = 4300.0  # fallback
 
+    # ── XAUUSD Spot Offset Correction ──
+    # GC=F futures ~$25 above XAUUSD spot. Shift all data for accurate levels.
+    if symbol == "XAUUSD":
+        try:
+            import urllib.request, json
+            req = urllib.request.Request("https://api.gold-api.com/price/XAU", headers={"User-Agent": "VilonaEngine/1.0"})
+            with urllib.request.urlopen(req, timeout=4) as r:
+                spot_data = json.loads(r.read())
+            spot_price = float(spot_data.get("price", 0))
+            if 2000 < spot_price < 6000:
+                offset = spot_price - price  # spot minus GC=F
+                if abs(offset) > 1:
+                    logger.info(f"XAUUSD spot offset: ${offset:+.2f} (spot=${spot_price:.2f}, GC=F=${price:.2f})")
+                    price = spot_price
+                    # Shift all OHLCV bars by offset
+                    for tf in list(mtf_data.keys()):
+                        for bar in mtf_data[tf]:
+                            bar["open"] = round(bar["open"] + offset, 2)
+                            bar["high"] = round(bar["high"] + offset, 2)
+                            bar["low"] = round(bar["low"] + offset, 2)
+                            bar["close"] = round(bar["close"] + offset, 2)
+        except Exception as e:
+            logger.warning(f"XAUUSD spot offset fetch failed: {e}")
+
     # ── Compute per-timeframe ──
     tf_results: dict[str, dict] = {}
     macro_trends: dict[str, dict] = {}
