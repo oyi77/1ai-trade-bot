@@ -59,10 +59,12 @@ def fetch_market():
     dxy_q = md.get_quote("DX-Y.NYB", force=True)
     dxy = dxy_q.price if dxy_q else None
 
-    # OHLCV for XAUUSD H4 for swing zones
+    # OHLCV for swing zones (H4)
     xau_bars = md.get_ohlcv("gold", "4h", 50, force=True)
+    btc_bars = md.get_ohlcv("BTCUSD", "4h", 50, force=True)
+    oil_bars = md.get_ohlcv("USOIL", "4h", 50, force=True)
 
-    return prices, dxy, xau_bars
+    return prices, dxy, {"XAUUSD": xau_bars, "BTCUSD": btc_bars, "USOIL": oil_bars}
 
 
 def calc_zones(bars, current_price, dec=2):
@@ -102,14 +104,18 @@ def generate_mapping():
     now = datetime.now(WIB)
 
     try:
-        prices, dxy, xau_bars = fetch_market()
+        prices, dxy, all_bars = fetch_market()
     except Exception as e:
         log.error(f"Failed to fetch market data: {e}")
         return f"❌ Gagal generate mapping: {e}"
 
     xau_price = prices.get("XAUUSD", {}).get("price", 0)
     xau_change = prices.get("XAUUSD", {}).get("change", 0)
-    supports, resistances = calc_zones(xau_bars, xau_price) if xau_bars else ([], [])
+    btc_price = prices.get("BTCUSD", {}).get("price", 0)
+    oil_price = prices.get("USOIL", {}).get("price", 0)
+    xau_sup, xau_res = calc_zones(all_bars.get("XAUUSD"), xau_price) if all_bars.get("XAUUSD") else ([], [])
+    btc_sup, btc_res = calc_zones(all_bars.get("BTCUSD"), btc_price) if all_bars.get("BTCUSD") else ([], [])
+    oil_sup, oil_res = calc_zones(all_bars.get("USOIL"), oil_price) if all_bars.get("USOIL") else ([], [])
 
     lines = []
     lines.append(f"📊 <b>DAILY MARKET MAPPING</b>")
@@ -150,8 +156,8 @@ def generate_mapping():
         lines.append(f"   Current: <b>${xau_price:.2f}</b>")
         lines.append("")
 
-        if supports:
-            for i, s in enumerate(supports[:3]):
+        if xau_sup:
+            for i, s in enumerate(xau_sup[:3]):
                 zone_low = round(s - 5, 2)
                 zone_high = round(s + 5, 2)
                 label = ["Support Terdekat", "Qm Buy + RBS", "Last Support H4"][i] if i < 3 else f"Support {i+1}"
@@ -159,14 +165,38 @@ def generate_mapping():
                 lines.append(f"   {label}")
                 lines.append("")
 
-        if resistances:
-            for i, r in enumerate(resistances[:3]):
+        if xau_res:
+            for i, r in enumerate(xau_res[:3]):
                 zone_low = round(r - 5, 2)
                 zone_high = round(r + 5, 2)
                 label = ["Resisten Terdekat", "Break + Retest Resisten", "SBR + TL H4"][i] if i < 3 else f"Resistance {i+1}"
                 lines.append(f"📉 <b>ZONE SELL {zone_low}-{zone_high}:</b>")
                 lines.append(f"   {label}")
                 lines.append("")
+
+    # ── BTCUSD Zones ──
+    if btc_price > 0 and btc_sup and btc_res:
+        lines.append(f"━━━━━━━━━━━━━━━━")
+        lines.append(f"₿ <b>BTCUSD SWING ZONES (H4)</b>")
+        lines.append(f"   Current: <b>${btc_price:.1f}</b>")
+        lines.append("")
+        for i, s in enumerate(btc_sup[:2]):
+            lines.append(f"📈 <b>Support {i+1}:</b> ${s:.1f}")
+        for i, r in enumerate(btc_res[:2]):
+            lines.append(f"📉 <b>Resistance {i+1}:</b> ${r:.1f}")
+        lines.append("")
+
+    # ── USOIL Zones ──
+    if oil_price > 0 and oil_sup and oil_res:
+        lines.append(f"━━━━━━━━━━━━━━━━")
+        lines.append(f"🛢 <b>USOIL SWING ZONES (H4)</b>")
+        lines.append(f"   Current: <b>${oil_price:.2f}</b>")
+        lines.append("")
+        for i, s in enumerate(oil_sup[:2]):
+            lines.append(f"📈 <b>Support {i+1}:</b> ${s:.2f}")
+        for i, r in enumerate(oil_res[:2]):
+            lines.append(f"📉 <b>Resistance {i+1}:</b> ${r:.2f}")
+        lines.append("")
 
     # ── Session Info ──
     hour = now.hour
@@ -198,11 +228,11 @@ def generate_mapping():
 
     # ── CTA ──
     lines.append(f"━━━━━━━━━━━━━━━━")
-    lines.append(f"⚡ Monitor area Buy/Sell di atas — tunggu konfirmasi setup sebelum entry!")
-    lines.append(f"📱 Live signal: /analyze xauusd")
+    lines.append(f"⚡ Monitor zona Buy/Sell di atas — tunggu konfirmasi setup sebelum entry!")
+    lines.append(f"📱 Live signal: /analyze xauusd | /analyze btcusd | /analyze usoil")
     lines.append(f"🤖 Auto-trade: /autosync on")
     lines.append(f"")
-    lines.append(f"<i>#VilonaTradeFX #Gold #XAUUSD #MarketMapping</i>")
+    lines.append(f"<i>#VilonaTradeFX #XAUUSD #BTCUSD #USOIL #DailyMapping #TradingSignals</i>")
 
     return "\n".join(lines)
 
