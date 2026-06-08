@@ -721,11 +721,7 @@ function setLang(l){
     if(el.dataset.lang===l) el.classList.remove('hidden');
     else el.classList.add('hidden');
   });
-  document.querySelectorAll('[lang]').forEach(function(el){
-    if(el.getAttribute('lang')===l) el.classList.remove('hidden');
-    else el.classList.add('hidden');
-  });
-  // Also show/hide lang buttons
+  // Show/hide lang buttons
   document.querySelectorAll('.lang-b').forEach(function(b){
     b.classList.toggle('on', b.classList.contains(l));
   });
