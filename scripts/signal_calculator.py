@@ -163,16 +163,25 @@ def compute_signal(mtf_result: dict) -> dict | None:
     # Count engine agreement for the dominant TFs
     total_engines = 0
     agreeing_engines = 0
+    non_hold_engines = 0
     for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
         tf = tfs.get(tf_name, {})
         for eng_name, eng_data in tf.get("engines", {}).items():
             total_engines += 1
-            if eng_data.get("direction") == action:
+            direction = eng_data.get("direction")
+            if direction == action:
                 agreeing_engines += 1
+            if direction in ("BUY", "SELL"):
+                non_hold_engines += 1
 
     if total_engines > 0:
         pct = round(agreeing_engines / total_engines * 100)
-        reason_parts.append(f"{agreeing_engines}/{total_engines} engines agree ({pct}%)")
+        # Show active participation if many HOLD
+        if non_hold_engines > 0 and non_hold_engines < total_engines * 0.8:
+            active_pct = round(agreeing_engines / non_hold_engines * 100) if non_hold_engines > 0 else 0
+            reason_parts.append(f"{agreeing_engines}/{total_engines} engines | {active_pct}% of active")
+        else:
+            reason_parts.append(f"{agreeing_engines}/{total_engines} engines agree ({pct}%)")
 
     if flags:
         reason_parts.append(f"⚠️ {'; '.join(flags[:2])}")
@@ -259,14 +268,38 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
             ct_ok = False
     checks["counter_trend"] = {"passed": ct_ok, "flags": flags[:2] if flags else []}
 
-    # Check 4: Minimum engine agreement (50%)
+    # Check 4: Minimum engine agreement (50% of active voters)
+    # HOLD = abstain, not rejection. Only count engines with BUY/SELL opinion.
     eng_ok = True
     if total_eng > 0:
-        eng_pct = agree_eng / total_eng
-        eng_ok = eng_pct >= 0.50
-        checks["engine_agreement"] = {"passed": eng_ok, "value": round(eng_pct, 3), "min": 0.50, "agree": agree_eng, "total": total_eng}
-    else:
-        checks["engine_agreement"] = {"passed": True, "value": 0, "min": 0.50, "agree": 0, "total": 0}
+        # Count non-HOLD engines (those with BUY/SELL opinion)
+        non_hold = 0
+        for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
+            tf = tfs.get(tf_name, {})
+            engines = tf.get("engines", {})
+            for eng_data in engines.values():
+                d = eng_data.get("direction")
+                if d in ("BUY", "SELL"):
+                    non_hold += 1
+        
+        # Requirement 1: at least 30% of total engines must have an opinion
+        participation_ok = non_hold >= max(6, total_eng * 0.3)
+        # Requirement 2: of those with opinion, at least 50% must agree with action
+        agree_pct = agree_eng / non_hold if non_hold > 0 else 0
+        agreement_ok = agree_pct >= 0.50
+        
+        eng_ok = participation_ok and agreement_ok
+        checks["engine_agreement"] = {
+            "passed": eng_ok,
+            "agree_pct": round(agree_pct, 3),
+            "agree": agree_eng,
+            "total": total_eng,
+            "non_hold": non_hold,
+            "participation_ok": participation_ok,
+            "agreement_ok": agreement_ok,
+            "min_participation": 0.30,
+            "min_agreement": 0.50,
+        }
 
     # Check 4: Macro vs action alignment
     macro_ok = True
@@ -286,7 +319,7 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
             "alignment": f"MTF alignment conflict ({alignment})",
             "counter_trend": f"Counter-trend: {flags[0] if flags else 'unknown'}",
             "macro_alignment": f"Action {action} vs macro {macro}",
-            "engine_agreement": f"Only {checks['engine_agreement'].get('agree',0)}/{checks['engine_agreement'].get('total',0)} engines agree (need 50%+)",
+            "engine_agreement": f"Only {checks['engine_agreement'].get('agree',0)}/{checks['engine_agreement'].get('non_hold',0)} non-HOLD engines agree (need 50%+)",
         }
         first_fail = failures[0]
         reason = reasons.get(first_fail, "Quality gate failed")
