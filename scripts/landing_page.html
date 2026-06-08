@@ -560,8 +560,8 @@ td.pn{color:var(--red)}
         <li>Free EA Bridge</li>
         <li>Name on donor wall</li>
       </ul>
-      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
-      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
+      <button onclick="directPay(50000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp50K</button>
+      <button onclick="directPay(50000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp50K</button>
     </div>
     <div class="dn-c feat">
       <div class="dn-l" data-lang="id">Montir Kepercayaan</div>
@@ -581,8 +581,8 @@ td.pn{color:var(--red)}
         <li>VIP Telegram group</li>
         <li>Daily performance report</li>
       </ul>
-      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-p" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
-      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-p hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
+      <button onclick="directPay(150000)" class="btn btn-p" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp150K</button>
+      <button onclick="directPay(150000)" class="btn btn-p hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp150K</button>
     </div>
     <div class="dn-c">
       <div class="dn-l" data-lang="id">Sultan Server</div>
@@ -604,23 +604,17 @@ td.pn{color:var(--red)}
         <li>1-on-1 setup support</li>
         <li>Sultan badge 👑</li>
       </ul>
-      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s" style="padding:8px;font-size:11px" target="_blank" data-lang="id">💚 Donasi</a>
-      <a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s hidden" style="padding:8px;font-size:11px" target="_blank" data-lang="en">💚 Donate</a>
+      <button onclick="directPay(500000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp500K</button>
+      <button onclick="directPay(500000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp500K</button>
     </div>
   </div>
 
   <!-- Direct Payment Row -->
   <div style="margin-bottom:12px">
     <div class="cd-sm" style="text-align:center">
-      <div style="font-size:11px;color:var(--txt2);margin-bottom:6px" data-lang="id">⚡ Atau bayar langsung via QRIS/VA tanpa ribet:</div>
-      <div style="font-size:11px;color:var(--txt2);margin-bottom:6px;display:none" data-lang="en">⚡ Or pay directly via QRIS/VA — no hassle:</div>
-      <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-        <button onclick="directPay(50000)" class="btn btn-s" style="padding:8px 14px;font-size:11px">💚 Rp50.000</button>
-        <button onclick="directPay(150000)" class="btn btn-p" style="padding:8px 14px;font-size:11px">💚 Rp150.000 ★</button>
-        <button onclick="directPay(500000)" class="btn btn-s" style="padding:8px 14px;font-size:11px">💚 Rp500.000</button>
-        <button onclick="directPayCustom()" class="btn btn-s" style="padding:8px 14px;font-size:11px">💰 Custom</button>
-      </div>
-      <div id="pay-status" style="font-size:10px;color:var(--txt2);margin-top:6px"></div>
+      <div style="font-size:10px;color:var(--txt2);margin-bottom:4px" data-lang="id">Atau via Telegram: <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" style="color:var(--cyan)">@berkahkaryaforexbotbot</a> · <button onclick="directPayCustom()" style="background:none;border:none;color:var(--cyan);cursor:pointer;font-size:10px;text-decoration:underline;padding:0">💰 Nominal custom</button></div>
+      <div style="font-size:10px;color:var(--txt2);margin-bottom:4px;display:none" data-lang="en">Or via Telegram: <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" style="color:var(--cyan)">@berkahkaryaforexbotbot</a> · <button onclick="directPayCustom()" style="background:none;border:none;color:var(--cyan);cursor:pointer;font-size:10px;text-decoration:underline;padding:0">💰 Custom amount</button></div>
+      <div id="pay-status" style="font-size:10px;color:var(--txt2);margin-top:4px"></div>
     </div>
   </div>
 
