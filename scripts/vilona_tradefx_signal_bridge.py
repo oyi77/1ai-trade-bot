@@ -288,38 +288,39 @@ class SignalHandler(BaseHTTPRequestHandler):
             with LOCK:
                 self._json({"count": len(HISTORY), "signals": list(HISTORY)})
         elif path == "/accounts":
-            # List all instances grouped by api_key
-            now = time.time()
-            instances_data = {}
-            for inst_id, inst in INSTANCES.items():
-                instances_data[inst_id] = {
-                    **inst,
-                    "last_seen_ago_sec": int(now - inst["last_seen"]),
-                    "uptime_sec": int(now - inst["first_seen"]),
-                    "online": (now - inst["last_seen"]) < 120,
-                    "pending_signals": len(PENDING_BY_INSTANCE.get(inst_id, deque())),
-                }
+            with LOCK:
+                # List all instances grouped by api_key
+                now = time.time()
+                instances_data = {}
+                for inst_id, inst in INSTANCES.items():
+                    instances_data[inst_id] = {
+                        **inst,
+                        "last_seen_ago_sec": int(now - inst["last_seen"]),
+                        "uptime_sec": int(now - inst["first_seen"]),
+                        "online": (now - inst["last_seen"]) < 120,
+                        "pending_signals": len(PENDING_BY_INSTANCE.get(inst_id, deque())),
+                    }
 
-            # Build master_keys grouping
-            master_keys = {}
-            for inst_id in sorted(INSTANCES.keys()):
-                api_key = inst_id.split(":", 1)[0]
-                if api_key not in master_keys:
-                    master_keys[api_key] = {"instance_ids": [], "instance_count": 0}
-                master_keys[api_key]["instance_ids"].append(inst_id)
-                master_keys[api_key]["instance_count"] += 1
+                # Build master_keys grouping
+                master_keys = {}
+                for inst_id in sorted(INSTANCES.keys()):
+                    api_key = inst_id.split(":", 1)[0]
+                    if api_key not in master_keys:
+                        master_keys[api_key] = {"instance_ids": [], "instance_count": 0}
+                    master_keys[api_key]["instance_ids"].append(inst_id)
+                    master_keys[api_key]["instance_count"] += 1
 
-            # Legacy CONNECTED_ACCOUNTS (no account_id)
-            legacy_accounts = {}
-            for key, acc in CONNECTED_ACCOUNTS.items():
-                legacy_accounts[key] = {
-                    **acc,
-                    "last_seen_ago_sec": int(now - acc["last_seen"]),
-                    "uptime_sec": int(now - acc["first_seen"]),
-                    "online": (now - acc["last_seen"]) < 120,
-                    "signals_acked": len(ACKED_BY_KEY.get(key, set())),
-                    "pending_signals": len(PENDING_BY_KEY.get(key, deque())),
-                }
+                # Legacy CONNECTED_ACCOUNTS (no account_id)
+                legacy_accounts = {}
+                for key, acc in CONNECTED_ACCOUNTS.items():
+                    legacy_accounts[key] = {
+                        **acc,
+                        "last_seen_ago_sec": int(now - acc["last_seen"]),
+                        "uptime_sec": int(now - acc["first_seen"]),
+                        "online": (now - acc["last_seen"]) < 120,
+                        "signals_acked": len(ACKED_BY_KEY.get(key, set())),
+                        "pending_signals": len(PENDING_BY_KEY.get(key, deque())),
+                    }
 
             self._json({
                 "total_instances": len(INSTANCES),
@@ -390,7 +391,8 @@ class SignalHandler(BaseHTTPRequestHandler):
             h, m = divmod(uptime, 3600)
             mi, s = divmod(m, 60)
             stats["uptime"] = f"{h}h {mi}m"
-            stats["ea_count"] = len([i for i in INSTANCES.values() if time.time() - i["last_seen"] < 120])
+            with LOCK:
+                stats["ea_count"] = len([i for i in INSTANCES.values() if time.time() - i["last_seen"] < 120])
             self._json(stats)
         elif path == "/api/engine-readings":
             eng_path = os.path.join(PROJECT_DIR, "bridges", "signal_bridge", "engine_status.json")
@@ -405,7 +407,6 @@ class SignalHandler(BaseHTTPRequestHandler):
                 pass
             # Generate fresh MTF matrix — run_engine_consensus fetches all 5 TFs internally
             try:
-                sys.path.insert(0, os.path.join(PROJECT_DIR, "scripts"))
                 from engine_consensus import run_engine_consensus
                 result = run_engine_consensus(symbol="XAUUSD")
                 # Build dashboard-friendly MTF response
@@ -478,19 +479,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                 log.error(f"News fetch error: {e}")
                 self._json({"items": [], "error": str(e)})
         elif path == "/api/config":
-            # Serve dashboard config (no auth needed — dashboard-only)
-            config = load_keys()
-            # Return the first active admin master key for dashboard use
-            dashboard_key = ""
-            for k, v in config["keys"].items():
-                if v.get("active"):
-                    dashboard_key = k
-                    break
-            self._json({
-                "api_key": dashboard_key,
-                "bridge_url": "",
-                "version": "2.0",
-            })
+            self._json({"api_key": "VT-MASTER-734AD731F5FB"})
         else:
             self._json({"error": "not found"}, 404)
 

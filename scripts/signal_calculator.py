@@ -235,8 +235,9 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
             ct_ok = score >= 0.75
         elif action == "SELL" and macro == "BULLISH":
             ct_ok = score >= 0.75
-        else:
-            ct_ok = False
+        elif macro == "NEUTRAL":
+            ct_ok = False  # Counter-trend only reject on neutral
+        # else: action aligns with macro → allow
     checks["counter_trend"] = {"passed": ct_ok, "flags": flags[:2] if flags else []}
 
     # Check 4: Macro vs action alignment
@@ -248,7 +249,7 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
     checks["macro_alignment"] = {"passed": macro_ok, "macro": macro}
 
     # Overall
-    passed = score_ok and align_ok and ct_ok
+    passed = score_ok and align_ok and ct_ok and macro_ok
 
     if not passed:
         failures = [k for k, v in checks.items() if not v.get("passed", True)]

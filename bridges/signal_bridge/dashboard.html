@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0a0e17;--surface:#111827;--card:#1a2236;--card-hover:#1e2a40;--border:#2a3a5c;--text:#e2e8f0;--text-muted:#8899bb;--accent:#3b82f6;--buy:#22c55e;--sell:#ef4444;--gold:#f59e0b;--radius:12px;--shadow:0 4px 24px rgba(0,0,0,.4)}
+:root{--bg:#0a0e17;--surface:#111827;--card:#1a2236;--card-hover:#1e2a40;--border:#2a3a5c;--text:#e2e8f0;--text-muted:#8899bb;--accent:#3b82f6;--buy:#22c55e;--sell:#ef4444;--gold:#f59e0b;--grade-a:#22c55e;--grade-b:#3b82f6;--grade-c:#f59e0b;--radius:12px;--shadow:0 4px 24px rgba(0,0,0,.4)}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:16px}
 .container{max-width:1500px;margin:0 auto}
 
@@ -107,6 +107,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .news-list{max-height:280px;overflow-y:auto}
 .news-list::-webkit-scrollbar{width:4px}
 .news-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.news-list{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
 .n-item{padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;line-height:1.3}
 .n-item:last-child{border-bottom:none}
 .n-item .nt{color:var(--text-muted);margin-right:6px}
@@ -133,10 +134,61 @@ td.rl{color:var(--sell);font-weight:700}
 td.pnl-pos{color:var(--buy)}
 td.pnl-neg{color:var(--sell)}
 
+/* Grade Badges */
+.grade-badge{display:inline-block;padding:1px 8px;border-radius:4px;font-size:10px;font-weight:700}
+.grade-a{background:rgba(34,197,94,.15);color:var(--grade-a)}
+.grade-b{background:rgba(59,130,246,.15);color:var(--grade-b)}
+.grade-c{background:rgba(245,158,11,.12);color:var(--grade-c)}
+
+/* Trade History Timeline */
+.trade-history-wrap{grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:18px}
+.trade-history-wrap h3{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+
+/* Signal Timeline Cards */
+.signal-timeline{display:grid;gap:10px;max-height:500px;overflow-y:auto;padding-right:6px}
+.signal-timeline::-webkit-scrollbar{width:4px}
+.signal-timeline::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+.signal-timeline{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.st-card{background:var(--card);border-radius:8px;padding:12px 14px;border-left:3px solid;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.st-card.buy{border-left-color:var(--buy)}
+.st-card.sell{border-left-color:var(--sell)}
+.st-card.hold{border-left-color:var(--gold)}
+.st-icon{font-size:20px;line-height:1;text-align:center;width:28px}
+.st-info{min-width:0}
+.st-info .st-row1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.st-info .st-action{font-size:14px;font-weight:700}
+.st-info .st-action.buy{color:var(--buy)}
+.st-info .st-action.sell{color:var(--sell)}
+.st-info .st-symbol{font-size:12px;color:var(--text-muted)}
+.st-info .st-time{font-size:10px;color:var(--text-muted)}
+.st-info .st-price{font-size:12px;margin-top:2px}
+.st-info .st-detail{font-size:11px;color:var(--text-muted);margin-top:3px;display:none;padding-top:6px;border-top:1px solid var(--border)}
+.st-info .st-detail.open{display:block}
+.st-detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px}
+.st-detail-item{background:rgba(0,0,0,.2);border-radius:4px;padding:4px 6px}
+.st-detail-item .dl{font-size:9px;color:var(--text-muted);text-transform:uppercase}
+.st-detail-item .dv{font-size:12px;font-weight:600}
+.st-detail-item .dv.buy{color:var(--buy)}
+.st-detail-item .dv.sell{color:var(--sell)}
+.st-reason{font-size:10px;color:var(--text-muted);margin-top:4px;line-height:1.3;font-style:italic}
+.st-expand{font-size:11px;color:var(--accent);cursor:pointer;text-decoration:none}
+.st-expand:hover{text-decoration:underline}
+.st-meta{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+
+/* Trade History Stats Bar */
+.th-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
+.th-stat{background:var(--card);border-radius:8px;padding:10px;text-align:center}
+.th-stat .tl{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)}
+.th-stat .tv{font-size:18px;font-weight:800;margin-top:2px}
+.th-stat .ts{font-size:9px;color:var(--text-muted);margin-top:1px}
+
+/* Security Badge */
+.mtf-badge{font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,.12);color:var(--accent)}
+
 .footer{margin-top:16px;text-align:center;font-size:11px;color:var(--text-muted);padding:12px;border-top:1px solid var(--border)}
 
-@media(max-width:1100px){.metrics{grid-template-columns:repeat(2,1fr)}.chart-row{grid-template-columns:1fr}.mid-grid{grid-template-columns:1fr}}
-@media(max-width:600px){body{padding:10px}.metrics{grid-template-columns:1fr}.mv{font-size:22px}}
+@media(max-width:1100px){.metrics{grid-template-columns:repeat(2,1fr)}.chart-row{grid-template-columns:1fr}.mid-grid{grid-template-columns:1fr}.th-stats{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:600px){body{padding:10px}.metrics{grid-template-columns:1fr}.mv{font-size:22px}.th-stats{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
@@ -173,7 +225,7 @@ td.pnl-neg{color:var(--sell)}
     <div class="ms" id="bridge-detail">-- uptime &middot; <span id="bridge-queue">--</span> queued</div>
   </div>
   <div class="metric-card mc-sim">
-    <div class="ml">💰 $100 Simulator</div>
+    <div class="ml">💰 Simulator</div>
     <div class="mv" id="sim-balance" style="color:#ec4899">--</div>
     <div class="ms" id="sim-detail">-- lot &middot; <span id="sim-pnl">--</span></div>
   </div>
@@ -241,6 +293,28 @@ td.pnl-neg{color:var(--sell)}
   </div>
 </div>
 
+<!-- ═══ TRADE HISTORY + TIMELINE ═══ -->
+<div class="trade-history-wrap" id="trade-history-section">
+  <h3>📜 Signal History</h3>
+  
+  <!-- Stats Bar -->
+  <div class="th-stats" id="th-stats">
+    <div class="th-stat"><div class="tl">📊 Total</div><div class="tv" id="th-total">0</div><div class="ts">semua signal</div></div>
+    <div class="th-stat"><div class="tl">🔥 Grade A</div><div class="tv" style="color:var(--grade-a)" id="th-grade-a">0</div><div class="ts">high conviction</div></div>
+    <div class="th-stat"><div class="tl">⚡ Grade B</div><div class="tv" style="color:var(--grade-b)" id="th-grade-b">0</div><div class="ts">signal valid</div></div>
+    <div class="th-stat"><div class="tl">📌 Grade C</div><div class="tv" style="color:var(--grade-c)" id="th-grade-c">0</div><div class="ts">standar</div></div>
+    <div class="th-stat"><div class="tl">🏆 Best RR</div><div class="tv" style="color:var(--buy)" id="th-best-rr">--</div><div class="ts">risk/reward</div></div>
+  </div>
+
+  <!-- Signal Timeline -->
+  <div id="th-body">
+    <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:30px">
+      <div style="font-size:28px;margin-bottom:8px;opacity:.4">📜</div>
+      <p>Belum ada sinyal yang dihasilkan. <br>Signal akan muncul saat quality gate lolos.</p>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ BOTTOM: STATUS + TRADE TABLE ═══ -->
 <div style="display:grid;grid-template-columns:1fr 2.5fr;gap:14px;margin-bottom:18px">
   <!-- Status Grid -->
@@ -295,9 +369,18 @@ td.pnl-neg{color:var(--sell)}
 </script>
 
 <script>
-const API_KEY = 'VT-MASTER-734AD731F5FB';
+let API_KEY = '';
+// Fetch API key from backend before first load
+(async function initConfig() {
+  try {
+    const r = await fetch('/api/config', { signal: AbortSignal.timeout(3000) });
+    const cfg = await r.json();
+    if (cfg.api_key) API_KEY = cfg.api_key;
+  } catch(e) { console.warn('Config fetch failed, using empty API key'); }
+})();
 const BRIDGE = '';
 let xauPrev = 0, firstRun = true;
+let lastTradeLog = [];
 
 function $(id){return document.getElementById(id)}
 function ts(){return new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Jakarta'})+' WIB'}
@@ -311,32 +394,113 @@ function fmtPnL(v){
 function fmtPips(v){if(v==null)return'--';const n=parseFloat(v);return(n>=0?'+':'')+n.toFixed(1)}
 function fmtPrice(v){if(v==null||!v)return'--';return'$'+parseFloat(v).toFixed(2)}
 
+function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function gradeBadge(g){
+  if(!g) return '';
+  const cls = 'grade-badge grade-' + g.toLowerCase();
+  return `<span class="${cls}">${g.toUpperCase()}</span>`;
+}
+
+function fmtTime(ts){
+  if(!ts) return '--';
+  const d = new Date(ts);
+  if(isNaN(d.getTime())) return '--';
+  return d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short',timeZone:'Asia/Jakarta'});
+}
+
 // ── SIMULATOR $100 ──
 let simBalance = 100.00;
-const SIM_LOT = 0.01; // micro lot
-const SIM_VAL_PER_PIP = 0.10; // ~$0.10/pip for 0.01 lot XAUUSD
+const SIM_LOT = 0.01;
+const SIM_VAL_PER_PIP = 0.10;
 
-function updateSimulator(trades) {
-  if (!trades || !trades.length) return;
-  // Recalculate from scratch based on trade outcomes
-  let closedTotal = 0;
-  for (const t of trades) {
-    if (t.outcome === 'TP_HIT' || t.outcome === 'SL_HIT') {
-      const pips = parseFloat(t.pips) || 0;
-      closedTotal += pips * SIM_VAL_PER_PIP;
-    }
+// ── TRADE LOG VISUALIZATION ──
+function renderTradeLog(log) {
+  const body = $('th-body');
+  if (!log || !log.length) {
+    body.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:30px"><div style="font-size:28px;margin-bottom:8px;opacity:.4">📜</div><p>Belum ada sinyal yang dihasilkan.<br>Signal akan muncul saat quality gate lolos.</p></div>';
+    $('th-total').textContent = '0';
+    $('th-grade-a').textContent = '0';
+    $('th-grade-b').textContent = '0';
+    $('th-grade-c').textContent = '0';
+    $('th-best-rr').textContent = '--';
+    return;
   }
-  simBalance = 100 + closedTotal;
-  const netPnl = closedTotal;
-  $('sim-balance').textContent = '$' + simBalance.toFixed(2);
-  $('sim-balance').style.color = simBalance >= 100 ? 'var(--buy)' : 'var(--sell)';
-  $('sim-detail').innerHTML = SIM_LOT.toFixed(2) + ' lot &middot; <span style="color:'+(netPnl>=0?'var(--buy)':'var(--sell)')+'">'+(netPnl>=0?'+':'')+netPnl.toFixed(2)+'</span>';
+
+  // Stats
+  const total = log.length;
+  const gradeA = log.filter(s => s.grade === 'A').length;
+  const gradeB = log.filter(s => s.grade === 'B').length;
+  const gradeC = log.filter(s => s.grade === 'C').length;
+  const bestRR = log.reduce((b, s) => Math.max(b, parseFloat(s.rr) || 0), 0);
+
+  $('th-total').textContent = total;
+  $('th-grade-a').textContent = gradeA;
+  $('th-grade-b').textContent = gradeB;
+  $('th-grade-c').textContent = gradeC;
+  $('th-best-rr').textContent = '1:' + bestRR.toFixed(1);
+
+  // Timeline cards (newest first)
+  body.innerHTML = '<div class="signal-timeline">' +
+    [...log].reverse().map((sig, i) => {
+      const action = (sig.action || '').toUpperCase();
+      const isBuy = action === 'BUY';
+      const isSell = action === 'SELL';
+      const dirClass = isBuy ? 'buy' : isSell ? 'sell' : 'hold';
+      const icon = isBuy ? '🟢' : isSell ? '🔴' : '⚪️';
+      const grade = sig.grade || 'C';
+      const conf = sig.confidence ? (sig.confidence > 1 ? sig.confidence.toFixed(0) : (sig.confidence * 100).toFixed(0)) + '%' : '--';
+      const rr = sig.rr ? '1:' + parseFloat(sig.rr).toFixed(1) : '--';
+      const pips_tp = sig.pips_target || '--';
+      const pips_sl = sig.pips_sl || '--';
+      const entryVal = fmtPrice(sig.entry);
+      const slVal = fmtPrice(sig.sl);
+      const tp1Val = fmtPrice(sig.tp1);
+      const tp2Val = fmtPrice(sig.tp2);
+      const align = sig.mtf_alignment || '--';
+      const macro = sig.macro_trend || '--';
+      const consensus = sig.consensus_score ? (sig.consensus_score * 100).toFixed(0) + '%' : '--';
+      
+      return `<div class="st-card ${dirClass}">
+        <div class="st-icon">${icon}</div>
+        <div class="st-info">
+          <div class="st-row1">
+            <span class="st-action ${dirClass}">${action}</span>
+            <span class="st-symbol">${esc(sig.symbol || 'XAUUSD')}</span>
+            ${gradeBadge(grade)}
+            <span class="mtf-badge">${esc(align)}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${conf} conf · RR ${rr}</span>
+          </div>
+          <div class="st-price">Entry ${entryVal} · SL ${slVal} · TP1 ${tp1Val} ${tp2Val ? '· TP2 ' + tp2Val : ''}</div>
+          <div class="st-time">${fmtTime(sig.timestamp)}</div>
+          <div class="st-detail" id="st-detail-${i}">
+            <div class="st-detail-grid">
+              <div class="st-detail-item"><div class="dl">Pips Target</div><div class="dv ${isBuy?'buy':'sell'}">+${esc(pips_tp)}pt</div></div>
+              <div class="st-detail-item"><div class="dl">Pips SL</div><div class="dv sell">-${esc(pips_sl)}pt</div></div>
+              <div class="st-detail-item"><div class="dl">Risk/Reward</div><div class="dv" style="color:var(--gold)">${rr}</div></div>
+              <div class="st-detail-item"><div class="dl">Macro</div><div class="dv" style="color:${macro==='BULLISH'?'var(--buy)':macro==='BEARISH'?'var(--sell)':'var(--gold)'}">${esc(macro)}</div></div>
+              <div class="st-detail-item"><div class="dl">Consensus</div><div class="dv">${consensus}</div></div>
+              <div class="st-detail-item"><div class="dl">Confidence</div><div class="dv">${conf}</div></div>
+            </div>
+            <div class="st-reason">${esc(sig.reason || '')}</div>
+          </div>
+          <a class="st-expand" onclick="toggleDetail(${i})">▼ Detail</a>
+        </div>
+        <div class="st-meta">
+          <div style="font-size:10px;color:var(--text-muted)">#${esc(sig.id ? sig.id.slice(-6) : (total - i).toString())}</div>
+          <div style="font-size:10px;color:var(--text-muted)">${sig.price ? '$'+parseFloat(sig.price).toFixed(1) : ''}</div>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+}
+
+function toggleDetail(i) {
+  const el = document.getElementById('st-detail-' + i);
+  if (el) el.classList.toggle('open');
 }
 
 // ── AI FUNDAMENTAL ANALYSIS ──
 function calcFundamental(price, trades) {
   if (!price || price<=0) return;
-  // Trend: compare price vs EMA approximation (simple: last 5 trades avg close)
   const closes = trades.filter(t=>t.close_price).map(t=>parseFloat(t.close_price)).filter(c=>c>0);
   let trend = 'Neutral', rsi = 50, atr = 0, s1 = 0, r1 = 0, ema200 = price;
   
@@ -344,7 +508,6 @@ function calcFundamental(price, trades) {
     const avgClose = closes.reduce((a,b)=>a+b,0)/closes.length;
     trend = price > avgClose * 1.002 ? 'Bullish ↗️' : price < avgClose * 0.998 ? 'Bearish ↘️' : 'Neutral ↔️';
     
-    // Approximate RSI from recent gains/losses
     let gains = 0, losses = 0, count = 0;
     for (let i=1;i<closes.length;i++){
       const d = closes[i] - closes[i-1];
@@ -360,19 +523,16 @@ function calcFundamental(price, trades) {
       }
     }
     
-    // ATR approximation
     const diffs = [];
     for (let i=1;i<closes.length;i++) diffs.push(Math.abs(closes[i]-closes[i-1]));
     atr = diffs.length ? (diffs.reduce((a,b)=>a+b,0)/diffs.length).toFixed(1) : 0;
     
-    // S/R levels from highs/lows
     const highs = trades.filter(t=>t.close_price).map(t=>parseFloat(t.close_price)).filter(c=>c>0);
     const maxH = Math.max(...highs), minL = Math.min(...highs);
     const range = maxH - minL;
     s1 = (price - range*0.382).toFixed(1);
     r1 = (price + range*0.382).toFixed(1);
     
-    // EMA 200 approx (last 200 closes avg)
     ema200 = closes.length ? (closes.reduce((a,b)=>a+b,0)/closes.length).toFixed(1) : price.toFixed(1);
   }
   
@@ -384,7 +544,6 @@ function calcFundamental(price, trades) {
   $('ai-r1').textContent = '$'+r1;
   $('ai-ema200').textContent = '$'+ema200;
   
-  // Verdict
   let verdict = 'HOLD';
   let reason = '';
   const aboveEma = price > parseFloat(ema200);
@@ -409,11 +568,6 @@ function calcFundamental(price, trades) {
 // ── NEWS FEED ──
 async function fetchNews() {
   try {
-    // Use RSS-to-JSON proxy for XAUUSD news
-    const sources = [
-      'https://www.tradingview.com/symbols/XAUUSD/news/content-preview/',
-      'https://api.gold-api.com/news'
-    ];
     const r = await fetch('https://rss.app/feeds/v1.1/B1g8Th97KpPffqls.json', { signal: AbortSignal.timeout(5000) });
     const d = await r.json();
     const items = d.items || [];
@@ -422,14 +576,13 @@ async function fetchNews() {
       newsEl.innerHTML = items.slice(0, 10).map(n => `
         <div class="n-item">
           <span class="nt">${new Date(n.date_published||n.date_created||Date.now()).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'})}</span>
-          <span class="ns"><span class="nh" onclick="window.open('${n.url||'#'}','_blank')">${n.title}</span></span>
+          <span class="ns"><span class="nh" onclick="window.open('${esc(n.url)||'#'}','_blank')">${esc(n.title)}</span></span>
         </div>
       `).join('');
     } else {
       newsEl.innerHTML = '<div style="color:var(--text-muted);font-size:11px;padding:6px">No recent XAUUSD headlines</div>';
     }
   } catch(e) {
-    // Fallback headlines
     const fallback = [
       {t:'XAUUSD holds near $4,320 as traders await US data',h:'15m'},
       {t:'Gold steady ahead of Fed minutes release this week',h:'30m'},
@@ -462,7 +615,6 @@ async function fetchEnginePulse() {
     const hier = d.hierarchical || {};
     const tfKeys = Object.keys(tfs);
 
-    // Hierarchical verdict bar
     const macro = hier.macro_trend || 'NEUTRAL';
     const align = hier.mtf_alignment || 'NONE';
     const macroEmoji = macro === 'BULLISH' ? '🟢' : macro === 'BEARISH' ? '🔴' : '⚪️';
@@ -471,7 +623,6 @@ async function fetchEnginePulse() {
     $('ep-verdict').innerHTML = `<span style="color:var(--text-muted)">🏛 ${macroEmoji} ${macro} | ${alignEmoji} ${align} | </span><span class="${vCls}" style="font-weight:700">${hier.verdict||'HOLD'} (${((hier.consensus_score||0)*100).toFixed(0)}%)</span>`;
 
     if (tfKeys.length) {
-      // Per-timeframe panels
       ep.innerHTML = tfKeys.map(tf => {
         const tfData = tfs[tf];
         const verdict = tfData.verdict||'HOLD';
@@ -480,7 +631,6 @@ async function fetchEnginePulse() {
         const w = (tfData.weight||0)*100;
         const engs = tfData.engines||{};
 
-        // Engine details for this TF
         const engList = Object.keys(engs).map(k => {
           const e = engs[k];
           const eDir = e.direction||'HOLD';
@@ -488,10 +638,9 @@ async function fetchEnginePulse() {
           const eConf = e.confidence ? (e.confidence > 1 ? e.confidence.toFixed(0) : (e.confidence*100).toFixed(0)) : '--';
           const names = {quant:'Q', fvg:'FV', crt:'CR', smc:'SM', trend:'Tr', ultimate:'Ul', hermes:'He', sequoia:'Se', tv:'TV'};
           const lbl = names[k.toLowerCase()] || k.charAt(0).toUpperCase();
-          return `<span class="eng-dot ${eCls}" title="${k}: ${eDir} ${eConf}%">${lbl}</span>`;
+          return `<span class="eng-dot ${eCls}" title="${esc(k)}: ${esc(eDir)} ${esc(eConf)}%">${lbl}</span>`;
         }).join('');
 
-        // Structure/macro details
         let details = '';
         if (tfData.macro) {
           const m = tfData.macro;
@@ -506,19 +655,17 @@ async function fetchEnginePulse() {
         }
 
         return `<div class="tf-panel">
-          <div class="tf-header"><span class="tf-name">${tf}</span><span class="d ${vCls2}">${verdict} ${conf.toFixed(0)}%</span><span class="tf-w">w:${w.toFixed(0)}%</span></div>
+          <div class="tf-header"><span class="tf-name">${esc(tf)}</span><span class="d ${vCls2}">${esc(verdict)} ${conf.toFixed(0)}%</span><span class="tf-w">w:${w.toFixed(0)}%</span></div>
           <div class="tf-engines">${engList}</div>
-          ${details ? `<div class="tf-detail">${details}</div>` : ''}
+          ${details ? `<div class="tf-detail">${esc(details)}</div>` : ''}
         </div>`;
       }).join('');
 
-      // Counter-trend flags
       const flags = d.counter_trend_flags || [];
       if (flags.length) {
         ep.innerHTML += '<div style="margin-top:8px;font-size:10px;color:var(--gold)">' + flags.map(f => '⚠️ ' + f).join('<br>') + '</div>';
       }
 
-      // Per-TF engine detail (hidden, expandable)
       ep.innerHTML += '<div style="margin-top:8px;font-size:10px;color:var(--text-muted);cursor:pointer" onclick="toggleMtfDetail()">▼ Expand engine details</div>';
       window._mtfTfs = tfs;
     } else {
@@ -535,15 +682,15 @@ function toggleMtfDetail() {
   const tfs = window._mtfTfs || {};
   const keys = Object.keys(tfs);
   if (!keys.length) return;
-  const html = '<div id="mtf-detail-expand" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;font-size:10px">' +
+  const html = '<div id="mtf-detail-expand" style="display:none;margin-top:6px;border-top:1px solid var(--border);padding-top:6px;font-size:10px">' +
     keys.map(tf => {
       const engs = tfs[tf].engines||{};
       const engHtml = Object.keys(engs).map(k => {
         const e = engs[k];
         const n = {quant:'Quant',fvg:'FVG',crt:'CRT/TBS',smc:'SMC',trend:'Trend',ultimate:'Ultimate',hermes:'Hermes',sequoia:'Sequoia'};
-        return `<div style="display:flex;justify-content:space-between;padding:2px 4px"><span>${n[k.toLowerCase()]||k}</span><span style="color:${e.direction==='BUY'?'var(--buy)':e.direction==='SELL'?'var(--sell)':'var(--text-muted)'}">${e.direction||'?'} ${e.confidence?(((e.confidence>1?e.confidence/100:e.confidence)*100).toFixed(0))+'%':''}</span></div>`;
+        return `<div style="display:flex;justify-content:space-between;padding:2px 4px"><span>${n[k.toLowerCase()]||esc(k)}</span><span style="color:${e.direction==='BUY'?'var(--buy)':e.direction==='SELL'?'var(--sell)':'var(--text-muted)'}">${esc(e.direction)||'?'} ${e.confidence?(((e.confidence>1?e.confidence/100:e.confidence)*100).toFixed(0))+'%':''}</span></div>`;
       }).join('');
-      return `<div style="margin-bottom:4px"><b>${tf}</b> ${engHtml}</div>`;
+      return `<div style="margin-bottom:4px"><b>${esc(tf)}</b> ${engHtml}</div>`;
     }).join('') + '</div>';
   document.getElementById('engine-pulse').insertAdjacentHTML('beforeend', html);
 }
@@ -551,13 +698,19 @@ function toggleMtfDetail() {
 // ── MAIN FETCH ──
 async function fetchAll() {
   try {
-    const [statsRes, bridgeRes] = await Promise.all([
+    const [statsRes, bridgeRes, tradeLogRes] = await Promise.all([
       fetch(BRIDGE + '/api/dash-stats'),
-      fetch(BRIDGE + '/status')
+      fetch(BRIDGE + '/status'),
+      fetch(BRIDGE + '/api/trade-log')
     ]);
     const statsData = await statsRes.json();
     let bridgeData;
     try { bridgeData = await bridgeRes.json(); } catch(e) { bridgeData = {}; }
+    let tradeLog;
+    try { tradeLog = await tradeLogRes.json(); } catch(e) { tradeLog = []; }
+
+    // Store trade log for rendering
+    lastTradeLog = tradeLog || [];
 
     const trades = statsData.trades || [];
     const total = statsData.total || 0;
@@ -565,6 +718,9 @@ async function fetchAll() {
     const losses = statsData.losses || 0;
     const wr = statsData.win_rate || 0;
     const pnl = statsData.total_profit_usd || statsData.total_profit || 0;
+
+    // ── Render Trade History ──
+    renderTradeLog(tradeLog);
 
     // ── Price ──
     const xauPrice = statsData.xau_price || 0;
@@ -587,6 +743,7 @@ async function fetchAll() {
     $('bot-total').innerHTML = total+' total signals &middot; P&L '+fmtPnL(pnl);
     $('stat-wins').textContent = wins;
     $('stat-losses').textContent = losses;
+    $('trade-count').textContent = total + ' total';
 
     if (trades.length) {
       const pipsArr = trades.map(t=>parseFloat(t.pips)||0).filter(p=>p!==0);
@@ -596,13 +753,12 @@ async function fetchAll() {
       }
     }
 
-    // Consecutive
     let cw=0,cl=0;
     for (const t of trades) {
       const r = (t.outcome||t.result||'').toUpperCase();
       if (r.includes('TP')||r==='WIN'){cw++;cl=0;}
       else if (r.includes('SL')||r==='LOSS'){cl++;cw=0;}
-      else break;
+      else {/* skip */}
     }
     $('stat-cwin').textContent=cw;
     $('stat-closs').textContent=cl;
@@ -621,9 +777,6 @@ async function fetchAll() {
     const session = hh>=8&&hh<16?'Asian':hh>=16&&hh<21?'London':hh>=21||hh<2?'New York':'Pacific';
     $('xau-session').textContent = session+' Session';
 
-    // ── Simulator ──
-    updateSimulator(trades);
-
     // ── AI Fundamental ──
     calcFundamental(xauPrice, trades);
 
@@ -638,37 +791,16 @@ async function fetchAll() {
         sigIndicator.className = 'sh-indicator active';
         sigIndicator.style.background = isBuy ? 'var(--buy)' : 'var(--sell)';
         $('signal-time').textContent = ts();
-        const confidence = sig.confidence ? (sig.confidence>1?(sig.confidence/100).toFixed(0):(sig.confidence*100).toFixed(0))+'%' : '--';
+        const confidence = sig.confidence ? (sig.confidence>1 ? sig.confidence.toFixed(0) : (sig.confidence*100).toFixed(0))+'%' : '--';
         const rr = sig.rr_ratio ? '1:'+parseFloat(sig.rr_ratio).toFixed(1) : '--';
         const slDist = sig.sl&&sig.entry ? Math.abs(sig.sl-sig.entry).toFixed(1) : '--';
-        signalEl.innerHTML = '<div style="margin-bottom:10px;font-size:12px;color:var(--text-muted);display:flex;gap:10px;flex-wrap:wrap"><span style="font-weight:700;'+(isBuy?'color:var(--buy)':'color:var(--sell)')+'">'+sig.action+'</span><span>'+(sig.symbol||'XAUUSD')+'</span><span>Conf: '+confidence+'</span><span>RR '+rr+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(sig.entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sig.sl)+' ('+slDist+' pt)</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(sig.tp)+'</div></div><div class="si"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">'+rr+'</div></div>'+(sig.tp1?'<div class="si"><div class="sl">TP1</div><div class="sv">'+fmtPrice(sig.tp1)+'</div></div>':'')+(sig.tp2?'<div class="si"><div class="sl">TP2</div><div class="sv">'+fmtPrice(sig.tp2)+'</div></div>':'')+'</div>';
+        signalEl.innerHTML = '<div style="margin-bottom:10px;font-size:12px;color:var(--text-muted);display:flex;gap:10px;flex-wrap:wrap"><span style="font-weight:700;'+(isBuy?'color:var(--buy)':'color:var(--sell)')+'">'+esc(sig.action)+'</span><span>'+esc(sig.symbol||'XAUUSD')+'</span><span>Conf: '+confidence+'</span><span>RR '+rr+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(sig.entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sig.sl)+' ('+slDist+' pt)</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(sig.tp)+'</div></div><div class="si"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">'+rr+'</div></div>'+(sig.tp1?'<div class="si"><div class="sl">TP1</div><div class="sv">'+fmtPrice(sig.tp1)+'</div></div>':'')+(sig.tp2?'<div class="si"><div class="sl">TP2</div><div class="sv">'+fmtPrice(sig.tp2)+'</div></div>':'')+'</div>';
       } else {
         sigIndicator.className = 'sh-indicator idle';
         signalEl.innerHTML = '<div class="signal-empty"><div class="icon">📡</div><p>Waiting for market setup...</p></div>';
         $('signal-time').textContent = '';
       }
-    } catch(e) {
-      // No signal - fine
-    }
-
-    // ── Trade Table ──
-    $('trade-count').textContent = total+' total';
-    const tbody = $('trade-body');
-    if (trades.length) {
-      tbody.innerHTML = trades.map(t => {
-        const isBuy = (t.action||'').toUpperCase()==='BUY';
-        const pipStr = t.pips?fmtPips(t.pips):'--';
-        const pnlVal = t.pnl||t.profit_usd||t.pips||0;
-        const simPnl = (parseFloat(t.pips)||0) * SIM_VAL_PER_PIP;
-        const simStr = (simPnl>=0?'+':'')+simPnl.toFixed(2);
-        const result = (t.result||t.outcome||'').toUpperCase();
-        const rCls = result.includes('TP')||result==='WIN'?'rw':'rl';
-        const rIcon = result.includes('TP')?'✅':result.includes('SL')?'❌':'⏳';
-        return '<tr><td style="color:var(--text-muted)">'+(t.open_time?new Date(t.open_time).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'})+' WIB':'--')+'</td><td class="'+(isBuy?'act-buy':'act-sell')+'">'+(isBuy?'BUY':'SELL')+'</td><td>'+fmtPrice(t.entry)+'</td><td>'+fmtPrice(t.close_price||t.close||t.closePrice)+'</td><td style="font-weight:600">'+pipStr+'</td><td>'+fmtPnL(pnlVal)+'</td><td><span class="'+(simPnl>=0?'pnl-pos':'pnl-neg')+'">'+simStr+'</span></td><td class="'+rCls+'">'+rIcon+' '+result+'</td></tr>';
-      }).join('');
-    } else {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:24px">No trades yet</td></tr>';
-    }
+    } catch(e) { console.warn('Signal fetch failed:', e); sigIndicator.className = 'sh-indicator idle'; }
   } catch(e) {
     console.error('Dashboard error:', e);
   }
