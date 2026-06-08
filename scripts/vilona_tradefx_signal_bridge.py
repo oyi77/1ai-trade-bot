@@ -13,7 +13,7 @@ Usage: python3 vilona_tradefx_signal_bridge.py --port 8765 --host 0.0.0.0
   Gen key:     POST /admin/generate-key (localhost only)
   EA download: GET  /download/ea or /ea/download
 """
-import json, time, threading, argparse, logging, os
+import json, time, threading, argparse, logging, os, sys, urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from collections import deque, defaultdict
 from urllib.parse import urlparse, parse_qs
@@ -29,8 +29,8 @@ KEYS_FILE = os.path.join(PROJECT_DIR, "api_keys.json")
 # ── Global state ──
 HISTORY = deque(maxlen=500)
 PENDING = deque(maxlen=100)        # global pending queue (all users)
-PENDING_BY_KEY = defaultdict(deque)  # per-user pending (backward compat)
-PENDING_BY_INSTANCE = defaultdict(deque)  # "{api_key}:{account_id}" → deque of signals
+PENDING_BY_KEY = defaultdict(lambda: deque(maxlen=50))  # per-user pending
+PENDING_BY_INSTANCE = defaultdict(lambda: deque(maxlen=50))  # per-instance queue
 LOCK = threading.Lock()
 ID_COUNTER = 0
 ACKED = set()
@@ -169,7 +169,8 @@ class SignalHandler(BaseHTTPRequestHandler):
             "tp": sig.get("tp", 0),
             "tp1": sig.get("tp1", sig.get("tp", 0)),
             "tp2": sig.get("tp2", 0),
-            "tp3": sig.get("tp3", sig.get("tp", 0)),
+            "tp3": sig.get("tp3", 0),
+            "tp4": sig.get("tp4", 0),
             "risk_percent": sig.get("risk_percent", 1.0),
             "comment": sig.get("comment", "VTFX/AI"),
             "confidence": sig.get("confidence", 0),
@@ -183,7 +184,7 @@ class SignalHandler(BaseHTTPRequestHandler):
         return {
             "signal_id": "", "symbol": "", "action": "HOLD",
             "entry": 0, "sl": 0, "tp": 0,
-            "tp1": 0, "tp2": 0, "tp3": 0,
+            "tp1": 0, "tp2": 0, "tp3": 0, "tp4": 0,
             "risk_percent": 0, "comment": "", "confidence": 0,
             "layers": [], "layer_count": 0, "tier": "", "pending": False,
         }
@@ -192,12 +193,26 @@ class SignalHandler(BaseHTTPRequestHandler):
         path, params = self._get_params()
         api_key = params.get("api_key", [""])[0]
 
-        if path == "/health" or path == "":
+        if path == "/health":
             self._json({
                 "status": "ok",
                 "uptime_seconds": int(time.time() - START_TIME),
                 "queue_size": len(PENDING),
             })
+        elif path == "" or path == "/":
+            # Serve landing page
+            html_path = os.path.join(PROJECT_DIR, "scripts", "landing_page.html")
+            try:
+                with open(html_path, "r") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content.encode())))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(content.encode())
+            except FileNotFoundError:
+                self._json({"error": "page not found"}, 404)
         elif path == "/status":
             with LOCK:
                 self._json({
@@ -316,7 +331,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "mode": "instance_broadcast",
             })
         elif path == "/download/ea" or path == "/download/ea.ex5" or path == "/ea/download":
-            # Serve EA file for download
+            # Serve EA compiled binary for download (no source — misuse prevention)
             ea_path = os.path.join(PROJECT_DIR, "ea", "VilonaTradeFX_EA.ex5")
             try:
                 with open(ea_path, "rb") as f:
@@ -330,22 +345,110 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
             except FileNotFoundError:
                 self._json({"error": "file not found"}, 404)
-
-        elif path == "/download/ea/source":
-            # Serve EA source file (.mq5)
-            mq5_path = os.path.join(PROJECT_DIR, "experts", "VilonaTradeFX_EA.mq5")
+        elif path == "/dashboard":
+            html_path = os.path.join(PROJECT_DIR, "bridges", "signal_bridge", "dashboard.html")
             try:
-                with open(mq5_path, "rb") as f:
+                with open(html_path, "r") as f:
                     content = f.read()
                 self.send_response(200)
-                self.send_header("Content-Type", "text/plain")
-                self.send_header("Content-Disposition", "attachment; filename=VilonaTradeFX_EA.mq5")
+                self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Access-Control-Allow-Origin", "*")
-                self.send_header("Content-Length", str(len(content)))
+                self.send_header("Content-Length", str(len(content.encode())))
                 self.end_headers()
-                self.wfile.write(content)
+                self.wfile.write(content.encode())
             except FileNotFoundError:
-                self._json({"error": "source file not found"}, 404)
+                self._json({"error": "dashboard not found"}, 404)
+        elif path == "/api/dash-stats":
+            stats = {"total": 0, "win_rate": 0, "total_profit": 0, "trades": [], "uptime": "", "ea_count": 0}
+            try:
+                scripts_dir = os.path.join(PROJECT_DIR, "scripts")
+                if scripts_dir not in sys.path:
+                    sys.path.insert(0, scripts_dir)
+                from trade_tracker import get_stats, get_recent_trades
+                s = get_stats()
+                stats.update(s)
+                stats["trades"] = get_recent_trades(10)
+                stats["total_profit"] = s.get("total_profit_usd", 0)
+            except Exception:
+                pass
+            # XAU spot price
+            try:
+                req = urllib.request.Request("https://api.gold-api.com/price/XAU", headers={"User-Agent": "VilonaBridge/1.0"})
+                with urllib.request.urlopen(req, timeout=4) as r:
+                    xau = json.loads(r.read())
+                stats["xau_price"] = float(xau.get("price", 0))
+            except Exception:
+                pass
+            uptime = int(time.time() - START_TIME)
+            h, m = divmod(uptime, 3600)
+            mi, s = divmod(m, 60)
+            stats["uptime"] = f"{h}h {mi}m"
+            stats["ea_count"] = len([i for i in INSTANCES.values() if time.time() - i["last_seen"] < 120])
+            self._json(stats)
+        elif path == "/api/engine-readings":
+            eng_path = os.path.join(PROJECT_DIR, "bridges", "signal_bridge", "engine_status.json")
+            try:
+                with open(eng_path, "r") as f:
+                    cached = json.load(f)
+                    # Use cached if less than 120s old
+                    if time.time() - os.path.getmtime(eng_path) < 120:
+                        self._json(cached)
+                        return
+            except Exception:
+                pass
+            # Generate fresh MTF matrix — run_engine_consensus fetches all 5 TFs internally
+            try:
+                sys.path.insert(0, os.path.join(PROJECT_DIR, "scripts"))
+                from engine_consensus import run_engine_consensus
+                result = run_engine_consensus(symbol="XAUUSD")
+                # Build dashboard-friendly MTF response
+                dashboard_output = {
+                    "symbol": result.get("symbol", "XAUUSD"),
+                    "price": result.get("price", 0),
+                    "timestamp": result.get("timestamp", ""),
+                    "timeframes": {},
+                    "hierarchical": result.get("hierarchical", {}),
+                    "mtf_alignment": result.get("mtf_alignment", "NONE"),
+                    "macro_trend": result.get("macro_trend", "NEUTRAL"),
+                    "counter_trend_flags": result.get("counter_trend_flags", []),
+                }
+                from engine_consensus import TIMEFRAMES as _TFS, TF_WEIGHTS as _TFW
+                for tf in _TFS:
+                    tr = result.get("timeframes", {}).get(tf, {})
+                    if tr:
+                        dashboard_output["timeframes"][tf] = {
+                            "verdict": tr["verdict"],
+                            "consensus_pct": tr["consensus_pct"],
+                            "buy_count": tr["buy_count"],
+                            "sell_count": tr["sell_count"],
+                            "total": tr["total"],
+                            "engines": tr.get("engines", {}),
+                            "weight": _TFW.get(tf, 0),
+                        }
+                        if "macro" in tr:
+                            dashboard_output["timeframes"][tf]["macro"] = tr["macro"]
+                        if "structure" in tr:
+                            dashboard_output["timeframes"][tf]["structure"] = tr["structure"]
+                        if "entry" in tr:
+                            dashboard_output["timeframes"][tf]["entry"] = tr["entry"]
+                # Save to cache
+                try:
+                    with open(eng_path, "w") as f:
+                        json.dump(dashboard_output, f, indent=2)
+                except Exception:
+                    pass
+                # Also include backwards-compat fields for older dashboard
+                active_tf = dashboard_output["timeframes"].get("M15", {})
+                dashboard_output["engines"] = active_tf.get("engines", {})
+                dashboard_output["verdict"] = dashboard_output["hierarchical"].get("verdict", "HOLD")
+                dashboard_output["consensus_pct"] = dashboard_output["hierarchical"].get("consensus_score", 0)
+                dashboard_output["buy_count"] = active_tf.get("buy_count", 0)
+                dashboard_output["sell_count"] = active_tf.get("sell_count", 0)
+                dashboard_output["total"] = active_tf.get("total", 0)
+                self._json(dashboard_output)
+            except Exception as e:
+                log.error(f"/api/engine-readings error: {e}")
+                self._json({"error": str(e), "engines": {}, "verdict": "N/A", "timeframes": {}})
         else:
             self._json({"error": "not found"}, 404)
 
@@ -429,15 +532,24 @@ class SignalHandler(BaseHTTPRequestHandler):
                     PENDING.append(signal)
                     log.info(f"📡 No instances for {broadcast_api_key}, queued global")
                 else:
-                    # No api_key in POST — fall back to old CONNECTED_ACCOUNTS broadcast
-                    for key in list(CONNECTED_ACCOUNTS.keys()):
-                        acct_signal = dict(signal)
-                        acct_signal["_for_account"] = key
-                        PENDING_BY_KEY[key].append(acct_signal)
-                        broadcast_count += 1
+                    # No api_key in POST — broadcast to ALL instances of ALL master keys
+                    for mk in list(MASTER_INSTANCES.keys()):
+                        for acct_id in list(MASTER_INSTANCES[mk].keys()):
+                            instance_id = MASTER_INSTANCES[mk][acct_id]
+                            acct_signal = dict(signal)
+                            acct_signal["_for_instance"] = instance_id
+                            PENDING_BY_INSTANCE[instance_id].append(acct_signal)
+                            broadcast_count += 1
+                    # Fallback to legacy accounts if no instances
+                    if broadcast_count == 0:
+                        for key in list(CONNECTED_ACCOUNTS.keys()):
+                            acct_signal = dict(signal)
+                            acct_signal["_for_account"] = key
+                            PENDING_BY_KEY[key].append(acct_signal)
+                            broadcast_count += 1
                     if broadcast_count == 0:
                         PENDING.append(signal)
-                    log.info(f"📡 Legacy broadcast to {broadcast_count} account(s)")
+                    log.info(f"📡 Broadcast to {broadcast_count} instance(s)")
 
             layers_count = len(signal['layers']) if isinstance(signal.get('layers'), list) else 0
             log.info(f"Signal: {sig_id} | {symbol} {action} | layers={layers_count} | broadcast→{broadcast_count}")
@@ -520,6 +632,36 @@ if __name__ == "__main__":
     log.info(f"  EA download: GET  /download/ea or /ea/download")
     log.info(f"  Accounts:    GET  /accounts (instance-level detail)")
     log.info(f"  Instances:   {len(INSTANCES)} active | Master keys: {len(MASTER_INSTANCES)}")
+
+    def cleanup_stale_instances():
+        """Remove instances not seen in 30 minutes."""
+        while True:
+            time.sleep(300)  # every 5 min
+            now = time.time()
+            with LOCK:
+                stale = [iid for iid, inst in INSTANCES.items() if now - inst["last_seen"] > 1800]
+                for iid in stale:
+                    api_key = iid.split(":", 1)[0]
+                    acct_id = iid.split(":", 1)[1] if ":" in iid else ""
+                    del INSTANCES[iid]
+                    if api_key in MASTER_INSTANCES and acct_id in MASTER_INSTANCES[api_key]:
+                        del MASTER_INSTANCES[api_key][acct_id]
+                        if not MASTER_INSTANCES[api_key]:
+                            del MASTER_INSTANCES[api_key]
+                    if iid in PENDING_BY_INSTANCE:
+                        del PENDING_BY_INSTANCE[iid]
+                if stale:
+                    log.info(f"🧹 Cleaned {len(stale)} stale instance(s)")
+            # Also clean stale CONNECTED_ACCOUNTS
+            with LOCK:
+                stale_keys = [k for k, acc in CONNECTED_ACCOUNTS.items() if now - acc["last_seen"] > 1800]
+                for k in stale_keys:
+                    del CONNECTED_ACCOUNTS[k]
+                    if k in PENDING_BY_KEY:
+                        del PENDING_BY_KEY[k]
+
+    cleanup_thread = threading.Thread(target=cleanup_stale_instances, daemon=True)
+    cleanup_thread.start()
 
     server = HTTPServer((args.host, args.port), SignalHandler)
     try:

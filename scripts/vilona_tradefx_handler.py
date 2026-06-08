@@ -5,7 +5,7 @@ Grab forex data + generate signals even without MT5/EA.
 
 Commands: /start /help /price /analyze /data /killzone /status /subscribe /autosync /genkey /listkeys /mykey
 """
-import json, logging, os, re, sys, threading, time, urllib.request
+import hashlib, json, logging, os, re, sys, threading, time, urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -71,6 +71,10 @@ except Exception as e:
     MARKET_DATA = None
     print(f"Market data layer unavailable: {e}")
 
+# ── Suppress yfinance noisy warnings ($BT, delisted, etc.) ──
+import logging as _logging
+_logging.getLogger('yfinance').setLevel(_logging.CRITICAL)
+
 # ── Member system ──
 try:
     from members import register_member, get_member, get_member_stats, mark_paid, get_due_members
@@ -122,6 +126,18 @@ except Exception as e:
     SMC_ENGINE = False
     print(f"SMC engine unavailable: {e}")
 
+# ── Sequoia-X Quantitative Screening (Turtle + HTF + RPS + MA) ──
+try:
+    import pandas as pd
+    from strategies.sequoia_math import (
+        turtle_breakout, turtle_signal_strength, ma_volume_breakout,
+        turtle_trend_filter, validate_ohlcv
+    )
+    SEQUOIA_ENGINE = True
+except Exception as e:
+    SEQUOIA_ENGINE = False
+    print(f"Sequoia engine unavailable: {e}")
+
 # ── Ultimate SMC Engine v3.0 (13+ repos combined) ──
 try:
     from ultimate_smc_engine import (ultimate_analyze, format_ultimate_block,
@@ -166,10 +182,11 @@ WIB = timezone(timedelta(hours=7))
 BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
 DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
+FCS_API_KEY = os.environ.get("FCS_API_KEY", "")
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 CLAUDE_KEY = os.environ.get("CLAUDE_API_KEY", "")
 CHAT_ID = os.environ.get("VILONA_TRADEFX_CHAT_ID", "")
-OMNIROUTE_URL = os.environ.get("OMNIROUTE_URL", "http://localhost:20129/v1/chat/completions")
+OMNIROUTE_URL = os.environ.get("OMNIROUTE_URL", "http://localhost:20128/v1/chat/completions")
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 OMNIROUTE_MODELS = ["nemotron-3-super-free", "qwen3.6-plus-free", "ling-2.6-1t-free"]
@@ -186,10 +203,11 @@ def load_env():
                 key, val = key.strip(), val.strip().strip('"').strip("'")
                 if key not in os.environ or not os.environ.get(key):
                     os.environ[key] = val
-    global BOT_TOKEN, DEEPSEEK_KEY, OPENAI_KEY, GEMINI_KEY, CLAUDE_KEY, CHAT_ID, TELEGRAM_API
+    global BOT_TOKEN, DEEPSEEK_KEY, OPENAI_KEY, FCS_API_KEY, GEMINI_KEY, CLAUDE_KEY, CHAT_ID, TELEGRAM_API
     BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", BOT_TOKEN)
     DEEPSEEK_KEY = os.environ.get("DEEPSEEK_API_KEY", DEEPSEEK_KEY)
     OPENAI_KEY = os.environ.get("OPENAI_API_KEY", OPENAI_KEY)
+    FCS_API_KEY = os.environ.get("FCS_API_KEY", FCS_API_KEY)
     GEMINI_KEY = os.environ.get("GEMINI_API_KEY", GEMINI_KEY)
     CLAUDE_KEY = os.environ.get("CLAUDE_API_KEY", CLAUDE_KEY)
     CHAT_ID = os.environ.get("VILONA_TRADEFX_CHAT_ID", CHAT_ID)
@@ -294,6 +312,10 @@ def _fetch_ohlcv_for_ai(pair="gold"):
                "aapl":"AAPL","tsla":"TSLA","msft":"MSFT","nvda":"NVDA",
                "bbca":"BBCA.JK","bbri":"BBRI.JK","tlkm":"TLKM.JK","asii":"ASII.JK",
                "unvr":"UNVR.JK","bmri":"BMRI.JK","adro":"ADRO.JK","ihsg":"^JKSE"}
+    # Internal name for FCS fallback
+    _fcs_name_map = {"gold":"XAUUSD","xauusd":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
+                     "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL",
+                     "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY","jpyusd":"USDJPY"}
     sym = sym_map.get(pair, "GC=F")
     # Stocks use daily; forex/crypto/commodities use 15m
     is_stock = sym.replace(".JK","").isalpha() and "." not in sym.replace(".JK","")
@@ -301,18 +323,35 @@ def _fetch_ohlcv_for_ai(pair="gold"):
     try:
         if MARKET_DATA is None:
             logger.error(f"_fetch_ohlcv_for_ai: MARKET_DATA is None!")
-            return None
+            raise Exception("MARKET_DATA not initialized")
         bars = MARKET_DATA.get_bars_dicts(sym, interval, 80)
         if not bars:
             logger.warning(f"_fetch_ohlcv_for_ai: got empty bars for {sym} ({interval})")
-            return None
+            raise Exception("Empty bars from MARKET_DATA")
         result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
                 for b in bars[-20:]]
         logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {sym}")
         return result
     except Exception as e:
-        logger.error(f"_fetch_ohlcv_for_ai error: {e}")
-        return None
+        logger.warning(f"_fetch_ohlcv_for_ai (primary) error: {e}")
+    
+    # ── Fallback: FCS API ──
+    try:
+        fcs_name = _fcs_name_map.get(pair)
+        if fcs_name:
+            from data_sources import fcs_ohlcv
+            bars_data = fcs_ohlcv(fcs_name, period=interval, bars=20)
+            if bars_data:
+                result = [{"t": b.get("timestamp", int(time.time())),
+                          "o": b["Open"], "h": b["High"], "l": b["Low"], "c": b["Close"]}
+                         for b in bars_data]
+                logger.info(f"_fetch_ohlcv_for_ai (FCS fallback): {len(result)} bars for {fcs_name}")
+                return result
+    except Exception as e2:
+        logger.error(f"_fetch_ohlcv_for_ai (FCS fallback) error: {e2}")
+    
+    logger.error(f"_fetch_ohlcv_for_ai: ALL sources failed for {pair}")
+    return None
 
 
 # ── Price fetching ──
@@ -326,9 +365,41 @@ def _normalize_broker_symbol(s):
     s = re.sub(r'[cm]$', '', s)
     return s
 
+def get_xauusd_spot_offset() -> float:
+    """Calculate XAUUSD spot-futures differential (spot minus futures).
+    Positive = spot higher, Negative = spot lower (most common).
+    Returns 0 if can't determine."""
+    try:
+        spot = fetch_xauusd_spot()
+        if not spot: return 0
+        if MARKET_DATA:
+            quote = MARKET_DATA.get_quote("GC=F")
+            if quote and quote.price > 1000:
+                return spot - quote.price
+    except: pass
+    return 0
+
+def fetch_xauusd_spot() -> float | None:
+    """Fetch live spot XAUUSD from gold-api.com (free, unlimited, real-time)."""
+    try:
+        req = urllib.request.Request("https://api.gold-api.com/price/XAU", headers={"User-Agent": "Vilona/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read())
+        price = float(data.get("price", 0))
+        if 2000 < price < 6000:
+            return price
+    except Exception as e:
+        logger.debug(f"Gold-API failed: {e}")
+    return None
+
 def fetch_price(pair="gold"):
     pair = _normalize_broker_symbol(pair.lower().strip())
     if pair in ("gold", "xauusd"):
+        # Use spot gold API instead of Yahoo GC=F futures
+        spot = fetch_xauusd_spot()
+        if spot:
+            return spot
+        # Fallback to Yahoo GC=F if spot API fails
         try:
             quote = MARKET_DATA.get_quote("GC=F")
             if quote and quote.price > 1000:
@@ -379,7 +450,7 @@ def tg_send(text, chat_id=None, reply_markup=None):
     # Use unique Unicode placeholder markers (safe across Python 3.11-3.13)
     TAG_OPEN = "\ue000"   # Private Use Area — won't appear in normal text
     TAG_CLOSE = "\ue001"
-    text = re.sub(r'<(/?[bi][^>]*)>', TAG_OPEN + r'\1' + TAG_CLOSE, text)
+    text = re.sub(r'<(/?[abi][^>]*)>', TAG_OPEN + r'\1' + TAG_CLOSE, text)
     text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     text = text.replace(TAG_OPEN, '<').replace(TAG_CLOSE, '>')
     
@@ -413,6 +484,7 @@ def tg_send(text, chat_id=None, reply_markup=None):
 
 # ── Signal bridge ──
 BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
+MASTER_API_KEY="VT-MASTER-734AD731F5FB"  # auto-detected from api_keys.json
 
 
 def _fetch_json_url(url, timeout=5):
@@ -461,6 +533,27 @@ def format_bridge_status():
 # ── Trade/Skip inline keyboard ──
 PENDING_SIGNALS = {}  # {chat_id: {"sig": ..., "price": ..., "expires": ts}}
 PENDING_SIGNAL_TTL = 300  # 5 menit
+PENDING_SIGNALS_PATH = DATA_DIR / ".pending_signals.json"
+
+def _load_pending_signals():
+    """Restore pending signals from disk (survives restart). Clean expired."""
+    global PENDING_SIGNALS
+    try:
+        if PENDING_SIGNALS_PATH.exists():
+            raw = json.loads(PENDING_SIGNALS_PATH.read_text())
+            now = time.time()
+            PENDING_SIGNALS = {k: v for k, v in raw.items() if v.get("expires", 0) > now}
+            if PENDING_SIGNALS:
+                logger.info(f"♻️ Restored {len(PENDING_SIGNALS)} pending signal(s)")
+    except Exception:
+        pass
+
+def _save_pending_signals():
+    """Persist pending signals to disk."""
+    try:
+        PENDING_SIGNALS_PATH.write_text(json.dumps(PENDING_SIGNALS))
+    except Exception:
+        pass
 
 # ── Manual-mode guard: anti-spam + anti-opposite-flip per user ──
 USER_LAST_ANALYZE = {}  # chat_id -> timestamp
@@ -484,7 +577,7 @@ def _is_manual_blocked(chat_id):
     if rec and rec.get("action") in ("BUY", "SELL"):
         try:
             last = datetime.fromisoformat(rec.get("at", ""))
-            elapsed = (datetime.now() - last).total_seconds()
+            elapsed = (wib_now() - last).total_seconds()
             if elapsed < DIRECTION_LOCK_SECONDS:
                 return True, f"🔒 Terdeteksi arah {rec['action']} pada {rec.get('asset','?')} {int(elapsed)} detik lalu. Menunggu {DIRECTION_LOCK_SECONDS - int(elapsed)} detik untuk menghindari flip."
         except Exception:
@@ -531,13 +624,15 @@ def handle_trade_callback(callback_query):
             if LAYERING_ENGINE:
                 sig = enrich_signal_with_layers(sig)
             sig["target_user"] = chat_id  # route ke EA user ini aja
-            post_signal_to_bridge(sig, price)
+            post_signal_to_bridge(sig, price, "XAUUSD")
             tg_send(f"✅ <b>Sinyal {action} dikirim!</b>\nEA kamu auto-eksekusi dalam 5 detik.", chat_id)
         del PENDING_SIGNALS[chat_id]
+        _save_pending_signals()
         
     elif data.startswith("skip:"):
         tg_send("⏭ Sinyal dilewati.\nAnalisa lagi: /analyze", chat_id)
         del PENDING_SIGNALS[chat_id]
+        _save_pending_signals()
 
 
 def handle_payment_callback(callback_query):
@@ -672,7 +767,7 @@ def handle_payment_callback(callback_query):
         else:
             # Generic — show options
             tg_send(
-                "💚 <b>Dukung Server AI</b>\n"
+                "⚡ <b>Isi Bahan Bakar AI</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
                 "Pilih nominal dukungan:\n\n"
                 "☕️ Rp15K — Traktir kopi\n"
@@ -742,14 +837,26 @@ def answer_callback(cb_id, text=""):
     except Exception:
         pass
 
-def post_signal_to_bridge(sig, price):
-    symbol = sig.get("symbol", sig.get("display", "XAUUSD"))
+def post_signal_to_bridge(sig, price, display="XAUUSD"):
+    symbol = sig.get("symbol", sig.get("display", display))
+    entry = sig.get("entry", price) or price
+    sl = sig.get("sl", 0)
+    tp = sig.get("tp", 0)
+
+    # --- XAUUSD spot offset: shift to real broker prices ---
+    if display in ("XAUUSD","GOLD") and entry and sl:
+        offset = get_xauusd_spot_offset()
+        if abs(offset) > 5:
+            entry = round(entry + offset, 2)
+            sl = round(sl + offset, 2)
+            if tp: tp = round(tp + offset, 2)
+
     payload = {
         "action": sig.get("action", "HOLD"),
         "symbol": symbol,
-        "entry": sig.get("entry", price),
-        "sl": sig.get("sl", 0),
-        "tp": sig.get("tp", 0),
+        "entry": entry,
+        "sl": sl,
+        "tp": tp,
         "tp1": sig.get("tp1", sig.get("tp", 0)),
         "tp2": sig.get("tp2", 0),
         "confidence": sig.get("confidence", 0),
@@ -769,7 +876,7 @@ def post_signal_to_bridge(sig, price):
         except Exception: pass
     for url in BRIDGE_URLS:
         try:
-            req = urllib.request.Request(f"{url}/signal", data=data,
+            req = urllib.request.Request(f"{url}/signal?api_key={MASTER_API_KEY}", data=data,
                 headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=5)
             return  # success, stop
@@ -844,11 +951,20 @@ def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlc
     if quant_result and quant_result.get("match_count", 0) >= 35 and quant_result.get("confidence_score", 0) >= 0.70:
         confidence = quant_result["confidence_score"]
         reasoning = f"🤖 MECHANICAL (Quant Only) | {quant_bias} bias ({confidence:.0%})"
+        # Point-based SL/TP for XAUUSD/GOLD
+        if display in ("XAUUSD", "GOLD"):
+            sl_val = round(price - 32, 2) if quant_bias == "BUY" else round(price + 32, 2)
+            tp_val = round(price + 52, 2) if quant_bias == "BUY" else round(price - 52, 2)
+            rr_val = round(52/32, 2)
+        else:
+            sl_val = price * 0.995 if quant_bias == "BUY" else price * 1.005
+            tp_val = price * 1.01 if quant_bias == "BUY" else price * 0.99
+            rr_val = 2.0
         sig = {
             "action": quant_bias, "entry": price,
-            "sl": price * 0.995 if quant_bias == "BUY" else price * 1.005,
-            "tp": price * 1.01 if quant_bias == "BUY" else price * 0.99,
-            "confidence": confidence, "rr_ratio": 2.0,
+            "sl": sl_val,
+            "tp": tp_val,
+            "confidence": confidence, "rr_ratio": rr_val,
             "reasoning": reasoning, "ensemble": "mechanical", "voters": 0,
             "_model": "Quant", "grade": "C", "source": "mechanical_quant_only",
         }
@@ -869,18 +985,59 @@ def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlc
             if ohlcv_m15:
                 hermes_signal = hermes_liquidity_pipeline(ohlcv_bars, ohlcv_m15, price)
                 if hermes_signal and hermes_signal.action in ("SELL", "BUY"):
-                    logger.info(f"🔮 HERMES LIQUIDITY SWEEP: {hermes_signal.action} {display} | "
-                                f"Entry={hermes_signal.entry_price} SL={hermes_signal.stop_loss} "
-                                f"TP1={hermes_signal.take_profit_1} R:R=1:{hermes_signal.risk_reward_ratio}")
+                    # ── SAFETY VALIDATION ──
+                    action = hermes_signal.action
+                    entry = hermes_signal.entry_price
+                    sl = hermes_signal.stop_loss
+                    tp = hermes_signal.take_profit_1
+                    rr = hermes_signal.risk_reward_ratio
+
+                    # XAUUSD pip = $0.10 per 0.01 lot, 1 pip = 0.10 USD movement
+                    # Minimum SL distance: 30 pips = $3.00
+                    MIN_SL_DIST = 3.0    # $3.00 minimum SL distance (was $2)
+                    MIN_RR_REQ = 1.5     # minimum acceptable R:R (was 1.2)
+                    MAX_RR_CAP = 5.0     # maximum R:R cap — too aggressive = unrealistic
+
+                    sl_dist = abs(entry - sl)
+                    sl_invalid = False
+                    reject_reason = ""
+
+                    # Check SL direction
+                    if action == "BUY" and sl >= entry:
+                        sl_invalid = True
+                        reject_reason = f"SL ({sl}) >= Entry ({entry}) → SL di atas entry untuk BUY!"
+                    elif action == "SELL" and sl <= entry:
+                        sl_invalid = True
+                        reject_reason = f"SL ({sl}) <= Entry ({entry}) → SL di bawah entry untuk SELL!"
+
+                    # Check SL distance
+                    elif sl_dist < MIN_SL_DIST:
+                        sl_invalid = True
+                        reject_reason = f"SL distance ${sl_dist:.2f} < minimum ${MIN_SL_DIST:.2f}"
+
+                    # Check R:R
+                    elif rr < MIN_RR_REQ:
+                        sl_invalid = True
+                        reject_reason = f"R:R 1:{rr} < minimum 1:{MIN_RR_REQ}"
+                    elif rr > MAX_RR_CAP:
+                        sl_invalid = True
+                        reject_reason = f"R:R 1:{rr} > maximum 1:{MAX_RR_CAP} — unrealistic"
+
+                    if sl_invalid:
+                        logger.warning(f"🛑 HERMES REJECTED [{display}]: {reject_reason}")
+                        return None, None
+
+                    logger.info(f"🔮 HERMES LIQUIDITY SWEEP: {action} {display} | "
+                                f"Entry={entry} SL={sl} TP1={tp} R:R=1:{rr} | SL_dist=${sl_dist:.2f}")
                     sig = {
-                        "action": hermes_signal.action, "entry": hermes_signal.entry_price,
-                        "sl": hermes_signal.stop_loss, "tp": hermes_signal.take_profit_1,
-                        "tp1": hermes_signal.take_profit_1, "tp2": hermes_signal.take_profit_2,
+                        "action": action, "entry": entry,
+                        "sl": sl, "tp": tp,
+                        "tp1": tp, "tp2": hermes_signal.take_profit_2,
                         "confidence": hermes_signal.confidence,
-                        "rr_ratio": hermes_signal.risk_reward_ratio,
+                        "rr_ratio": rr,
                         "reasoning": hermes_signal.reason, "ensemble": "mechanical", "voters": 0,
                         "_model": "HermesSMC",
-                        "grade": "A" if hermes_signal.risk_reward_ratio >= 2.0 else "B",
+                        "grade": "A" if rr >= 2.0 else "B",
                         "source": "hermes_liquidity_sweep",
                     }
                     return sig, hermes_signal.reason
@@ -999,25 +1156,13 @@ def _call_openai(prompt, model="gpt-4o-mini"):
 
 
 def _call_gemini(prompt):
-    """Call Gemini 2.5 Pro via Google AI API."""
-    if not GEMINI_KEY: return None
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_KEY}"
-        body = {
-            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 800}
-        }
-        req = urllib.request.Request(url, data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = json.loads(r.read())
-            content = data["candidates"][0]["content"]["parts"][0]["text"]
-            logger.info(f"Gemini 2.5 Pro: {len(content)} chars")
-            return _extract_json(content)
-    except Exception as e:
-        logger.warning(f"Gemini error: {e}")
-        return None
+    """Call Gemini via OmniRoute (auto-rotates ~20 keys, avoids rate limits)."""
+    # Route through OmniRoute with Gemini models (Bro has 20 keys in rotation)
+    return _call_omniroute(prompt, models=[
+        "gemini-cli/gemini-2.0-flash",
+        "gemini-cli/gemini-3.1-pro-preview",
+        "kie/gemini-2.5-pro",
+    ])
 
 
 def _call_omniroute(prompt, models=None):
@@ -1025,14 +1170,17 @@ def _call_omniroute(prompt, models=None):
     for model in models:
         try:
             req = urllib.request.Request(OMNIROUTE_URL,
-                data=json.dumps({"model":model,"max_tokens":600,"temperature":0.3,
+                data=json.dumps({"model":model,"max_tokens":600,"temperature":0.3,"stream":False,
                     "messages":[{"role":"system","content":SYSTEM_PROMPT},{"role":"user","content":prompt}]}).encode(),
                 headers={"Content-Type":"application/json"})
             with urllib.request.urlopen(req, timeout=30) as r:
                 data = json.loads(r.read())
                 content = data["choices"][0]["message"]["content"]
+                logger.info(f"OmniRoute/{model}: {len(content)} chars")
                 return _extract_json(content)
-        except: continue
+        except Exception as e:
+            logger.warning(f"OmniRoute/{model} error: {e}")
+            continue
     return None
 
 
@@ -1040,8 +1188,8 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     """Multi-AI consensus — tier-based model selection.
     
     🆓 Starter (free):  DeepSeek + Gemini (2 models, zero cost)
-    ⭐ Pro (premium):    All 4 models — DeepSeek + o3-mini + GPT-4o-mini + Gemini
-    👑 Elite (premium):  All 4 models + weighted voting (o3-mini 1.2x weight)
+    ⭐ Pro (premium):    All 4 models — DeepSeek + GPT-4.1-mini + GPT-4o-mini + Gemini
+    👑 Elite (premium):  All 4 models + weighted voting (GPT-4.1-mini 1.2x weight)
     """
     # Build analysis prompt
     data_section = f"💰 Current Price: ${price:.2f}"
@@ -1074,25 +1222,20 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     is_elite = (tier == "elite")
     is_premium = premium or is_elite or (tier in ("pro", "elite", "testing"))
 
-    # Always use free models
+    # Always try all models (OpenAI included — DeepSeek/Gemini often fail)
     deepseek = _call_deepseek(prompt)
     gemini = _call_gemini(prompt)
-
-    # Paid models only for premium tiers
-    o3 = None
-    gpt4o = None
-    if is_premium:
-        o3 = _call_openai(prompt, model="o3-mini")
-        gpt4o = _call_openai(prompt, model="gpt-4o-mini")
+    gpt41 = _call_openai(prompt, model="gpt-4.1-mini")
+    gpt4o = _call_openai(prompt, model="gpt-4o-mini")
 
     # Collect all valid signals
     signals = []
     if deepseek and deepseek.get("action") in ("BUY", "SELL"):
         signals.append({"sig": deepseek, "name": "DeepSeek", "weight": 1.0})
-    if o3 and o3.get("action") in ("BUY", "SELL"):
+    if gpt41 and gpt41.get("action") in ("BUY", "SELL"):
         # Elite gets 1.2x reasoning bonus; Pro gets 1.0
         w = 1.2 if is_elite else 1.0
-        signals.append({"sig": o3, "name": "o3-mini", "weight": w})
+        signals.append({"sig": gpt41, "name": "GPT-4.1-mini", "weight": w})
     if gpt4o and gpt4o.get("action") in ("BUY", "SELL"):
         signals.append({"sig": gpt4o, "name": "GPT-4o", "weight": 0.9})
     if gemini and gemini.get("action") in ("BUY", "SELL"):
@@ -1146,8 +1289,9 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         return sig
     
     # Any signal from any model (even HOLD)
-    for s, name in [(deepseek, "DeepSeek"), (o3, "o3-mini"), (gpt4o, "GPT-4o"), (gemini, "Gemini")]:
+    for s, name in [(deepseek, "DeepSeek"), (gpt41, "GPT-4.1-mini"), (gpt4o, "GPT-4o"), (gemini, "Gemini")]:
         if s:
+            s = dict(s)  # shallow copy — don't mutate original
             s["ensemble"] = "solo"; s["voters"] = 1; s["_model"] = name
             s["_tier"] = tier_label
             s["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
@@ -1155,7 +1299,15 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     
     # LAST RESORT: OmniRoute
     logger.info("All 4 AI models failed — falling back to OmniRoute...")
-    return _call_omniroute(prompt)
+    result = _call_omniroute(prompt)
+    if result and isinstance(result, dict):
+        result.setdefault("voters", 1)
+        result.setdefault("ensemble", "fallback")
+        result.setdefault("_model", "omniroute-fallback")
+        result.setdefault("_tier", tier_label)
+        result.setdefault("_models", "1/1")
+        result.setdefault("grade", "D")
+    return result
 
 
 def ask_ai(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv=None, display="XAUUSD", tier="starter"):
@@ -1189,49 +1341,235 @@ def apply_elite_params(sig: dict, params: dict, price: float, display: str = "XA
 
 
 def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
+    """Format signal Telegram-style — clean, structured, professional like SIGNAL x GMFX."""
     action = sig.get("action","HOLD")
     emoji = {"BUY":"🟢","SELL":"🔴","HOLD":"⚪️"}.get(action,"⚪️")
     grade = sig.get("grade","D")
     conf = sig.get("confidence",0)
+    if isinstance(conf, (int,float)) and conf > 10:
+        conf = conf / 100
     rr = sig.get("rr_ratio","?")
+    if isinstance(rr, str) and rr.startswith("1:"):
+        rr = rr[2:]
     entry = sig.get("entry") or price or 0
     sl = sig.get("sl") or 0
     tp = sig.get("tp") or 0
-    reason = sig.get("reasoning","")[:300]
+    tp1 = sig.get("tp1", 0)
+    tp2 = sig.get("tp2", 0)
+    tp3 = sig.get("tp3", 0)
+    tp4 = sig.get("tp4", 0)
+    models_display = sig.get("_models","")
+    voters = sig.get("voters", sig.get("ensemble", "?"))
+    now_wib = wib_now()
 
-    # Fallback SL/TP when AI returns 0 — use sensible defaults per asset
+    # --- MIN SL GUARD: override if AI sets SL too tight (backtest-proven minimum) ---
+    if action in ("BUY","SELL") and entry and sl and price:
+        sl_dist = abs(sl - entry)
+        min_sl_map = {"XAUUSD": 32, "GOLD": 32, "BTCUSD": 600, "ETHUSD": 50}
+        min_sl = min_sl_map.get(display, 0)
+        if min_sl > 0 and 0 < sl_dist < min_sl:
+            logger.info(f"    [SL GUARD] {display} SL={sl_dist}pt < min={min_sl}pt — overriding with fallback")
+            sl = 0
+            tp = 0
+
+    # Fallback SL/TP — wider for realistic fills, tighter for consistency
     if (sl == 0 or tp == 0) and price and price > 0:
         if display in ("XAUUSD", "GOLD"):
-            sl = round(price - 15, 2) if action == "BUY" else round(price + 15, 2)
-            tp = round(price + 30, 2) if action == "BUY" else round(price - 30, 2)
-        elif display in ("EURUSD", "GBPUSD", "USDJPY"):
+            sl = round(price - 32, 2) if action == "BUY" else round(price + 32, 2)
+            tp = round(price + 52, 2) if action == "BUY" else round(price - 52, 2)
+        elif display in ("EURUSD","GBPUSD","USDJPY"):
             sl = round(price - 0.0015, 5) if action == "BUY" else round(price + 0.0015, 5)
             tp = round(price + 0.0030, 5) if action == "BUY" else round(price - 0.0030, 5)
         elif display == "BTCUSD":
-            sl = round(price - 500, 2) if action == "BUY" else round(price + 500, 2)
-            tp = round(price + 1000, 2) if action == "BUY" else round(price - 1000, 2)
+            sl = round(price - 600, 2) if action == "BUY" else round(price + 600, 2)
+            tp = round(price + 1200, 2) if action == "BUY" else round(price - 1200, 2)
+        elif display == "ETHUSD":
+            sl = round(price - 50, 2) if action == "BUY" else round(price + 50, 2)
+            tp = round(price + 75, 2) if action == "BUY" else round(price - 75, 2)
+        elif display in ("BBCA","BBRI","TLKM","ASII","UNVR","BMRI","ADRO","IHSG"):
+            # IDX stocks — percentage-based (backtest-optimized)
+            sl_pct = 0.01   # 1% SL
+            tp_pct = 0.02 if display == "BBCA" else 0.015  # BBCA: 2% TP, others: 1.5%
+            sl = round(price * (1 - sl_pct), 0) if action == "BUY" else round(price * (1 + sl_pct), 0)
+            tp = round(price * (1 + tp_pct), 0) if action == "BUY" else round(price * (1 - tp_pct), 0)
         else:
             sl = round(price * 0.995, 2) if action == "BUY" else round(price * 1.005, 2)
             tp = round(price * 1.01, 2) if action == "BUY" else round(price * 0.99, 2)
 
-    tier_display = sig.get("_tier", "")
-    models_display = sig.get("_models", "")
-    ai_line = f"Confidence: {conf:.0%} | Ensemble: {sig.get('ensemble','?')}"
-    if models_display:
-        ai_line += f" | Models: {models_display}"
-    if tier_display:
-        ai_line += f" | {tier_display}"
+    # --- XAUUSD spot offset: shift entry/SL/TP from futures -> spot ---
+    if action in ("BUY","SELL") and display in ("XAUUSD","GOLD") and entry > 0:
+        offset = get_xauusd_spot_offset()
+        if abs(offset) > 5:
+            entry = round(entry + offset, 2)
+            if sl: sl = round(sl + offset, 2)
+            if tp: tp = round(tp + offset, 2)
 
-    return (
-        f"{emoji} <b>{action} {display}</b> | Grade:{grade} | RR 1:{rr}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"{ai_line}\n"
-        f"Entry: {currency}{entry:.2f} | SL: {currency}{sl:.2f} | TP: {currency}{tp:.2f}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"📊 {reason}\n"
-        f"━━━━━━━━━━━━━━━━\n"
-        f"🕐 {wib_fmt()} | Session: {session(h)}"
-    )
+    # Generate TP levels if only single TP provided
+    if not tp1 and tp > 0 and entry > 0:
+        tp_dist = abs(tp - entry)
+        if action == "BUY":
+            tp1 = round(entry + tp_dist * 0.25, 2)
+            tp2 = round(entry + tp_dist * 0.50, 2)
+            tp3 = round(entry + tp_dist * 0.75, 2)
+            tp4 = tp
+        else:
+            tp1 = round(entry - tp_dist * 0.25, 2)
+            tp2 = round(entry - tp_dist * 0.50, 2)
+            tp3 = round(entry - tp_dist * 0.75, 2)
+            tp4 = tp
+
+    # Winrate stats
+    wr_text = ""
+    if TRADE_TRACKER:
+        try:
+            stats = get_stats()
+            total_t = stats.get("total",0)
+            wins_t = stats.get("wins",0)
+            losses_t = stats.get("losses",0)
+            wr_t = stats.get("win_rate",0)
+            if total_t > 0:
+                wr_text = f"📊 Winrate: {total_t} sinyal | {wr_t}% ({wins_t}W/{losses_t}L)"
+        except Exception:
+            pass
+
+    # Pip distances
+    def _pips(dist, asset=display):
+        if asset in ("XAUUSD","GOLD"): return f"{dist:.0f} pt"
+        elif asset in ("EURUSD","GBPUSD","USDJPY"): return f"{dist:.1f} pip"
+        elif asset == "BTCUSD": return f"${dist:.0f}"
+        else: return f"{dist:.0f} pt"
+
+    def _tp_pips(tp_val):
+        if entry and tp_val:
+            return f"(+{_pips(abs(tp_val - entry))})"
+        return ""
+
+    def _sl_pips(sl_val):
+        if entry and sl_val:
+            return f"(-{_pips(abs(sl_val - entry))})"
+        return ""
+
+    # AI info line
+    ai_parts = []
+    if models_display:
+        v_str = f"({voters} model)" if voters and voters != "?" else ""
+        ai_parts.append(f"🤖 {models_display} {v_str}".strip())
+    if grade and grade != "D":
+        ai_parts.append(f"Grade {grade}")
+    ai_line = " | ".join(ai_parts) if ai_parts else ""
+
+    is_idx = display in ("BBCA","BBRI","IHSG")
+    def _fmt(v):
+        return f"Rp{v:,.0f}" if is_idx else f"{currency}{v:.2f}"
+
+    lines = [
+        f"{emoji} <b>SINYAL {action} — {display}</b>",
+        f"━━━━━━━━━━━━━━━━━━━━━━",
+        f"🕐 {now_wib.strftime('%Y.%m.%d %H:%M')} WIB | Session: {session(h)}",
+        f"📍 Entry: {_fmt(entry)}",
+        f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}",
+    ]
+
+    # TP levels
+    for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+        if tp_val and tp_val > 0:
+            lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
+
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+    if ai_line:
+        lines.append(ai_line)
+    lines.append(f"📐 RR 1:{rr} | Confidence: {conf:.0%}")
+    if wr_text:
+        lines.append(wr_text)
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"⚠️ <i>NFA — Not Financial Advice. Sinyal hasil deteksi otomatis AI untuk edukasi. Keputusan & risiko trading sepenuhnya ada padamu. Selalu pakai manajemen risiko.</i>")
+    lines.append(f"")
+    lines.append(f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
+
+    return "\n".join(lines)
+
+
+def fmt_pulse(pulse_data: dict) -> str:
+    """Format engine readings into Market Pulse message.
+    
+    pulse_data format from run_engine_consensus():
+        {"engines": {name: {"direction", "confidence", "details"}},
+         "buy_count": int, "sell_count": int, "total": int,
+         "verdict": str, "consensus_pct": float, "symbol": str,
+         "timestamp": str, "price": float}
+    """
+    engines = pulse_data.get("engines", {})
+    buys = pulse_data.get("buy_count", 0)
+    sells = pulse_data.get("sell_count", 0)
+    total = pulse_data.get("total", 0)
+    verdict = pulse_data.get("verdict", "HOLD")
+    cpct = pulse_data.get("consensus_pct", 0)
+    sym = pulse_data.get("symbol", "XAUUSD")
+    price = pulse_data.get("price", 0)
+    ts = pulse_data.get("timestamp", wib_now().isoformat())
+    
+    # Parse timestamp
+    try:
+        dt = datetime.fromisoformat(ts)
+        ts_fmt = dt.strftime("%Y.%m.%d %H:%M") + " WIB"
+    except:
+        ts_fmt = ts
+    
+    # Verdict emoji
+    v_emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "⚪️"}.get(verdict, "⚪️")
+    price_str = f"${price:.2f}" if isinstance(price, (int,float)) and price > 0 else ""
+    
+    lines = [
+        f"🔄 <b>MARKET PULSE — {sym}</b>",
+        f"━━━━━━━━━━━━━━━━━━━━━━",
+        f"🕐 {ts_fmt} {price_str}",
+        f"━━━━━━━━━━━━━━━━━━━━━━",
+    ]
+    
+    if engines:
+        lines.append("")
+        lines.append("<b>📊 ENGINE READINGS</b>")
+        
+        # Named display for each engine
+        engine_names = {
+            "quant": "Quant", "fvg": "FVG", "hermes": "Hermes",
+            "crt": "CRT/TBS", "smc": "SMC", "trend": "Trend",
+            "ultimate": "Ultimate", "sequoia": "Sequoia"
+        }
+        dir_emoji = {"BUY": "🟢", "SELL": "🔴", "HOLD": "⚪️", "ERROR": "❌"}
+        
+        for eng_key, eng_name in engine_names.items():
+            eng = engines.get(eng_key)
+            if not eng:
+                continue
+            direction = eng.get("direction", "HOLD")
+            conf = eng.get("confidence", 0)
+            details = eng.get("details", "")
+            de = dir_emoji.get(direction, "⚪️")
+            conf_str = f" {conf:.0%}" if isinstance(conf, (int,float)) and conf > 0 else ""
+            det_str = f" | {details}" if details else ""
+            lines.append(f"{de} {eng_name}: {direction}{conf_str}{det_str}")
+    
+    lines.append("")
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+    
+    if total > 0:
+        verdict_line = f"{buys} BUY / {sells} SELL / {total - buys - sells} HOLD"
+        consensus_str = f" | Consensus: {cpct:.0%}" if cpct > 0 else ""
+        lines.append(f"📈 {verdict_line}{consensus_str}")
+        lines.append(f"{v_emoji} Verdict: <b>{verdict}</b>")
+    
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+    
+    if verdict == "HOLD" and total >= 4:
+        lines.append(f"⚠️ Menunggu konfirmasi lanjutan…")
+    elif verdict != "HOLD":
+        lines.append(f"✅ Sinyal valid — siap eksekusi setelah quality gate")
+    
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
+    
+    return "\n".join(lines)
 
 
 # ── Quant Consensus UI helper ──
@@ -1283,6 +1621,133 @@ def append_quant_consensus_ui(sig, quant_result, disp="XAUUSD"):
         warnings.append(f"🚨 <b>KONFLIK:</b> AI BUY vs Quant SELL ({red_pct:.0f}% Red) — TUNGGU konfirmasi!")
     elif ai_action == "SELL" and dominant == "G" and green_pct >= GUARD_THRESHOLD:
         warnings.append(f"🚨 <b>KONFLIK:</b> AI SELL vs Quant BUY ({green_pct:.0f}% Green) — TUNGGU konfirmasi!")
+
+    return block, warnings
+
+
+# ── Sequoia-X Quantitative Screening ──
+
+def run_sequoia_screen(ohlcv_bars, disp="XAUUSD"):
+    """Run Sequoia-X quantitative screening on OHLCV bars.
+
+    Runs multiple vectorized strategies:
+      - Turtle 20-day breakout (turtle_breakout)
+      - Turtle signal strength (0-1 momentum score)
+      - MA Volume breakout (price > MA20 + volume spike)
+      - Turtle Trend Filter (bull/bear/neutral for D1/H4 macro)
+
+    Returns None on insufficient data or error.
+    """
+    if not SEQUOIA_ENGINE or not ohlcv_bars or len(ohlcv_bars) < 30:
+        return None
+
+    try:
+        # Build DataFrame from OHLCV bars
+        df_bars = []
+        for b in ohlcv_bars:
+            t = b.get("t", b.get("timestamp", 0))
+            o = float(b.get("o", b.get("open", 0)))
+            h = float(b.get("h", b.get("high", 0)))
+            l = float(b.get("l", b.get("low", 0)))
+            c = float(b.get("c", b.get("close", 0)))
+            v = float(b.get("v", b.get("volume", 0)))
+            if o <= 0 or c <= 0:
+                continue
+            df_bars.append({"open": o, "high": h, "low": l, "close": c, "volume": v})
+
+        if len(df_bars) < 30:
+            return None
+
+        df = pd.DataFrame(df_bars)
+
+        if not validate_ohlcv(df):
+            return None
+
+        # ── Run Sequoia strategies ──
+        result = {"status": "ok", "display": disp}
+
+        # 1) MA Volume Breakout (fastest signal)
+        ma_vol_sig = ma_volume_breakout(df, ma_period=20, volume_mult=1.5)
+        result["ma_volume_trigger"] = bool(ma_vol_sig.iloc[-1])
+
+        # 2) Turtle 20-day Breakout
+        turtle_sig = turtle_breakout(df, lookback=20)
+        result["turtle_trigger"] = bool(turtle_sig.iloc[-1])
+
+        # 3) Turtle Signal Strength (continuous 0-1)
+        strength = turtle_signal_strength(df, lookback=20)
+        result["turtle_strength"] = float(strength.iloc[-1]) if len(strength) > 0 else 0.0
+
+        # 4) Turtle Trend Filter (macro direction)
+        is_bull, trend_strength, tf_dir = turtle_trend_filter(df, lookback=20, smoothing=3)
+        result["trend_bullish"] = bool(is_bull.iloc[-1])
+        result["trend_strength"] = float(trend_strength.iloc[-1]) if len(trend_strength) > 0 else 0.0
+        result["trend_direction"] = tf_dir  # -1, 0, +1
+
+        # Consensus summary
+        bullish_score = sum([
+            1 if result["turtle_trigger"] else 0,
+            1 if result["ma_volume_trigger"] else 0,
+            1 if tf_dir > 0 else 0,
+        ])
+        bearish_score = 1 if tf_dir < 0 else 0
+
+        result["bullish_signals"] = bullish_score
+        result["bearish_signals"] = bearish_score
+
+        if bullish_score >= 2:
+            result["sequoia_verdict"] = "BUY_BIAS"
+        elif bearish_score >= 1 and bullish_score == 0:
+            result["sequoia_verdict"] = "SELL_BIAS"
+        elif tf_dir != 0:
+            result["sequoia_verdict"] = f"TREND_{'BULL' if tf_dir > 0 else 'BEAR'}"
+        else:
+            result["sequoia_verdict"] = "NEUTRAL"
+
+        return result
+
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+def format_sequoia_block(result, ai_action=None):
+    """Format Sequoia screening results into a compact Telegram block.
+
+    Includes guardrail warnings when Sequoia contradicts AI signal.
+    Returns (block_text, warnings_list).
+    """
+    if not result or result.get("status") != "ok":
+        return "", []
+
+    verdict = result.get("sequoia_verdict", "?")
+    verdict_emoji = {
+        "BUY_BIAS": "🐢🟢", "SELL_BIAS": "🐢🔴",
+        "TREND_BULL": "📈", "TREND_BEAR": "📉",
+        "NEUTRAL": "⚪️"
+    }.get(verdict, "⚪️")
+
+    t_str = f"{result.get('turtle_strength', 0):.0%}" if result.get("turtle_strength") else "—"
+    tr_str = f"{result.get('trend_strength', 0):.0%}" if result.get('trend_strength') else "—"
+
+    block = (
+        f"\n━━━━━━━━━━━━━━━━\n"
+        f"🐢 <b>Sequoia-X Quant</b> [Turtle+HTF+MA]\n"
+        f"{verdict_emoji} <b>{verdict.replace('_',' ')}</b> | "
+        f"🟢{result.get('bullish_signals',0)} 🔴{result.get('bearish_signals',0)}\n"
+        f"Turtle BO: {'✅' if result.get('turtle_trigger') else '❌'} | "
+        f"MA Vol: {'✅' if result.get('ma_volume_trigger') else '❌'}\n"
+        f"Momentum: {t_str} | Trend: {tr_str}"
+    )
+
+    # Guardrail warnings
+    warnings = []
+    if ai_action:
+        if ai_action == "BUY" and verdict == "SELL_BIAS":
+            warnings.append(f"🐢⚠️ <b>Sequoia Guardrail:</b> AI BUY vs Sequoia SELL — divergence!")
+        elif ai_action == "SELL" and verdict == "BUY_BIAS":
+            warnings.append(f"🐢⚠️ <b>Sequoia Guardrail:</b> AI SELL vs Sequoia BUY — divergence!")
+        elif ai_action in ("BUY", "SELL") and verdict == "NEUTRAL":
+            warnings.append(f"🐢💤 Sequoia neutral — sinyal AI tanpa konfirmasi kuantitatif")
 
     return block, warnings
 
@@ -1343,7 +1808,7 @@ def send_ultimatum_video(chat_id):
         "Akses ini GRATIS. Tapi ekosistem ini dibangun\n"
         "dengan mental <b>GOTONG ROYONG.</b> Jika AI kami\n"
         "memberi Anda profit, kami menuntut apresiasi\n"
-        "Anda untuk menyiram bahan bakar server.\n"
+        "Anda untuk mengisi bahan bakar server AI.\n"
         "\n"
         "Jika Anda hanya ingin menjadi parasit, silakan keluar.\n"
         "━━━━━━━━━━━━━━━━\n"
@@ -1452,7 +1917,7 @@ def handle_ultimatum_callback(cb):
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📱 /help — Semua command\n"
             "📊 /analyze xauusd — Mulai analisa\n"
-            "💚 /donate — Dukung server AI\n"
+            "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📞 Admin: @codergaboets"
         )
@@ -1461,7 +1926,7 @@ def handle_ultimatum_callback(cb):
         tg_send(
             "🔗 <b>Gabung Komunitas:</b>\n"
             "━━━━━━━━━━━━━━━━\n"
-            "📢 Channel Sinyal: https://t.me/+qLAdRGd_RiplZmU1\n"
+            "📢 Channel Sinyal: https://t.me/vilonaaichanel\n"
             "👥 Group Diskusi: https://t.me/+kX8tspebrpVhMmE1",
             chat_id
         )
@@ -1598,7 +2063,7 @@ def handle_command(cmd, text, chat_id, msg):
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"📊 /analyze xauusd — Mulai analisa\n"
                 f"📱 /help — Semua command\n"
-                f"💚 /donate — Siram bahan bakar AI"
+                f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot"
             )
             tg_send(welcome, chat_id)
         else:
@@ -1612,11 +2077,19 @@ def handle_command(cmd, text, chat_id, msg):
             "👑 <b>PILAR UTAMA</b>\n"
             "/start — Reboot Markas Komando\n"
             "/analyze — Perintahkan AI Scan Market\n"
+            "/price — Cek harga real-time\n"
+            "/data — Market overview\n"
             "/status — Cek Kuota & Akses VIP\n"
-            "/donate — Siram Bensin Server AI\n\n"
-            "📊 <b>ADVANCED TOOLS</b>\n"
-            "/mapping — Tarik data mapping harian\n"
+            "/donate — Isi Bahan Bakar AI ⚡\n\n"
+            "📊 <b>TRADING TOOLS</b>\n"
+            "/mapping — Mapping harian + level S/R\n"
             "/killzone — Radar sesi market aktif\n"
+            "/winrate — Statistik performa\n"
+            "/history — Riwayat trade terakhir\n"
+            "/recap — Rekap harian\n\n"
+            "🔧 <b>POWER TOOLS</b>\n"
+            "/autosync — Auto-trade ke EA\n"
+            "/bridge_status — Cek koneksi EA"
             "━━━━━━━━━━━━━━━━\n"
             "📞 Jalur Privat Investor: @codergaboets",
             chat_id)
@@ -1701,9 +2174,9 @@ def handle_command(cmd, text, chat_id, msg):
                     "━━━━━━━━━━━━━━━━\n"
                     f"📊 Free Member: {FREE_QUOTA_PER_DAY}x analisa/hari\n"
                     f"📉 Sisa: 0/{FREE_QUOTA_PER_DAY}\n\n"
-                    "💚 <b>Dukung server AI kami!</b>\n"
+                    "⚡ <b>Isi Bahan Bakar AI!</b>\n"
                     "Donasi sukarela untuk akses unlimited:\n"
-                    "👉 /donate — Info donasi\n\n"
+                    "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n\n"
                     "⏰ Reset: besok jam 00:00 WIB",
                     chat_id
                 )
@@ -1737,7 +2210,7 @@ def handle_command(cmd, text, chat_id, msg):
                         "👑 <b>Custom Parameter khusus Donatur!</b>\n"
                         "━━━━━━━━━━━━━━━━\n"
                         "Fitur risk= dan tf= hanya untuk Donatur.\n\n"
-                        "💚 /donate — Dukung server AI\n"
+                        "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
                         "👉 /bill — Lihat info",
                         chat_id
                     )
@@ -1797,15 +2270,34 @@ def handle_command(cmd, text, chat_id, msg):
             sig = ask_ai(price, dxy, session(), str(killzone()), 0, premium=False,
                           ohlcv=ohlcv_bars, display=disp, tier=user_tier)
             if sig:
+                # Record direction for flip guard (after AI returns action)
+                action = sig.get("action", "HOLD")
+                _touch_manual(str(chat_id), action=action if action in ("BUY","SELL") else None, asset=disp)
+                # Normalize confidence for quality checks
+                c = sig.get("confidence", 0)
+                if isinstance(c, (int,float)) and c > 10:
+                    sig["confidence"] = c / 100
                 # Apply Elite custom params
                 sig = apply_elite_params(sig, elite_params, price, disp)
                 curr = "Rp" if is_idx else "$"
+                # Quality gate for manual analyze
+                voters = sig.get("voters", 0)
+                rr = sig.get("rr_ratio", 0)
+                if isinstance(rr, str) and rr.startswith("1:"):
+                    rr = float(rr[2:]) if rr[2:] else 0
+                rr = float(rr) if rr else 0
+                if sig.get("action") in ("BUY","SELL") and voters < 2:
+                    tg_send(f"⚠️ Sinyal ditahan: hanya {voters} model setuju (min 2). Coba /analyze lagi.", chat_id)
+                    return
+                if sig.get("action") in ("BUY","SELL") and rr > 0 and (rr < 1.5 or rr > 5.0):
+                    tg_send(f"⚠️ Sinyal ditahan: RR 1:{rr:.1f} di luar 1:1.5-5. Coba /analyze lagi.", chat_id)
+                    return
                 # Auto-sync ON → langsung trade, OFF → keyboard
                 if is_autosync(chat_id):
                     if LAYERING_ENGINE and sig.get("action") != "HOLD":
                         sig = enrich_signal_with_layers(sig)
                     sig["target_user"] = str(chat_id)
-                    post_signal_to_bridge(sig, price)
+                    post_signal_to_bridge(sig, price, disp)
                     action = sig.get("action", "HOLD")
                     auto_text = f"🤖 <b>Auto Sync</b> — {action} {disp} @ {price}\n"
                     # Quant Consensus bloc for autosync
@@ -1848,6 +2340,18 @@ def handle_command(cmd, text, chat_id, msg):
                             trend = analyze_trend_break(ohlcv_bars, disp)
                             auto_text += format_trend_block(trend) or ""
                         except: pass
+                    # 🐢 Sequoia-X Quant (Turtle + MA Vol + Trend)
+                    if SEQUOIA_ENGINE and ohlcv_bars:
+                        try:
+                            seq_result = run_sequoia_screen(ohlcv_bars, disp)
+                            if seq_result:
+                                ai_act = sig.get("action", "") if sig else ""
+                                seq_block, seq_warns = format_sequoia_block(seq_result, ai_act)
+                                if seq_block:
+                                    auto_text += seq_block + "\n"
+                                    for w in seq_warns:
+                                        auto_text += f"{w}\n"
+                        except: pass
                     auto_text += "<i>EA auto-eksekusi... 3-5 detik</i>"
                     tg_send(auto_text, chat_id)
                 else:
@@ -1855,6 +2359,7 @@ def handle_command(cmd, text, chat_id, msg):
                         "sig": sig, "price": price,
                         "expires": time.time() + PENDING_SIGNAL_TTL,
                     }
+                    _save_pending_signals()
                     text = fmt_signal(sig, price, dxy, wib_now().hour, disp, curr)
                     # 🔥 Inject Quant Consensus + Guardrail
                     if QUANT_ENGINE and ohlcv_bars:
@@ -1893,6 +2398,18 @@ def handle_command(cmd, text, chat_id, msg):
                             if trend_block:
                                 text += trend_block
                         except: pass
+                    # 🐢 Sequoia-X Quant (Turtle + MA Vol + Trend)
+                    if SEQUOIA_ENGINE and ohlcv_bars:
+                        try:
+                            seq_result = run_sequoia_screen(ohlcv_bars, disp)
+                            if seq_result:
+                                ai_act = sig.get("action", "") if sig else ""
+                                seq_block, seq_warns = format_sequoia_block(seq_result, ai_act)
+                                if seq_block:
+                                    text += seq_block
+                                    for w in seq_warns:
+                                        text += f"\n{w}"
+                        except: pass
                     text += "\n<i>⏰ Sinyal valid 5 menit</i>"
                     keyboard = {
                         "inline_keyboard": [[
@@ -1924,7 +2441,6 @@ def handle_command(cmd, text, chat_id, msg):
                         return
 
                     _touch_manual(str(chat_id), asset=sub.upper())
-
                     tg_send(f"🔍 Menganalisa {sub.upper()}... ~15 detik", chat_id)
                     ohlcv_bars2 = _fetch_ohlcv_for_ai(sub)
                     # Detect user tier for AI model selection
@@ -1938,14 +2454,33 @@ def handle_command(cmd, text, chat_id, msg):
                     sig = ask_ai(price, None, session(), str(killzone()), 0, premium=False,
                                   ohlcv=ohlcv_bars2, display=sub.upper(), tier=user_tier2)
                     if sig:
+                        # Record direction for flip guard
+                        action2 = sig.get("action", "HOLD")
+                        _touch_manual(str(chat_id), action=action2 if action2 in ("BUY","SELL") else None, asset=sub.upper())
+                        # Normalize confidence
+                        c = sig.get("confidence", 0)
+                        if isinstance(c, (int,float)) and c > 10:
+                            sig["confidence"] = c / 100
                         # Apply Elite custom params
                         sig = apply_elite_params(sig, elite_params, price, sub.upper())
+                        # Quality gate
+                        voters = sig.get("voters", 0)
+                        rr = sig.get("rr_ratio", 0)
+                        if isinstance(rr, str) and rr.startswith("1:"):
+                            rr = float(rr[2:]) if rr[2:] else 0
+                        rr = float(rr) if rr else 0
+                        if sig.get("action") in ("BUY","SELL") and voters < 2:
+                            tg_send(f"⚠️ Sinyal ditahan: hanya {voters} model setuju (min 2). Coba /analyze lagi.", chat_id)
+                            return
+                        if sig.get("action") in ("BUY","SELL") and rr > 0 and (rr < 1.5 or rr > 5.0):
+                            tg_send(f"⚠️ Sinyal ditahan: RR 1:{rr:.1f} di luar 1:1.5-5. Coba /analyze lagi.", chat_id)
+                            return
                         # Auto-sync ON → langsung trade, OFF → keyboard
                         if is_autosync(chat_id):
                             if LAYERING_ENGINE and sig.get("action") != "HOLD":
                                 sig = enrich_signal_with_layers(sig)
                             sig["target_user"] = str(chat_id)
-                            post_signal_to_bridge(sig, price)
+                            post_signal_to_bridge(sig, price, sub.upper())
                             action = sig.get("action", "HOLD")
                             auto_text = f"🤖 <b>Auto Sync</b> — {action} {sub.upper()} @ {price}\n"
                             if QUANT_ENGINE and ohlcv_bars2:
@@ -1973,6 +2508,18 @@ def handle_command(cmd, text, chat_id, msg):
                                     if crt_block:
                                         auto_text += crt_block + "\n"
                                 except: pass
+                            # 🐢 Sequoia-X Quant (Turtle + MA Vol + Trend)
+                            if SEQUOIA_ENGINE and ohlcv_bars2:
+                                try:
+                                    seq_result = run_sequoia_screen(ohlcv_bars2, sub.upper())
+                                    if seq_result:
+                                        ai_act = sig.get("action", "") if sig else ""
+                                        seq_block, seq_warns = format_sequoia_block(seq_result, ai_act)
+                                        if seq_block:
+                                            auto_text += seq_block + "\n"
+                                            for w in seq_warns:
+                                                auto_text += f"{w}\n"
+                                except: pass
                             auto_text += "<i>EA auto-eksekusi... 3-5 detik</i>"
                             tg_send(auto_text, chat_id)
                         else:
@@ -1980,6 +2527,7 @@ def handle_command(cmd, text, chat_id, msg):
                                 "sig": sig, "price": price,
                                 "expires": time.time() + PENDING_SIGNAL_TTL,
                             }
+                            _save_pending_signals()
                             text = fmt_signal(sig, price, None, wib_now().hour, sub.upper(), "$")
                             if QUANT_ENGINE and ohlcv_bars2:
                                 try:
@@ -2012,6 +2560,18 @@ def handle_command(cmd, text, chat_id, msg):
                                     text += format_smc_block(smc) or ""
                                     trend = analyze_trend_break(ohlcv_bars2, sub.upper())
                                     text += format_trend_block(trend) or ""
+                                except: pass
+                            # 🐢 Sequoia-X Quant (Turtle + MA Vol + Trend)
+                            if SEQUOIA_ENGINE and ohlcv_bars2:
+                                try:
+                                    seq_result = run_sequoia_screen(ohlcv_bars2, sub.upper())
+                                    if seq_result:
+                                        ai_act = sig.get("action", "") if sig else ""
+                                        seq_block, seq_warns = format_sequoia_block(seq_result, ai_act)
+                                        if seq_block:
+                                            text += seq_block
+                                            for w in seq_warns:
+                                                text += f"\n{w}"
                                 except: pass
                             text += "\n<i>⏰ Sinyal valid 5 menit</i>"
                             keyboard = {
@@ -2115,7 +2675,7 @@ def handle_command(cmd, text, chat_id, msg):
         if msg:
             username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
 
-        tg_send("🧪 <b>Test Dukung Server AI — Rp10,000</b>\nMembuat invoice...", chat_id)
+        tg_send("🧪 <b>Test Isi Bahan Bakar AI — Rp10,000</b>\nMembuat invoice...", chat_id)
 
         result = create_tripay_payment(str(chat_id), username, tier="donor", amount=10000)
         if result.get("error"):
@@ -2126,7 +2686,7 @@ def handle_command(cmd, text, chat_id, msg):
         ref = result.get("reference", "") or result.get("merchant_ref", "")
 
         txt = (
-            "🧪 <b>Test Dukung Server AI — Rp10,000</b>\n"
+            "🧪 <b>Test Isi Bahan Bakar AI — Rp10,000</b>\n"
             "━━━━━━━━━━━━━━━━\n"
             "💰 Total: <b>Rp10,000</b>\n"
             "👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
@@ -2225,7 +2785,7 @@ def handle_command(cmd, text, chat_id, msg):
                 "━━━━━━━━━━━━━━━━\n"
                 "Fitur auto-trade ke EA hanya tersedia untuk\n"
                 "👑 <b>Donatur</b> — yang sudah dukung server AI.\n\n"
-                "💚 /donate — Dukung server AI sekarang\n"
+                "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
                 "📞 @codergaboets — Tanya admin",
                 chat_id
             )
@@ -2265,17 +2825,28 @@ def handle_command(cmd, text, chat_id, msg):
         except Exception as e:
             tg_send(f"❌ Mapping error: {e}", chat_id)
 
+    elif cmd == "/restart_bot":
+        """Admin-only: Exit so systemd auto-restarts."""
+        admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
+        if str(chat_id) not in admin_ids:
+            tg_send("⛔ Hanya admin yang bisa execute command ini.", chat_id)
+            return
+        tg_send("♻️ Sistem bot sedang di-restart, mohon tunggu sebentar...", chat_id)
+        time.sleep(2)
+        logger.warning(f"♻️ Bot restart initiated by admin {chat_id}")
+        os._exit(0)
+
 
 # ── Signal log ──
-def load_signal_log():
-    path = DATA_DIR / "signal_log.json"
+def load_signal_log(asset="default"):
+    path = DATA_DIR / f"signal_log_{asset}.json"
     try:
         if path.exists(): return json.loads(path.read_text())
     except Exception: pass
     return {"signals_sent":0,"last_signal_time":None,"last_action":None,"last_price":0,"loss_count":0}
 
-def save_signal_log(log):
-    (DATA_DIR / "signal_log.json").write_text(json.dumps(log))
+def save_signal_log(log, asset="default"):
+    (DATA_DIR / f"signal_log_{asset}.json").write_text(json.dumps(log))
 
 def is_trading_session(h):
     return 7 <= h < 23
@@ -2315,28 +2886,47 @@ def is_market_open():
         return True  # crypto is always open
     return is_trading_session(wib_now().hour)
 
-# ── Mapping channel for daily insights (separate from signals) ──
-MAPPING_CHANNEL_ID = os.getenv("MAPPING_CHANNEL_ID", "")
-MAPPING_CHANNEL = f"telegram:{MAPPING_CHANNEL_ID}" if MAPPING_CHANNEL_ID else ""
+# ── Signal channel (used for ALL signal posts, mapping, and trade alerts) ──
+# Supports both old env var name and new SIGNAL_CHANNEL_ID
+SIGNAL_CHANNEL_ID = os.getenv("SIGNAL_CHANNEL_ID") or os.getenv("MAPPING_CHANNEL_ID", "")
+SIGNAL_CHANNEL_REF = f"telegram:{SIGNAL_CHANNEL_ID}" if SIGNAL_CHANNEL_ID else ""
 
 # ── Group forward (optional — set GROUP_CHAT_ID to forward signals/mapping to group) ──
 GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID", "")
 
 def _broadcast_to_group(text):
-    """Forward signal/mapping text to the discussion group if GROUP_CHAT_ID is configured."""
+    """DEPRECATED — channel linked, auto-forward."""
+    return  # no-op
+def _no_pin_broadcast(text):
+    """Signal broadcast to group WITHOUT pinning.
+    Since channel is linked to group, Telegram auto-forwards+pins channel posts.
+    We send a separate bot message (auto-forward may be slow) AND unpin to keep
+    group pins clear for admin's own material."""
     if GROUP_CHAT_ID:
         try:
             tg_send(text, GROUP_CHAT_ID)
+            # Unpin latest pinned message (the auto-forwarded channel post)
+            payload = json.dumps({"chat_id": GROUP_CHAT_ID}).encode()
+            urllib.request.urlopen(
+                urllib.request.Request(f"{TELEGRAM_API}/unpinChatMessage",
+                                       data=payload,
+                                       headers={"Content-Type": "application/json"}),
+                timeout=5)
         except Exception:
-            pass
+            pass  # bot may not have can_pin_messages permission — graceful fallback
 
 def send_to_channel(text):
-    """Send to mapping channel. Falls back to home if no channel configured."""
-    if MAPPING_CHANNEL_ID:
-        tg_send(text, MAPPING_CHANNEL_ID)
-    else:
-        tg_send(text)  # fallback to home
-    _broadcast_to_group(text)  # forward to discussion group
+    """Send signal/mapping to broadcast channel. Returns tg_send result.
+    Falls back to home only if channel ID is not configured (warns in log)."""
+    if SIGNAL_CHANNEL_ID:
+        result = tg_send(text, SIGNAL_CHANNEL_ID)
+        if result is None:
+            logger.warning("send_to_channel: post failed, retrying once...")
+            time.sleep(1)
+            result = tg_send(text, SIGNAL_CHANNEL_ID)
+        return result
+    logger.warning("send_to_channel: SIGNAL_CHANNEL_ID not set — falling back to HOME")
+    return tg_send(text)  # fallback to home
 
 
 # ── Subscription reminders (H-7/H-3/H-1) ──
@@ -2466,87 +3056,144 @@ def format_daily_mapping():
 # ── Auto-analyze loop ──
 # Assets to scan autonomously (forex, crypto, commodities — stocks on-demand via /analyze)
 
-# ── Channel rate limiter (prevents signal spam) ──
-# Tiered anti-spam: global, per-asset, same-direction, daily cap
-_last_channel_post = {}         # {(asset, direction): timestamp} — per-asset+direction cooldown
-_GLOBAL_CHANNEL_COOLDOWN = 300   # min 5 min between ANY channel posts
-_PER_ASSET_COOLDOWN = 1800        # min 30 min per asset (any direction)
-_SAME_DIR_COOLDOWN = 3600         # min 60 min for same-direction on same asset
+# ── Channel rate limiter + Signal Dedup (DISK-PERSISTED — survives restarts) ──
+CHANNEL_STATE_FILE = DATA_DIR / ".channel_rate_state.json"
+_SIGNAL_DEDUP_WINDOW = 7200       # 2h — same signal hash rejected within this
+_GLOBAL_CHANNEL_COOLDOWN = 600    # 10 min between ANY channel posts
+_PER_ASSET_COOLDOWN = 1800        # 30 min per asset (any direction)
+_SAME_DIR_COOLDOWN = 3600         # 60 min same-direction on same asset
 _MAX_PER_ASSET_PER_DAY = 3        # max 3 signals per asset per day
-_daily_signal_counts = {}         # {(date, asset): count}
-_last_global_post = None
-_last_tpsl_alert = {}             # {(trade_id): timestamp} — prevent duplicate TP/SL alerts
+_channel_state = None             # lazy-loaded from disk
+_last_tpsl_alert = {}             # {(trade_id): timestamp}
+_ALERT_STATE_FILE = DATA_DIR / "tpsl_alert_state.json"
 
-def _can_post_to_channel(asset_key: str = "", direction: str = "") -> bool:
-    """Rate limit channel posts: 5min global, 30min per asset, 60min same-dir, max 3/day per asset."""
-    global _last_global_post
-    now = time.time()
-    today = wib_now().strftime("%Y%m%d")
+def _load_tpsl_state():
+    global _last_tpsl_alert
+    try:
+        if _ALERT_STATE_FILE.exists():
+            with open(_ALERT_STATE_FILE) as f:
+                data = json.load(f)
+            now = time.time()
+            _last_tpsl_alert = {k: v for k, v in data.items() if (now - v) < 3600}
+    except: pass
 
+def _save_tpsl_state():
+    try:
+        _ALERT_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(_ALERT_STATE_FILE, "w") as f:
+            json.dump(_last_tpsl_alert, f)
+    except: pass
+
+def _load_channel_state():
+    """Load channel rate state from disk. Auto-clean entries older than 24h."""
+    try:
+        if CHANNEL_STATE_FILE.exists():
+            raw = json.loads(CHANNEL_STATE_FILE.read_text())
+            now = time.time(); today = wib_now().strftime("%Y%m%d")
+            for k in list(raw.get("per_asset", {}).keys()):
+                if now - raw["per_asset"][k] > 86400: del raw["per_asset"][k]
+            for k in list(raw.get("daily_counts", {}).keys()):
+                if not k.startswith(today): del raw["daily_counts"][k]
+            for k in list(raw.get("signal_hashes", {}).keys()):
+                if now - raw["signal_hashes"][k] > _SIGNAL_DEDUP_WINDOW: del raw["signal_hashes"][k]
+            return raw
+    except Exception: pass
+    return {"global_last": 0, "per_asset": {}, "daily_counts": {}, "signal_hashes": {}}
+
+def _save_channel_state():
+    try:
+        if _channel_state is not None:
+            CHANNEL_STATE_FILE.write_text(json.dumps(_channel_state))
+    except Exception: pass
+
+def _cs():
+    """Lazy-load channel state."""
+    global _channel_state
+    if _channel_state is None: _channel_state = _load_channel_state()
+    return _channel_state
+
+def _signal_dedup_hash(asset_key, direction, entry, sl, tp):
+    """Content fingerprint — same asset+direction+price combo = duplicate."""
+    key = f"{asset_key}|{direction}|{round(float(entry or 0),1)}|{round(float(sl or 0),1)}|{round(float(tp or 0),1)}"
+    return hashlib.md5(key.encode()).hexdigest()[:12]
+
+def _can_post_to_channel(asset_key: str = "", direction: str = "", entry=0, sl=0, tp=0) -> bool:
+    """Rate limit + dedup. Returns False if blocked."""
+    state = _cs(); now = time.time(); today = wib_now().strftime("%Y%m%d")
+    # 0. Signal dedup — SAME content within 2h = BLOCK
+    if asset_key and direction:
+        sig_hash = _signal_dedup_hash(asset_key, direction, entry, sl, tp)
+        stored = state["signal_hashes"].get(sig_hash, 0)
+        if now - stored < _SIGNAL_DEDUP_WINDOW:
+            logger.info(f"🚫 DEDUP BLOCK [{asset_key}]: identical signal {sig_hash} ({int((now-stored)/60)}m ago)")
+            return False
     # 1. Global cooldown
-    if _last_global_post and (now - _last_global_post) < _GLOBAL_CHANNEL_COOLDOWN:
-        return False
-
+    gl = state.get("global_last", 0)
+    if gl and (now - gl) < _GLOBAL_CHANNEL_COOLDOWN: return False
     # 2. Daily cap per asset
     if asset_key:
-        daily_key = f"{today}:{asset_key}"
-        if _daily_signal_counts.get(daily_key, 0) >= _MAX_PER_ASSET_PER_DAY:
-            return False
-
-        # 3. Same-direction cooldown (60 min)
+        dk = f"{today}:{asset_key}"
+        if state["daily_counts"].get(dk, 0) >= _MAX_PER_ASSET_PER_DAY: return False
+        # 3. Same-direction cooldown
         if direction:
-            dir_key = f"{asset_key}:{direction}"
-            last = _last_channel_post.get(dir_key, 0)
-            if (now - last) < _SAME_DIR_COOLDOWN:
-                return False
-
-        # 4. Any-direction per-asset cooldown (30 min)
-        any_key = f"{asset_key}:*"
-        last_any = _last_channel_post.get(any_key, 0)
-        if (now - last_any) < _PER_ASSET_COOLDOWN:
-            return False
-
+            dk2 = f"{asset_key}:{direction}"
+            if now - state["per_asset"].get(dk2, 0) < _SAME_DIR_COOLDOWN: return False
+        # 4. Any-direction per-asset cooldown
+        dk3 = f"{asset_key}:*"
+        if now - state["per_asset"].get(dk3, 0) < _PER_ASSET_COOLDOWN: return False
     return True
 
-def _mark_channel_post(asset_key: str = "", direction: str = ""):
-    """Record a channel post for rate limiting."""
-    global _last_global_post
-    now = time.time()
-    today = wib_now().strftime("%Y%m%d")
-    _last_global_post = now
+def _mark_channel_post(asset_key: str = "", direction: str = "", entry=0, sl=0, tp=0):
+    """Persist post to disk immediately."""
+    state = _cs(); now = time.time(); today = wib_now().strftime("%Y%m%d")
+    state["global_last"] = now
     if asset_key:
-        _last_channel_post[f"{asset_key}:*"] = now  # any-direction tracker
-        if direction:
-            _last_channel_post[f"{asset_key}:{direction}"] = now  # same-direction tracker
-        daily_key = f"{today}:{asset_key}"
-        _daily_signal_counts[daily_key] = _daily_signal_counts.get(daily_key, 0) + 1
+        state["per_asset"][f"{asset_key}:*"] = now
+        if direction: state["per_asset"][f"{asset_key}:{direction}"] = now
+        dk = f"{today}:{asset_key}"
+        state["daily_counts"][dk] = state["daily_counts"].get(dk, 0) + 1
+        if entry and sl and tp:
+            sh = _signal_dedup_hash(asset_key, direction, entry, sl, tp)
+            state["signal_hashes"][sh] = now
+    _save_channel_state()
 
 def _can_post_tpsl_alert(trade_id: str) -> bool:
-    """Prevent duplicate TP/SL alerts within 5 min for the same trade."""
+    """Prevent duplicate TP/SL alerts within 5 min for the same trade. Persisted to disk."""
     now = time.time()
     last = _last_tpsl_alert.get(trade_id, 0)
     if (now - last) < 300:
         return False
     _last_tpsl_alert[trade_id] = now
+    _save_tpsl_state()
     return True
 
 AUTO_SCAN_ASSETS = [
     # (internal_pair, display_name, yahoo_symbol, is_forex_metal)
+    # FOCUS MODE: XAUUSD only — hemat token, sinyal paling akurat
     ("gold", "XAUUSD", "GC=F", True),
-    ("btc", "BTCUSD", "BTC-USD", False),
-    ("eth", "ETHUSD", "ETH-USD", False),
-    ("eurusd", "EURUSD", "EURUSD=X", True),
-    ("gbpusd", "GBPUSD", "GBPUSD=X", True),
-    ("oil", "USOIL", "CL=F", False),
 ]
 
 def auto_analyze_loop():
     """Main autonomous signal loop. Weekdays: all assets. Weekends: crypto only (BTC/ETH)."""
-    logger.info("🚀 Auto-analyze loop started (multi-asset, weekend-aware)")
+    logger.info("🚀 Auto-analyze loop started (XAUUSD focus mode)")
     time.sleep(5)
     asset_idx = 0
     # Per-asset signal logs for cooldown tracking
     asset_logs = {}
+    # ── Market Pulse tracker (post engine readings every 30 min) ──
+    last_pulse_time = 0.0
+    # ── 2-Bar Confirmation Tracker (BTC only) ──
+    # Backtest proven: +30% profit, +1.9% WR for BTCUSD
+    _consec_tracker = {}  # {asset: {"action": "BUY"/"SELL", "bar_time": timestamp}}
+    def _consec_2bar_confirm(asset, action):
+        """Only allow signal if same direction confirmed on previous bar scan.
+        Returns True if this is the first signal (no prior) or matches prior."""
+        prev = _consec_tracker.get(asset)
+        # Update tracker with current signal
+        _consec_tracker[asset] = {"action": action, "time": wib_now()}
+        if prev is None:
+            return False  # First signal ever → wait for confirmation
+        return prev["action"] == action
     # ── Persistent mapping tracker (survives restarts) ──
     MAPPING_TRACKER = DATA_DIR / ".last_mapping_date"
     def _get_last_mapping():
@@ -2604,8 +3251,9 @@ def auto_analyze_loop():
                                 trade_id = ct.get("id", ct.get("trade_id", ""))
                                 if trade_id and not _can_post_tpsl_alert(str(trade_id)):
                                     continue
-                                text, markup = format_trade_close_with_cta(ct)
-                                tg_send(text, reply_markup=markup)
+                                # Send to channel (text only — buttons gak work di channel)
+                                alert_text = format_trade_close_alert(ct)
+                                send_to_channel(alert_text)
                             except Exception: pass
                     except Exception: pass
 
@@ -2637,7 +3285,7 @@ def auto_analyze_loop():
                     action = mech_sig["action"]
                     conf = mech_sig["confidence"]
                     log_key = f"auto_{pair}"
-                    log = asset_logs.get(log_key, load_signal_log())
+                    log = asset_logs.get(log_key, load_signal_log(pair))
                     last_time = log.get("last_signal_time")
                     last_action = log.get("last_action")
                     if last_time and last_action:
@@ -2649,14 +3297,22 @@ def auto_analyze_loop():
                                 continue
                         except: pass
                     logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
-                    text = fmt_signal(mech_sig, price, dxy, h, disp, "$") + f"\n<i>[{mech_sig.get('source','mech')}] weekend-crypto</i>"
-                    if _can_post_to_channel(pair, action):
-                        tg_send(text)
-                        _mark_channel_post(pair, action)
-                        _broadcast_to_group(text)
-                    if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
-                        mech_sig = enrich_signal_with_layers(mech_sig)
-                    post_signal_to_bridge(mech_sig, price)
+                    # ── BTC 2-bar confirmation (gate channel + bridge) ──
+                    if disp == "BTCUSD" and not _consec_2bar_confirm("BTCUSD", action):
+                        logger.info(f"⏳ BTC 2-BAR WAIT: {action} — waiting for next bar confirm")
+                        continue
+                    text = fmt_signal(mech_sig, price, dxy, h, disp, "$")
+                    _entry = mech_sig.get("entry", price) or 0
+                    _sl = mech_sig.get("sl", 0) or 0
+                    _tp = mech_sig.get("tp", 0) or 0
+                    if _can_post_to_channel(pair, action, _entry, _sl, _tp):
+                        send_to_channel(text)
+                        _mark_channel_post(pair, action, _entry, _sl, _tp)
+                        if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
+                            mech_sig = enrich_signal_with_layers(mech_sig)
+                        post_signal_to_bridge(mech_sig, price, disp)
+                    else:
+                        logger.info(f"BLOCKED weekend [{disp}]: rate limited — skip bridge")
                     log["signals_sent"] = log.get("signals_sent", 0) + 1
                     log["last_signal_time"] = wib_now().isoformat()
                     log["last_action"] = action
@@ -2667,30 +3323,53 @@ def auto_analyze_loop():
                         "confidence": conf, "source": mech_sig.get("source", "mech"),
                         "rr_ratio": mech_sig.get("rr_ratio", 0)}
                     asset_logs[log_key] = log
-                    (DATA_DIR / "ea_signal.json").write_text(json.dumps(log["last_signal"]))
-                    save_signal_log(log)
+                    # Per-asset signal file (avoid race between threads)
+                    (DATA_DIR / f"ea_signal_{pair}.json").write_text(json.dumps(log["last_signal"]))
+                    save_signal_log(log, pair)
                 else:
                     # AI consensus (simplified for weekend - just DeepSeek/OmniRoute)
                     sig = ask_ai(price, dxy, "WeekendCrypto", kz, 0, premium=False,
                                   ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
-                    if sig and sig.get("action") in ("BUY", "SELL") and sig.get("confidence", 0) >= 0.60:
-                        logger.info(f"AI PUSH [{disp}]: {sig['action']} | conf={sig.get('confidence',0):.0%}")
-                        if LAYERING_ENGINE:
-                            sig = enrich_signal_with_layers(sig)
-                        post_signal_to_bridge(sig, price)
-                        log_key = f"auto_{pair}"
-                        log = asset_logs.get(log_key, load_signal_log())
-                        log["signals_sent"] = log.get("signals_sent", 0) + 1
-                        log["last_signal_time"] = wib_now().isoformat()
-                        log["last_action"] = sig["action"]
-                        log["last_price"] = price
-                        save_signal_log(log)
-                        asset_logs[log_key] = log
-                        text = fmt_signal(sig, price, dxy, h, disp, "$") + "\n<i>[weekend-crypto]</i>"
-                        if _can_post_to_channel(pair, sig["action"]):
-                            tg_send(text)
-                            _mark_channel_post(pair, sig["action"])
-                            _broadcast_to_group(text)
+                    if sig and sig.get("action") in ("BUY", "SELL"):
+                        # Normalize confidence + quality gates
+                        wc = sig.get("confidence", 0)
+                        if isinstance(wc, (int,float)) and wc > 10:
+                            sig["confidence"] = wc / 100; wc = wc / 100
+                        voters = sig.get("voters", 0)
+                        rr = sig.get("rr_ratio", 0)
+                        if isinstance(rr, str) and rr.startswith("1:"):
+                            rr = float(rr[2:]) if rr[2:] else 0
+                        rr = float(rr) if rr else 0
+                        if wc < 0.70:
+                            logger.info(f"   [{disp}] BLOCKED: low confidence {wc:.0%}")
+                        elif voters < 3:
+                            logger.info(f"   [{disp}] BLOCKED: solo call ({voters} model)")
+                        elif rr > 0 and (rr < 1.5 or rr > 5.0):
+                            logger.info(f"   [{disp}] BLOCKED: RR 1:{rr:.1f} outside range")
+                        else:
+                            logger.info(f"AI PUSH [{disp}]: {sig['action']} | conf={wc:.0%}")
+                            # ── Rate-limit check BEFORE bridge push (anti-oversignal weekend) ──
+                            _entry = sig.get("entry", price) or 0
+                            _sl = sig.get("sl", 0) or 0
+                            _tp = sig.get("tp", 0) or 0
+                            if _can_post_to_channel(pair, sig["action"], _entry, _sl, _tp):
+                                if LAYERING_ENGINE:
+                                    sig = enrich_signal_with_layers(sig)
+                                post_signal_to_bridge(sig, price, disp)
+                                text = fmt_signal(sig, price, dxy, h, disp, "$")
+                                send_to_channel(text)
+                                _mark_channel_post(pair, sig["action"], _entry, _sl, _tp)
+                            else:
+                                logger.info(f"BLOCKED weekend [{disp}]: rate limited — skip bridge+channel")
+                        # Weekend signal log (separate from weekday for accurate tracking)
+                        wk_log_key = f"weekend_{pair}"
+                        wk_log = asset_logs.get(wk_log_key, load_signal_log(f"weekend_{pair}"))
+                        wk_log["signals_sent"] = wk_log.get("signals_sent", 0) + 1
+                        wk_log["last_signal_time"] = wib_now().isoformat()
+                        wk_log["last_action"] = sig["action"]
+                        wk_log["last_price"] = price
+                        save_signal_log(wk_log, f"weekend_{pair}")
+                        asset_logs[wk_log_key] = wk_log
 
                 time.sleep(120)  # 2 min between weekend crypto scans
                 continue  # back to top of while loop
@@ -2718,7 +3397,7 @@ def auto_analyze_loop():
             # Per-asset signal log
             log_key = f"auto_{pair}"
             if log_key not in asset_logs:
-                asset_logs[log_key] = load_signal_log()
+                asset_logs[log_key] = load_signal_log(pair)
             log = asset_logs[log_key]
 
             # Fetch price for this asset
@@ -2736,8 +3415,9 @@ def auto_analyze_loop():
                             trade_id = ct.get("id", ct.get("trade_id", ""))
                             if trade_id and not _can_post_tpsl_alert(str(trade_id)):
                                 continue
-                            text, markup = format_trade_close_with_cta(ct)
-                            tg_send(text, reply_markup=markup)
+                            # Send to channel (text only — buttons gak work di channel)
+                            alert_text = format_trade_close_alert(ct)
+                            send_to_channel(alert_text)
                         except Exception: pass
                 except Exception: pass
 
@@ -2778,17 +3458,32 @@ def auto_analyze_loop():
                     except: pass
                 
                 logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
-                text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp") + f"\n<i>[{mech_sig.get('source','mech')}] override</i>"
-                # ── Channel rate limiter (tiered: 5min global / 30min asset / 60min same-dir / 3/day cap) ──
-                if _can_post_to_channel(pair, action):
-                    tg_send(text)
-                    _mark_channel_post(pair, action)
-                    _broadcast_to_group(text)  # forward to discussion group
+                # Killzone gate for forex/commodity
+                if pair in ("gold","oil","eurusd","gbpusd") and kz == "Outside":
+                    logger.info(f"⛔ MECH KILLZONE REJECT [{disp}]: outside London/NY (hour={h})")
+                    time.sleep(60)
+                    continue
+                # ── BTC 2-bar confirmation (gate channel + bridge) ──
+                if disp == "BTCUSD" and not _consec_2bar_confirm("BTCUSD", action):
+                    logger.info(f"⏳ BTC 2-BAR WAIT: {action} — waiting for next bar confirm")
+                    continue
+                text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp")
+                _entry = mech_sig.get("entry", price) or 0
+                _sl = mech_sig.get("sl", 0) or 0
+                _tp = mech_sig.get("tp", 0) or 0
+                if _can_post_to_channel(pair, action, _entry, _sl, _tp):
+                    logger.info(f"CHANNEL POST [mechanical]: {pair} {action}")
+                    result = send_to_channel(text)
+                    if result:
+                        logger.info(f"CHANNEL POST OK [mechanical]: message_id={result.get('result',{}).get('message_id')}")
+                    else:
+                        logger.warning(f"CHANNEL POST FAILED [mechanical]: tg_send returned None")
+                    _mark_channel_post(pair, action, _entry, _sl, _tp)
                 else:
                     logger.info(f"⏳ Channel rate limited [{disp}] — signal stored, not posted")
                 if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
                     mech_sig = enrich_signal_with_layers(mech_sig)
-                post_signal_to_bridge(mech_sig, price)
+                post_signal_to_bridge(mech_sig, price, disp)
 
                 if LEARNING_ENGINE:
                     try: track_signal(mech_sig, price, disp, session(h), mech_sig.get("source","mech"))
@@ -2805,9 +3500,9 @@ def auto_analyze_loop():
                     "confidence": conf, "source": mech_sig.get("source", "mech"),
                     "rr_ratio": mech_sig.get("rr_ratio", 0),
                 }
-                _eaq = DATA_DIR / "ea_signal.json"
+                _eaq = DATA_DIR / f"ea_signal_{pair}.json"
                 _eaq.write_text(json.dumps(log["last_signal"]))
-                save_signal_log(log)
+                save_signal_log(log, pair)
                 asset_logs[log_key] = log
                 time.sleep(120)  # 2 min cooldown after mechanical
                 continue
@@ -2821,13 +3516,27 @@ def auto_analyze_loop():
 
             action = sig.get("action","HOLD")
             conf = sig.get("confidence",0)
+            # Normalize confidence before quality checks
+            if isinstance(conf, (int,float)) and conf > 10:
+                conf = conf / 100
+                sig["confidence"] = conf
 
             # Auto-push rules
             should_push = False
             if action in ("BUY","SELL"):
-                if (lkz or nykz) and sig.get("voters",0) >= 2 and conf >= 0.70:
+                voters = sig.get("voters",0)
+                rr_val = sig.get("rr_ratio", 0)
+                # RR validation
+                if isinstance(rr_val, str) and rr_val.startswith("1:"):
+                    rr_val = float(rr_val[2:]) if rr_val[2:] else 0
+                rr_val = float(rr_val) if rr_val else 0
+                if rr_val > 0 and (rr_val < 1.5 or rr_val > 5.0):
+                    logger.info(f"   [{disp}] BLOCKED: RR 1:{rr_val:.1f} outside 1:1.5-5 range")
+                elif voters < 2:
+                    logger.info(f"   [{disp}] BLOCKED: solo call ({voters} model)")
+                elif (lkz or nykz) and conf >= 0.70:
                     should_push = True
-                elif not (lkz or nykz) and conf >= 0.65:
+                elif not (lkz or nykz) and conf >= 0.75:
                     should_push = True
 
             if should_push:
@@ -2835,7 +3544,23 @@ def auto_analyze_loop():
 
                 if LAYERING_ENGINE:
                     sig = enrich_signal_with_layers(sig)
-                post_signal_to_bridge(sig, price)
+                post_signal_to_bridge(sig, price, disp)
+
+                # ── Post to channel (with rate limiter) ──
+                text = fmt_signal(sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp")
+                _entry = sig.get("entry", price) or 0
+                _sl = sig.get("sl", 0) or 0
+                _tp = sig.get("tp", 0) or 0
+                if _can_post_to_channel(pair, action, _entry, _sl, _tp):
+                    logger.info(f"CHANNEL POST [AI-consensus]: {pair} {action}")
+                    result = send_to_channel(text)
+                    if result:
+                        logger.info(f"CHANNEL POST OK [AI-consensus]: message_id={result.get('result',{}).get('message_id')}")
+                    else:
+                        logger.warning(f"CHANNEL POST FAILED [AI-consensus]: tg_send returned None")
+                    _mark_channel_post(pair, action, _entry, _sl, _tp)
+                else:
+                    logger.info(f"⏳ Channel rate limited [{disp}] — AI signal stored, not posted")
 
                 if LEARNING_ENGINE:
                     try: track_signal(sig, price, disp, session(h), "ai")
@@ -2845,11 +3570,25 @@ def auto_analyze_loop():
                 log["last_signal_time"] = wib_now().isoformat()
                 log["last_action"] = action
                 log["last_price"] = price
-                save_signal_log(log)
+                save_signal_log(log, pair)
                 asset_logs[log_key] = log
                 time.sleep(90)
             else:
                 logger.info(f"   [{disp}] {action} | Grade:{sig.get('grade','?')} | conf={conf:.0%}")
+
+            # ── Market Pulse: MTF Top-Down Matrix every ~30 min ──
+            if pair == "gold" and (time.time() - last_pulse_time) > 1800:
+                try:
+                    from engine_consensus import run_engine_consensus, _format_pulse_text
+                    mtf_result = run_engine_consensus(symbol="XAUUSD")
+                    if mtf_result and mtf_result.get("timeframes"):
+                        pulse_text = _format_pulse_text(mtf_result)
+                        send_to_channel(pulse_text)
+                        last_pulse_time = time.time()
+                        hier = mtf_result.get("hierarchical", {})
+                        logger.info(f"📊 MTF Market Pulse sent: {hier.get('verdict','?')} ({hier.get('mtf_alignment','?')})")
+                except Exception as e:
+                    logger.warning(f"Market Pulse error: {e}")
 
             time.sleep(90 if (lkz or nykz) else 120)
 
@@ -2903,6 +3642,8 @@ def main():
 
     # Start bot polling with exponential backoff
     state = load_state()
+    _load_tpsl_state()  # Prevent TP/SL alert spam after restart
+    _load_pending_signals()  # Restore pending trade/skip keyboards
     offset = state.get("last_update_id", 0)
     logger.info(f"Bot starting... offset={offset}")
 
@@ -2912,7 +3653,7 @@ def main():
             {"command": "start",   "description": "🚀 Reboot Markas Komando"},
             {"command": "analyze", "description": "🧠 Perintahkan AI Scan Market"},
             {"command": "status",  "description": "🛡 Cek Kuota & Akses VIP"},
-            {"command": "donate",  "description": "⛽ Siram Bensin Server AI"},
+            {"command": "donate",  "description": "⚡ Isi Bahan Bakar AI"},
             {"command": "mapping", "description": "📐 Tarik data mapping harian"},
             {"command": "killzone","description": "🎯 Radar sesi market aktif"},
         ]
@@ -2932,17 +3673,20 @@ def main():
 
     poll_errors = 0
 
-    # ── Initial connection reset — clear any stale polling state ──
+    # ── Connection warmup — validate API reachable (NO message consumption) ──
     for attempt in range(3):
         try:
-            url = f"{TELEGRAM_API}/getUpdates?offset=-1&timeout=0"
+            url = f"{TELEGRAM_API}/getMe"
             req = urllib.request.Request(url, headers={"Connection": "close"})
             with urllib.request.urlopen(req, timeout=5) as r:
-                pass
-            logger.info("✅ Polling connection reset OK")
-            break
+                resp = json.loads(r.read())
+            if resp.get("ok"):
+                logger.info(f"✅ Bot connected as @{resp.get('result',{}).get('username','?')}")
+                break
+            else:
+                logger.warning(f"getMe failed: {resp}")
         except Exception as e:
-            logger.warning(f"Initial reset attempt {attempt+1}: {e}")
+            logger.warning(f"Connection warmup attempt {attempt+1}: {e}")
             time.sleep(2)
     time.sleep(1)
     # ──────────────────────────────────────────────────────────────
@@ -2967,16 +3711,21 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping","/activate"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping","/activate","/restart_bot"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
-                            logger.error(f"Command error: {e}")
+                            logger.error(f"Command error ({cmd}): {e}")
+                            try:
+                                tg_send("❌ <b>Waduh! Sistem error.</b>\nCoba lagi nanti atau hubungi @codergaboets.", chat_id)
+                            except Exception:
+                                pass
                     elif cmd.startswith("/"):
                         # Unknown command — give helpful response
                         try:
-                            tg_send("📋 <b>Command tidak dikenal</b>\n"
-                                    "Ketik /help untuk lihat daftar command.", chat_id)
+                            tg_send("📋 <b>Command tidak dikenal.</b>\n"
+                                    "Ketik /help untuk lihat daftar command.\n"
+                                    "Contoh: /analyze xauusd | /price btc | /mapping", chat_id)
                         except Exception:
                             pass
                     elif text and not cmd.startswith("/"):
@@ -2998,7 +3747,7 @@ def main():
                                         pay_code = result.get("pay_code", "")
                                         ref = result.get("reference", "") or result.get("merchant_ref", "")
                                         txt = (
-                                            f"💚 <b>Dukung Server AI Rp{amount:,}</b>\n"
+                                            f"⚡ <b>Isi Bahan Bakar AI Rp{amount:,}</b>\n"
                                             f"━━━━━━━━━━━━━━━━\n"
                                             f"👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
                                         )
