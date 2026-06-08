@@ -52,6 +52,15 @@ ASSET_CONFIG = {
         "sl_buffer_atr": 0.3,
         "entry_slip": 2.0,
     },
+    "USOIL": {
+        "pip_value": 0.01,      # USOIL = 0.01 per pip
+        "min_sl_pts": 15,       # Minimum SL for oil
+        "min_rr": 1.5,          # Minimum risk:reward
+        "max_rr": 5.0,          # Maximum risk:reward
+        "atr_period": 14,
+        "sl_buffer_atr": 0.5,   # SL = structure + 0.5x ATR
+        "entry_slip": 0.5,      # Entry slip in pips
+    },
 }
 
 DEFAULT_CONFIG = {

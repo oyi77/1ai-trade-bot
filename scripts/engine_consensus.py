@@ -138,7 +138,7 @@ def _has_mt5_data(symbol: str, tf: str) -> bool:
 def _fetch_yf_bars(symbol: str, tf: str) -> list[dict] | None:
     """Fetch OHLCV from yfinance with smart caching."""
     import yfinance as yf
-    yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD"}.get(symbol, symbol)
+    yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD", "USOIL": "CL=F"}.get(symbol, symbol)
     interval = TF_YF_INTERVAL[tf]
     period = TF_YF_PERIOD[tf]
     min_bars = TF_ENGINE_MIN[tf]
@@ -194,7 +194,7 @@ def fetch_mtf_ohlcv(symbol: str = "XAUUSD") -> dict[str, list[dict]]:
             logger.info(f"MT5/{symbol} {tf}: {len(result[tf])} bars")
         else:
             # Check cache first
-            yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD"}.get(symbol, symbol)
+            yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD", "USOIL": "CL=F"}.get(symbol, symbol)
             cache_key = f"{yf_sym}/{tf}"
             ttl = TF_CACHE_TTL[tf]
             now = time.time()
@@ -210,7 +210,7 @@ def fetch_mtf_ohlcv(symbol: str = "XAUUSD") -> dict[str, list[dict]]:
     # Parallel fetch remaining TFs from yfinance
     if yf_tfs:
         import concurrent.futures as cf
-        yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD"}.get(symbol, symbol)
+        yf_sym = {"XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD", "USOIL": "CL=F"}.get(symbol, symbol)
         with cf.ThreadPoolExecutor(max_workers=5) as exe:
             future_map = {exe.submit(_fetch_yf_bars, symbol, tf): tf for tf in yf_tfs}
             for future in cf.as_completed(future_map, timeout=90):
@@ -956,6 +956,12 @@ def run_engine_consensus(
                             bar["close"] = round(bar["close"] + offset, 2)
         except Exception as e:
             logger.warning(f"XAUUSD spot offset fetch failed: {e}")
+
+    # ── USOIL Spot Offset Correction ──
+    # CL=F is the NYMEX Crude Oil futures contract — essentially spot for WTI.
+    # No offset correction needed; CL=F IS the reference price for USOIL.
+    if symbol == "USOIL":
+        pass
 
     # ── Compute per-timeframe ──
     tf_results: dict[str, dict] = {}

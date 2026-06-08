@@ -3370,8 +3370,9 @@ def _can_post_tpsl_alert(trade_id: str) -> bool:
 
 AUTO_SCAN_ASSETS = [
     # (internal_pair, display_name, yahoo_symbol, is_forex_metal)
-    # FOCUS MODE: XAUUSD only — hemat token, sinyal paling akurat
     ("gold", "XAUUSD", "GC=F", True),
+    ("btc", "BTCUSD", "BTC-USD", False),
+    ("oil", "USOIL", "CL=F", False),
 ]
 
 def auto_analyze_loop():
@@ -3778,25 +3779,28 @@ def auto_analyze_loop():
                 logger.info(f"   [{disp}] {action} | Grade:{sig.get('grade','?')} | conf={conf:.0%}")
 
             # ── Market Pulse: MTF Top-Down Matrix every ~30 min ──
-            if pair == "gold" and (time.time() - last_pulse_time) > 1800:
+            _mtf_symbol = {"gold": "XAUUSD", "btc": "BTCUSD", "oil": "USOIL"}.get(pair)
+            if _mtf_symbol and (time.time() - last_pulse_time) > 1800:
                 try:
                     from engine_consensus import run_engine_consensus, _format_pulse_text
-                    mtf_result = run_engine_consensus(symbol="XAUUSD")
+                    mtf_result = run_engine_consensus(symbol=_mtf_symbol)
                     if mtf_result and mtf_result.get("timeframes"):
                         pulse_text = _format_pulse_text(mtf_result)
                         send_to_channel(pulse_text)
                         last_pulse_time = time.time()
                         hier = mtf_result.get("hierarchical", {})
-                        logger.info(f"📊 MTF Market Pulse sent: {hier.get('verdict','?')} ({hier.get('mtf_alignment','?')})")
+                        logger.info(f"📊 MTF Market Pulse sent ({_mtf_symbol}): {hier.get('verdict','?')} ({hier.get('mtf_alignment','?')})")
                 except Exception as e:
                     logger.warning(f"Market Pulse error: {e}")
 
             # ── Active Signal: quality gate → post if valid ──
             try:
-                if pair == "gold" and mtf_result and mtf_result.get("hierarchical", {}).get("verdict") != "HOLD" and mtf_result.get("hierarchical", {}).get("consensus_score", 0) >= 0.5:
+                _as_symbol = {"gold": "XAUUSD", "btc": "BTCUSD", "oil": "USOIL"}.get(pair, "XAUUSD")
+                if _as_symbol and mtf_result and mtf_result.get("hierarchical", {}).get("verdict") != "HOLD" and mtf_result.get("hierarchical", {}).get("consensus_score", 0) >= 0.5:
                     from signal_calculator import compute_signal as _compute_sig, format_signal_telegram as _fmt_sig, log_signal as _log_sig
                     sig = _compute_sig(result)
                     if sig and sig.get("grade") in ("A", "B"):
+                        sig["symbol"] = _as_symbol
                         text = _fmt_sig(sig)
                         send_to_channel(text)
                         # log to bridge + trade log

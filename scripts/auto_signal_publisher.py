@@ -54,89 +54,105 @@ def main():
         return 1
 
     # ── MTF Scan ──
-    if not args.quiet:
-        log.info("Scanning MTF matrix...")
+    assets = ["XAUUSD", "BTCUSD", "USOIL"]
+    results = {}
     
-    result = run_engine_consensus(symbol="XAUUSD")
-    if not result:
+    for sym in assets:
         if not args.quiet:
-            log.warning("No MTF result")
-        return 0
-
-    hier = result.get("hierarchical", {})
-    verdict = hier.get("verdict", "HOLD")
-    score = hier.get("consensus_score", 0)
-    alignment = hier.get("mtf_alignment", "NONE")
-    
-    if not args.quiet:
-        log.info(f"MTF: {hier.get('macro_trend','?')} | {alignment} | {verdict} ({score*100:.0f}%)")
-
-    if verdict == "HOLD":
-        if not args.quiet:
-            log.info("Market HOLD — no signal")
-        return 0
-
-    # ── Generate Signal ──
-    sig = compute_signal(result)
-    if not sig:
-        if not args.quiet:
-            log.info("Quality gate blocked — no signal")
-        return 0
-
-    if sig.get("grade") not in ("A", "B"):
-        if not args.quiet:
-            log.info(f"Grade {sig.get('grade')} too low — skipped")
-        return 0
-
-    # ── Dedup check ──
-    if not args.force:
-        trade_log = load_trade_log()
-        if is_duplicate(trade_log, sig):
-            if not args.quiet:
-                log.info("Duplicate signal — skipped")
-            return 0
-
-    # ── Post to Telegram ──
-    text = format_signal_telegram(sig)
-    
-    try:
-        sys.path.insert(0, os.path.join(PROJECT_DIR, "scripts"))
-        from vilona_tradefx_handler import send_to_channel
-        result = send_to_channel(text)
+            log.info(f"Scanning {sym}...")
+        result = run_engine_consensus(symbol=sym)
         if result:
-            log.info(f"✅ Posted to channel: {sig['action']} {sig['symbol']} Grade {sig['grade']}")
-        else:
-            log.warning("Channel post returned None")
-    except Exception as e:
-        log.warning(f"Channel post error (trying tg_send): {e}")
+            results[sym] = result
+            hier = result.get("hierarchical", {})
+            verdict = hier.get("verdict", "HOLD")
+            score = hier.get("consensus_score", 0)
+            alignment = hier.get("mtf_alignment", "NONE")
+            if not args.quiet:
+                log.info(f"  {sym}: {hier.get('macro_trend','?')} | {alignment} | {verdict} ({score*100:.0f}%)")
+    
+    if not results:
+        if not args.quiet:
+            log.warning("No MTF results for any asset")
+        return 0
+    
+    # Process each result
+    any_signal = False
+    for sym, result in results.items():
+        hier = result.get("hierarchical", {})
+        verdict = hier.get("verdict", "HOLD")
+        score = hier.get("consensus_score", 0)
+        alignment = hier.get("mtf_alignment", "NONE")
+        
+        if verdict == "HOLD":
+            if not args.quiet:
+                log.info(f"  {sym}: HOLD — skipped")
+            continue
+        
+        # ── Generate Signal ──
+        sig = compute_signal(result)
+        if not sig:
+            if not args.quiet:
+                log.info(f"  {sym}: Quality gate blocked")
+            continue
+        
+        if sig.get("grade") not in ("A", "B"):
+            if not args.quiet:
+                log.info(f"  {sym}: Grade {sig.get('grade')} too low — skipped")
+            continue
+        
+        # ── Dedup check ──
+        if not args.force:
+            trade_log = load_trade_log()
+            if is_duplicate(trade_log, sig):
+                if not args.quiet:
+                    log.info(f"  {sym}: Duplicate signal — skipped")
+                continue
+        
+        # ── Post to Telegram ──
+        text = format_signal_telegram(sig)
+        
         try:
-            sys.path.insert(0, os.path.join(PROJECT_DIR, "strategies", "vilona_tradefx"))
-            import telebot
-            bot = telebot.TeleBot(os.getenv("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", ""))
-            bot.send_message(os.getenv("MAPPING_CHANNEL_ID", ""), text, parse_mode="HTML")
-            log.info("✅ Posted via telebot fallback")
-        except Exception as e2:
-            log.error(f"All posting methods failed: {e2}")
-
-    # ── Log to trade log ──
-    log_signal(sig)
-
-    # ── Post to bridge ──
-    try:
-        import urllib.request, json
-        bridge_url = "https://phantomfx.aitradepulse.com/signal?api_key=VT-DONOR-0"
-        req = urllib.request.Request(
-            bridge_url,
-            data=json.dumps(sig).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-        urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass
-
-    if not args.quiet:
-        log.info(f"🔥 Signal published: {sig['action']} {sig['symbol']} @ ${sig['entry']} Grade {sig['grade']}")
+            sys.path.insert(0, os.path.join(PROJECT_DIR, "scripts"))
+            from vilona_tradefx_handler import send_to_channel
+            result = send_to_channel(text)
+            if result:
+                log.info(f"✅ Posted to channel: {sig['action']} {sig['symbol']} Grade {sig['grade']}")
+            else:
+                log.warning("Channel post returned None")
+        except Exception as e:
+            log.warning(f"Channel post error (trying tg_send): {e}")
+            try:
+                sys.path.insert(0, os.path.join(PROJECT_DIR, "strategies", "vilona_tradefx"))
+                import telebot
+                bot = telebot.TeleBot(os.getenv("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", ""))
+                bot.send_message(os.getenv("MAPPING_CHANNEL_ID", ""), text, parse_mode="HTML")
+                log.info("✅ Posted via telebot fallback")
+            except Exception as e2:
+                log.error(f"All posting methods failed: {e2}")
+        
+        # ── Log to trade log ──
+        log_signal(sig)
+        any_signal = True
+        
+        # ── Post to bridge ──
+        try:
+            import urllib.request, json
+            bridge_url = "https://phantomfx.aitradepulse.com/signal?api_key=VT-DONOR-0"
+            req = urllib.request.Request(
+                bridge_url,
+                data=json.dumps(sig).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+        
+        if not args.quiet:
+            log.info(f"🔥 {sym} signal published: {sig['action']} @ ${sig['entry']} Grade {sig['grade']}")
+    
+    if not any_signal and not args.quiet:
+        log.info("No signals generated for any asset")
     return 0
 
 if __name__ == "__main__":
