@@ -410,7 +410,49 @@ td.pn{color:var(--red)}
     </div>
   </div>
 
-  <!-- Trade History -->
+  <!-- Stats Grid + Trade History Wrapper -->
+  <div class="cd" style="margin-bottom:12px">
+    <div class="cl" data-lang="id">📊 PERFORMANCE — REAL TRADING STATS</div>
+    <div class="cl hidden" data-lang="en">📊 PERFORMANCE — REAL TRADING STATS</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div data-lang="id" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">🏆 Menang</div><div class="hidden" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)" data-lang="en">🏆 Wins</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)" id="stat-wins">0</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div data-lang="id" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">💀 Kalah</div><div class="hidden" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)" data-lang="en">💀 Losses</div>
+        <div style="font-size:18px;font-weight:800;color:var(--red)" id="stat-losses">0</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">📈 Best</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)" id="stat-best">--</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">📉 Worst</div>
+        <div style="font-size:18px;font-weight:800;color:var(--red)" id="stat-worst">--</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div data-lang="id" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">🔥 Win Streak</div><div class="hidden" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)" data-lang="en">🔥 Win Streak</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)" id="stat-cwin">0</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div data-lang="id" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">💀 Lose Streak</div><div class="hidden" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)" data-lang="en">💀 Lose Streak</div>
+        <div style="font-size:18px;font-weight:800;color:var(--red)" id="stat-closs">0</div>
+      </div>
+    </div>
+
+    <div class="cl" data-lang="id" style="margin-bottom:8px">📜 SIGNAL TIMELINE</div>
+    <div class="cl hidden" data-lang="en" style="margin-bottom:8px">📜 SIGNAL TIMELINE</div>
+    <div id="signal-timeline-container">
+      <div style="color:var(--txt2);font-size:12px;text-align:center;padding:24px">
+        <div style="font-size:28px;margin-bottom:6px;opacity:.4">📜</div>
+        <p data-lang="id">Belum ada sinyal. Sinyal muncul saat quality gate lolos.</p>
+        <p class="hidden" data-lang="en">No signals yet. Signals appear when quality gate passes.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trade Table -->
   <div class="cd">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div class="cl" data-lang="id">📊 RIWAYAT TRADING</div>
@@ -749,6 +791,9 @@ function setLang(l){
 // ─── INIT LANGUAGE ───
 setLang('id');
 
+// ─── GLOBAL ───
+var lastTradeLog = [];
+
 // ─── ENGINE MTF MATRIX ───
 async function fetchEngine(){
   try{
@@ -844,6 +889,44 @@ function calcFundamental(price, trades){
   $('ai-verdict').innerHTML='<span style="color:'+(verdict.includes('BUY')?'var(--green)':verdict.includes('SELL')?'var(--red)':'var(--gold)')+';font-weight:700">'+verdict+'</span> — '+reason;
 }
 
+// ─── SIGNAL TIMELINE ───
+function renderTimeline(log){
+  var container=$('signal-timeline-container');
+  if(!log||!log.length){
+    container.innerHTML='<div style="color:var(--txt2);font-size:12px;text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:6px;opacity:.4">📜</div><p>Belum ada sinyal. Sinyal muncul saat quality gate lolos.</p></div>';
+    return;
+  }
+  var sorted=[].concat(log).reverse().slice(0,20);
+  container.innerHTML='<div style="display:grid;gap:8px;max-height:400px;overflow-y:auto;padding-right:4px">'+
+    sorted.map(function(sig,i){
+      var action=(sig.action||'').toUpperCase();
+      var isBuy=action==='BUY';
+      var isSell=action==='SELL';
+      var dirClass=isBuy?'buy':isSell?'sell':'hold';
+      var icon=isBuy?'🟢':isSell?'🔴':'⚪️';
+      var grade=sig.grade||'C';
+      var conf=sig.confidence?(sig.confidence>1?sig.confidence.toFixed(0):(sig.confidence*100).toFixed(0))+'%':'--';
+      var rr=sig.rr?'1:'+parseFloat(sig.rr).toFixed(1):'--';
+      var entryVal=fmtPrice(sig.entry);
+      var slVal=fmtPrice(sig.sl);
+      var tp1Val=fmtPrice(sig.tp1);
+      var id=i;
+      return '<div style="background:var(--card);border-radius:6px;padding:10px 12px;border-left:3px solid '+(isBuy?'var(--green)':isSell?'var(--red)':'var(--gold)')+';display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start">'+
+        '<div style="font-size:18px;line-height:1;text-align:center;width:24px">'+icon+'</div>'+
+        '<div style="min-width:0">'+
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+            '<span style="font-size:13px;font-weight:700;color:'+(isBuy?'var(--green)':isSell?'var(--red)':'var(--gold)')+'">'+action+'</span>'+
+            '<span style="font-size:11px;color:var(--txt2)">'+(sig.symbol||'XAUUSD')+'</span>'+
+            '<span style="background:rgba(245,158,11,.12);padding:1px 6px;border-radius:3px;font-size:9px;color:var(--gold);font-weight:600">'+grade+'</span>'+
+            '<span style="font-size:10px;color:var(--txt2)">'+conf+' · RR '+rr+'</span>'+
+          '</div>'+
+          '<div style="font-size:11px;margin-top:2px">Entry '+entryVal+' · SL '+slVal+(tp1Val?' · TP '+tp1Val:'')+'</div>'+
+          '<div style="font-size:10px;color:var(--txt2);margin-top:1px">'+(sig.timestamp?new Date(sig.timestamp).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short',timeZone:'Asia/Jakarta'}):'')+'</div>'+
+        '</div>'+
+      '</div>';
+    }).join('')+'</div>';
+}
+
 // ─── PRICE TICKERS ───
 async function fetchCrypto(){
   try{
@@ -865,14 +948,30 @@ async function fetchCrypto(){
 // ─── MAIN FETCH ───
 async function fetchAll(){
   try{
-    var r=await fetch(BRIDGE+'/api/dash-stats',{signal:AbortSignal.timeout(8000)});
-    var sd=await r.json();
-    var trades=sd.trades||[];
-    var total=sd.total||0;
-    var wr=sd.win_rate||0;
-    var pnl=sd.total_profit_usd||sd.total_profit||0;
-    var wins=sd.wins||0;
-    var losses=sd.losses||0;
+    // 1. Fetch trade-log for signals (primary)
+    var slog=[], signals=[];
+    try{
+      var slr=await fetch(BRIDGE+'/api/trade-log',{signal:AbortSignal.timeout(5000)});
+      slog=await slr.json();
+      signals=Array.isArray(slog)?slog:[];
+    }catch(e){}
+    
+    // Priority: XAUUSD > BTCUSD > USOIL
+    var xauSig=signals.filter(function(s){return (s.symbol||'').includes('XAU')});
+    var btcSig=signals.filter(function(s){return (s.symbol||'').includes('BTC')});
+    var oilSig=signals.filter(function(s){return (s.symbol||'').includes('OIL')});
+    var latestSig= xauSig.length?xauSig[xauSig.length-1] : btcSig.length?btcSig[btcSig.length-1] : oilSig.length?oilSig[oilSig.length-1] : signals.length?signals[signals.length-1] : null;
+    
+    // 2. Fetch dash-stats for prices + execution stats
+    var sd={}, trades=[], total=0, wins=0, losses=0;
+    try{
+      var sr=await fetch(BRIDGE+'/api/dash-stats',{signal:AbortSignal.timeout(5000)});
+      sd=await sr.json();
+      trades=sd.trades||[];
+      total=sd.total||0;
+      wins=sd.wins||0;
+      losses=sd.losses||0;
+    }catch(e){}
 
     // Price
     var xauPrice=sd.xau_price||0;
@@ -881,9 +980,8 @@ async function fetchAll(){
       $('tb-price').textContent='XAU: $'+parseFloat(xauPrice).toFixed(1);
       if(xauPrev&&xauPrev!==xauPrice){
         var diff=xauPrice-xauPrev;
-        var cls=diff>=0?'up':'down';
         var icon=diff>=0?'▲':'▼';
-        $('p-xau-ch').innerHTML='<span class="'+cls+'" style="color:'+(diff>=0?'var(--green)':'var(--red)')+'">'+icon+' '+Math.abs(diff).toFixed(2)+' ('+(diff/xauPrev*100).toFixed(2)+'%)</span>';
+        $('p-xau-ch').innerHTML='<span style="color:'+(diff>=0?'var(--green)':'var(--red)')+'">'+icon+' '+Math.abs(diff).toFixed(2)+' ('+(diff/xauPrev*100).toFixed(2)+'%)</span>';
       }else if(firstRun){$('p-xau-ch').textContent='$0.00 (0.00%)'}
       xauPrev=xauPrice;
     }
@@ -894,10 +992,11 @@ async function fetchAll(){
     $('p-session').textContent=session;
     $('p-session-detail').textContent=new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'})+' local';
 
-    // Hero stats (live session indicator)
-    var livePips=total>0?trades.reduce(function(s,t){return s+(parseFloat(t.pips)||0)},0):0;
-    var liveWr=wr?wr.toFixed(1)+'%':'0.0%';
-    $('hs-live').textContent=total+' signals · WR '+liveWr+' · '+fmtPips(livePips)+' pips · XAU $'+parseFloat(xauPrice||0).toFixed(1);
+    // Hero stats
+    var livePips=trades.length?trades.reduce(function(s,t){return s+(parseFloat(t.pips)||0)},0):0;
+    var liveWr=total>0?(wins/total*100).toFixed(1):'0.0';
+    var sigCount=signals.length;
+    $('hs-live').textContent=sigCount+' signals generated · '+total+' executed · WR '+liveWr+'% · '+fmtPips(livePips)+' pips · XAU $'+parseFloat(xauPrice||0).toFixed(1);
     $('hs-live').style.color=livePips>=0?'var(--green)':'var(--txt2)';
 
     // Bridge info
@@ -906,67 +1005,47 @@ async function fetchAll(){
     var eaCount=sd.ea_count||0;
     $('bridge-info').textContent='Online · '+eaCount+' EA'+(eaCount===1?'':'s')+' connected · '+h+'h '+m+'m uptime';
 
-    // Signal — fetch from trade-log first, then bridge pending
-    try{
-      var slr=await fetch(BRIDGE+'/api/trade-log',{signal:AbortSignal.timeout(4000)});
-      var slog=await slr.json();
-      var latestSig=slog&&slog.length?slog[slog.length-1]:null;
-      var sigEl=$('sig-content');
-      if(latestSig&&latestSig.action){
-        var isBuy=latestSig.action==='BUY';
-        var grade=latestSig.grade||'B';
-        var entry=latestSig.entry||0;
-        var sl=latestSig.sl||0;
-        var tp1=latestSig.tp1||0;
-        var rr=latestSig.rr||1.5;
-        var price=latestSig.price||entry;
-        var orderType='';
-        var diff=entry-price;
-        if(Math.abs(diff)>0.5){
-          if(latestSig.action==='SELL') orderType=diff>0?' SELL LIMIT':' SELL STOP';
-          else orderType=diff<0?' BUY LIMIT':' BUY STOP';
-        }
-        $('sig-time').textContent=ts();
-        sigEl.innerHTML='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between"><span style="font-weight:700;font-size:14px;color:'+(isBuy?'var(--green)':'var(--red)')+'">'+(isBuy?'🟢':'🔴')+' '+(latestSig.symbol||'XAUUSD')+orderType+'</span><span style="background:rgba(245,158,11,.12);padding:2px 8px;border-radius:4px;font-weight:600;font-size:10px;color:var(--gold)">Grade '+grade+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sl)+'</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(tp1)+'</div></div><div class="si fl"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">1:'+rr.toFixed(1)+'</div></div></div>';
-      }else{
-        throw new Error('no trade log signal');
+    // LIVE SIGNAL — priority XAUUSD
+    var sigEl=$('sig-content');
+    if(latestSig&&latestSig.action){
+      var isBuy=latestSig.action==='BUY';
+      var grade=latestSig.grade||'B';
+      var entry=latestSig.entry||0;
+      var sl=latestSig.sl||0;
+      var tp1=latestSig.tp1||0;
+      var rr=latestSig.rr||1.5;
+      var price=latestSig.price||entry;
+      var orderType='';
+      var dd=entry-price;
+      if(Math.abs(dd)>0.5){
+        if(latestSig.action==='SELL') orderType=dd>0?' SELL LIMIT':' SELL STOP';
+        else orderType=dd<0?' BUY LIMIT':' BUY STOP';
       }
-    }catch(e){
-      // Fallback to bridge pending queue
-      try{
-        var sr=await fetch(BRIDGE+'/signal/pending?api_key='+API_KEY,{signal:AbortSignal.timeout(4000)});
-        var sig=await sr.json();
-        if(sig&&sig.action&&sig.action!=='HOLD'&&sig.pending){
-          var isBuy=sig.action==='BUY';
-          var confidence=sig.confidence?(sig.confidence>1?Math.round(sig.confidence/100*100):Math.round(sig.confidence*100))+'%':'--';
-          var rr=sig.rr_ratio?parseFloat(sig.rr_ratio).toFixed(1):'--';
-          $('sig-time').textContent=ts();
-          sigEl.innerHTML='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap"><span style="font-weight:700;color:'+(isBuy?'var(--green)':'var(--red)')+'">'+sig.action+'</span><span>'+(sig.symbol||'XAUUSD')+'</span><span>Conf: '+confidence+'</span><span>RR 1:'+rr+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(sig.entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sig.sl)+'</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(sig.tp)+'</div></div><div class="si fl"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">1:'+rr+'</div></div></div>';
-        }else{
-          sigEl.innerHTML='<div class="sig-e"><div class="si" style="font-size:16px">🔍</div><p style="font-size:11px">AI menganalisis market — sinyal berikutnya dalam beberapa menit</p></div>';
-        }
-      }catch(e2){/* no signal */}
+      $('sig-time').textContent=ts();
+      sigEl.innerHTML='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between"><span style="font-weight:700;font-size:14px;color:'+(isBuy?'var(--green)':'var(--red)')+'">'+(isBuy?'🟢':'🔴')+' '+(latestSig.symbol||'XAUUSD')+orderType+'</span><span style="background:rgba(245,158,11,.12);padding:2px 8px;border-radius:4px;font-weight:600;font-size:10px;color:var(--gold)">Grade '+grade+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sl)+'</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(tp1)+'</div></div><div class="si fl"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">1:'+rr.toFixed(1)+'</div></div></div>';
+    }else{
+      sigEl.innerHTML='<div class="sig-e"><div class="si" style="font-size:16px">🔍</div><p style="font-size:11px">AI menganalisis market — sinyal berikutnya dalam beberapa menit</p></div>';
     }
 
-    // Trade table with aggregate summary
+    // TRADE HISTORY — from dash-stats (real execution with results)
     var tbody=$('th-body');
-    $('th-count').textContent=total+' total';
+    $('th-count').textContent=(total||signals.length)+' total'+(signals.length?' ('+signals.length+' signal)':'');
     if(trades.length){
-      // Aggregate stats
-      var winCnt = trades.filter(function(t){var o=(t.outcome||t.result||'').toUpperCase();return o.includes('TP')||o==='WIN'}).length;
-      var lossCnt = trades.filter(function(t){var o=(t.outcome||t.result||'').toUpperCase();return o.includes('SL')||o==='LOSS'}).length;
-      var pendCnt = total - winCnt - lossCnt;
-      var totalPips = trades.reduce(function(s,t){return s+(parseFloat(t.pips)||0)},0);
-      // Summary bar
-      var summaryHtml = '<div style="display:flex;gap:12px;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:6px;flex-wrap:wrap">'+
+      var winCnt=trades.filter(function(t){var o=(t.outcome||t.result||'').toUpperCase();return o.includes('TP')||o==='WIN'}).length;
+      var lossCnt=trades.filter(function(t){var o=(t.outcome||t.result||'').toUpperCase();return o.includes('SL')||o==='LOSS'}).length;
+      var pendCnt=total-winCnt-lossCnt;
+      var totalPips=trades.reduce(function(s,t){return s+(parseFloat(t.pips)||0)},0);
+      var wrDisplay=total>0?(winCnt/total*100).toFixed(1):'--';
+      var summaryHtml='<div style="display:flex;gap:12px;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:6px;flex-wrap:wrap">'+
         '<div><span style="font-size:9px;color:var(--txt2)">Total</span><div style="font-size:14px;font-weight:700">'+total+'</div></div>'+
         '<div><span style="font-size:9px;color:var(--txt2)">Win</span><div style="font-size:14px;font-weight:700;color:var(--green)">'+winCnt+'</div></div>'+
         '<div><span style="font-size:9px;color:var(--txt2)">Loss</span><div style="font-size:14px;font-weight:700;color:var(--red)">'+lossCnt+'</div></div>'+
-        '<div><span style="font-size:9px;color:var(--txt2)">P&L Pips</span><div style="font-size:14px;font-weight:700;color:'+(totalPips>=0?'var(--green)':'var(--red)')+'">'+(totalPips>=0?'+':'')+totalPips.toFixed(1)+'</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">WR</span><div style="font-size:14px;font-weight:700;color:'+(parseFloat(wrDisplay)>40?'var(--green)':'var(--gold)')+'">'+wrDisplay+'%</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">Pips</span><div style="font-size:14px;font-weight:700;color:'+(totalPips>=0?'var(--green)':'var(--red)')+'">'+(totalPips>=0?'+':'')+totalPips.toFixed(1)+'</div></div>'+
         (pendCnt>0?'<div><span style="font-size:9px;color:var(--txt2)">Pending</span><div style="font-size:14px;font-weight:700;color:var(--gold)">'+pendCnt+'</div></div>':'')+
-        '</div>';
-      // Last 5 trades
-      var rowsHtml = trades.slice(0,5).map(function(t){
+        '</div>'+
+        '<div style="font-size:8px;color:var(--text-dim);margin-bottom:6px;padding:4px 10px">Early stage — small sample. WR improves with volume.</div>';
+      var rowsHtml=trades.slice(0,8).map(function(t){
         var isBuy=(t.action||'').toUpperCase()==='BUY';
         var pipStr=t.pips?fmtPips(t.pips):'--';
         var pnlVal=t.pnl||t.profit_usd||0;
@@ -976,41 +1055,38 @@ async function fetchAll(){
         return '<tr><td style="color:var(--txt2)">'+(t.open_time?new Date(t.open_time).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}):'--')+'</td><td class="'+(isBuy?'ab':'as')+'">'+(isBuy?'BUY':'SELL')+'</td><td>'+fmtPrice(t.entry)+'</td><td>'+fmtPrice(t.close_price||t.close||t.closePrice)+'</td><td style="font-weight:600">'+pipStr+'</td><td>'+fmtPnL(pnlVal)+'</td><td class="'+rCls+'">'+rIcon+' '+(result||'PENDING')+'</td></tr>';
       }).join('');
       tbody.innerHTML=summaryHtml+rowsHtml;
+    }else if(signals.length){
+      var rowsHtml=signals.slice(0).reverse().slice(0,8).map(function(s){
+        var isBuy=(s.action||'').toUpperCase()==='BUY';
+        var entry=s.entry||0;
+        var grade=s.grade||'';
+        return '<tr><td style="color:var(--txt2)">'+(s.timestamp?new Date(s.timestamp).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}):'--')+'</td><td class="'+(isBuy?'ab':'as')+'">'+(isBuy?'BUY':'SELL')+'</td><td>'+fmtPrice(entry)+'</td><td>--</td><td>--</td><td>--</td><td class="pp">⏳ Grade '+grade+'</td></tr>';
+      }).join('');
+      var summary='<div style="font-size:9px;color:var(--text-dim);padding:8px 10px">📡 '+signals.length+' signals generated (pending execution)</div>';
+      tbody.innerHTML=summary+rowsHtml;
     }
 
     // AI Fundamental Analysis
     calcFundamental(xauPrice, trades);
 
-    // Server Cost Progress — donor-based (fallback ke messaging kalo blm ada)
-    var target=2500000;
-    // Default: "AI masih tanggung sendiri" until first donation
-    var raised=0;
-    var pct=0;
-    // Try to fetch from payment orders API
+    // Server Cost Progress
+    var target=2500000, raised=0, pct=0;
     try{
       var pr=await fetch(BRIDGE+'/api/donations',{signal:AbortSignal.timeout(3000)});
       var pd=await pr.json();
-      if(pd && pd.total_raised){
-        raised=Math.min(parseInt(pd.total_raised)||0, target);
-        pct=Math.round(raised/target*100);
-      }
-    }catch(e){/* fallback */}
+      if(pd&&pd.total_raised){raised=Math.min(parseInt(pd.total_raised)||0,target);pct=Math.round(raised/target*100);}
+    }catch(e){}
     if(raised>0){
       $('sc-raised').textContent='Rp'+raised.toLocaleString('id-ID');
       $('sc-pct').textContent=pct+'%';
       $('sc-bar').style.width=pct+'%';
     }else{
       $('sc-raised').innerHTML='<span style="color:var(--txt2);font-size:10px" data-lang="id">AI masih tanggung sendiri</span><span class="hidden" style="color:var(--txt2);font-size:10px" data-lang="en">Self-funded by AI</span>';
-      $('sc-pct').textContent='0%';
-      $('sc-bar').style.width='2%';
-      $('sc-bar').style.background='var(--border)';
+      $('sc-pct').textContent='0%';$('sc-bar').style.width='2%';$('sc-bar').style.background='var(--border)';
     }
-
   }catch(e){console.error('Fetch error:',e)}
   firstRun=false;
-}
-
-// ─── NEWS FETCH ───
+}// ─── NEWS FETCH ───
 async function fetchNews(){
   try{
     var r=await fetch(BRIDGE+'/api/news',{signal:AbortSignal.timeout(8000)});

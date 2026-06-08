@@ -213,6 +213,12 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content.encode())
             except FileNotFoundError:
                 self._json({"error": "page not found"}, 404)
+        elif path == "/dashboard":
+            # 301 redirect to landing page
+            self.send_response(301)
+            self.send_header("Location", "/")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
         elif path == "/status":
             with LOCK:
                 self._json({

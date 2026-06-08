@@ -215,10 +215,10 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
     Run quality checks. Returns {passed: bool, checks: dict, reason: str}
 
     Checks:
-    1. Consensus score > threshold (35%)
+    1. Consensus score > threshold (50%)
     2. MTF alignment not CONFLICT
     3. No counter-trend without strong evidence
-    4. Minimum engine agreement
+    4. Minimum engine agreement (50%)
     """
     hier = mtf_result.get("hierarchical", {})
     score = hier.get("consensus_score", 0)
@@ -229,16 +229,26 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
 
     checks = {}
 
-    # Check 1: Consensus score threshold
-    score_ok = score >= 0.35
-    checks["consensus_threshold"] = {"passed": score_ok, "value": round(score, 3), "min": 0.35}
+    # Count engine agreement
+    total_eng = 0
+    agree_eng = 0
+    for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
+        tf = tfs.get(tf_name, {})
+        engines = tf.get("engines", {})
+        for eng_name, eng_data in engines.items():
+            total_eng += 1
+            if eng_data.get("direction") == action:
+                agree_eng += 1
+
+    # Check 1: Consensus score threshold (50%)
+    score_ok = score >= 0.50
+    checks["consensus_threshold"] = {"passed": score_ok, "value": round(score, 3), "min": 0.50}
 
     # Check 2: MTF alignment
     align_ok = alignment != "CONFLICT"
     checks["alignment"] = {"passed": align_ok, "value": alignment}
 
     # Check 3: Counter-trend
-    # If M5/M15 goes against D1/H4 macro, only allow if score is very high (75%+)
     ct_ok = True
     if flags:
         if action == "BUY" and macro == "BEARISH":
@@ -246,9 +256,17 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
         elif action == "SELL" and macro == "BULLISH":
             ct_ok = score >= 0.75
         elif macro == "NEUTRAL":
-            ct_ok = False  # Counter-trend only reject on neutral
-        # else: action aligns with macro → allow
+            ct_ok = False
     checks["counter_trend"] = {"passed": ct_ok, "flags": flags[:2] if flags else []}
+
+    # Check 4: Minimum engine agreement (50%)
+    eng_ok = True
+    if total_eng > 0:
+        eng_pct = agree_eng / total_eng
+        eng_ok = eng_pct >= 0.50
+        checks["engine_agreement"] = {"passed": eng_ok, "value": round(eng_pct, 3), "min": 0.50, "agree": agree_eng, "total": total_eng}
+    else:
+        checks["engine_agreement"] = {"passed": True, "value": 0, "min": 0.50, "agree": 0, "total": 0}
 
     # Check 4: Macro vs action alignment
     macro_ok = True
@@ -259,15 +277,16 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
     checks["macro_alignment"] = {"passed": macro_ok, "macro": macro}
 
     # Overall
-    passed = score_ok and align_ok and ct_ok and macro_ok
+    passed = score_ok and align_ok and ct_ok and macro_ok and eng_ok
 
     if not passed:
         failures = [k for k, v in checks.items() if not v.get("passed", True)]
         reasons = {
-            "consensus_threshold": f"Consensus {checks['consensus_threshold']['value']*100:.0f}% < 35%",
+            "consensus_threshold": f"Consensus {checks['consensus_threshold']['value']*100:.0f}% < 50%",
             "alignment": f"MTF alignment conflict ({alignment})",
             "counter_trend": f"Counter-trend: {flags[0] if flags else 'unknown'}",
             "macro_alignment": f"Action {action} vs macro {macro}",
+            "engine_agreement": f"Only {checks['engine_agreement'].get('agree',0)}/{checks['engine_agreement'].get('total',0)} engines agree (need 50%+)",
         }
         first_fail = failures[0]
         reason = reasons.get(first_fail, "Quality gate failed")
@@ -553,7 +572,7 @@ TRADE_LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "trade_lo
 
 
 def log_signal(signal: dict):
-    """Append signal to trade log for dashboard display."""
+    """Append signal to trade log for dashboard display. Uses atomic write."""
     try:
         log_path = os.path.normpath(TRADE_LOG_PATH)
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -576,8 +595,11 @@ def log_signal(signal: dict):
         if len(log) > 200:
             log = log[-200:]
 
-        with open(log_path, "w") as f:
+        # Atomic write: write to temp, then rename (prevents corruption)
+        tmp_path = log_path + ".tmp"
+        with open(tmp_path, "w") as f:
             json.dump(log, f, indent=2)
+        os.replace(tmp_path, log_path)  # Atomic on Linux (same filesystem)
 
         logger.info(f"Signal logged: {sig_id} {signal['action']} {signal['symbol']}")
     except Exception as e:
