@@ -3597,7 +3597,7 @@ def auto_analyze_loop():
                     sig = _compute_sig(result)
                     if sig and sig.get("grade") in ("A", "B"):
                         text = _fmt_sig(sig)
-                        _send(text, parse_mode="HTML", target_channel=CHANNEL_ID)
+                        send_to_channel(text)
                         # log to bridge + trade log
                         try:
                             from scripts.vilona_tradefx_signal_bridge import PROJECT_DIR
