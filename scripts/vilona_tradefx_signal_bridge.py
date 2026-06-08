@@ -477,6 +477,20 @@ class SignalHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 log.error(f"News fetch error: {e}")
                 self._json({"items": [], "error": str(e)})
+        elif path == "/api/config":
+            # Serve dashboard config (no auth needed — dashboard-only)
+            config = load_keys()
+            # Return the first active admin master key for dashboard use
+            dashboard_key = ""
+            for k, v in config["keys"].items():
+                if v.get("active"):
+                    dashboard_key = k
+                    break
+            self._json({
+                "api_key": dashboard_key,
+                "bridge_url": "",
+                "version": "2.0",
+            })
         else:
             self._json({"error": "not found"}, 404)
 
