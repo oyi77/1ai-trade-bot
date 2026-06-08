@@ -382,7 +382,7 @@ def _run_engines_on_tf(ohlcv: list[dict], price: float, symbol: str, tf: str) ->
         try:
             ult = _ultimate_engine(ohlcv, symbol, price)
             if ult and hasattr(ult, 'signal') and ult.signal in ("BUY", "SELL"):
-                conf_val = ult.score / max(ult.max_score, 1) if hasattr(ult, 'score') else 0.5
+                conf_val = ult.score / max(getattr(ult, 'max_score', 24), 1) if hasattr(ult, 'score') else 0.5
                 engines["ultimate"] = {
                     "direction": ult.signal,
                     "confidence": conf_val,
@@ -497,7 +497,7 @@ def _vectorized_macro_trend(ohlcv: list[dict], price: float) -> dict:
 
         # EMA200
         ema200 = pd.Series(close_vals).ewm(span=200, adjust=False).mean().iloc[-1]
-        ema200_dist = (price_f - ema200) / ema200 * 100
+        ema200_dist = (price_f - ema200) / ema200 * 100 if ema200 != 0 and not pd.isna(ema200) else 0
 
         # SMA20/50 cross
         sma20 = pd.Series(close_vals).rolling(20).mean()
@@ -608,8 +608,8 @@ def _vectorized_snr_levels(ohlcv: list[dict], price: float) -> dict:
         vwap = (close.tail(20) * vol).sum() / vol.sum() if vol.sum() > 0 else price
 
         # Distance to levels
-        dist_to_high = (recent_high - price) / price * 100
-        dist_to_low = (price - recent_low) / price * 100
+        dist_to_high = (recent_high - price) / price * 100 if price > 0 else 0
+        dist_to_low = (price - recent_low) / price * 100 if price > 0 else 0
         near_resistance = dist_to_high < 0.5  # within 0.5%
         near_support = dist_to_low < 0.5
 
@@ -674,8 +674,8 @@ def _vectorized_entry_trigger(ohlcv: list[dict], price: float) -> dict:
         sweep_low = float(low_vals[-5:].min()) < recent_low * 0.999 and close_vals[-1] > recent_low * 1.001
 
         # Momentum (rate of change)
-        mom_3 = (close_vals[-1] - close_vals[-3]) / close_vals[-3] * 100 if len(close_vals) >= 3 else 0
-        mom_8 = (close_vals[-1] - close_vals[-8]) / close_vals[-8] * 100 if len(close_vals) >= 8 else 0
+        mom_3 = (close_vals[-1] - close_vals[-3]) / close_vals[-3] * 100 if len(close_vals) >= 3 and close_vals[-3] != 0 else 0
+        mom_8 = (close_vals[-1] - close_vals[-8]) / close_vals[-8] * 100 if len(close_vals) >= 8 and close_vals[-8] != 0 else 0
 
         # Micro trend
         if mom_3 > 0.1 and mom_8 > 0.1:
@@ -742,8 +742,8 @@ def _compute_hierarchical_verdict(tf_results: dict[str, dict]) -> dict:
         # Mixed — check which is stronger
         d1 = tf_results.get("D1", {})
         h4 = tf_results.get("H4", {})
-        d1_bias = 1 if d1.get("buy_count", 0) > d1.get("sell_count", 0) else -1
-        h4_bias = 1 if h4.get("buy_count", 0) > h4.get("sell_count", 0) else -1
+        d1_bias = 1 if d1.get("buy_count", 0) > d1.get("sell_count", 0) else 0
+        h4_bias = 1 if h4.get("buy_count", 0) > h4.get("sell_count", 0) else 0
         macro_trend = "BULLISH" if (d1_bias + h4_bias) > 0 else ("BEARISH" if (d1_bias + h4_bias) < 0 else "NEUTRAL")
 
     # Second pass: weighted consensus with counter-trend detection

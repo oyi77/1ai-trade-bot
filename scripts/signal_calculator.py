@@ -10,6 +10,7 @@ Takes MTF matrix output from engine_consensus → generates:
   - Quality gate validation
 """
 
+import html
 import logging
 import math
 import json
@@ -243,9 +244,9 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
     # Check 4: Macro vs action alignment
     macro_ok = True
     if action == "BUY" and macro == "BEARISH":
-        macro_ok = False
+        macro_ok = score >= 0.75  # Allow strong counter-trend
     elif action == "SELL" and macro == "BULLISH":
-        macro_ok = False
+        macro_ok = score >= 0.75  # Allow strong counter-trend
     checks["macro_alignment"] = {"passed": macro_ok, "macro": macro}
 
     # Overall
@@ -396,7 +397,7 @@ def _get_atr_from_tf(tfs: dict, tf_name: str) -> float | None:
         ind = eng.get("indicators", {})
         if isinstance(ind, dict):
             atr = ind.get("atr")
-            if atr:
+            if atr is not None:
                 return float(atr)
     return None
 
@@ -474,9 +475,9 @@ def format_signal_telegram(signal: dict) -> str:
     pips_target = signal["pips_target"]
     pips_sl = signal["pips_sl"]
     conf = signal["confidence"]
-    reason = signal["reason"]
-    macro = signal.get("macro_trend", "")
-    align = signal.get("mtf_alignment", "")
+    reason = html.escape(signal["reason"])
+    macro = html.escape(signal.get("macro_trend", ""))
+    align = html.escape(signal.get("mtf_alignment", ""))
 
     now = datetime.now(timezone(timedelta(hours=7)))
     wib = now.strftime("%Y.%m.%d %H:%M")
@@ -534,8 +535,9 @@ def log_signal(signal: dict):
 
         # Add signal with unique ID
         sig_id = f"sig_{int(datetime.now().timestamp() * 1000)}"
-        signal["id"] = sig_id
-        log.append(signal)
+        entry = dict(signal)
+        entry["id"] = sig_id
+        log.append(entry)
 
         # Keep last 200
         if len(log) > 200:
@@ -575,8 +577,11 @@ if __name__ == "__main__":
             print("❌ No signal — quality gate blocked")
             # Show what blocked
             sym_result = run_engine_consensus(symbol="XAUUSD")
-            hier = sym_result.get("hierarchical", {})
-            print(f"   Verdict: {hier.get('verdict')} | Score: {hier.get('consensus_score',0)*100:.0f}%")
-            print(f"   Alignment: {hier.get('mtf_alignment')} | Flags: {hier.get('counter_trend_flags')}")
+            if sym_result:
+                hier = sym_result.get("hierarchical", {})
+                print(f"   Verdict: {hier.get('verdict')} | Score: {hier.get('consensus_score',0)*100:.0f}%")
+                print(f"   Alignment: {hier.get('mtf_alignment')} | Flags: {hier.get('counter_trend_flags')}")
+            else:
+                print("   (engine_consensus returned None)")
     else:
         print("❌ No MTF result")

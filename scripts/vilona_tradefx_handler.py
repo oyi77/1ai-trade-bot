@@ -555,6 +555,17 @@ def _save_pending_signals():
     except Exception:
         pass
 
+def _cleanup_expired_pending_signals():
+    """Remove expired entries from PENDING_SIGNALS and persist cleanup."""
+    global PENDING_SIGNALS
+    now = time.time()
+    before = len(PENDING_SIGNALS)
+    PENDING_SIGNALS = {k: v for k, v in PENDING_SIGNALS.items() if v.get("expires", 0) > now}
+    after = len(PENDING_SIGNALS)
+    if after < before:
+        logger.info(f"🧹 Cleaned {before - after} expired pending signal(s)")
+        _save_pending_signals()
+
 # ── Manual-mode guard: anti-spam + anti-opposite-flip per user ──
 USER_LAST_ANALYZE = {}  # chat_id -> timestamp
 USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
@@ -876,8 +887,12 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
         except Exception: pass
     for url in BRIDGE_URLS:
         try:
-            req = urllib.request.Request(f"{url}/signal?api_key={MASTER_API_KEY}", data=data,
-                headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(f"{url}/signal",
+                data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-API-Key": MASTER_API_KEY
+                })
             urllib.request.urlopen(req, timeout=5)
             return  # success, stop
         except Exception:
@@ -3778,7 +3793,7 @@ def auto_analyze_loop():
 
             # ── Active Signal: quality gate → post if valid ──
             try:
-                if pair == "gold" and result and result.get("hierarchical", {}).get("verdict") != "HOLD" and result.get("hierarchical", {}).get("consensus_score", 0) >= 0.5:
+                if pair == "gold" and mtf_result and mtf_result.get("hierarchical", {}).get("verdict") != "HOLD" and mtf_result.get("hierarchical", {}).get("consensus_score", 0) >= 0.5:
                     from signal_calculator import compute_signal as _compute_sig, format_signal_telegram as _fmt_sig, log_signal as _log_sig
                     sig = _compute_sig(result)
                     if sig and sig.get("grade") in ("A", "B"):
@@ -3850,6 +3865,7 @@ def main():
     state = load_state()
     _load_tpsl_state()  # Prevent TP/SL alert spam after restart
     _load_pending_signals()  # Restore pending trade/skip keyboards
+    _cleanup_expired_pending_signals()  # Remove any that expired during runtime
     offset = state.get("last_update_id", 0)
     logger.info(f"Bot starting... offset={offset}")
 
@@ -3921,7 +3937,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping","/activate","/restart_bot"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
@@ -4021,7 +4037,14 @@ def main():
                             handle_trade_callback(cb)
                     except Exception as e:
                         logger.error(f"Callback error: {e}")
-            save_state({"last_update_id": offset})
+            _now = time.time()
+            if _now - getattr(handle_command, '_last_state_save', 0) > 30:
+                save_state({"last_update_id": offset})
+                handle_command._last_state_save = _now
+            # Periodic cleanup of expired pending signals (every 60s)
+            if _now - getattr(handle_command, '_last_signal_cleanup', 0) > 60:
+                _cleanup_expired_pending_signals()
+                handle_command._last_signal_cleanup = _now
             time.sleep(0.3)  # Prevent hammering Telegram API
         except Exception as e:
             err_str = str(e)
