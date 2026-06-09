@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tradebot.brokers.base import Broker
+from tradebot.brokers import BaseBroker as Broker
 from tradebot.brokers.deriv.client import (
     DerivContractResult,
     DerivOHLCV,

@@ -618,6 +618,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._serve_json({"donors": get_donor_list()})
         elif path == '/api/daily_analyze':
             self._serve_json(get_daily_analyze_stats())
+        elif path == '/api/daily_recap':
+            try:
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
+                from trade_tracker import get_daily_trades, format_daily_recap
+                recap = get_daily_trades()
+                self._serve_json(recap)
+            except Exception as e:
+                self._serve_json({"error": str(e), "trades": [], "total_signals": 0})
         elif path == '/health':
             self._serve_json({"status": "ok", "timestamp": datetime.now(WIB).isoformat()})
         else:
@@ -642,7 +650,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Cache-Control', 'no-cache')
         self.end_headers()
-        self.wfile.write(json.dumps(data, default=str).encode('utf-8'))
+        # JSON-safe: convert Infinity/NaN to null for JavaScript compatibility
+        raw = json.dumps(data, default=str)
+        raw = raw.replace(': Infinity', ': null').replace(': -Infinity', ': null').replace(': NaN', ': null')
+        self.wfile.write(raw.encode('utf-8'))
     
     def do_OPTIONS(self):
         self.send_response(204)

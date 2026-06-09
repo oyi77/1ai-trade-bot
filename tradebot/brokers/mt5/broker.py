@@ -15,14 +15,11 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from tradebot.brokers.base import Broker
+from tradebot.brokers.base import BaseBroker, BrokerPlatform, TradeDirection, TradeResult, TradeStatus
 from tradebot.config import settings
 from tradebot.models import Balance, Order
-
 LOG = logging.getLogger(__name__)
-
-
-class MT5Broker(Broker):
+class MT5Broker(BaseBroker):
     """MetaTrader 5 broker adapter implementing the async Broker ABC.
 
     Parameters
@@ -97,6 +94,10 @@ class MT5Broker(Broker):
         )
         return True
 
+    async def close(self) -> None:
+        """Close connection (alias for disconnect)."""
+        await self.disconnect()
+
     async def disconnect(self) -> None:
         """Shut down the MT5 API connection."""
         if self._mt5 is not None:
@@ -106,6 +107,10 @@ class MT5Broker(Broker):
         LOG.info("MT5Broker disconnected")
 
     # ── Properties ──
+
+    @property
+    def platform(self) -> BrokerPlatform:
+        return BrokerPlatform.MT5
 
     @property
     def is_connected(self) -> bool:
@@ -237,7 +242,47 @@ class MT5Broker(Broker):
 
     # ── Tick subscription ──
 
-    async def subscribe_ticks(self, symbol: str) -> bool:
+    
+    async def place_trade(
+        self,
+        symbol: str,
+        direction: TradeDirection,
+        amount: float,
+        duration: int | None = None,
+    ) -> TradeResult:
+        """Place a trade (wrapper for place_order)."""
+        order_type = 0 if direction == TradeDirection.CALL else 1  # BUY=0, SELL=1
+        lots = amount / 100000  # Convert stake to lots (simplified)
+        
+        result = await self.place_order(
+            symbol=symbol,
+            order_type=order_type,
+            volume=lots,
+        )
+        
+        if not result:
+            return TradeResult(
+                platform=self.platform,
+                order_id="",
+                symbol=symbol,
+                direction=direction,
+                amount=amount,
+                status=TradeStatus.REJECTED,
+                error="Order rejected by MT5",
+            )
+        
+        return TradeResult(
+            platform=self.platform,
+            order_id=str(result.get("order", "")),
+            symbol=symbol,
+            direction=direction,
+            amount=amount,
+            duration=duration,
+            status=TradeStatus.OPENED,
+            metadata=result,
+        )
+
+async def subscribe_ticks(self, symbol: str) -> bool:
         """Subscribe to real-time MT5 ticks for a symbol.
 
         This enables MT5's tick cache for the symbol. Actual streaming

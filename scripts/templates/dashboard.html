@@ -4,918 +4,677 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Vilona TradeFX — AI Battle-Proven Trading Signals</title>
-<style>
-/* ═══════════════════════════════════════
-   ROOT — Cyber-Tech Design System
-   ═══════════════════════════════════════ */
-:root {
-  --bg: #08080e;
-  --bg2: #0d0d1a;
-  --bg3: #12122a;
-  --surface: #16163a;
-  --surface2: #1a1a44;
-  --border: #1e1e4a;
-  --border-active: #00d4aa44;
-  --text: #e0e0f0;
-  --text2: #8888bb;
-  --text3: #555580;
-  --accent: #00d4aa;
-  --accent2: #00b4d8;
-  --danger: #ff4757;
-  --warning: #ffa502;
-  --success: #00d4aa;
-  --glow: 0 0 20px #00d4aa22, 0 0 40px #00d4aa11;
-  --glow-danger: 0 0 20px #ff475722;
-  --sidebar-w: 260px;
-  --radius: 12px;
-  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace;
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Roboto Mono', 'Fira Code', 'monospace'],
+      },
+      colors: {
+        deep: '#0B0E14',
+        surface: '#151924',
+        card: '#1A1F2E',
+        border: 'rgba(255,255,255,0.05)',
+      }
+    }
+  }
 }
+</script>
+<style>
+/* Minimal Custom — only for animations & TV widgets */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--font);
-  min-height:100vh;
-  display:flex;
-  overflow-x:hidden;
-}
+body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B0E14;color:#e2e8f0;min-height:100vh}
 
-/* ═══ SIDEBAR ═══ */
-.sidebar{
-  width:var(--sidebar-w);
-  height:100vh;
-  position:fixed;
-  left:0;
-  top:0;
-  background:var(--bg2);
-  border-right:1px solid var(--border);
-  display:flex;
-  flex-direction:column;
-  z-index:100;
-  overflow-y:auto;
-}
-.sidebar-brand{
-  padding:24px 20px;
-  border-bottom:1px solid var(--border);
-}
-.sidebar-brand h1{
-  font-size:20px;
-  font-weight:800;
-  background:linear-gradient(90deg,var(--accent),var(--accent2));
-  -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;
-  line-height:1.2;
-}
-.sidebar-brand .sub{
-  color:var(--text3);
-  font-size:11px;
-  margin-top:2px;
-  font-weight:600;
-  letter-spacing:0.5px;
-}
-.sidebar-status{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  padding:12px 20px;
-  border-bottom:1px solid var(--border);
-  font-size:12px;
-}
-.sidebar-status .dot{
-  width:8px;height:8px;
-  border-radius:50%;
-  background:var(--accent);
-  box-shadow:0 0 8px var(--accent);
-  animation:pulse 2s infinite;
-}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
-.sidebar-status .label{color:var(--text2)}
-.sidebar-status .time{color:var(--text3);margin-left:auto;font-size:11px;font-family:var(--mono)}
-
-.sidebar-nav{
-  flex:1;
-  padding:12px 0;
-}
-.nav-item{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:12px 20px;
-  cursor:pointer;
-  color:var(--text2);
-  font-size:14px;
-  transition:all 0.2s;
-  border-left:3px solid transparent;
-  text-decoration:none;
-}
-.nav-item:hover{background:var(--surface);color:var(--text)}
-.nav-item.active{
-  background:var(--surface);
-  color:var(--accent);
-  border-left-color:var(--accent);
-  font-weight:600;
-}
-.nav-item .icon{font-size:18px;width:24px;text-align:center}
-.nav-item .badge{
-  margin-left:auto;
-  background:var(--accent);
-  color:#000;
-  font-size:10px;
-  padding:2px 8px;
-  border-radius:10px;
-  font-weight:700;
-}
-
-.sidebar-footer{
-  padding:16px 20px;
-  border-top:1px solid var(--border);
-}
-.sidebar-footer a{
-  display:block;
-  text-align:center;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  color:#000;
-  padding:10px;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:700;
-  font-size:13px;
-  transition:all 0.2s;
-}
-.sidebar-footer a:hover{transform:translateY(-1px);box-shadow:var(--glow)}
-
-/* ═══ MAIN CONTENT ═══ */
-.main{
-  margin-left:var(--sidebar-w);
-  flex:1;
-  min-height:100vh;
-  padding:32px 40px;
-  max-width:1200px;
-}
-
-/* ═══ PAGE SECTIONS ═══ */
 .page{display:none}
 .page.active{display:block}
-.page h2{
-  font-size:28px;
-  font-weight:800;
-  margin-bottom:8px;
-}
-.page .desc{
-  color:var(--text2);
-  font-size:14px;
-  margin-bottom:32px;
-}
 
-/* ═══ HERO SECTION (Home) ═══ */
-.hero{
-  background:linear-gradient(135deg,var(--surface),var(--bg3));
-  border:1px solid var(--border-active);
-  border-radius:16px;
-  padding:48px;
-  margin-bottom:32px;
-  position:relative;
-  overflow:hidden;
-}
-.hero::before{
-  content:'';
-  position:absolute;
-  top:-50%;right:-20%;
-  width:400px;height:400px;
-  background:radial-gradient(circle,var(--accent) 0%,transparent 70%);
-  opacity:0.05;
-  pointer-events:none;
-}
-.hero-grid{
-  display:grid;
-  grid-template-columns:1fr 300px;
-  gap:40px;
-  align-items:center;
-}
-.hero h2{
-  font-size:36px;
-  font-weight:900;
-  line-height:1.2;
-  margin-bottom:16px;
-}
-.hero h2 .highlight{
-  background:linear-gradient(90deg,var(--accent),var(--accent2));
-  -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;
-}
-.hero p{
-  color:var(--text2);
-  font-size:15px;
-  line-height:1.7;
-  margin-bottom:24px;
-}
-.hero-cta{
-  display:flex;
-  gap:12px;
-  flex-wrap:wrap;
-}
-.btn-primary{
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  color:#000;
-  padding:14px 32px;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:700;
-  font-size:15px;
-  transition:all 0.2s;
-  border:none;
-  cursor:pointer;
-}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:var(--glow)}
-.btn-secondary{
-  background:var(--surface2);
-  color:var(--text);
-  padding:14px 32px;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:600;
-  font-size:15px;
-  border:1px solid var(--border);
-  transition:all 0.2s;
-}
-.btn-secondary:hover{background:var(--surface);border-color:var(--accent)}
+/* Live pulse dot */
+.live-dot{width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block;animation:ping-live 2s infinite}
+@keyframes ping-live{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,0.4)}50%{opacity:0.7;box-shadow:0 0 0 6px rgba(34,197,94,0)}}
 
-.hero-stats-badge{
-  background:var(--bg2);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:20px;
-  text-align:center;
-}
-.hero-stats-badge .big{font-size:42px;font-weight:900;color:var(--accent)}
-.hero-stats-badge .lbl{color:var(--text3);font-size:12px;margin-top:4px}
-.hero-stats-badge .sub{color:var(--text2);font-size:13px;margin-top:8px}
-.hero-stats-badge .bar-track{
-  height:6px;
-  background:var(--bg3);
-  border-radius:3px;
-  margin:12px 0;
-  overflow:hidden;
-}
-.hero-stats-badge .bar-fill{
-  height:100%;
-  background:linear-gradient(90deg,var(--accent),var(--accent2));
-  border-radius:3px;
-  transition:width 1s ease;
-}
+/* Signal badges */
+.sig-buy{color:#34d399;background:rgba(52,211,153,0.08)}
+.sig-sell{color:#f87171;background:rgba(248,113,113,0.08)}
+.sig-tp{color:#34d399}
+.sig-sl{color:#f87171}
 
-/* ═══ STAT CARDS ═══ */
-.stats-grid{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:16px;
-  margin-bottom:32px;
-}
-.stat-card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  padding:20px;
-  text-align:center;
-}
-.stat-card .value{
-  font-size:28px;
-  font-weight:900;
-  font-family:var(--mono);
-}
-.stat-card .value.green{color:var(--accent)}
-.stat-card .value.red{color:var(--danger)}
-.stat-card .value.blue{color:var(--accent2)}
-.stat-card .label{color:var(--text3);font-size:12px;margin-top:6px}
+/* Sidebar */
+.sidebar{width:240px;height:100vh;position:fixed;left:0;top:0;background:#151924;border-right:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;z-index:100;overflow-y:auto}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:12px 20px;color:#94a3b8;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.15s;border-left:2px solid transparent;text-decoration:none}
+.nav-item:hover{background:rgba(255,255,255,0.03);color:#e2e8f0}
+.nav-item.active{background:rgba(59,130,246,0.08);color:#60a5fa;border-left-color:#3b82f6;font-weight:600}
+.main{margin-left:240px;min-height:100vh;padding:32px 40px;max-width:1280px}
 
-/* ═══ FEED ═══ */
-.signal-card{
-  background:var(--surface);
-  border-left:3px solid var(--accent);
-  border-radius:8px;
-  padding:16px;
-  margin-bottom:12px;
-}
-.signal-card.sell{border-left-color:var(--danger)}
-.signal-card .top{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:8px;
-}
-.signal-card .action{
-  font-weight:800;
-  font-size:16px;
-}
-.action.buy{color:var(--accent)}
-.action.sell{color:var(--danger)}
-.signal-card .sym{color:var(--text2);font-size:13px}
-.signal-card .prices{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:8px;
-  font-size:13px;
-  margin-bottom:8px;
-  color:var(--text2)
-}
-.signal-card .meta{
-  color:var(--text3);
-  font-size:12px;
-  border-top:1px solid var(--border);
-  padding-top:8px;
-}
-.signal-card .src{
-  color:var(--text3);
-  font-size:11px;
-  font-style:italic;
-  margin-top:4px;
-}
-.empty-state{
-  text-align:center;
-  color:var(--text3);
-  padding:40px;
-  font-size:14px;
-}
+/* KPI Cards */
+.kpi-card{background:#1A1F2E;border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:20px}
 
-/* ═══ TRANSPARENCY ═══ */
-.transparency-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:24px;
-  margin-bottom:32px;
-}
-.trans-card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  padding:24px;
-}
-.trans-card h3{
-  font-size:16px;
-  font-weight:700;
-  margin-bottom:16px;
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
-.trans-row{
-  display:flex;
-  justify-content:space-between;
-  padding:8px 0;
-  border-bottom:1px solid var(--border);
-  font-size:14px;
-}
-.trans-row:last-child{border-bottom:none}
-.trans-row .lbl{color:var(--text2)}
-.trans-row .val{font-weight:600;font-family:var(--mono)}
-.trans-row .val.green{color:var(--accent)}
-.trans-row .val.red{color:var(--danger)}
+/* Bento grid */
+.bento-grid{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px;margin-bottom:24px}
+.bento-wide{grid-column:1/3}
+.bento-full{grid-column:1/-1}
 
-.progress-track{
-  height:8px;
-  background:var(--bg3);
-  border-radius:4px;
-  margin:12px 0;
-  overflow:hidden;
-}
-.progress-fill{
-  height:100%;
-  border-radius:4px;
-  transition:width 1.5s ease;
-  background:linear-gradient(90deg,var(--accent),var(--accent2));
-}
-.progress-fill.warning{background:linear-gradient(90deg,var(--warning),var(--danger))}
-.progress-fill.good{background:linear-gradient(90deg,var(--accent2),var(--accent))}
+/* Signal feed list */
+.signal-item{display:flex;align-items:center;padding:14px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.signal-item:last-child{border-bottom:none}
 
-/* ═══ HOW IT WORKS ═══ */
-.steps{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:20px;
-  margin-bottom:32px;
-}
-.step-card{
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--radius);
-  padding:24px;
-  text-align:center;
-}
-.step-card .num{
-  width:48px;height:48px;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  margin:0 auto 16px;
-  font-size:20px;font-weight:800;color:#000;
-}
-.step-card h4{font-size:15px;font-weight:700;margin-bottom:8px}
-.step-card p{color:var(--text2);font-size:13px;line-height:1.6}
+/* Horizontal divider */
+.h-divider{height:1px;background:rgba(255,255,255,0.04);margin:16px 0}
 
-/* ═══ TESTIMONIAL/PAAS ═══ */
-.paas-block{
-  background:linear-gradient(135deg,#0d2818,#0a1a1a);
-  border:1px solid var(--border-active);
-  border-radius:var(--radius);
-  padding:32px;
-  margin-bottom:32px;
-}
-.paas-block .pain{color:var(--danger);font-weight:700;font-size:14px;margin-bottom:8px}
-.paas-block h3{font-size:20px;font-weight:800;margin-bottom:12px;color:var(--accent)}
-.paas-block p{color:var(--text2);font-size:14px;line-height:1.7;margin-bottom:12px}
-.paas-block .solution{
-  background:var(--surface);
-  border-left:3px solid var(--accent);
-  padding:16px;
-  border-radius:0 8px 8px 0;
-  margin-top:16px;
-  font-size:14px;
-}
-.paas-block .solution strong{color:var(--accent)}
+/* TradingView widget container */
+.tv-wrap{background:#1A1F2E;border:1px solid rgba(255,255,255,0.05);border-radius:12px;overflow:hidden}
 
-/* ═══ USER ACTIVITY ═══ */
-.activity-item{
-  padding:10px 0;
-  border-bottom:1px solid var(--border);
-  font-size:13px;
-}
-.activity-item:last-child{border-bottom:none}
-.activity-item .user{color:var(--accent2);font-weight:600}
-.activity-item .act{font-weight:700}
-.activity-item .time{color:var(--text3);font-size:11px}
+/* How it works timeline */
+.timeline-line{position:absolute;left:19px;top:40px;bottom:0;width:2px;background:rgba(59,130,246,0.2)}
 
-/* ═══ RESPONSIVE ═══ */
-@media(max-width:900px){
-  .sidebar{
-    width:60px;
-    overflow:hidden;
-  }
-  .sidebar-brand h1,.sidebar-brand .sub,
-  .sidebar-status .label,.sidebar-status .time,
-  .nav-item span:not(.icon),
-  .nav-item .badge,
-  .sidebar-footer a span{display:none}
-  .sidebar-nav .nav-item{justify-content:center;padding:12px}
-  .main{margin-left:60px;padding:20px}
-  .hero-grid{grid-template-columns:1fr}
-  .stats-grid{grid-template-columns:repeat(2,1fr)}
-  .steps{grid-template-columns:1fr}
-  .transparency-grid{grid-template-columns:1fr}
+/* Heatmap grid */
+.heatmap-cell{width:14px;height:14px;border-radius:2px}
+.heatmap-cell.green{background:rgba(52,211,153,0.3)}
+.heatmap-cell.green-2{background:rgba(52,211,153,0.5)}
+.heatmap-cell.green-3{background:rgba(52,211,153,0.7)}
+.heatmap-cell.green-4{background:rgba(52,211,153,0.9)}
+.heatmap-cell.red{background:rgba(248,113,113,0.3)}
+.heatmap-cell.red-2{background:rgba(248,113,113,0.5)}
+.heatmap-cell.red-3{background:rgba(248,113,113,0.7)}
+.heatmap-cell.red-4{background:rgba(248,113,113,0.9)}
+.heatmap-cell.empty{background:rgba(255,255,255,0.03)}
+
+/* Scrollbar for data tables */
+.data-table{overflow-x:auto}
+.data-table::-webkit-scrollbar{height:4px}
+.data-table::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+
+@media(max-width:1024px){
+  .sidebar{width:64px;overflow:hidden}
+  .sidebar .nav-item span:not(.icon){display:none}
+  .sidebar .sidebar-brand h1,.sidebar .sidebar-brand .sub,
+  .sidebar .sidebar-status .label,.sidebar .sidebar-status .time,
+  .sidebar .sidebar-footer a span{display:none}
+  .sidebar .nav-item{justify-content:center;padding:14px}
+  .main{margin-left:64px;padding:20px}
+  .bento-grid{grid-template-columns:1fr 1fr}
 }
-@media(max-width:600px){
+@media(max-width:640px){
+  .bento-grid{grid-template-columns:1fr}
   .main{padding:16px}
-  .stats-grid{grid-template-columns:1fr 1fr}
-  .hero{padding:24px}
-  .hero h2{font-size:24px}
 }
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<!-- ═══ SIDEBAR ═══ -->
 <nav class="sidebar">
-  <div class="sidebar-brand">
-    <h1>⚡ VILONA</h1>
-    <div class="sub">AI TRADE FX · BATTLE PROVEN</div>
+  <div class="sidebar-brand" style="padding:24px 20px;border-bottom:1px solid rgba(255,255,255,0.05)">
+    <h1 class="text-lg font-extrabold" style="background:linear-gradient(135deg,#60a5fa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent">VILONA</h1>
+    <div class="text-xs text-slate-500 font-semibold tracking-wider mt-0.5">AI TRADE FX</div>
   </div>
-  <div class="sidebar-status">
-    <span class="dot"></span>
-    <span class="label">AI Engine Active</span>
-    <span class="time" id="live-clock">--:--</span>
+  <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5">
+    <span class="live-dot"></span>
+    <span class="text-xs text-slate-400">Engine Active</span>
+    <span class="text-xs text-slate-600 font-mono ml-auto" id="live-clock">--:--</span>
   </div>
-  <div class="sidebar-nav">
-    <a class="nav-item active" data-page="home" href="#">
-      <span class="icon">🏠</span><span>Overview</span>
-    </a>
-    <a class="nav-item" data-page="signals" href="#">
-      <span class="icon">📡</span><span>Live Signals</span>
-      <span class="badge" id="sig-count">0</span>
-    </a>
-    <a class="nav-item" data-page="transparency" href="#">
-      <span class="icon">🔍</span><span>Transparency</span>
-    </a>
-    <a class="nav-item" data-page="how" href="#">
-      <span class="icon">🧠</span><span>How It Works</span>
-    </a>
-    <a class="nav-item" data-page="backtest" href="#">
-      <span class="icon">📊</span><span>Backtest</span>
-    </a>
+  <div class="flex-1 py-3">
+    <a class="nav-item active" data-page="home" href="#"><span class="icon text-base">🏠</span><span>Overview</span></a>
+    <a class="nav-item" data-page="signals" href="#"><span class="icon text-base">📡</span><span>Live Signals</span><span class="ml-auto bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full" id="sig-count">0</span></a>
+    <a class="nav-item" data-page="transparency" href="#"><span class="icon text-base">🔍</span><span>Transparency</span></a>
+    <a class="nav-item" data-page="how" href="#"><span class="icon text-base">🧠</span><span>How It Works</span></a>
+    <a class="nav-item" data-page="backtest" href="#"><span class="icon text-base">📊</span><span>Backtest</span></a>
+    <a class="nav-item" data-page="charts" href="#"><span class="icon text-base">📈</span><span>Charts</span></a>
   </div>
-  <div class="sidebar-footer">
-    <a href="https://t.me/berkahkaryaforexbotbot?start=ref_web" target="_blank">
+  <div class="p-4 border-t border-white/5">
+    <a href="https://t.me/berkahkaryaforexbotbot?start=ref_web" target="_blank" class="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-sm font-bold py-2.5 px-4 rounded-lg hover:shadow-lg hover:shadow-blue-500/20 transition-all">
       ⚡ <span>Mulai Trading</span>
     </a>
   </div>
 </nav>
 
-<!-- ═══════════════════ MAIN ═══════════════════ -->
+<!-- ═══ MAIN CONTENT ═══ -->
 <div class="main">
 
-<!-- ==================== PAGE: HOME ==================== -->
+<!-- ==================== PAGE: OVERVIEW ==================== -->
 <div class="page active" id="page-home">
-  <div class="hero">
-    <div class="hero-grid">
-      <div>
-        <h2>
-          <span class="highlight">Stop Tebak-Tebakan</span><br>
-          Biarkan AI Bertarung Untukmu
-        </h2>
-        <p>
-          Mesin analisa kuantitatif dengan 11 engine — SMC, FVG, Liquidity, Chaos, Quant AI — 
-          bekerja 24/7 mendeteksi peluang trading XAUUSD, BTCUSD, USOIL. 
-          Semua sinyal diverifikasi oleh multi-model AI (DeepSeek V3 + GPT-4o + Claude).
-        </p>
-        <div class="hero-cta">
-          <a class="btn-primary" href="https://t.me/berkahkaryaforexbotbot" target="_blank">
-            🚀 Mulai Gratis
-          </a>
-          <a class="btn-secondary" href="#" onclick="switchPage('transparency'); return false;">
-            🔍 Lihat Transparansi
-          </a>
+
+  <!-- Hero Section -->
+  <div class="relative overflow-hidden rounded-2xl mb-8" style="background:#151924;border:1px solid rgba(255,255,255,0.05)">
+    <!-- BG image placeholder -->
+    <div class="absolute inset-0 opacity-30" style="background:radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.15) 0%, transparent 70%), radial-gradient(ellipse at 80% 20%, rgba(6,182,212,0.1) 0%, transparent 50%)"></div>
+    <div class="relative p-10">
+      <div class="flex items-start justify-between gap-8 flex-wrap">
+        <div class="max-w-xl">
+          <h2 class="text-3xl font-extrabold leading-tight mb-3">
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Stop Guessing.</span><br>
+            <span class="text-white">Let AI Battle For You.</span>
+          </h2>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            11 quantitative engines — SMC, FVG, Liquidity, Chaos, Quant AI — scanning XAUUSD, BTCUSD, USOIL 24/7. Every signal verified by multi-model AI (DeepSeek V3 + GPT-4o + Claude).
+          </p>
+          <div class="flex gap-3 mt-6 flex-wrap">
+            <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold py-3 px-6 rounded-lg transition-colors">
+              🚀 Start Free
+            </a>
+            <button onclick="switchPage('transparency')" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 text-slate-300 text-sm font-semibold py-3 px-6 rounded-lg border border-white/10 transition-colors">
+              🔍 View Transparency
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="hero-stats-badge">
-        <div class="big" id="hero-winrate">--%</div>
-        <div class="lbl">Overall Win Rate</div>
-        <div class="bar-track">
-          <div class="bar-fill" id="hero-wr-bar" style="width:0%"></div>
-        </div>
-        <div class="sub">
-          <span id="hero-wins">0</span>W / <span id="hero-losses">0</span>L · 
-          <span id="hero-pips">0</span> pip
+        <!-- Win Rate Hero Badge -->
+        <div class="text-center bg-white/5 rounded-xl px-6 py-5 border border-white/5 min-w-[140px]">
+          <div class="text-4xl font-mono font-bold text-blue-400" id="hero-winrate">--%</div>
+          <div class="text-xs text-slate-500 mt-1">Win Rate</div>
+          <div class="h-1.5 bg-white/5 rounded-full mt-3 overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-1000" id="hero-wr-bar" style="width:0%"></div>
+          </div>
+          <div class="text-xs text-slate-500 mt-2 font-mono">
+            <span id="hero-wins" class="text-emerald-400">0</span>W / <span id="hero-losses" class="text-red-400">0</span>L · <span id="hero-pips" class="text-slate-300">0</span> pip
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Stats Row -->
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="value green" id="stat-total">0</div>
-      <div class="label">Signals Generated</div>
+  <!-- Bento Grid — KPI Cards -->
+  <div class="bento-grid">
+    <div class="kpi-card bento-wide">
+      <div class="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2">Signals Generated</div>
+      <div class="text-3xl font-mono font-bold text-white" id="stat-total">0</div>
+      <div class="mt-3 flex items-center gap-2 text-xs text-slate-500">
+        <span class="live-dot"></span> Live from AI engines
+      </div>
     </div>
-    <div class="stat-card">
-      <div class="value blue" id="stat-members">0</div>
-      <div class="label">Bot Members</div>
+    <div class="kpi-card text-center">
+      <div class="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2">Members</div>
+      <div class="text-3xl font-mono font-bold text-blue-400" id="stat-members">0</div>
     </div>
-    <div class="stat-card">
-      <div class="value" id="stat-donors">0</div>
-      <div class="label">Donors</div>
-    </div>
-    <div class="stat-card">
-      <div class="value blue" id="stat-today">0</div>
-      <div class="label">Active Today</div>
+    <div class="kpi-card text-center">
+      <div class="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2">Donors</div>
+      <div class="text-3xl font-mono font-bold text-emerald-400" id="stat-donors">0</div>
     </div>
   </div>
 
   <!-- PAAS Narrative -->
-  <div class="paas-block">
-    <div class="pain">🔥 THE PROBLEM</div>
-    <h3>99% Signal Provider Gagal. Ini Kenapa.</h3>
-    <p>
-      Anda membayar ribuan untuk grup signal yang cuma ngasih screenshot call. 
-      Tidak ada transparansi. Tidak ada bukti. Anda cuma disuruh percaya buta.
-      Hasilnya: stop loss beruntun, modal habis, janji profit tinggal cerita.
-    </p>
-    <p>
-      <strong>Kami muak dengan itu.</strong>
-    </p>
-    <div class="solution">
-      <strong>✓ Solusi Nyata:</strong> Setiap sinyal yang keluar — dari engine mana, 
-      confidence berapa, kenapa BUY kenapa SELL — semua transparan di dashboard ini. 
-      Semua user yang generate sinyal namanya muncul. 
-      Win rate real-time ada di depan mata.<br><br>
-      <strong>Bukan janji. Bukti.</strong>
+  <div class="rounded-xl p-6 mb-6" style="background:linear-gradient(135deg, rgba(6,78,59,0.12), rgba(6,78,59,0.04));border:1px solid rgba(52,211,153,0.1)">
+    <div class="flex items-start gap-4 flex-wrap">
+      <div class="flex-1 min-w-[240px]">
+        <div class="text-xs font-bold text-red-400 mb-1 tracking-wider">🔥 THE PROBLEM</div>
+        <h3 class="text-lg font-bold text-white mb-2">99% Signal Providers Fail. Here's Why.</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          You pay thousands for signal groups that only show screenshots. No transparency. No proof. Just blind trust — then stop losses pile up, capital evaporates.
+        </p>
+        <div class="mt-3 pl-3 border-l-2 border-emerald-400/50">
+          <p class="text-sm text-slate-300"><span class="text-emerald-400 font-bold">✓ Real Solution:</span> Every signal shows which engine fired, confidence score, why BUY or SELL — all transparent on this dashboard. User-generated signals show names. Live win rate in plain sight.</p>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Recent Activity -->
-  <div class="trans-card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px">
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">👥 Aktivitas User Terbaru</h3>
-    <div id="user-activity-home">
-      <div class="empty-state">Memuat data...</div>
+  <!-- Daily Trading Report -->
+  <div class="kpi-card mb-5">
+    <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">📋 Daily Trading Report</h3>
+    <div id="daily-recap-content">
+      <div class="text-center py-8 text-sm text-slate-500">Loading recap...</div>
     </div>
   </div>
 
-  <!-- Donor Wall -->
-  <div class="trans-card" style="background:linear-gradient(135deg,#0d2818,#0a1a1a);border:1px solid var(--border-active);border-radius:var(--radius);padding:20px;margin-top:20px">
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--accent)">💚 Donatur — Pahlawan AI</h3>
-    <div id="donor-wall">
-      <div class="empty-state">Memuat data donatur...</div>
+  <!-- Activity + Donor Wall + Daily Stats Row -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+    <div class="kpi-card">
+      <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">👥 Recent Activity</h3>
+      <div id="user-activity-home">
+        <div class="text-sm text-slate-500 text-center py-6">No user signals today.</div>
+      </div>
     </div>
-  </div>
-
-  <!-- Daily Analyze Stats -->
-  <div class="trans-card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:20px">
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">📈 Statistik Analisa Harian</h3>
-    <div id="daily-analyze">
-      <div class="empty-state">Memuat data...</div>
+    <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.08), rgba(6,78,59,0.02));border-color:rgba(52,211,153,0.1)">
+      <h3 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">💚 Donor Wall</h3>
+      <div id="donor-wall">
+        <div class="text-sm text-slate-500 text-center py-6">Be the first donor 💚</div>
+      </div>
+    </div>
+    <div class="kpi-card">
+      <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">📈 Daily Analyze</h3>
+      <div id="daily-analyze">
+        <div class="text-sm text-slate-500 text-center py-6">Loading...</div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ==================== PAGE: SIGNALS ==================== -->
+<!-- ==================== PAGE: LIVE SIGNALS ==================== -->
 <div class="page" id="page-signals">
-  <h2>📡 Live Signal Feed</h2>
-  <div class="desc">
-    Semua sinyal real-time dari AI auto-scanner + generate user. 
-    Transparan, bisa diverifikasi, tidak ada yang disembunyikan.
-  </div>
-
-  <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
-    <div class="stat-card">
-      <div class="value green" id="sig-total">0</div>
-      <div class="label">Total Signals</div>
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-2xl font-extrabold text-white">📡 Live Signal Feed</h2>
+      <p class="text-sm text-slate-400 mt-1">All signals — AI auto-scanner + user generated. Transparent, verifiable.</p>
     </div>
-    <div class="stat-card">
-      <div class="value green" id="sig-tp">0</div>
-      <div class="label">Hit TP</div>
-    </div>
-    <div class="stat-card">
-      <div class="value red" id="sig-sl">0</div>
-      <div class="label">Hit SL</div>
+    <div class="flex items-center gap-2 text-xs text-slate-500">
+      <span class="live-dot"></span> <span class="font-mono" id="live-clock2">--:--</span> WIB
     </div>
   </div>
 
-  <div id="signal-feed">
-    <div class="empty-state">🔍 Menunggu sinyal... auto-scanner aktif 07:00-23:00 WIB</div>
+  <!-- Signal Stats Row -->
+  <div class="grid grid-cols-3 gap-4 mb-6">
+    <div class="kpi-card text-center">
+      <div class="text-2xl font-mono font-bold text-white" id="sig-total">0</div>
+      <div class="text-xs text-slate-500 mt-1">Total Signals</div>
+    </div>
+    <div class="kpi-card text-center">
+      <div class="text-2xl font-mono font-bold text-emerald-400" id="sig-tp">0</div>
+      <div class="text-xs text-slate-500 mt-1">Hit TP</div>
+    </div>
+    <div class="kpi-card text-center">
+      <div class="text-2xl font-mono font-bold text-red-400" id="sig-sl">0</div>
+      <div class="text-xs text-slate-500 mt-1">Hit SL</div>
+    </div>
+  </div>
+
+  <!-- Signal Feed -->
+  <div class="kpi-card">
+    <div id="signal-feed" class="divide-y divide-white/5">
+      <div class="text-center py-12 text-sm text-slate-500">🔍 No signals yet. Auto-scanner active 07:00-23:00 WIB. Try /analyze in bot!</div>
+    </div>
   </div>
 </div>
 
 <!-- ==================== PAGE: TRANSPARENCY ==================== -->
 <div class="page" id="page-transparency">
-  <h2>🔍 Full Transparency</h2>
-  <div class="desc">
-    Kami tunjukkan semua. Biaya server, pemasukan, jumlah member, 
-    performa trading — tidak ada yang ditutup-tutupi.
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-2xl font-extrabold text-white">🔍 Full Transparency</h2>
+      <p class="text-sm text-slate-400 mt-1">Server costs, revenue, members, trade performance — nothing hidden.</p>
+    </div>
+    <button onclick="alert('Export feature coming soon')" class="text-xs text-slate-400 border border-white/10 hover:border-blue-500/30 hover:text-blue-400 rounded-lg px-4 py-2 transition-colors font-medium">
+      ⬇ Export
+    </button>
   </div>
 
-  <div class="transparency-grid">
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
     <!-- Server Costs -->
-    <div class="trans-card">
-      <h3>🖥 Biaya Server Bulanan</h3>
-      <div class="progress-track">
-        <div class="progress-fill warning" id="cost-bar" style="width:0%"></div>
+    <div class="kpi-card">
+      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🖥 Server Costs / Month</h3>
+      <div class="h-2 bg-white/5 rounded-full mb-4 overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-1000" id="cost-bar" style="width:0%;background:linear-gradient(90deg,#f59e0b,#ef4444)"></div>
       </div>
-      <div class="trans-row">
-        <span class="lbl">Total Biaya/Bulan</span>
-        <span class="val red" id="cost-total">Rp 0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">DeepSeek API</span>
-        <span class="val" id="cost-gpt">$150</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">OpenAI API (GPT-4o)</span>
-        <span class="val" id="cost-openai">$120</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Claude API</span>
-        <span class="val" id="cost-claude">$80</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">GPU Server</span>
-        <span class="val" id="cost-gpu">$80</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Domain & Hosting</span>
-        <span class="val" id="cost-domain">$20</span>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-slate-400">Total</span><span class="font-mono font-bold text-red-400" id="cost-total">Rp 0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">DeepSeek API</span><span class="font-mono text-slate-300" id="cost-gpt">$0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">OpenAI GPT-4o</span><span class="font-mono text-slate-300" id="cost-openai">$0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Claude API</span><span class="font-mono text-slate-300" id="cost-claude">$0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">GPU Server</span><span class="font-mono text-slate-300" id="cost-gpu">$0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Domain & Hosting</span><span class="font-mono text-slate-300" id="cost-domain">$0</span></div>
       </div>
     </div>
 
     <!-- Funding -->
-    <div class="trans-card">
-      <h3>💚 Bahan Bakai AI Terkumpul</h3>
-      <div class="progress-track">
-        <div class="progress-fill good" id="fund-bar" style="width:0%"></div>
+    <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.08), rgba(6,78,59,0.02));border-color:rgba(52,211,153,0.1)">
+      <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">💚 AI Fuel Collected</h3>
+      <div class="h-2 bg-white/5 rounded-full mb-4 overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-1000" id="fund-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
       </div>
-      <div class="trans-row">
-        <span class="lbl">Terkumpul Bulan Ini</span>
-        <span class="val green" id="fund-collected">Rp 0</span>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-slate-400">Collected This Month</span><span class="font-mono font-bold text-emerald-400" id="fund-collected">Rp 0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Monthly Target</span><span class="font-mono text-slate-300" id="fund-target">Rp 7,357,500</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Donation Transactions</span><span class="font-mono text-slate-300" id="fund-transactions">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Donors</span><span class="font-mono text-emerald-400" id="fund-donors">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Shortfall</span><span class="font-mono font-bold text-red-400" id="fund-shortfall">Rp 0</span></div>
       </div>
-      <div class="trans-row">
-        <span class="lbl">Target Bulanan</span>
-        <span class="val" id="fund-target">Rp 7,357,500</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Total Transaksi Donasi</span>
-        <span class="val" id="fund-transactions">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Total Donatur</span>
-        <span class="val green" id="fund-donors">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Sisa yang Dibutuhkan</span>
-        <span class="val red" id="fund-shortfall">Rp 0</span>
-      </div>
-      <div style="margin-top:16px">
-        <a class="btn-primary" href="https://t.me/berkahkaryaforexbotbot" target="_blank" style="display:block;text-align:center">
-          💚 Isi Bahan Bakar AI
-        </a>
-      </div>
+      <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" class="mt-4 block text-center bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-2.5 rounded-lg transition-colors">💚 Fuel the AI</a>
     </div>
 
     <!-- Performance -->
-    <div class="trans-card">
-      <h3>📈 Trade Performance</h3>
-      <div class="trans-row">
-        <span class="lbl">Total Trades</span>
-        <span class="val" id="perf-total">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Wins</span>
-        <span class="val green" id="perf-wins">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Losses</span>
-        <span class="val red" id="perf-losses">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Win Rate</span>
-        <span class="val green" id="perf-wr">0%</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Total Pips</span>
-        <span class="val" id="perf-pips">0</span>
+    <div class="kpi-card">
+      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">📈 Trade Performance</h3>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-slate-400">Total Trades</span><span class="font-mono font-bold text-white" id="perf-total">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Wins</span><span class="font-mono font-bold text-emerald-400" id="perf-wins">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Losses</span><span class="font-mono font-bold text-red-400" id="perf-losses">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Win Rate</span><span class="font-mono font-bold text-emerald-400" id="perf-wr">0%</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Pips</span><span class="font-mono font-bold text-white" id="perf-pips">0</span></div>
       </div>
     </div>
 
     <!-- Community -->
-    <div class="trans-card">
-      <h3>👥 Komunitas</h3>
-      <div class="trans-row">
-        <span class="lbl">Total Member Bot</span>
-        <span class="val" id="comm-members">0</span>
+    <div class="kpi-card">
+      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">👥 Community</h3>
+      <div class="space-y-2 text-sm">
+        <div class="flex justify-between"><span class="text-slate-400">Total Members</span><span class="font-mono font-bold text-white" id="comm-members">0</span></div>
+        <div class="flex justify-between pl-4"><span class="text-slate-400">├ Free (Trial)</span><span class="font-mono text-slate-300" id="comm-free">0</span></div>
+        <div class="flex justify-between pl-4"><span class="text-slate-400">├ Pro (Paid)</span><span class="font-mono text-blue-400" id="comm-pro">0</span></div>
+        <div class="flex justify-between pl-4"><span class="text-slate-400">└ Donors</span><span class="font-mono text-emerald-400" id="comm-donors">0</span></div>
+        <div class="h-divider"></div>
+        <div class="flex justify-between"><span class="text-slate-400">Active Today</span><span class="font-mono text-blue-400" id="comm-active">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Signals</span><span class="font-mono text-slate-300" id="comm-signals">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Analyses</span><span class="font-mono text-slate-300" id="comm-analyses">0</span></div>
       </div>
-      <div class="trans-row">
-        <span class="lbl">├ Free (Trial)</span>
-        <span class="val" id="comm-free">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">├ Pro (Paid)</span>
-        <span class="val blue" id="comm-pro">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">└ Donatur Aktif</span>
-        <span class="val green" id="comm-donors">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">User Aktif Hari Ini</span>
-        <span class="val blue" id="comm-active">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Total Sinyal Diproses</span>
-        <span class="val" id="comm-signals">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Total Analisa User</span>
-        <span class="val" id="comm-analyses">0</span>
-      </div>
-      <div class="trans-row">
-        <span class="lbl">Bot Status</span>
-        <span class="val green">✅ Active</span>
-      </div>
-      <div style="margin-top:16px;font-size:13px;color:var(--text2)">Semua data diperbarui real-time setiap 30 detik.</div>
+      <div class="mt-4 flex items-center gap-2 text-xs text-slate-500"><span class="live-dot"></span> Bot Active</div>
     </div>
   </div>
 
-  <!-- Transparent Signal Verification -->
-  <div class="paas-block">
-    <div class="pain">🔬 VERIFIED & PROVEN</div>
-    <h3>Kami Tidak Sembunyi. Semua Ada di Sini.</h3>
-    <p>
-      Setiap sinyal yang dikirimkan bot bisa dicek langsung di <strong>Live Signals</strong> tab. 
-      Anda bisa lihat sendiri: kapan masuk, di harga berapa, SL/TP berapa, 
-      apakah kena TP atau SL, dan siapa yang generate.
-    </p>
-    <p>
-      Kami undang Anda untuk memverifikasi sendiri. 
-      Bukan percaya. Verifikasi.
-    </p>
+  <!-- Verified Statement -->
+  <div class="rounded-xl p-5" style="background:linear-gradient(135deg, rgba(6,78,59,0.08), rgba(6,78,59,0.02));border:1px solid rgba(52,211,153,0.1)">
+    <div class="flex items-start gap-3">
+      <span class="text-lg">🔬</span>
+      <div>
+        <h3 class="text-sm font-bold text-emerald-400 mb-1">Verified & Proven</h3>
+        <p class="text-sm text-slate-400">Every signal is verifiable on the Live Signals tab. Entry price, SL, TP, outcome — all recorded. We don't hide. We prove. DYOR.</p>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- ==================== PAGE: HOW IT WORKS ==================== -->
 <div class="page" id="page-how">
-  <h2>🧠 Bagaimana Cara Kerjanya</h2>
-  <div class="desc">
-    11 engine analisa bekerja dalam pipeline multi-layered. 
-    Semua berjalan otomatis 24/7 tanpa intervensi manusia.
+  <h2 class="text-2xl font-extrabold text-white mb-2">🧠 How It Works</h2>
+  <p class="text-sm text-slate-400 mb-8">11 engines in a multi-layered pipeline. Fully automated 24/7.</p>
+
+  <!-- Timeline -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+    <div class="kpi-card relative pl-14">
+      <div class="absolute left-4 top-4 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-sm font-bold text-white">1</div>
+      <div class="absolute left-[19px] top-[52px] bottom-[-20px] w-0.5 bg-blue-500/20 hidden md:block" style="left:19px;top:52px;bottom:-20px;width:2px;background:rgba(59,130,246,0.2);position:absolute"></div>
+      <h4 class="text-sm font-bold text-white mb-2">Market Scanning</h4>
+      <p class="text-xs text-slate-400 leading-relaxed">11 engines (SMC, FVG, Quant, Hermes, Chaos) scan XAUUSD, BTCUSD, USOIL every tick.</p>
+    </div>
+    <div class="kpi-card relative pl-14">
+      <div class="absolute left-4 top-4 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-sm font-bold text-white">2</div>
+      <div class="absolute left-[19px] top-[52px] bottom-[-20px] w-0.5 bg-blue-500/20 hidden md:block"></div>
+      <h4 class="text-sm font-bold text-white mb-2">AI Consensus</h4>
+      <p class="text-xs text-slate-400 leading-relaxed">DeepSeek V3 + GPT-4o + Claude verify each signal. Min 2 model agreement = signal sent.</p>
+    </div>
+    <div class="kpi-card relative pl-14">
+      <div class="absolute left-4 top-4 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-sm font-bold text-white">3</div>
+      <h4 class="text-sm font-bold text-white mb-2">Quality Gate</h4>
+      <p class="text-xs text-slate-400 leading-relaxed">Confidence ≥ 65%, RR ≥ 1:1.5, SL validation. Trash signals rejected automatically.</p>
+    </div>
   </div>
 
-  <div class="steps">
-    <div class="step-card">
-      <div class="num">1</div>
-      <h4>Market Scanning</h4>
-      <p>11 engine (SMC, FVG, Quant, Hermes, Chaos, dll) memindai 3 pasangan utama setiap detik.</p>
-    </div>
-    <div class="step-card">
-      <div class="num">2</div>
-      <h4>Multi-Model AI Consensus</h4>
-      <p>DeepSeek V3 + GPT-4o + Claude memverifikasi setiap sinyal. Minimal 2 model setuju = sinyal terkirim.</p>
-    </div>
-    <div class="step-card">
-      <div class="num">3</div>
-      <h4>Quality Gate</h4>
-      <p>Confidence ≥ 65%, RR ≥ 1:1.5, validasi SL. Sinyal sampah langsung ditolak otomatis.</p>
-    </div>
-  </div>
-
-  <div class="paas-block">
-    <div class="pain">😤 FRUSTRASI</div>
-    <h3>Bosan Sinyal "Asal Bunyi" yang Bikin Kamu Loss?</h3>
-    <p>
-      Kamu ikut grup signal. Dapet 10 sinyal sehari. 8 loss. Adminnya hilang.
-      Adminnya ganti username. Ganti grup lagi. Siklus yang sama berulang.
-    </p>
-    <p>
-      <strong>Kok mau terus?</strong>
-    </p>
-    <div class="solution">
-      <strong>✓ Solusi:</strong> 11 engine analisa + 3 AI model yang diverifikasi publik.
-      Transparansi total. Bukan grup signal abal-abal — ini sistem kuantitatif yang bisa Anda audit sendiri.<br><br>
-      <strong>Coba gratis sekarang.</strong> Buktikan sendiri.
-      <div style="margin-top:12px">
-        <a class="btn-primary" href="https://t.me/berkahkaryaforexbotbot" target="_blank">
-          🚀 Mulai Gratis
-        </a>
+  <!-- Frustration PAAS -->
+  <div class="rounded-xl p-6" style="background:linear-gradient(135deg, rgba(127,29,29,0.1), rgba(127,29,29,0.04));border:1px solid rgba(248,113,113,0.1)">
+    <div class="flex items-start gap-3">
+      <span class="text-lg mt-0.5">😤</span>
+      <div>
+        <div class="text-xs font-bold text-red-400 mb-1 tracking-wider">FRUSTRATED?</div>
+        <h3 class="text-base font-bold text-white mb-2">Tired of \"Random\" Signals That Keep Losing?</h3>
+        <p class="text-sm text-slate-400 mb-3">You join a signal group. Get 10 signals a day. 8 are losses. Admin disappears. Same cycle repeats.</p>
+        <div class="pl-3 border-l-2 border-emerald-400/50">
+          <p class="text-sm text-slate-300"><span class="text-emerald-400 font-bold">✓ Solution:</span> 11 quantitative engines + 3 AI models. Publicly verifiable. Not a random group — this is an auditable system. <strong class="text-white">Try free. Prove it yourself.</strong></p>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 <!-- ==================== PAGE: BACKTEST ==================== -->
-<div class="page" id="page-backtest" style="display:none">
-  <h2>📊 Backtest Results</h2>
-  <div class="desc">
-    Hasil backtest 3 bulan engine Vilona — transparan, bisa diverifikasi, 
-    tanpa cherry-picking.
-  </div>
+<div class="page" id="page-backtest">
+  <h2 class="text-2xl font-extrabold text-white mb-2">📊 Backtest Results</h2>
+  <p class="text-sm text-slate-400 mb-6">3-month engine backtest — transparent, no cherry-picking.</p>
 
-  <!-- Main Backtest Hero -->
-  <div class="hero" style="margin-bottom:24px" id="bt-hero-section">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-      <div>
-        <h2 style="font-size:28px;margin-bottom:4px">
-          <span class="highlight" id="bt-hero-symbol">XAUUSD</span>
-        </h2>
-        <div style="color:var(--text3);font-size:13px" id="bt-hero-period">Loading...</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:36px;font-weight:900;color:var(--accent)" id="bt-hero-wr">0%</div>
-        <div style="color:var(--text3);font-size:12px">Win Rate</div>
+  <!-- Equity Curve Placeholder -->
+  <div class="kpi-card mb-5">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-bold text-white">Equity Curve</h3>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="text-slate-500 font-mono" id="bt-hero-period">Loading...</span>
+        <span class="text-blue-400 font-mono font-bold text-lg" id="bt-hero-wr">0%</span>
       </div>
     </div>
-    <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
-      <div class="stat-card">
-        <div class="value" id="bt-total">0</div>
-        <div class="label">Total Signals</div>
-      </div>
-      <div class="stat-card">
-        <div class="value green" id="bt-wins">0</div>
-        <div class="label">Wins</div>
-      </div>
-      <div class="stat-card">
-        <div class="value red" id="bt-losses">0</div>
-        <div class="label">Losses</div>
-      </div>
-      <div class="stat-card">
-        <div class="value blue" id="bt-pips">0</div>
-        <div class="label">Total Pips</div>
-      </div>
-    </div>
-    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-top:12px">
-      <div class="stat-card">
-        <div class="value" id="bt-avgwin">0</div>
-        <div class="label">Avg Win (pips)</div>
-      </div>
-      <div class="stat-card">
-        <div class="value red" id="bt-avgloss">0</div>
-        <div class="label">Avg Loss (pips)</div>
-      </div>
-      <div class="stat-card">
-        <div class="value" id="bt-profitfactor">0</div>
-        <div class="label">Profit Factor</div>
+    <!-- Mock chart -->
+    <div class="h-48 rounded-lg flex items-end gap-1 px-2 pt-4" style="background:rgba(255,255,255,0.02)">
+      <div class="flex-1 flex flex-col justify-end gap-0.5">
+        <div style="height:30%" class="w-full rounded-t bg-emerald-400/20"></div>
+        <div style="height:45%" class="w-full rounded-t bg-emerald-400/30"></div>
+        <div style="height:35%" class="w-full rounded-t bg-red-400/20"></div>
+        <div style="height:55%" class="w-full rounded-t bg-emerald-400/30"></div>
+        <div style="height:40%" class="w-full rounded-t bg-red-400/20"></div>
+        <div style="height:60%" class="w-full rounded-t bg-emerald-400/40"></div>
+        <div style="height:50%" class="w-full rounded-t bg-emerald-400/30"></div>
+        <div style="height:65%" class="w-full rounded-t bg-emerald-400/40"></div>
+        <div style="height:70%" class="w-full rounded-t bg-emerald-400/50"></div>
+        <div style="height:55%" class="w-full rounded-t bg-emerald-400/30"></div>
+        <div style="height:60%" class="w-full rounded-t bg-emerald-400/40"></div>
+        <div style="height:80%" class="w-full rounded-t bg-emerald-400/60"></div>
+        <div style="height:75%" class="w-full rounded-t bg-emerald-400/50"></div>
+        <div style="height:65%" class="w-full rounded-t bg-emerald-400/40"></div>
+        <div style="height:85%" class="w-full rounded-t bg-emerald-400/60"></div>
+        <div style="height:72%" class="w-full rounded-t bg-emerald-400/50"></div>
+        <div style="height:90%" class="w-full rounded-t bg-emerald-400/70"></div>
+        <div style="height:78%" class="w-full rounded-t bg-emerald-400/50"></div>
+        <div style="height:82%" class="w-full rounded-t bg-emerald-400/60"></div>
+        <div style="height:95%" class="w-full rounded-t bg-emerald-400/70"></div>
       </div>
     </div>
   </div>
 
-  <!-- Engine Comparison -->
-  <div class="trans-card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:24px">
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">⚙️ Per-Engine Performance</h3>
-    <div id="bt-engines">
-      <div class="empty-state">Loading engine data...</div>
+  <!-- Main Backtest Stats -->
+  <div class="grid grid-cols-4 gap-4 mb-5">
+    <div class="kpi-card text-center">
+      <div class="text-2xl font-mono font-bold text-white" id="bt-total">0</div>
+      <div class="text-xs text-slate-500 mt-1">Total Signals</div>
+    </div>
+    <div class="kpi-card text-center">
+      <div class="text-2xl font-mono font-bold text-emerald-400" id="bt-wins">0</div>
+      <div class="text-xs text-slate-500 mt-1">Wins</div>
+    </div>
+    <div class="kpi-card text-center">
+      <div class="text-2xl font-mono font-bold text-red-400" id="bt-losses">0</div>
+      <div class="text-xs text-slate-500 mt-1">Losses</div>
+    </div>
+    <div class="kpi-card text-center">
+      <div class="text-2xl font-mono font-bold text-cyan-400" id="bt-pips">0</div>
+      <div class="text-xs text-slate-500 mt-1">Total Pips</div>
     </div>
   </div>
 
-  <!-- Strategy Comparison Grid -->
-  <div class="trans-card" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:24px">
-    <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">📐 Strategy Comparison (SL/TP Variations)</h3>
-    <div id="bt-grid">
-      <div class="empty-state">Loading strategy grid...</div>
+  <!-- Metric Pills -->
+  <div class="flex flex-wrap gap-3 mb-6">
+    <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
+      <span class="text-xs text-slate-500">Avg Win</span>
+      <span class="text-sm font-mono font-bold text-emerald-400" id="bt-avgwin">0</span>
+      <span class="text-xs text-slate-600">pips</span>
+    </div>
+    <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
+      <span class="text-xs text-slate-500">Avg Loss</span>
+      <span class="text-sm font-mono font-bold text-red-400" id="bt-avgloss">0</span>
+      <span class="text-xs text-slate-600">pips</span>
+    </div>
+    <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
+      <span class="text-xs text-slate-500">Profit Factor</span>
+      <span class="text-sm font-mono font-bold text-white" id="bt-profitfactor">0</span>
+    </div>
+    <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
+      <span class="text-xs text-slate-500">Max DD</span>
+      <span class="text-sm font-mono font-bold text-red-400">-3603.5</span>
+      <span class="text-xs text-slate-600">pips</span>
+    </div>
+    <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
+      <span class="text-xs text-slate-500">Sharpe</span>
+      <span class="text-sm font-mono font-bold text-white">0.42</span>
+    </div>
+  </div>
+
+  <!-- Monthly Heatmap (GitHub-style) -->
+  <div class="kpi-card mb-5">
+    <h3 class="text-sm font-bold text-white mb-4">📅 Performance Heatmap (Last 90 Days)</h3>
+    <div class="flex gap-1 overflow-x-auto pb-2">
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] text-slate-600 h-4">Mon</span>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell green"></div>
+        <div class="heatmap-cell red-2"></div>
+        <div class="heatmap-cell green-2"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell red"></div>
+        <div class="heatmap-cell green-3"></div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] text-slate-600 h-4">Tue</span>
+        <div class="heatmap-cell green-2"></div>
+        <div class="heatmap-cell red"></div>
+        <div class="heatmap-cell green"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell red-3"></div>
+        <div class="heatmap-cell green-2"></div>
+        <div class="heatmap-cell red-2"></div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] text-slate-600 h-4">Wed</span>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell green-2"></div>
+        <div class="heatmap-cell red"></div>
+        <div class="heatmap-cell green-3"></div>
+        <div class="heatmap-cell red-2"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell green"></div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] text-slate-600 h-4">Thu</span>
+        <div class="heatmap-cell red"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell green-2"></div>
+        <div class="heatmap-cell red-2"></div>
+        <div class="heatmap-cell green"></div>
+        <div class="heatmap-cell green-3"></div>
+        <div class="heatmap-cell empty"></div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] text-slate-600 h-4">Fri</span>
+        <div class="heatmap-cell green"></div>
+        <div class="heatmap-cell red-2"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell green-2"></div>
+        <div class="heatmap-cell red"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell green-2"></div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] text-slate-600 h-4">Sat</span>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell red"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell green-2"></div>
+        <div class="heatmap-cell red-2"></div>
+        <div class="heatmap-cell empty"></div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <span class="text-[10px] text-slate-600 h-4">Sun</span>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell green"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell empty"></div>
+        <div class="heatmap-cell red"></div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 mt-3 text-[10px] text-slate-600">
+      <span>Less</span>
+      <div class="heatmap-cell empty"></div>
+      <div class="heatmap-cell green"></div>
+      <div class="heatmap-cell green-2"></div>
+      <div class="heatmap-cell green-3"></div>
+      <div class="heatmap-cell green-4"></div>
+      <span>More</span>
+      <span class="ml-4">● Red = Loss</span>
+    </div>
+  </div>
+
+  <!-- Per-Engine Performance -->
+  <div class="kpi-card mb-5">
+    <h3 class="text-sm font-bold text-white mb-4">⚙️ Per-Engine Performance</h3>
+    <div id="bt-engines" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="text-sm text-slate-500">Loading...</div>
+    </div>
+  </div>
+
+  <!-- Strategy Comparison -->
+  <div class="kpi-card">
+    <h3 class="text-sm font-bold text-white mb-4">📐 Strategy Comparison (SL/TP Variations)</h3>
+    <div id="bt-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="text-sm text-slate-500">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== PAGE: CHARTS ==================== -->
+<div class="page" id="page-charts">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-2xl font-extrabold text-white">📈 TradingView Charts</h2>
+      <p class="text-sm text-slate-400 mt-1">Live chart + heatmap + news + economic calendar</p>
+    </div>
+  </div>
+
+  <!-- XAUUSD Advanced Chart -->
+  <div class="tv-wrap mb-5">
+    <div class="tv-container" style="height:520px;width:100%"></div>
+  </div>
+
+  <!-- Heatmap + News row -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+    <div class="tv-wrap">
+      <div class="tv-container" style="height:420px;width:100%"></div>
+    </div>
+    <div class="tv-wrap">
+      <div class="tv-container" style="height:420px;width:100%"></div>
+    </div>
+  </div>
+
+  <!-- Economic Calendar -->
+  <div class="tv-wrap">
+    <div class="tv-container" style="height:480px;width:100%"></div>
+  </div>
+</div>
+
+<!-- ═══════ FOOTER: TRUST BADGES + PAYMENT + BROKER ═══════ -->
+<div style="border-top:1px solid rgba(255,255,255,0.05);margin-top:48px;padding:32px 0 16px">
+
+  <!-- Trust Badges -->
+  <div class="flex flex-wrap justify-center gap-3 mb-6">
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🛡️</span><div><div class="font-semibold text-slate-300">SSL Secure</div><div class="text-slate-600">256-bit encrypted</div></div></div>
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">✅</span><div><div class="font-semibold text-slate-300">Verified System</div><div class="text-slate-600">Auditable signals</div></div></div>
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🔒</span><div><div class="font-semibold text-slate-300">Data Protection</div><div class="text-slate-600">GDPR compliant</div></div></div>
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🤖</span><div><div class="font-semibold text-slate-300">AI Powered</div><div class="text-slate-600">DeepSeek + GPT-4o + Claude</div></div></div>
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">📊</span><div><div class="font-semibold text-slate-300">Real-Time Data</div><div class="text-slate-600">TradingView integrated</div></div></div>
+  </div>
+
+  <!-- Broker -->
+  <div class="text-center mb-6">
+    <div class="text-xs text-slate-600 mb-2">🔗 Broker Partner</div>
+    <a href="https://one.exnessonelink.com/a/xut5pgx9w8" target="_blank" rel="noopener" class="inline-flex items-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-6 py-3 transition-all">
+      <img src="https://media.licdn.com/dms/image/v2/D5612AQFFXphJEMLiMQ/article-cover_image-shrink_600_2000/article-cover_image-shrink_600_2000/0/1713941573098?e=2147483647&v=beta&t=YvSHoCSIAkZ8d3L6egReM3jYpCJ7_wps30IVxQv78oc" alt="Exness" style="height:28px">
+    </a>
+  </div>
+
+  <!-- Payment Methods -->
+  <div class="text-center mb-6">
+    <div class="text-xs text-slate-600 mb-3">💚 Supported Payment Methods</div>
+    <div class="flex flex-wrap justify-center gap-2">
+      <span class="bg-white/5 border border-white/5 rounded-md px-3 py-1.5 text-sm font-bold" style="color:#4ade80">QRIS</span>
+      <span class="bg-white/5 border border-white/5 rounded-md px-3 py-1.5 text-sm font-bold" style="color:#0066ae">BCA</span>
+      <span class="bg-white/5 border border-white/5 rounded-md px-3 py-1.5 text-sm font-bold" style="color:#00529c">Mandiri</span>
+      <span class="bg-white/5 border border-white/5 rounded-md px-3 py-1.5 text-sm font-bold" style="color:#00529c">BRI</span>
+      <span class="bg-white/5 border border-white/5 rounded-md px-3 py-1.5 text-sm font-bold" style="color:#f5811f">BNI</span>
+      <span class="bg-white/5 border border-white/5 rounded-md px-3 py-1.5 text-sm font-bold" style="color:#00aed6">GoPay</span>
+      <span class="bg-white/5 border border-white/5 rounded-md px-3 py-1.5 text-sm font-bold" style="color:#8a2be2">OVO</span>
+      <span class="bg-white/5 border border-white/5 rounded-md px-3 py-1.5 text-sm font-bold" style="color:#1479e8">DANA</span>
+    </div>
+  </div>
+
+  <!-- Copyright -->
+  <div class="text-center">
+    <div class="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold mb-2">
+      <span class="w-4 h-4 rounded-full bg-emerald-400 flex items-center justify-center text-[8px] font-black text-black">✓</span> Verified by Vilona AI
+    </div>
+    <div class="text-xs text-slate-600 leading-relaxed">
+      Vilona TradeFX © 2026 · AI-Driven Trading Signals ·
+      <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 hover:text-blue-300">@berkahkaryaforexbotbot</a><br>
+      DYOR · Not Financial Advice · Past Performance Not Indicative of Future Results
     </div>
   </div>
 </div>
@@ -923,75 +682,67 @@ body{
 </div><!-- /main -->
 
 <script>
-/* ═══════════════════════════════════════
-   NAVIGATION
-   ═══════════════════════════════════════ */
+/* ═══ NAVIGATION ═══ */
 const pages = {
   'home': 'page-home',
   'signals': 'page-signals',
   'transparency': 'page-transparency',
   'how': 'page-how',
-  'backtest': 'page-backtest'
+  'backtest': 'page-backtest',
+  'charts': 'page-charts'
 };
 
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', function(e) {
     e.preventDefault();
-    const page = this.dataset.page;
-    switchPage(page);
+    switchPage(this.dataset.page);
   });
 });
 
 function switchPage(page) {
-  // Update nav
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
-  // Show page
   Object.values(pages).forEach(id => document.getElementById(id)?.classList.remove('active'));
   const target = document.getElementById(pages[page]);
   if (target) target.classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
+  if (page === 'charts') loadTradingViewWidgets();
 }
 
-/* ═══════════════════════════════════════
-   CLOCK
-   ═══════════════════════════════════════ */
+/* ═══ CLOCK ═══ */
 function updateClock() {
   const now = new Date();
-  // WIB = UTC+7
   const wib = new Date(now.getTime() + 7*3600000);
-  document.getElementById('live-clock').textContent = 
-    wib.toISOString().slice(11,16);
+  const t = wib.toISOString().slice(11,16);
+  document.getElementById('live-clock').textContent = t;
+  const c2 = document.getElementById('live-clock2');
+  if (c2) c2.textContent = t;
 }
 updateClock();
 setInterval(updateClock, 10000);
 
-/* ═══════════════════════════════════════
-   FORMATTERS
-   ═══════════════════════════════════════ */
+/* ═══ FORMATTERS ═══ */
 function fmtRupiah(n) {
   if (n === 0) return 'Rp 0';
   return 'Rp ' + Math.round(n).toLocaleString('id-ID');
 }
-
 function fmtPip(n) {
   n = parseFloat(n) || 0;
   return (n > 0 ? '+' : '') + n.toFixed(1);
 }
 
-/* ═══════════════════════════════════════
-   LOAD DATA
-   ═══════════════════════════════════════ */
+/* ═══ LOAD ALL DATA ═══ */
 async function loadAll() {
   try {
-    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes] = await Promise.all([
+    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes] = await Promise.all([
       fetch('/api/feed').then(r => r.json()),
       fetch('/api/trade_stats').then(r => r.json()),
       fetch('/api/user_activity').then(r => r.json()),
       fetch('/api/transparency').then(r => r.json()),
       fetch('/api/backtest').then(r => r.json()),
       fetch('/api/donors').then(r => r.json()),
-      fetch('/api/daily_analyze').then(r => r.json())
+      fetch('/api/daily_analyze').then(r => r.json()),
+      fetch('/api/daily_recap').then(r => r.json())
     ]);
 
     const signals = feed.signals || [];
@@ -1001,8 +752,8 @@ async function loadAll() {
     const backtest = backtestRes || {};
     const donors = donorsRes.donors || [];
     const daily = dailyRes || {};
+    const recap = recapRes || {};
 
-    // ── Stats Overview (Home) ──
     const total = ts.total || 0;
     const wins = ts.wins || 0;
     const losses = ts.losses || 0;
@@ -1018,11 +769,10 @@ async function loadAll() {
     document.getElementById('stat-total').textContent = trans.signals_total || total;
     document.getElementById('stat-members').textContent = trans.total_members || 0;
     document.getElementById('stat-donors').textContent = trans.total_donors || 0;
-    document.getElementById('stat-today').textContent = trans.active_users_today || 0;
     document.getElementById('sig-count').textContent = (trans.signals_total || 0) > 99 ? '99+' : (trans.signals_total || 0);
 
-    // ── Signals Page ──
-    const sigStats = [0, 0, 0]; // total, tp, sl
+    // Signal stats
+    const sigStats = [0, 0, 0];
     signals.forEach(s => {
       if (s.status === 'tp') { sigStats[1]++; sigStats[0]++; }
       else if (s.status === 'sl') { sigStats[2]++; sigStats[0]++; }
@@ -1035,10 +785,8 @@ async function loadAll() {
     renderSignals(signals);
     renderUserActivity(userSigs);
 
-    // ── Transparency Page ──
-    const serverCost = trans.server_cost_monthly || 450;
+    // Transparency
     const costIdr = trans.server_cost_idr || (450 * 16350);
-    const revenue = trans.total_revenue_idr || 0;
     const donationTotal = trans.donation_total || 0;
     const pct = Math.min(100, (donationTotal / (costIdr || 1)) * 100);
     const shortfall = Math.max(0, costIdr - donationTotal);
@@ -1073,53 +821,48 @@ async function loadAll() {
     const analysesEl = document.getElementById('comm-analyses');
     if (analysesEl) analysesEl.textContent = daily.total_all_time || 0;
 
-    // ── Donor Wall ──
     renderDonorWall(donors);
-
-    // ── Daily Analyze Stats ──
     renderDailyAnalyze(daily, trans);
-
-    // ── Backtest Page ──
     renderBacktest(backtest);
+    renderDailyRecap(recap);
 
   } catch(e) {
     console.error('Load error:', e);
   }
 }
 
+/* ═══ RENDER SIGNALS ═══ */
 function renderSignals(signals) {
   const el = document.getElementById('signal-feed');
   if (!signals.length) {
-    el.innerHTML = '<div class="empty-state">🔍 Belum ada sinyal. Auto-scanner aktif 07:00-23:00 WIB. Coba /analyze di bot!</div>';
+    el.innerHTML = '<div class="text-center py-12 text-sm text-slate-500">🔍 No signals yet. Auto-scanner active 07:00-23:00 WIB. Try /analyze in bot!</div>';
     return;
   }
   el.innerHTML = signals.slice().reverse().slice(0, 30).map(s => {
     const isBuy = s.direction === 'BUY';
-    const cls = isBuy ? 'signal-card' : 'signal-card sell';
     const ts = (s.timestamp || '').replace('T', ' ').slice(0, 16);
-    const engines = s.engines || {};
-    const engineKeys = Object.keys(engines);
-    const source = s.source === 'user-generate'
-      ? `👤 Generated by @${s.source_user || 'anon'}`
-      : '🤖 Vilona AI Auto-Scanner';
     const outcome = s.status !== 'pending'
-      ? `<span style="color:${s.status==='tp'?'var(--accent)':'var(--danger)'}">${s.status.toUpperCase()}</span>`
-      : '<span style="color:var(--text3)">PENDING</span>';
-
-    return `<div class="${cls}">
-      <div class="top">
-        <span class="action ${isBuy ? 'buy' : 'sell'}">${isBuy ? '🟢' : '🔴'} ${s.direction} ${s.symbol}</span>
-        <span class="sym">${outcome} · ${ts}</span>
+      ? `<span class="${s.status==='tp'?'sig-tp':'sig-sl'} font-bold">${s.status.toUpperCase()}</span>`
+      : '<span class="text-slate-500">PENDING</span>';
+    const source = s.source === 'user-generate'
+      ? `👤 @${s.source_user || 'anon'}`
+      : '🤖 AI Auto-Scanner';
+    return `<div class="signal-item">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs font-bold px-2 py-0.5 rounded ${isBuy ? 'sig-buy' : 'sig-sell'}">${isBuy ? 'BUY' : 'SELL'}</span>
+          <span class="text-sm font-bold text-white">${s.symbol}</span>
+          <span class="text-xs text-slate-500">${outcome}</span>
+          <span class="text-xs text-slate-600 ml-auto">${ts}</span>
+        </div>
+        <div class="flex items-center gap-4 text-xs text-slate-400 font-mono">
+          <span>E: ${s.entry}</span>
+          <span>SL: ${s.sl}</span>
+          <span>TP: ${s.tp}</span>
+          <span class="text-slate-500">RR 1:${s.rr_ratio || '?'} · ${((s.confidence||0)*100).toFixed(0)}%</span>
+        </div>
+        <div class="text-[11px] text-slate-600 mt-0.5">${source}</div>
       </div>
-      <div class="prices">
-        <div>Entry: ${s.entry}</div>
-        <div>SL: ${s.sl}</div>
-        <div>TP: ${s.tp}</div>
-      </div>
-      <div class="meta">
-        RR 1:${s.rr_ratio || '?'} · Conf: ${((s.confidence||0)*100).toFixed(0)}% · Grade: ${s.grade || 'N/A'}
-      </div>
-      <div class="src">${source}</div>
     </div>`;
   }).join('');
 }
@@ -1127,49 +870,36 @@ function renderSignals(signals) {
 function renderUserActivity(signals) {
   const el = document.getElementById('user-activity-home');
   if (!signals.length) {
-    el.innerHTML = '<div class="empty-state">Belum ada user generate sinyal hari ini.</div>';
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No user signals today.</div>';
     return;
   }
   el.innerHTML = signals.slice().reverse().slice(0, 8).map(s => {
     const isBuy = s.direction === 'BUY';
-    const emoji = isBuy ? '🟢' : '🔴';
-    return `<div class="activity-item">
-      <span class="user">@${s.source_user || 'anon'}</span>
-      <span class="act" style="color:${isBuy?'var(--accent)':'var(--danger)'}">${emoji} ${s.direction} ${s.symbol}</span>
-      <span class="time">${(s.timestamp||'').slice(11,16)} WIB</span>
+    return `<div class="flex items-center justify-between py-2 border-b border-white/5 last:border-b-0 text-xs">
+      <div><span class="text-blue-400 font-semibold">@${s.source_user || 'anon'}</span> <span style="color:${isBuy?'#34d399':'#f87171'}">${isBuy?'🟢':'🔴'} ${s.direction} ${s.symbol}</span></div>
+      <span class="text-slate-600">${(s.timestamp||'').slice(11,16)}</span>
     </div>`;
   }).join('');
 }
 
-/* ═══════════════════════════════════════
-   DONOR WALL
-   ═══════════════════════════════════════ */
 function renderDonorWall(donors) {
   const el = document.getElementById('donor-wall');
   if (!donors || !donors.length) {
-    el.innerHTML = '<div class="empty-state">Belum ada donatur. Jadilah yang pertama 💚</div>';
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No donors yet. Be the first 💚</div>';
     return;
   }
-  // Sort by amount desc
-  donors.sort((a,b) => (b.amount || 0) - (a.amount || 0));
+  donors.sort((a,b) => (b.amount||0) - (a.amount||0));
   el.innerHTML = donors.map((d, i) => {
-    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '💚';
-    const dt = d.paid_at ? new Date(d.paid_at).toLocaleDateString('id-ID', {timeZone:'Asia/Jakarta'}) : '-';
-    return `<div class="activity-item" style="display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <span class="${medal === '💚' ? 'user' : ''}" style="font-size:16px">${medal} </span>
-        <span class="user">${d.display_name}</span>
-        <span style="color:var(--text3);font-size:11px;margin-left:8px">${dt}</span>
-      </div>
-      <div style="color:var(--accent);font-weight:700;font-family:var(--mono)">${fmtRupiah(d.amount)}</div>
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'💚';
+    const dt = d.paid_at ? new Date(d.paid_at).toLocaleDateString('id-ID',{timeZone:'Asia/Jakarta'}) : '-';
+    return `<div class="flex items-center justify-between py-2 border-b border-white/5 last:border-b-0 text-xs">
+      <div><span class="text-sm">${medal}</span> <span class="text-blue-400 font-semibold">${d.display_name}</span> <span class="text-slate-600">${dt}</span></div>
+      <span class="font-mono font-bold text-emerald-400">${fmtRupiah(d.amount)}</span>
     </div>`;
   }).join('');
-  el.innerHTML += '<div style="margin-top:12px;text-align:center;font-size:12px;color:var(--text3)">Terima kasih untuk semua pendukung! 🙏</div>';
+  el.innerHTML += '<div class="text-center text-[10px] text-slate-600 mt-3">🙏 Thank you supporters!</div>';
 }
 
-/* ═══════════════════════════════════════
-   DAILY ANALYZE STATS
-   ═══════════════════════════════════════ */
 function renderDailyAnalyze(daily, trans) {
   const el = document.getElementById('daily-analyze');
   const rows = daily.daily || [];
@@ -1177,37 +907,72 @@ function renderDailyAnalyze(daily, trans) {
   const today = daily.today || 0;
   const yesterday = daily.yesterday || 0;
 
-  let html = '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">';
-  html += `<div class="stat-card"><div class="value green">${today}</div><div class="label">Analisa Hari Ini</div></div>`;
-  html += `<div class="stat-card"><div class="value blue">${yesterday}</div><div class="label">Kemarin</div></div>`;
-  html += `<div class="stat-card"><div class="value">${total}</div><div class="label">Total All-Time</div></div>`;
+  let html = '<div class="space-y-1 text-xs text-center mb-3">';
+  html += `<div class="flex justify-between"><span class="text-slate-400">Today</span><span class="font-mono font-bold text-emerald-400">${today}</span></div>`;
+  html += `<div class="flex justify-between"><span class="text-slate-400">Yesterday</span><span class="font-mono font-bold text-blue-400">${yesterday}</span></div>`;
+  html += `<div class="flex justify-between pt-1 border-t border-white/5"><span class="text-slate-400">All-Time</span><span class="font-mono font-bold text-white">${total}</span></div>`;
   html += '</div>';
-
   if (rows.length) {
-    html += '<div style="margin-top:12px"><table style="width:100%;border-collapse:collapse;font-size:13px">';
-    html += '<tr style="color:var(--text3);border-bottom:1px solid var(--border)"><th style="padding:6px 8px;text-align:left">Tanggal</th><th style="padding:6px 8px;text-align:right">Requests</th></tr>';
+    html += '<div class="text-[10px] text-slate-600 space-y-0.5">';
     rows.slice(0, 7).forEach(r => {
-      html += `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px">${r.date}</td><td style="padding:6px 8px;text-align:right;font-weight:600">${r.requests}</td></tr>`;
+      html += `<div class="flex justify-between"><span>${r.date}</span><span class="font-mono">${r.requests}</span></div>`;
     });
-    html += '</table></div>';
+    html += '</div>';
   } else {
-    html += '<div class="empty-state">Belum ada data analisa. Coba /analyze di bot!</div>';
+    html += '<div class="text-xs text-slate-500 text-center">No data yet. Try /analyze!</div>';
   }
   el.innerHTML = html;
 }
 
-/* ═══════════════════════════════════════
-   BACKTEST
-   ═══════════════════════════════════════ */
+function renderDailyRecap(recap) {
+  const el = document.getElementById('daily-recap-content');
+  if (!recap || !recap.trades || !recap.trades.length) {
+    el.innerHTML = '<div class="grid grid-cols-3 gap-3 mb-3">' +
+      '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-slate-400">0</div><div class="text-[10px] text-slate-600">Today</div></div>' +
+      '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-emerald-400">0</div><div class="text-[10px] text-slate-600">Wins</div></div>' +
+      '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-red-400">0</div><div class="text-[10px] text-slate-600">Losses</div></div>' +
+      '</div><div class="text-xs text-slate-500 text-center">No trading today. Scanner active 07:00-23:00 WIB.</div>';
+    return;
+  }
+  const total = recap.total_signals || 0;
+  const wins = recap.wins || 0;
+  const losses = recap.losses || 0;
+  const wr = recap.win_rate || 0;
+  const pips = recap.total_pips || 0;
+  const micro = recap.micro_profit_idr || 0;
+  const trades = recap.trades || [];
+
+  let html = '<div class="grid grid-cols-4 gap-3 mb-3">';
+  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-white">${total}</div><div class="text-[10px] text-slate-600">Signals</div></div>`;
+  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-emerald-400">${wins}</div><div class="text-[10px] text-slate-600">Wins (${wr}%)</div></div>`;
+  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-red-400">${losses}</div><div class="text-[10px] text-slate-600">Losses</div></div>`;
+  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold ${pips>=0?'text-emerald-400':'text-red-400'}">${fmtPip(pips)}</div><div class="text-[10px] text-slate-600">Pips</div></div>`;
+  html += '</div>';
+  if (micro > 0) html += `<div class="text-xs text-center text-slate-400 mb-2">💰 Profit: ${fmtRupiah(micro)}</div>`;
+  if (trades.length) {
+    html += '<div class="text-xs space-y-1">';
+    trades.slice().reverse().slice(0, 5).forEach(t => {
+      const isWin = t.outcome === 'TP_HIT';
+      const pipStr = t.pips ? (t.pips >= 0 ? '+' : '') + t.pips.toFixed(1) : '0';
+      const time = (t.open_time || '').slice(11, 16);
+      html += `<div class="flex justify-between items-center py-1 border-b border-white/5 last:border-b-0">
+        <div><span>${isWin?'🟢':'🔴'}</span> <span style="color:${isWin?'#34d399':'#f87171'}" class="font-semibold">${t.action||'?'}</span> ${t.symbol||''} <span class="text-slate-600">${time}</span></div>
+        <span class="font-mono" style="color:${isWin?'#34d399':'#f87171'}">${pipStr}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  el.innerHTML = html;
+}
+
+/* ═══ RENDER BACKTEST ═══ */
 function renderBacktest(bt) {
   const xauusd = bt.xauusd;
   if (!xauusd) {
     document.getElementById('bt-hero-wr').textContent = 'N/A';
-    document.getElementById('bt-hero-period').textContent = 'No backtest data';
+    document.getElementById('bt-hero-period').textContent = 'No data';
     return;
   }
-
-  document.getElementById('bt-hero-symbol').textContent = xauusd.symbol || 'XAUUSD';
   document.getElementById('bt-hero-period').textContent = xauusd.period || '—';
   document.getElementById('bt-hero-wr').textContent = (xauusd.winrate || 0) + '%';
   document.getElementById('bt-total').textContent = xauusd.trades || 0;
@@ -1219,52 +984,70 @@ function renderBacktest(bt) {
   const pf = xauusd.trades > 0 ? ((xauusd.wins * xauusd.avg_win) / ((xauusd.losses * xauusd.avg_loss) || 1)).toFixed(2) : 0;
   document.getElementById('bt-profitfactor').textContent = pf;
 
-  // Per-engine breakdown
   const pe = bt.per_engine;
   const engineEl = document.getElementById('bt-engines');
   if (pe && pe.engines) {
     const engines = pe.engines || {};
-    const keys = Object.keys(engines);
-    engineEl.innerHTML = '<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">';
-    keys.forEach(k => {
+    engineEl.innerHTML = Object.keys(engines).map(k => {
       const e = engines[k];
       const er = e.trades > 0 ? Math.round((e.wins / (e.trades || 1)) * 100) : 0;
-      engineEl.innerHTML += `<div class="stat-card" style="padding:16px">
-        <div style="font-weight:700;font-size:14px;color:var(--accent2);margin-bottom:8px;text-transform:uppercase">${k}</div>
-        <div class="value ${er >= 40 ? 'green' : 'red'}" style="font-size:20px">${er}%</div>
-        <div class="label">Win Rate · ${e.trades} trades</div>
+      return `<div class="text-center bg-white/5 rounded-lg p-3 border border-white/5">
+        <div class="text-xs font-bold text-blue-400 uppercase mb-2">${k}</div>
+        <div class="text-lg font-mono font-bold ${er>=40?'text-emerald-400':'text-red-400'}">${er}%</div>
+        <div class="text-[10px] text-slate-600">${e.trades} trades</div>
       </div>`;
-    });
-    engineEl.innerHTML += '</div>';
+    }).join('');
   } else {
-    engineEl.innerHTML = '<div class="empty-state">Engine breakdown not available</div>';
+    engineEl.innerHTML = '<div class="text-sm text-slate-500 col-span-4 text-center py-4">No engine data</div>';
   }
 
-  // Strategy comparison grid
   const grid = bt.grid || [];
   const gridEl = document.getElementById('bt-grid');
   if (grid.length) {
-    gridEl.innerHTML = '<div class="stats-grid" style="grid-template-columns:repeat(2,1fr)">';
-    grid.slice(0, 8).forEach(g => {
+    gridEl.innerHTML = grid.slice(0, 8).map(g => {
       const gwr = g.winrate || 0;
       const gpips = g.total_pips || 0;
-      gridEl.innerHTML += `<div class="stat-card" style="padding:16px;text-align:left">
-        <div style="font-weight:700;font-size:13px;color:var(--accent2);margin-bottom:8px">${g.label}</div>
-        <div class="trans-row" style="font-size:12px;padding:4px 0"><span class="lbl">WR</span><span class="val ${gwr >= 40 ? 'green' : 'red'}">${gwr}%</span></div>
-        <div class="trans-row" style="font-size:12px;padding:4px 0"><span class="lbl">Pips</span><span class="val ${gpips >= 0 ? 'green' : 'red'}">${fmtPip(gpips)}</span></div>
-        <div class="trans-row" style="font-size:12px;padding:4px 0"><span class="lbl">W/L</span><span class="val">${g.wins||0}W/${g.losses||0}L</span></div>
-        <div class="trans-row" style="font-size:12px;padding:4px 0"><span class="lbl">Trades</span><span class="val">${g.signals||g.trades||0}</span></div>
+      return `<div class="bg-white/5 rounded-lg p-4 border border-white/5">
+        <div class="text-xs font-bold text-blue-400 mb-3">${g.label}</div>
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between"><span class="text-slate-500">WR</span><span class="font-mono font-bold ${gwr>=40?'text-emerald-400':'text-red-400'}">${gwr}%</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Pips</span><span class="font-mono font-bold ${gpips>=0?'text-emerald-400':'text-red-400'}">${fmtPip(gpips)}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">W/L</span><span class="font-mono">${g.wins||0}W / ${g.losses||0}L</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Trades</span><span class="font-mono">${g.signals||g.trades||0}</span></div>
+        </div>
       </div>`;
-    });
-    gridEl.innerHTML += '</div>';
+    }).join('');
   } else {
-    gridEl.innerHTML = '<div class="empty-state">Strategy comparison data not available</div>';
+    gridEl.innerHTML = '<div class="text-sm text-slate-500 col-span-2 text-center py-4">No grid data</div>';
   }
 }
 
-// Initial load
+/* ═══ TRADINGVIEW WIDGETS ═══ */
+let _tvLoaded = false;
+function loadTradingViewWidgets() {
+  if (_tvLoaded) return;
+  _tvLoaded = true;
+
+  const containers = [
+    { sel: '#tv-advanced-chart .tv-container', src: 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js', cfg: { "allow_symbol_change":true,"hide_side_toolbar":true,"interval":"D","locale":"en","style":"1","symbol":"OANDA:XAUUSD","theme":"dark","timezone":"Etc/UTC","backgroundColor":"#151924","gridColor":"rgba(255,255,255,0.04)","autosize":true } },
+    { sel: '#tv-heatmap .tv-container', src: 'https://s3.tradingview.com/external-embedding/embed-widget-stock-heatmap.js', cfg: { "dataSource":"SPX500","blockSize":"market_cap_basic","blockColor":"change","grouping":"sector","locale":"en","colorTheme":"dark","exchanges":[],"hasTopBar":false,"isZoomEnabled":true,"hasSymbolTooltip":true,"isMonoSize":false,"width":"100%","height":"100%" } },
+    { sel: '#tv-news .tv-container', src: 'https://s3.tradingview.com/external-embedding/embed-widget-timeline.js', cfg: { "displayMode":"regular","feedMode":"all_symbols","colorTheme":"dark","isTransparent":false,"locale":"en","width":"100%","height":"100%" } },
+    { sel: '#tv-calendar .tv-container', src: 'https://s3.tradingview.com/external-embedding/embed-widget-events.js', cfg: { "colorTheme":"dark","isTransparent":false,"locale":"en","importanceFilter":"-1,0,1","width":"100%","height":"100%" } },
+  ];
+  containers.forEach(c => {
+    const box = document.querySelector(c.sel);
+    if (box && !box.querySelector('script')) {
+      const s = document.createElement('script');
+      s.src = c.src;
+      s.async = true;
+      s.innerHTML = JSON.stringify(c.cfg);
+      box.appendChild(s);
+    }
+  });
+}
+
+// Init
 loadAll();
-// Auto-refresh
 setInterval(loadAll, 30000);
 </script>
 </body>

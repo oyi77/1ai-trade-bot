@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from tradebot.brokers.base import Broker
+from tradebot.brokers import BaseBroker as Broker
 from tradebot.config.settings import settings
 from tradebot.events import bus as event_bus
 from tradebot.logging import get_logger

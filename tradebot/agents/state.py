@@ -14,6 +14,7 @@ class AgentState(TypedDict, total=False):
     """Shared state passed between graph nodes."""
 
     # Market state
+    platform: str  # "stockity", "deriv", "mt5"
     symbol: str
     last_price: float
     last_tick_time: str
@@ -37,6 +38,8 @@ class AgentState(TypedDict, total=False):
     # Execution
     trade_id: str
     trade_status: str
+    trade_platform: str
+    trade_error: str
     trade_result: dict[str, Any]  # win/loss, payout
 
     # LLM

@@ -33,7 +33,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from tradebot.brokers.base import Broker
+from tradebot.brokers.base import BaseBroker as Broker
 from tradebot.brokers.mt5.broker import MT5Broker
 from tradebot.config import settings
 from tradebot.models import Signal

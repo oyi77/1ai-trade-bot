@@ -99,6 +99,11 @@ class SignalHandler(BaseHTTPRequestHandler):
 
     def _json(self, data, code=200):
         body = json.dumps(data).encode()
+        # JSON-safe: prevent Infinity/NaN breaking JavaScript
+        body_str = body.decode()
+        if 'Infinity' in body_str or 'NaN' in body_str:
+            body_str = body_str.replace(': Infinity', ': null').replace(': -Infinity', ': null').replace(': NaN', ': null')
+            body = body_str.encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -202,7 +207,6 @@ class SignalHandler(BaseHTTPRequestHandler):
         elif path == "" or path == "/":
             # Serve new dashboard HTML (proxied from dashboard server on 8768)
             try:
-                import urllib.request
                 req = urllib.request.Request("http://127.0.0.1:8768/")
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     content = resp.read().decode("utf-8")
@@ -533,7 +537,29 @@ class SignalHandler(BaseHTTPRequestHandler):
                 log.error(f"/api/create-payment error: {e}")
                 self._json({"error": str(e)}, 500)
         else:
-            self._json({"error": "not found"}, 404)
+            # Proxy to dashboard server for all unrecognized paths (API calls + static)
+            try:
+                proxy_path = path
+                if params:
+                    qs = "&".join(f"{k}={','.join(v)}" for k,v in params.items())
+                    proxy_path += "?" + qs
+                req = urllib.request.Request(f"http://127.0.0.1:8768{proxy_path}")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    content = resp.read()
+                self.send_response(resp.status)
+                self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.end_headers()
+                self.wfile.write(content)
+            except urllib.error.HTTPError as e:
+                self.send_response(e.code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(e.read())
+            except Exception as e:
+                self._json({"error": f"dashboard proxy: {e}"}, 502)
 
     def _forward_webhook(self, path):
         """Forward webhook calls to payment_webhook on port 8787."""

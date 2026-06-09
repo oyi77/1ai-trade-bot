@@ -1,7 +1,7 @@
 {
   "symbol": "XAUUSD",
-  "price": 4241.4,
-  "timestamp": "2026-06-10T05:48:19.870058",
+  "price": 4213.4,
+  "timestamp": "2026-06-10T06:50:24.994293",
   "timeframes": {
     "D1": {
       "verdict": "SELL",
@@ -28,7 +28,7 @@
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 22:00)"
+          "details": "Outside killzone (UTC 23:00)"
         },
         "smc": {
           "direction": "SELL",
@@ -42,36 +42,36 @@
         },
         "ultimate": {
           "direction": "BUY",
-          "confidence": 0.25,
-          "details": "Grade:CUKUP \ud83d\udfe1 score=6/24"
+          "confidence": 0.20833333333333334,
+          "details": "Grade:LEMAH \u26aa score=5/24"
         },
         "tv": {
           "direction": "SELL",
           "confidence": 0.56,
-          "details": "RSI 31.6 (bullish bias) | MACD bearish (-) | ADX 45 strong downtrend | BB lower band bounce (oversold) | TV-score:22"
+          "details": "RSI 30.2 (bullish bias) | MACD bearish (-) | ADX 47 strong downtrend | BB lower band bounce (oversold) | TV-score:22"
         }
       },
       "weight": 0.35,
       "macro": {
         "trend": "BEARISH",
         "strength": 1.0,
-        "ema200_dist": -6.16,
-        "rsi": 31.6,
-        "atr_pct": 1.06,
+        "ema200_dist": -6.8,
+        "rsi": 30.2,
+        "atr_pct": 1.12,
         "sma_cross": "BEARISH"
       }
     },
     "H4": {
       "verdict": "SELL",
-      "consensus_pct": 0.8,
-      "buy_count": 1,
+      "consensus_pct": 0.6666666666666666,
+      "buy_count": 2,
       "sell_count": 4,
-      "total": 5,
+      "total": 6,
       "engines": {
         "quant": {
-          "direction": "SELL",
-          "confidence": 0.441,
-          "details": "G:35% R:44%"
+          "direction": "BUY",
+          "confidence": 0.4479,
+          "details": "G:45% R:42%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -81,22 +81,22 @@
         "hermes": {
           "direction": "BUY",
           "confidence": 1.0,
-          "details": "Grade:A RR=1:31.9"
+          "details": "Grade:A RR=1:7.4"
         },
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 22:00)"
+          "details": "Outside killzone (UTC 23:00)"
         },
         "smc": {
           "direction": "SELL",
-          "confidence": 0.55,
-          "details": "Grade=BAGUS \ud83d\udd35 score=12"
+          "confidence": 0.75,
+          "details": "Grade=KUAT \ud83d\udfe2 score=16"
         },
         "trend": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no break"
+          "direction": "SELL",
+          "confidence": 0.85,
+          "details": "Grade=SANGAT KUAT \u2b50 score=10"
         },
         "ultimate": {
           "direction": "SELL",
@@ -106,30 +106,30 @@
         "tv": {
           "direction": "SELL",
           "confidence": 0.4,
-          "details": "RSI oversold | MACD bearish (-) | ADX 50 strong downtrend | BB lower band bounce (oversold) | TV-score:30"
+          "details": "RSI oversold | MACD bearish (-) | ADX 60 strong downtrend | BB lower band bounce (oversold) | TV-score:30"
         }
       },
       "weight": 0.25,
       "macro": {
         "trend": "BEARISH",
         "strength": 1.0,
-        "ema200_dist": -3.8,
-        "rsi": 24.2,
-        "atr_pct": 0.25,
+        "ema200_dist": -4.41,
+        "rsi": 20.1,
+        "atr_pct": 0.3,
         "sma_cross": "BEARISH"
       }
     },
     "H1": {
       "verdict": "SELL",
-      "consensus_pct": 0.8,
-      "buy_count": 1,
+      "consensus_pct": 0.6666666666666666,
+      "buy_count": 2,
       "sell_count": 4,
-      "total": 5,
+      "total": 6,
       "engines": {
         "quant": {
-          "direction": "SELL",
-          "confidence": 0.4884,
-          "details": "G:31% R:49%"
+          "direction": "BUY",
+          "confidence": 0.4828,
+          "details": "G:48% R:41%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -139,17 +139,76 @@
         "hermes": {
           "direction": "BUY",
           "confidence": 1.0,
-          "details": "Grade:A RR=1:21.0"
+          "details": "Grade:A RR=1:5.2"
         },
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 22:00)"
+          "details": "Outside killzone (UTC 23:00)"
         },
         "smc": {
           "direction": "SELL",
-          "confidence": 0.55,
-          "details": "Grade=BAGUS \ud83d\udd35 score=12"
+          "confidence": 0.75,
+          "details": "Grade=KUAT \ud83d\udfe2 score=16"
+        },
+        "trend": {
+          "direction": "SELL",
+          "confidence": 0.85,
+          "details": "Grade=SANGAT KUAT \u2b50 score=10"
+        },
+        "ultimate": {
+          "direction": "SELL",
+          "confidence": 0.3333333333333333,
+          "details": "Grade:CUKUP \ud83d\udfe1 score=8/24"
+        },
+        "tv": {
+          "direction": "SELL",
+          "confidence": 0.4,
+          "details": "RSI oversold | MACD bearish (-) | ADX 60 strong downtrend | BB lower band bounce (oversold) | TV-score:30"
+        }
+      },
+      "weight": 0.2,
+      "structure": {
+        "s1": 4212.0,
+        "r1": 4356.9,
+        "vwap": 4285.18,
+        "near_support": true,
+        "near_resistance": false,
+        "range_pct": 3.44,
+        "structure_type": "expanded"
+      }
+    },
+    "M15": {
+      "verdict": "SELL",
+      "consensus_pct": 0.6,
+      "buy_count": 2,
+      "sell_count": 3,
+      "total": 5,
+      "engines": {
+        "quant": {
+          "direction": "SELL",
+          "confidence": 0.45,
+          "details": "G:39% R:45%"
+        },
+        "fvg": {
+          "direction": "HOLD",
+          "confidence": 0,
+          "details": "no gap"
+        },
+        "hermes": {
+          "direction": "BUY",
+          "confidence": 0.48,
+          "details": "Grade:A RR=1:20.8"
+        },
+        "crt": {
+          "direction": "HOLD",
+          "confidence": 0,
+          "details": "Outside killzone (UTC 23:00)"
+        },
+        "smc": {
+          "direction": "BUY",
+          "confidence": 0.35,
+          "details": "Grade=CUKUP \ud83d\udfe1 score=7"
         },
         "trend": {
           "direction": "HOLD",
@@ -164,90 +223,31 @@
         "tv": {
           "direction": "SELL",
           "confidence": 0.4,
-          "details": "RSI oversold | MACD bearish (-) | ADX 50 strong downtrend | BB lower band bounce (oversold) | TV-score:30"
-        }
-      },
-      "weight": 0.2,
-      "structure": {
-        "s1": 4227.3,
-        "r1": 4356.0,
-        "vwap": 4288.38,
-        "near_support": true,
-        "near_resistance": false,
-        "range_pct": 3.03,
-        "structure_type": "expanded"
-      }
-    },
-    "M15": {
-      "verdict": "SELL",
-      "consensus_pct": 0.6666666666666666,
-      "buy_count": 0,
-      "sell_count": 2,
-      "total": 3,
-      "engines": {
-        "quant": {
-          "direction": "SELL",
-          "confidence": 0.4333,
-          "details": "G:42% R:43%"
-        },
-        "fvg": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no gap"
-        },
-        "hermes": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no sweep"
-        },
-        "crt": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "Outside killzone (UTC 22:00)"
-        },
-        "smc": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no setup"
-        },
-        "trend": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no break"
-        },
-        "ultimate": {
-          "direction": "SELL",
-          "confidence": 0.4166666666666667,
-          "details": "Grade:CUKUP \ud83d\udfe1 score=10/24"
-        },
-        "tv": {
-          "direction": "HOLD",
-          "confidence": 0.58,
-          "details": "RSI 37.3 (bullish bias) | MACD bullish (+) | ADX 47 strong downtrend | BB lower band bounce (oversold) | TV-score:42"
+          "details": "RSI oversold | MACD bearish (-) | ADX 89 strong downtrend | BB lower band bounce (oversold) | TV-score:30"
         }
       },
       "weight": 0.12,
       "structure": {
-        "s1": 4229.8,
-        "r1": 4266.2,
-        "vwap": 4252.09,
+        "s1": 4212.0,
+        "r1": 4267.1,
+        "vwap": 4244.14,
         "near_support": true,
         "near_resistance": false,
-        "range_pct": 0.86,
-        "structure_type": "compressed"
+        "range_pct": 1.31,
+        "structure_type": "normal"
       }
     },
     "M5": {
       "verdict": "SELL",
-      "consensus_pct": 0.6666666666666666,
-      "buy_count": 1,
-      "sell_count": 2,
-      "total": 3,
+      "consensus_pct": 1.0,
+      "buy_count": 0,
+      "sell_count": 4,
+      "total": 4,
       "engines": {
         "quant": {
-          "direction": "BUY",
-          "confidence": 0.5037,
-          "details": "G:50% R:39%"
+          "direction": "SELL",
+          "confidence": 0.4699,
+          "details": "G:37% R:47%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -262,12 +262,12 @@
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 22:00)"
+          "details": "Outside killzone (UTC 23:00)"
         },
         "smc": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no setup"
+          "direction": "SELL",
+          "confidence": 0.75,
+          "details": "Grade=KUAT \ud83d\udfe2 score=14"
         },
         "trend": {
           "direction": "HOLD",
@@ -281,8 +281,8 @@
         },
         "tv": {
           "direction": "SELL",
-          "confidence": 0.56,
-          "details": "RSI 34.3 (bullish bias) | MACD bearish (-) | ADX 71 strong downtrend | BB lower band bounce (oversold) | TV-score:22"
+          "confidence": 0.4,
+          "details": "RSI oversold | MACD bearish (-) | ADX 58 strong downtrend | BB lower band bounce (oversold) | TV-score:30"
         }
       },
       "weight": 0.08,
@@ -290,9 +290,9 @@
         "sweep_detected": false,
         "sweep_type": "NONE",
         "sniper_entry": "NONE",
-        "micro_trend": "BEARISH",
-        "momentum": -0.155,
-        "momentum_8": -0.115
+        "micro_trend": "NEUTRAL",
+        "momentum": -0.085,
+        "momentum_8": -0.468
       }
     }
   },

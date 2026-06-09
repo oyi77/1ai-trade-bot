@@ -21,9 +21,10 @@ from tradebot.agents.state import AgentState
 
 LOG = logging.getLogger("tradebot.agents.graph")
 
-def make_initial_state(symbol: str = "CRYPTO_IDX") -> AgentState:
+def make_initial_state(symbol: str = "CRYPTO_IDX", platform: str = "stockity") -> AgentState:
     """Create initial agent state."""
     return AgentState(
+        platform=platform,
         symbol=symbol,
         last_price=0.0,
         last_tick_time="",
@@ -199,31 +200,42 @@ async def execute_node(state: AgentState) -> dict[str, Any]:
     signal = state.get("signal", "HOLD")
     params = state.get("trade_params", {})
     symbol = state.get("symbol", "CRYPTO_IDX")
+    platform = state.get("platform", "stockity")  # Default to Stockity
 
     if signal not in ("CALL", "PUT"):
         return {"trade_status": "invalid_signal"}
 
     try:
-        from tradebot.brokers.stockity.broker import StockityBroker
-        broker = StockityBroker()
-        try:
-            trade = await broker.place_trade(
+        from tradebot.brokers.base import (
+            BaseBroker,
+            TradeDirection,
+            get_broker,
+        )
+        broker: BaseBroker = get_broker(platform)
+        async with broker:
+            direction = TradeDirection(signal)
+            result = await broker.place_trade(
                 symbol=symbol,
-                direction=signal,
+                direction=direction,
                 amount=params.get("amount", 0.35),
                 duration=params.get("duration", 60),
             )
+            LOG.info(
+                "Trade result on %s: %s %s $%.2f → %s",
+                platform, signal, symbol, params.get("amount", 0.35), result.status,
+            )
             return {
-                "trade_id": trade.order_id,
-                "trade_status": trade.status,
+                "trade_id": result.order_id,
+                "trade_status": result.status.value,
+                "trade_platform": platform,
+                "trade_error": result.error,
             }
-        finally:
-            await broker.close()
     except Exception as e:
         LOG.error("Execution failed: %s", e)
         return {
             "trade_id": "",
-            "trade_status": f"error: {e}",
+            "trade_status": "error",
+            "trade_error": str(e),
         }
 
 
@@ -251,10 +263,18 @@ def build_agent() -> Any:
 
 # ── Entry point ────────────────────────────────────────────────────
 
-async def run_once(symbol: str = "CRYPTO_IDX") -> dict[str, Any]:
-    """Run one cycle of the agent."""
+async def run_once(symbol: str = "CRYPTO_IDX", platform: str = "stockity") -> dict[str, Any]:
+    """Run one cycle of the agent.
+
+    Args:
+        symbol: Asset symbol (e.g. "CRYPTO_IDX", "R_75", "EURUSD").
+        platform: Trading platform ("stockity", "deriv", "mt5").
+
+    Returns:
+        Agent state after one cycle.
+    """
     agent = build_agent()
-    state = make_initial_state(symbol)
+    state = make_initial_state(symbol, platform)
     config = {"configurable": {"thread_id": "tradebot-1"}}
     result = await agent.ainvoke(state, config)
     return result
