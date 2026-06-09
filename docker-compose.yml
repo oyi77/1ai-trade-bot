@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  bridge:
+    image: tradebot:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tradebot-bridge
+    command: tradebot bridge 8082
+    ports:
+      - "8082:8082"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  bot:
+    image: tradebot:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tradebot-bot
+    command: tradebot signals
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      bridge:
+        condition: service_healthy
+
+  monitor:
+    image: tradebot:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tradebot-monitor
+    command: tradebot stream R_75
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      bridge:
+        condition: service_healthy

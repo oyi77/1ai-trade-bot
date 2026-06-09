@@ -25,9 +25,13 @@ logger = logging.getLogger("signal_calculator")
 # ═══════════════════════════════════════════════════════════════════
 
 ASSET_CONFIG = {
+    # PhantomFX standard: 1 pip = 0.10 untuk XAUUSD (Exness 3-digit)
+    # Contoh: Entry 4458.500 → TP1 4446.500 = +120.0 pips (12.000 / 0.10)
+    # SOP 30 pip = 30 × 0.10 = $3.00 SL distance
     "XAUUSD": {
-        "pip_value": 0.01,      # XAUUSD = 0.01 per pip (standard)
-        "min_sl_pts": 32,       # Minimum SL from backtest
+        "pip_value": 0.10,      # Exness 3-digit: 1 pip = 0.10 ✅ sesuai PhantomFX
+        "min_sl_pts": 28,       # Minimum SL (~30 pip SOP = $3.00)
+        "max_sl_pts": 35,       # Max SL (35 pip = $3.50)
         "min_rr": 1.5,          # Minimum risk:reward
         "max_rr": 5.0,          # Maximum risk:reward
         "atr_period": 14,
@@ -37,6 +41,7 @@ ASSET_CONFIG = {
     "BTCUSD": {
         "pip_value": 0.1,
         "min_sl_pts": 600,
+        "max_sl_pts": 800,
         "min_rr": 1.5,
         "max_rr": 5.0,
         "atr_period": 14,
@@ -46,6 +51,7 @@ ASSET_CONFIG = {
     "ETHUSD": {
         "pip_value": 0.01,
         "min_sl_pts": 50,
+        "max_sl_pts": 80,
         "min_rr": 1.5,
         "max_rr": 5.0,
         "atr_period": 14,
@@ -53,8 +59,9 @@ ASSET_CONFIG = {
         "entry_slip": 2.0,
     },
     "USOIL": {
-        "pip_value": 0.01,      # USOIL = 0.01 per pip
+        "pip_value": 0.01,      # USOIL = 0.01 per pip (Exness 3-digit)
         "min_sl_pts": 15,       # Minimum SL for oil
+        "max_sl_pts": 25,       # Max SL cap
         "min_rr": 1.5,          # Minimum risk:reward
         "max_rr": 5.0,          # Maximum risk:reward
         "atr_period": 14,
@@ -341,6 +348,7 @@ def _run_quality_gate(mtf_result: dict, action: str) -> dict:
 def _calculate_levels(mtf_result: dict, action: str, cfg: dict) -> dict | None:
     """Calculate entry, SL, TP1, TP2 from structure + ATR."""
     price = mtf_result.get("price", 0)
+    symbol = mtf_result.get("symbol", "XAUUSD")
     tfs = mtf_result.get("timeframes", {})
 
     if not price:
@@ -353,7 +361,15 @@ def _calculate_levels(mtf_result: dict, action: str, cfg: dict) -> dict | None:
     if not atr_val:
         atr_val = _get_atr_from_tf(tfs, "H1")
     if not atr_val or atr_val <= 0:
-        atr_val = 10.0  # fallback for XAUUSD
+        # Asset-specific M5 ATR fallback — realistis, bukan 10.0
+        atr_fallback = {
+            "XAUUSD": 1.5,    # real M5 ATR ~$1-2
+            "BTCUSD": 150.0,  # real M5 ATR ~$100-200
+            "ETHUSD": 8.0,    # real M5 ATR ~$5-10
+            "USOIL": 0.15,    # real M5 ATR ~$0.10-0.20
+        }
+        atr_val = atr_fallback.get(symbol, 1.0)
+        logger.info(f"{symbol}: ATR not found in engines, using fallback={atr_val}")
 
     # ── Get structure levels ──
     support = None
@@ -380,34 +396,47 @@ def _calculate_levels(mtf_result: dict, action: str, cfg: dict) -> dict | None:
 
     slip = cfg.get("entry_slip", 0.5)
 
+    # ── EA MARKET EXECUTION ──
+    # EA Exness MAU EKSEKUSI SEKARANG, bukan pending order.
+    # Entry = harga saat ini, SL/TP dihitung dari entry.
+    # Struktur/resistance/support cuma dipake buat validasi arah, BUKAN entry price.
+    entry = price
+
     if action == "BUY":
-        # Entry: near support + small slip
-        entry = min(price, support + slip)
-        # SL: below support - (0.5 * ATR)
-        raw_sl = support - (atr_val * cfg["sl_buffer_atr"])
-        # Apply minimum SL in pips
+        # SL: di bawah entry — pakai max(ATR buffer, min SOP)
+        sl_buffer = max(atr_val * cfg["sl_buffer_atr"], cfg["min_sl_pts"] * cfg["pip_value"])
+        raw_sl = entry - sl_buffer
+        # Apply min SL
         pips_sl_raw = abs(entry - raw_sl) / cfg["pip_value"]
         min_sl_pips = cfg["min_sl_pts"]
         if pips_sl_raw < min_sl_pips:
-            # Widen SL to meet minimum
             raw_sl = entry - (min_sl_pips * cfg["pip_value"])
         sl = raw_sl
-        # TP based on RR
+        # Cap SL sesuai max_sl_pts SOP
+        max_sl_pips = cfg.get("max_sl_pts", 50)
         pips_sl = abs(entry - sl) / cfg["pip_value"]
-        tp1_price = entry + (pips_sl * cfg["pip_value"])       # 1:1
-        tp2_price = entry + (pips_sl * 2 * cfg["pip_value"])   # 1:2
+        if pips_sl > max_sl_pips:
+            sl = entry - (max_sl_pips * cfg["pip_value"])
+        pips_sl = abs(entry - sl) / cfg["pip_value"]
+        tp1_price = entry + (pips_sl * cfg["min_rr"] * cfg["pip_value"])  # 1:1.5
+        tp2_price = entry + (pips_sl * cfg["min_rr"] * 2 * cfg["pip_value"])  # 1:3
 
     else:  # SELL
-        entry = max(price, resistance - slip)
-        raw_sl = resistance + (atr_val * cfg["sl_buffer_atr"])
+        sl_buffer = max(atr_val * cfg["sl_buffer_atr"], cfg["min_sl_pts"] * cfg["pip_value"])
+        raw_sl = entry + sl_buffer
         pips_sl_raw = abs(raw_sl - entry) / cfg["pip_value"]
         min_sl_pips = cfg["min_sl_pts"]
         if pips_sl_raw < min_sl_pips:
             raw_sl = entry + (min_sl_pips * cfg["pip_value"])
         sl = raw_sl
+        # Cap SL sesuai max_sl_pts SOP
+        max_sl_pips = cfg.get("max_sl_pts", 50)
         pips_sl = abs(sl - entry) / cfg["pip_value"]
-        tp1_price = entry - (pips_sl * cfg["pip_value"])       # 1:1
-        tp2_price = entry - (pips_sl * 2 * cfg["pip_value"])   # 1:2
+        if pips_sl > max_sl_pips:
+            sl = entry + (max_sl_pips * cfg["pip_value"])
+        pips_sl = abs(sl - entry) / cfg["pip_value"]
+        tp1_price = entry - (pips_sl * cfg["min_rr"] * cfg["pip_value"])
+        tp2_price = entry - (pips_sl * cfg["min_rr"] * 2 * cfg["pip_value"])
 
     # Compute RR
     pips_target = abs(entry - tp1_price) / cfg["pip_value"]
@@ -550,7 +579,7 @@ def format_signal_telegram(signal: dict) -> str:
     symbol = signal["symbol"]
     entry = signal["entry"]
     price = signal.get("price", entry)
-    order_type = _get_order_type(action, entry, price)
+    order_type = action  # EA market execution — selalu MARKET
     emoji = "🟢" if action == "BUY" else "🔴"
     grade = signal["grade"]
     sl = signal["sl"]

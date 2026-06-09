@@ -1,0 +1,18 @@
+[Unit]
+Description=TradeBot Telegram Bot — user-facing signal and trade interface
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
+ExecStart=/home/openclaw/projects/1ai-trade-bot/.venv/bin/python -m tradebot.bots.telegram_bot
+User=openclaw
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

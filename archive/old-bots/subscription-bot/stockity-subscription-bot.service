@@ -1,0 +1,34 @@
+[Unit]
+Description=Stockity Signal Subscription Telegram Bot
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+Group=openclaw
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot/bots/subscription-bot
+
+# ── Python environment ──────────────────────────────────────────────────
+ExecStart=/home/openclaw/projects/1ai-trade-bot/.venv/bin/python3 /home/openclaw/projects/1ai-trade-bot/bots/subscription-bot/bot.py
+
+# ── Restart policy ──────────────────────────────────────────────────────
+Restart=always
+RestartSec=5
+
+# ── Resource limits ─────────────────────────────────────────────────────
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# ── Logging ─────────────────────────────────────────────────────────────
+StandardOutput=append:/home/openclaw/projects/1ai-trade-bot/bots/subscription-bot/subscription_bot.log
+StandardError=append:/home/openclaw/projects/1ai-trade-bot/bots/subscription-bot/subscription_bot.log
+
+# ── Hardening ───────────────────────────────────────────────────────────
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

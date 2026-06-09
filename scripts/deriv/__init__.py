@@ -1,39 +1,23 @@
-#!/usr/bin/env python3
 """
-Deriv Trading Package — Unified Module
-=======================================
-
-Single source of truth for all Deriv.com trading logic.
-Absorbs: deriv_client.py, deriv-digit-match-bot/deriv-actuary/
-Fixes: old ~/.openclaw/workspace/ paths → ~/projects/1ai-trade-bot/
-
-Capabilities:
-  - DerivWSClient: async WebSocket auth, ticks, proposals, buy/sell
-  - MomenPatternAnalyzer: carrier digit → 7 pattern (course bot)
-  - AdjacencyPatternAnalyzer: trigger→target adjacency (actuary v4)
-  - StreakCountdownStrategy: streak-based countdown trigger (GUI v5.9)
-  - DigitMartingaleStrategy: full 3-OP martingale w/ Config L risk
-  - MultiStreamActuary: parallel WS readers for multi-symbol (actuary v4)
-  - CognitiveDB: self-learning pattern optimization
-  - Persistence: SQLite state, paper mode, reconciliation
+Shim — re-exports from tradebot.brokers.deriv.
+Keeps existing imports working during migration.
 """
+import sys, warnings
+from pathlib import Path
 
-from .client import DerivWSClient, DerivTick, DerivOHLCV, DerivContractResult
-from .patterns import MomenPatternAnalyzer, MomenAnalysis, \
-    AdjacencyPatternAnalyzer, AdjacencyAnalysis, \
-    StreakCountdownAnalyzer, StreakAnalysis
-from .strategy import DigitMartingaleStrategy, TradeResult
-from .actuary import MultiStreamActuary, CognitiveDB
-from .config import SYNTHETIC_INDICES, CONTRACT_TYPES, \
-    DEFAULT_SYMBOL, DEFAULT_STAKE, DAILY_TP, DAILY_SL
+# Ensure tradebot is importable
+_tradebot = Path(__file__).resolve().parent.parent.parent / "tradebot"
+if str(_tradebot) not in sys.path:
+    sys.path.insert(0, str(_tradebot.parent))
 
-__all__ = [
+warnings.warn(
+    "scripts/deriv/ is deprecated — use tradebot.brokers.deriv instead",
+    DeprecationWarning, stacklevel=2
+)
+
+from tradebot.brokers.deriv import *  # noqa: F401, F403
+__all__ = [  # noqa: F405
     "DerivWSClient", "DerivTick", "DerivOHLCV", "DerivContractResult",
-    "MomenPatternAnalyzer", "MomenAnalysis",
-    "AdjacencyPatternAnalyzer", "AdjacencyAnalysis",
-    "StreakCountdownAnalyzer", "StreakAnalysis",
-    "DigitMartingaleStrategy", "TradeResult",
-    "MultiStreamActuary", "CognitiveDB",
-    "SYNTHETIC_INDICES", "CONTRACT_TYPES",
-    "DEFAULT_SYMBOL", "DEFAULT_STAKE", "DAILY_TP", "DAILY_SL",
+    "MomenPatternAnalyzer", "AdjacencyPatternAnalyzer", "StreakCountdownAnalyzer",
+    "DigitMartingaleStrategy", "MultiStreamActuary", "CognitiveDB",
 ]

@@ -32,6 +32,7 @@ class MomenAnalysis:
     total_m1: int
     total_m2: int
     confidence: float = 0.0
+    predicted_digit: int = 7  # Momen always predicts digit 7 after carrier
 
 
 class MomenPatternAnalyzer:
@@ -133,6 +134,11 @@ class AdjacencyAnalysis:
     trigger_count: int
     anti_flood_ok: bool
 
+    @property
+    def predicted_digit(self) -> int:
+        """The target digit of the adjacency pair is the predicted digit."""
+        return self.target
+
 
 class AdjacencyPatternAnalyzer:
     """Adjacency pair pattern detection (trigger→target digit).
@@ -212,6 +218,7 @@ class StreakAnalysis:
     op_tick_countdown: int
     tick_to_fire: int       # absolute tick index to fire
     confidence: float
+    predicted_digit: int = -1  # set during analyze; depends on comparison context
 
 
 class StreakCountdownAnalyzer:

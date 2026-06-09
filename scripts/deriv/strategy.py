@@ -25,6 +25,7 @@ from .config import (
     DEFAULT_SYMBOL, DEFAULT_CONTRACT_TYPE, DEFAULT_BARRIER,
     MIN_CONFIDENCE,
 )
+from .actuary import CognitiveDB
 
 LOG = logging.getLogger("deriv.strategy")
 
@@ -85,6 +86,34 @@ class DigitMartingaleStrategy:
         self.cycle_count = 0
         self.running = False
 
+    # ── Daily P&L Enforcement (cognitive_memory.db) ──
+
+    @property
+    def daily_loss_limit(self) -> float:
+        """Daily stop-loss threshold ($). Trading auto-stops when daily P&L <= this value.
+
+        From Config L: DAILY_SL = -8.0 (negative = loss limit).
+        """
+        return self.max_loss
+
+    @property
+    def daily_profit_tracker(self) -> dict:
+        """Current daily P&L state read from cognitive_memory.db.
+
+        Returns:
+            dict with keys: profit (cumulative), trades, wins, losses.
+        """
+        return CognitiveDB.get_daily_counter()
+
+    def reset_daily(self, date: str = None):
+        """Reset daily P&L counters for today (or a specific date).
+
+        Call this at market open or after SL/TP is reached to start fresh.
+        """
+        CognitiveDB.reset_daily_counter(date=date)
+        LOG.info("📅 Daily counters reset for %s",
+                 date or datetime.now().strftime("%Y-%m-%d"))
+
     async def get_session_balance(self) -> float:
         """Fetch current balance from Deriv."""
         bal = await self.client.get_balance()
@@ -102,6 +131,20 @@ class DigitMartingaleStrategy:
         self.running = True
         self.start_balance = await self.get_session_balance()
         LOG.info("🔄 Cycle %d | Balance: $%.2f", self.cycle_count + 1, self.start_balance)
+
+        # ── Daily SL/TP Enforcement ──
+        daily = self.daily_profit_tracker
+        daily_pnl = daily.get("profit", 0.0)
+        if daily_pnl <= self.daily_loss_limit:
+            LOG.info("🛑 Daily SL HIT: $%.2f <= $%.2f — stopping trading", daily_pnl, self.daily_loss_limit)
+            self.running = False
+            return TradeResult(0, 0, 0, 0, 0, 0, self.cycle_count + 1,
+                               stopped_early=True, reason="daily_sl_hit")
+        if daily_pnl >= self.target_profit:
+            LOG.info("✅ Daily TP HIT: $%.2f >= $%.2f — stopping trading", daily_pnl, self.target_profit)
+            self.running = False
+            return TradeResult(0, 0, 0, 0, 0, 0, self.cycle_count + 1,
+                               stopped_early=True, reason="daily_tp_hit")
 
         # Collect ticks
         ticks = await self.client.get_ticks_history(self.symbol, count=self.analysis_ticks)
@@ -206,6 +249,9 @@ class DigitMartingaleStrategy:
 
         LOG.info("📊 Cycle %d done: +$%.2f (%d/%d wins, %.0f%%)",
                  self.cycle_count, final_profit, wins, trades, win_rate)
+
+        # ── Persist to daily counter ──
+        CognitiveDB.update_daily_counter(profit_delta=final_profit, won=(final_profit > 0))
 
         return TradeResult(
             profit=final_profit,

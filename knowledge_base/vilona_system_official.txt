@@ -1,0 +1,21 @@
+VILONA SYSTEM - PURE LOGIC ICT & SMC ENGINE
+
+Sistem automated trading berkinerja tinggi yang dirancang dengan Pure Logic ICT & SMC Trend-Following Engine. Berbeda dari yang sebelumnya menggunakan kecerdasan buatan (AI) sebagai otaknya, Vilona System menggunakan logika algoritma murni yang terukur, transparan, dan 100% bisa di-backtest secara mandiri.
+
+💡 INFORMASI & REKOMENDASI AKUN
+- Wajib menggunakan Akun Cent.
+- Minimum Modal: Mulai dari $100 USD (10,000 USD Cent).
+- Timeframe: Dioptimalkan untuk M15 (timeframe terkunci secara aman di dalam sistem, sehingga EA tetap bekerja di M15 meskipun dipasang di TF lain).
+
+⚙️ PANDUAN CARA INSTALASI & AKTIVASI
+1. Izinkan WebRequest Server: Buka MT5 -> Tools -> Options -> Expert Advisors. Centang 'Allow WebRequest for listed URL' lalu tambahkan: https://phantomfx.aitradepulse.com/
+2. Dapatkan API Key: Buka Telegram Bot @berkahkaryaforexbotbot, ketik /donate AI.
+3. Pasang EA ke Chart: Seret Vilona System ke chart. Masukkan API Key pada input parameter teratas (InpApiKey).
+
+📊 HASIL UJI BACKTEST (Awal 2026 - Juni 2026)
+Mode: Every tick based on real ticks, Random delay, History Quality 100%.
+- Low Risk (1%): Total Profit +39.9% (~3,992 USD Cent). Max Drawdown ~8.2% - 9.6%.
+- Medium Risk (2%): Total Profit +78%. Max Drawdown ~18%.
+⚠️ Sesuaikan lot dengan profil resiko. Risk tinggi = profit & drawdown tinggi.
+
+📥 Link Download EA (.ex5): https://phantomfx.aitradepulse.com/download/ea

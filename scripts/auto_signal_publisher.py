@@ -67,8 +67,8 @@ def main():
         log.error(f"Import error: {e}")
         return 1
 
-    # ── MTF Scan ──
-    assets = ["XAUUSD", "BTCUSD", "USOIL"]
+    # ── MTF Scan — FOKUS XAU aja ──
+    assets = ["XAUUSD"]
     results = {}
     
     for sym in assets:
@@ -148,13 +148,15 @@ def main():
         log_signal(sig)
         any_signal = True
         
-        # ── Post to bridge ──
+        # ── Post to local bridge directly ──
         try:
             import urllib.request, json
-            bridge_url = "https://phantomfx.aitradepulse.com/signal?api_key=VT-DONOR-0"
+            bridge_url = "http://localhost:8765/signal?api_key=VT-MASTER-734AD731F5FB"
+            bridge_sig = dict(sig)
+            bridge_sig["tp"] = sig.get("tp1", 0)  # EA baca field tp, bukan tp1
             req = urllib.request.Request(
                 bridge_url,
-                data=json.dumps(sig).encode(),
+                data=json.dumps(bridge_sig).encode(),
                 headers={"Content-Type": "application/json"},
                 method="POST"
             )

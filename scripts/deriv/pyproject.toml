@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "deriv-client"
+version = "0.1.0"
+description = "Deriv.com async WebSocket trading client"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx",
+    "websockets",
+    "numpy",
+    "pandas",
+]
+
+[project.scripts]
+deriv-cli = "deriv.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["deriv*"]

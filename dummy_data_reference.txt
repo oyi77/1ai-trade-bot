@@ -1,0 +1,16 @@
+=== TRADING ANALYSIS DUMMY DATA ===
+Asset: XAU/USD (Timeframes H1 & M15)
+Market Structure (H1): Bullish order flow, price took sell-side liquidity (SSL) at 1985.00, leaving Fair Value Gap (FVG) at 1990-1995.
+Reaction (M15): Change of Character (ChoCh) upside with solid volume breaking minor Supply/Resistance at 1998.00.
+Execution Plan: Wait for retracement to H1 FVG (1990-1995) aligning with M15 order block. Target Buy with TP at nearest buy-side liquidity (BSL) at 2010.00.
+
+=== CODING ARCHITECTURE DUMMY DATA ===
+// Standard: Modular Logic Separation
+// 1. Service Layer (External APIs)
+export const fetchAIResponse = async (promptData) => { /* fetch logic */ };
+// 2. Controller Layer (Data Flow)
+export const processUGCFunnel = async (req, res) => {
+  try {
+    const result = await fetchAIResponse(req.body);
+  } catch (error) { /* error handling */ }
+};

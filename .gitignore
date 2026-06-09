@@ -2,9 +2,48 @@ __pycache__/
 *.pyc
 *.pyo
 *.py~
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Env and secrets
+*.env
+.env.*
+!.env.example
+
+# Logs
 logs/*
 !logs/.gitkeep
-strategies/vilona_tradefx/.env
-*.env
+
+# Data and databases
 data/
-db
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Coverage and test artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtual envs
+.venv/
+venv/
+
+# Legacy
+strategies/vilona_tradefx/.env

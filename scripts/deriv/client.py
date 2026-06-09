@@ -19,7 +19,6 @@ import asyncio
 import json
 import logging
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Callable, Optional
@@ -70,6 +69,7 @@ class DerivOHLCV:
     high: float
     low: float
     close: float
+    symbol: str = ""
     volume: int = 0
 
 
@@ -259,10 +259,10 @@ class DerivWSClient:
         LOG.info("Disconnected")
 
     async def reconnect(self):
-        """Auto-reconnect with exponential backoff (2s → 60s max)."""
+        """Auto-reconnect with exponential backoff (1s → 2s → 4s max)."""
         LOG.info("Reconnecting in %ds...", self._backoff)
         await asyncio.sleep(self._backoff)
-        self._backoff = min(self._backoff * 1.5, 60)
+        self._backoff = min(self._backoff * 2, 4)
         await self.connect()
         if self.is_connected:
             for stype, symbols in self._subs.items():
@@ -302,7 +302,12 @@ class DerivWSClient:
     # ── Receiver Loop ──
 
     async def _receiver_loop(self):
-        """Process all incoming WS messages."""
+        """Process all incoming WS messages with auto-reconnect.
+
+        On disconnect, attempts reconnect up to 3 times with
+        exponential backoff (1s, 2s, 4s).  Resubscribes all active
+        subscriptions on each successful reconnect.
+        """
         while self._running:
             try:
                 msg = await asyncio.wait_for(self._ws.recv(), timeout=5)
@@ -319,14 +324,20 @@ class DerivWSClient:
             except websockets.ConnectionClosed as e:
                 LOG.warning("WS closed (code=%s): %s", e.code, e.reason)
                 self._connected = False
-                if self._running:
-                    await self.reconnect()
+                if not self._running:
+                    break
+                # Attempt reconnect up to 3 times with exponential backoff
+                reconnected = await self._reconnect_with_backoff()
+                if not reconnected:
+                    self._running = False
                 break
             except Exception as e:
                 LOG.error("WS recv error: %s", e)
                 self._connected = False
                 if self._running:
-                    await self.reconnect()
+                    reconnected = await self._reconnect_with_backoff()
+                    if not reconnected:
+                        self._running = False
                 break
 
             try:
@@ -335,6 +346,31 @@ class DerivWSClient:
                 continue
 
             await self._dispatch(data)
+
+    async def _reconnect_with_backoff(self) -> bool:
+        """Attempt reconnect up to 3 times with backoff 1s, 2s, 4s.
+
+        Returns True if reconnected, False if all attempts failed.
+        Resubscribes active subscriptions on each successful reconnect.
+        """
+        backoffs = [1, 2, 4]
+        for attempt, delay in enumerate(backoffs, 1):
+            LOG.info("Reconnect attempt %d/3 (waiting %ds)...", attempt, delay)
+            await asyncio.sleep(delay)
+            try:
+                await self.connect()
+            except Exception as e:
+                LOG.warning("Reconnect attempt %d failed: %s", attempt, e)
+                continue
+            if self.is_connected:
+                LOG.info("Reconnected on attempt %d ✓", attempt)
+                # Resubscribe all active subscriptions
+                for stype, symbols in self._subs.items():
+                    for sym in symbols:
+                        await self._safe_send({stype: sym, "subscribe": 1})
+                return True
+        LOG.error("All 3 reconnect attempts failed")
+        return False
 
     async def _dispatch(self, data: dict):
         """Route incoming message to appropriate handler."""
@@ -440,25 +476,40 @@ class DerivWSClient:
         return [DerivTick(symbol=symbol, price=float(p), epoch=int(t))
                 for p, t in zip(prices, times)]
 
-    async def get_ohlcv(self, symbol: str, count: int = 100) -> list[DerivOHLCV]:
-        """Get OHLCV candles (aggregated from ticks by minute)."""
-        ticks = await self.get_ticks_history(symbol, count=count)
-        if not ticks:
+    async def get_ohlcv(self, symbol: str, granularity: int = 60,
+                        count: int = 100) -> list[DerivOHLCV]:
+        """Fetch OHLCV candles natively from the Deriv API.
+
+        Uses ticks_history with style='candles' for native candle data.
+
+        Args:
+            symbol: Trading symbol (e.g. "R_75").
+            granularity: Candle interval in seconds (default 60 = 1 min).
+            count: Number of candles to fetch (default 100, max 5000).
+
+        Returns:
+            List of DerivOHLCV objects sorted chronologically.
+        """
+        resp = await self._send_await({
+            "ticks_history": symbol,
+            "granularity": granularity,
+            "style": "candles",
+            "count": count,
+        }, "candles")
+        if not resp:
             return []
-        minutes: dict[int, list[float]] = defaultdict(list)
-        for t in ticks:
-            minutes[t.epoch // 60].append(t.price)
-        candles = []
-        for epoch_60, prices in sorted(minutes.items()):
-            candles.append(DerivOHLCV(
-                timestamp=epoch_60 * 60,
-                open=float(prices[0]),
-                high=float(max(prices)),
-                low=float(min(prices)),
-                close=float(prices[-1]),
-                volume=len(prices),
-            ))
-        return candles
+        candles_raw = resp.get("candles", [])
+        return [
+            DerivOHLCV(
+                timestamp=int(c["epoch"]),
+                open=float(c["open"]),
+                high=float(c["high"]),
+                low=float(c["low"]),
+                close=float(c["close"]),
+                symbol=symbol,
+            )
+            for c in candles_raw
+        ]
 
     async def get_balance(self) -> Optional[float]:
         """Fetch current account balance."""

@@ -20,14 +20,13 @@ LOG = logging.getLogger("signals.stockity_http")
 CANDLE_API = "https://api.stockity.com/candles/v1/{ric}/{time}/1"
 
 # RIC mapping: our symbol → Stockity RIC
-RIC_MAP = {
+# NOTE: Stockity hanya punya 1 index (Z-CRY/IDX).
+# Semua nama lain adalah alias — kita cuma kirim 1x aja.
+RIC_MAP: dict[str, str] = {
     "CRYPTO_IDX": "Z-CRY/IDX",
-    "BTC_IDX": "Z-CRY/IDX",
-    "ETH_IDX": "Z-CRY/IDX",
-    "GOLD_IDX": "Z-CRY/IDX",
 }
 
-PLATFORM_ASSETS = {"CRYPTO_IDX", "BTC_IDX", "ETH_IDX", "GOLD_IDX"}
+PLATFORM_ASSETS: set[str] = {"CRYPTO_IDX"}
 
 
 def _load_auth() -> tuple[str, str]:
@@ -37,8 +36,8 @@ def _load_auth() -> tuple[str, str]:
     cookie = os.environ.get("STOCKITY_FULL_COOKIE", "")
     if not auth or not cookie:
         env_paths = [
-            Path(__file__).parent.parent / "bots" / "stockity-bot" / ".env",
-            Path(__file__).parent.parent / ".env",
+            Path(__file__).resolve().parent.parent / "archive" / "old-bots" / "subscription-bot" / ".env",
+            Path(__file__).resolve().parent.parent / "archive" / "old-bots" / "stockity-bot" / ".env",
         ]
         for p in env_paths:
             if p.exists():

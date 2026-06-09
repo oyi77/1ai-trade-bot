@@ -96,6 +96,16 @@ class CognitiveDB:
                 latency_ms INTEGER
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS daily_counters (
+                date TEXT PRIMARY KEY,
+                profit REAL DEFAULT 0.0,
+                trades INTEGER DEFAULT 0,
+                wins INTEGER DEFAULT 0,
+                losses INTEGER DEFAULT 0,
+                last_updated TEXT
+            )
+        """)
         conn.commit()
         conn.close()
         LOG.info("🧠 Cognitive DB ready: %s", cls.DB_PATH)
@@ -216,6 +226,79 @@ class CognitiveDB:
             return True
 
     @staticmethod
+    def get_daily_counter(date: str = None) -> dict:
+        """Get daily P&L counters from cognitive_memory.db.
+
+        Returns:
+            dict with keys: profit, trades, wins, losses
+        """
+        if date is None:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with CognitiveDB.conn() as conn:
+            row = conn.execute(
+                "SELECT profit, trades, wins, losses FROM daily_counters WHERE date=?",
+                (date,)
+            ).fetchone()
+            if row:
+                return {
+                    "profit": row[0],
+                    "trades": row[1],
+                    "wins": row[2],
+                    "losses": row[3],
+                }
+            return {"profit": 0.0, "trades": 0, "wins": 0, "losses": 0}
+
+    @staticmethod
+    def update_daily_counter(profit_delta: float, won: bool, date: str = None):
+        """Record a trade result in the daily counter.
+
+        Args:
+            profit_delta: P&L change from this trade (signed float).
+            won: True if trade was a win.
+            date: YYYY-MM-DD string (defaults to UTC today).
+        """
+        if date is None:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc).isoformat()
+        with CognitiveDB.conn() as conn:
+            row = conn.execute(
+                "SELECT profit, trades, wins, losses FROM daily_counters WHERE date=?",
+                (date,)
+            ).fetchone()
+            if row:
+                pnl = round(row[0] + profit_delta, 2)
+                trades = row[1] + 1
+                wins = row[2] + (1 if won else 0)
+                losses = row[3] + (0 if won else 1)
+                conn.execute(
+                    "UPDATE daily_counters SET profit=?, trades=?, wins=?, losses=?, last_updated=? WHERE date=?",
+                    (pnl, trades, wins, losses, now, date)
+                )
+            else:
+                conn.execute(
+                    "INSERT INTO daily_counters (date, profit, trades, wins, losses, last_updated) VALUES (?,?,?,?,?,?)",
+                    (date, round(profit_delta, 2), 1, 1 if won else 0, 0 if won else 1, now)
+                )
+            conn.commit()
+
+    @staticmethod
+    def reset_daily_counter(date: str = None):
+        """Zero out the daily counter for a given date.
+
+        Args:
+            date: YYYY-MM-DD string (defaults to UTC today).
+        """
+        if date is None:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc).isoformat()
+        with CognitiveDB.conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO daily_counters (date, profit, trades, wins, losses, last_updated) VALUES (?,0,0,0,0,?)",
+                (date, now)
+            )
+            conn.commit()
+
+    @staticmethod
     def record_latency_trap(market: str, trigger_time, exec_time) -> bool:
         """Log latency trap. Returns True if should shift to Tick+2."""
         latency_ms = (exec_time - trigger_time).total_seconds() * 1000
@@ -266,6 +349,36 @@ class MultiStreamActuary:
         # Cold digit tracking (global)
         self.digit_heatmap: dict[str, list[int]] = defaultdict(lambda: [0] * 10)
         self.total_ticks_per_symbol: dict[str, int] = defaultdict(int)
+
+    def add_symbol(self, symbol: str):
+        """Add a new symbol to track for pattern detection.
+
+        Creates a fresh tick deque and heatmap entry.
+        Safe to call if symbol already tracked (no-op).
+        """
+        if symbol not in self.symbols:
+            self.symbols.append(symbol)
+            self.ticks[symbol] = deque(maxlen=self.tick_history)
+            self.digit_heatmap[symbol] = [0] * 10
+            self.last_print[symbol] = 0.0
+            LOG.info("📡 MultiStreamActuary added symbol: %s", symbol)
+
+    def remove_symbol(self, symbol: str):
+        """Remove a symbol from tracking. Cleans up all per-symbol state."""
+        if symbol in self.symbols:
+            self.symbols.remove(symbol)
+            self.ticks.pop(symbol, None)
+            self.digit_heatmap.pop(symbol, None)
+            self.total_ticks_per_symbol.pop(symbol, None)
+            self.last_print.pop(symbol, None)
+            LOG.info("📡 MultiStreamActuary removed symbol: %s", symbol)
+
+    def get_ticks(self, symbol: str) -> list:
+        """Return list of buffered ticks for a symbol, oldest first.
+
+        Returns empty list if symbol is not tracked.
+        """
+        return list(self.ticks.get(symbol, deque()))
 
     def process_tick(self, symbol: str, quote: float, epoch: int) -> dict:
         """Process an incoming tick and return action dict.

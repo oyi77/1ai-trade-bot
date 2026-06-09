@@ -1,0 +1,47 @@
+# ── Python artifacts ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Virtualenv ──
+.venv/
+venv/
+env/
+
+# ── Node / JS ──
+node_modules/
+npm-debug.log*
+
+# ── Git / CI / IDE ──
+.git/
+.gitignore
+.gitattributes
+.github/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Data & logs ──
+data/
+logs/
+*.db
+*.sqlite
+*.sqlite3
+
+# ── OS cruft ──
+.DS_Store
+Thumbs.db
+
+# ── Environment - never copy .env into docker image ──
+.env
+.env.local
+.env.production
+
+# ── Coverage ──
+.coverage
+htmlcov/
+coverage/
