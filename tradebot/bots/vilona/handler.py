@@ -282,6 +282,7 @@ class VilonaBot(BaseBot):
         # ── Scan interval for auto-loop ────────────────────────────────
         self._scan_interval_sec: int = 300
         self._default_pair: str = "gold"
+        self._posted_signals: dict[str, float] = {}  # dedup: pair→timestamp
 
     # ── Engine initialization ────────────────────────────────────────────
 
@@ -427,6 +428,13 @@ class VilonaBot(BaseBot):
                         LOG.info("Auto-analysis skipped: %s", reason)
                     elif sig and sig.get("action") != "HOLD":
                         display = pair.upper()
+                        # Dedup: skip if same pair fired within 3 hours
+                        last_posted = self._posted_signals.get(pair, 0)
+                        if time.time() - last_posted < 10800:  # 3 hours
+                            LOG.info("Auto signal SKIPPED (dedup): %s %s (last: %ds ago)",
+                                     display, sig["action"], int(time.time() - last_posted))
+                            continue
+                        self._posted_signals[pair] = time.time()
                         price = sig.get("entry", 0)
                         msg = format_signal_basic(sig, price, display)
                         await self._tg_send(msg)

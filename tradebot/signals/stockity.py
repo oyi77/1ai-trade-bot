@@ -1,17 +1,31 @@
 """
 Stockity platform market data source.
 
-Fetches 1-second candles via Stockity's public REST API (not WebSocket)
-and aggregates them into standard timeframes.
+Combines two data paths (reverse-engineered from HAR files):
+
+1. REST (historical):
+   GET https://api.stockity.com/candles/v1/{ric}/{time}/{seconds}?locale=en
+   Used by fetch() — returns full historical candle data for a day.
+
+2. WebSocket (real-time):
+   wss://as.stockity.com/ + {"action": "subscribe", "rics": [...]}
+   Used by stream() — streams live ticks with ask/bid prices.
+
+Auth: Requires STOCKITY_FULL_COOKIE (browser session cookie) in .env.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import AsyncIterator
+from contextlib import suppress
 from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import quote as url_quote
 
 import httpx
+import websockets
 
 from tradebot.config import settings
 from tradebot.models.market import OHLCV
@@ -20,39 +34,43 @@ from .base import BaseDataSource
 
 LOG = logging.getLogger("tradebot.signals.stockity")
 
-CANDLE_API = "https://api.stockity.com/candles/v1/{ric}/{time}/1"
+STOCKITY_WS_URL = "wss://as.stockity.com/"
+CANDLE_API = "https://api.stockity.com/candles/v1/{ric}/{time}/{seconds}"
 
-# RIC mappings for Stockity API
-# WARNING: Only CRYPTO_IDX is tested. Others may fail silently.
+# RIC mappings for Stockity.
+# CRYPTO_IDX is VERIFIED via both REST and WS HAR analysis.
+# Others are best-guess following the Z-{SYMBOL}/IDX pattern.
 RIC_MAP: dict[str, str] = {
-    "CRYPTO_IDX": "Z-CRY/IDX",  # Works ✓
-    "BTC_IDX": "BTC_IDX",        # Untested
-    "ETH_IDX": "ETH_IDX",        # Untested
-    "GOLD_IDX": "GOLD_IDX",      # Untested
+    "CRYPTO_IDX": "Z-CRY/IDX",  # VERIFIED
+    "BTC_IDX": "Z-BTC/IDX",      # UNVERIFIED
+    "ETH_IDX": "Z-ETH/IDX",      # UNVERIFIED
+    "GOLD_IDX": "Z-GOLD/IDX",    # UNVERIFIED
 }
 
-PLATFORM_ASSETS: set[str] = {"CRYPTO_IDX"}
+PLATFORM_ASSETS: set[str] = set(RIC_MAP.keys())
 
-DEFAULT_AGGR_SECONDS = 60  # aggregate 1s → 1m candles
+DEFAULT_CANDLE_SECONDS = 60  # 1-minute candles
 
 
 class StockitySource(BaseDataSource):
-    """Fetch OHLCV data from Stockity platform via its HTTP REST API.
+    """Fetch OHLCV from Stockity (REST) + stream live ticks (WebSocket).
 
-    Requires either ``STOCKITY_AUTHTOKEN`` (Bearer token) or
-    ``STOCKITY_FULL_COOKIE`` set in environment / .env.
+    Requires STOCKITY_FULL_COOKIE (browser session cookie) in .env.
 
-    The API returns 1-second candles that are aggregated into the
-    requested interval within this class.
+    Two data paths:
+        fetch()    — historical candles via REST
+        stream()   — real-time ticks via WebSocket (async generator)
     """
 
     def __init__(self) -> None:
-        self._authtoken: str = settings.STOCKITY_AUTHTOKEN
         self._cookie: str = settings.STOCKITY_FULL_COOKIE
-        self._client: httpx.AsyncClient | None = None
+        self._http: httpx.AsyncClient | None = None
+        self._ws: websockets.WebSocketClientProtocol | None = None
 
-    async def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None or self._client.is_closed:
+    # ── HTTP client (REST) ──────────────────────────────────────────────
+
+    async def _get_http(self) -> httpx.AsyncClient:
+        if self._http is None or self._http.is_closed:
             headers = {
                 "Origin": "https://stockity.com",
                 "User-Agent": (
@@ -60,63 +78,54 @@ class StockitySource(BaseDataSource):
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
                     "Chrome/125.0.0.0 Safari/537.36"
                 ),
+                "Accept": "application/json",
             }
             if self._cookie:
                 headers["Cookie"] = self._cookie
-            elif self._authtoken:
-                headers["Authorization"] = f"Bearer {self._authtoken}"
+            self._http = httpx.AsyncClient(timeout=httpx.Timeout(30.0), headers=headers)
+        return self._http
 
-            self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(15.0),
-                headers=headers,
+    # ── WebSocket client (real-time) ───────────────────────────────────
+
+    async def _connect_ws(self) -> websockets.WebSocketClientProtocol:
+        """Connect to Stockity WebSocket for real-time ticks."""
+        if self._ws is not None:
+            from websockets.protocol import State
+            if self._ws.state == State.OPEN:
+                return self._ws
+
+        if not self._cookie:
+            raise RuntimeError("STOCKITY_FULL_COOKIE not set in .env")
+
+        headers = {
+            "Cookie": self._cookie,
+            "Origin": "https://stockity.com",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+        }
+        LOG.info("Connecting to %s", STOCKITY_WS_URL)
+        self._ws = await websockets.connect(STOCKITY_WS_URL, additional_headers=headers)
+        LOG.info("✓ Stockity WebSocket connected")
+        return self._ws
+
+    async def _subscribe_ws(self, rics: list[str]) -> None:
+        """Subscribe to asset RICs on the WebSocket."""
+        ws = await self._connect_ws()
+        await ws.send(json.dumps({"action": "subscribe", "rics": rics}))
+        LOG.info("Subscribed to RICs: %s", rics)
+
+    # ── Public API: historical (REST) ──────────────────────────────────
+
+    def _compute_time_param(self, target_date: datetime | None = None) -> str:
+        """Time parameter for candle API (ISO 8601, midnight UTC)."""
+        if target_date is None:
+            target_date = datetime.now(UTC).replace(
+                hour=0, minute=0, second=0, microsecond=0
             )
-        return self._client
-    def _compute_time_param(self, target_minute: int = 15) -> str:
-        """Compute time parameter for Stockity API in ISO 8601 format.
-
-        Stockity accepts ISO 8601 UTC timestamps like '2024-01-01T00:00:00Z'.
-        """
-        # Stockity expects ISO 8601 UTC format
-        from datetime import datetime, timedelta, timezone
-        target_time = datetime.now(timezone.utc) - timedelta(minutes=target_minute)
-        return target_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    @staticmethod
-    def _aggregate_candles(raw: list[OHLCV], period_s: int = 60) -> list[OHLCV]:
-        """Aggregate 1-second candles into larger timeframes.
-
-        Args:
-            raw: List of 1-second :class:`OHLCV` candles.
-            period_s: Output candle period in seconds (default 60 = 1m).
-
-        Returns:
-            Aggregated candles sorted by timestamp ascending.
-        """
-        if not raw:
-            return []
-
-        buckets: dict[int, list[OHLCV]] = {}
-        for c in raw:
-            bucket = (c.timestamp // (period_s)) * (period_s)
-            if bucket not in buckets:
-                buckets[bucket] = []
-            buckets[bucket].append(c)
-
-        result: list[OHLCV] = []
-        for ts in sorted(buckets.keys()):
-            group = buckets[ts]
-            result.append(
-                OHLCV(
-                    timestamp=ts,
-                    open=group[0].open,
-                    high=max(c.high for c in group),
-                    low=min(c.low for c in group),
-                    close=group[-1].close,
-                    volume=0,
-                    symbol=raw[0].symbol if raw else "",
-                )
-            )
-        return result
+        return target_date.strftime("%Y-%m-%dT%H:%M:%S")
 
     async def fetch(
         self,
@@ -124,29 +133,18 @@ class StockitySource(BaseDataSource):
         interval: str = "1m",
         count: int = 100,
     ) -> list[OHLCV]:
-        """Fetch OHLCV data for a Stockity platform asset.
+        """Fetch historical OHLCV candles via REST.
 
         Args:
-            symbol: Platform asset (e.g. ``"CRYPTO_IDX"``, ``"BTC_IDX"``).
-            interval: Ignored — Stockity only provides 1s candles which
-                are aggregated to 1m.  Kept for API compatibility.
-            count: Not directly supported — returns all available
-                aggregated candles (typically 15-60 of them).
+            symbol: Platform asset (e.g. ``"CRYPTO_IDX"``).
+            interval: "1m" (60s) or "1s" (1s).
+            count: Max candles to return (most recent N).
 
         Returns:
-            List of :class:`OHLCV` candles, or empty list on error / no auth.
+            List of :class:`OHLCV` candles.
         """
         sym_upper = symbol.upper()
 
-        # Check if we have auth
-        if not self._authtoken and not self._cookie:
-            LOG.warning(
-                "Stockity: no auth configured (set STOCKITY_AUTHTOKEN "
-                "or STOCKITY_FULL_COOKIE)"
-            )
-            return []
-
-        # Validate symbol is supported
         if sym_upper not in RIC_MAP:
             LOG.warning(
                 f"Stockity: symbol {symbol} not in RIC_MAP. "
@@ -154,15 +152,17 @@ class StockitySource(BaseDataSource):
             )
             return []
 
-        # Map symbol to RIC
+        if not self._cookie:
+            LOG.warning("Stockity: no auth (set STOCKITY_FULL_COOKIE in .env)")
+            return []
+
         ric = RIC_MAP[sym_upper]
-
-        # Build API URL
-        time_param = self._compute_time_param(target_minute=15)
         encoded_ric = url_quote(ric, safe="")
-        url = CANDLE_API.format(ric=encoded_ric, time=time_param)
+        seconds = 1 if interval == "1s" else DEFAULT_CANDLE_SECONDS
+        time_param = self._compute_time_param()
+        url = f"{CANDLE_API.format(ric=encoded_ric, time=time_param, seconds=seconds)}?locale=en"
 
-        client = await self._get_client()
+        client = await self._get_http()
         try:
             resp = await client.get(url)
             resp.raise_for_status()
@@ -170,25 +170,30 @@ class StockitySource(BaseDataSource):
         except httpx.HTTPError as exc:
             LOG.warning("Stockity HTTP fetch failed for %s: %s", ric, exc)
             return []
+        except Exception as exc:
+            LOG.error("Stockity fetch error for %s: %s", ric, exc)
+            return []
+
+        if not data.get("success"):
+            errors = data.get("errors", [])
+            LOG.warning(f"Stockity API error for {ric}: {errors}")
+            return []
 
         raw_candles = data.get("data", [])
         if not raw_candles:
             LOG.debug("Stockity: no candle data for %s", ric)
             return []
 
-        raw_1s: list[OHLCV] = []
-        now_ts = int(datetime.now(UTC).timestamp())
+        result: list[OHLCV] = []
         for item in raw_candles:
             try:
                 ts_str = item.get("created_at", "")
-                if ts_str:
-                    ts = int(
-                        datetime.fromisoformat(ts_str.replace("Z", "+00:00")).timestamp()
-                    )
-                else:
-                    ts = now_ts
-
-                raw_1s.append(
+                if not ts_str:
+                    continue
+                ts = int(
+                    datetime.fromisoformat(ts_str.replace("Z", "+00:00")).timestamp()
+                )
+                result.append(
                     OHLCV(
                         timestamp=ts,
                         open=float(item["open"]),
@@ -196,32 +201,87 @@ class StockitySource(BaseDataSource):
                         low=float(item["low"]),
                         close=float(item["close"]),
                         volume=0,
-                        symbol=symbol,
+                        symbol=sym_upper,
                     )
                 )
             except (KeyError, ValueError, TypeError) as exc:
                 LOG.debug("Stockity: skipping bad candle %s — %s", item, exc)
 
-        if not raw_1s:
-            return []
-
-        raw_1s.sort(key=lambda c: c.timestamp)
+        result.sort(key=lambda c: c.timestamp)
         LOG.info(
-            "Stockity: got %d raw 1s candles for %s (%s)",
-            len(raw_1s),
-            symbol,
-            ric,
+            "Stockity: got %d candles for %s (%s, %ds)",
+            len(result), sym_upper, ric, seconds,
         )
+        return result[-count:] if len(result) > count else result
 
-        # Aggregate to 1-minute candles
-        aggregated = self._aggregate_candles(raw_1s, period_s=DEFAULT_AGGR_SECONDS)
-        LOG.info("Stockity: aggregated into %d 1m candles", len(aggregated))
+    # ── Public API: real-time (WebSocket) ──────────────────────────────
 
-        return aggregated
+    async def stream(
+        self,
+        symbol: str,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream real-time ticks via WebSocket.
+
+        Args:
+            symbol: Platform asset (e.g. ``"CRYPTO_IDX"``).
+
+        Yields:
+            Tick dicts with keys: ric, ask, bid, rate, created_at.
+        """
+        sym_upper = symbol.upper()
+        if sym_upper not in RIC_MAP:
+            LOG.warning(f"Stockity stream: symbol {symbol} not in RIC_MAP")
+            return
+        if not self._cookie:
+            LOG.warning("Stockity stream: no auth (set STOCKITY_FULL_COOKIE in .env)")
+            return
+
+        ric = RIC_MAP[sym_upper]
+        await self._subscribe_ws([ric])
+
+        ws = await self._connect_ws()
+        async for raw in ws:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            for item in data.get("data", []):
+                if "assets" in item:
+                    for asset in item["assets"]:
+                        yield asset
+
+    # ── Helpers ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _aggregate_candles(raw: list[OHLCV], period_s: int = 60) -> list[OHLCV]:
+        """Aggregate candles into larger timeframes."""
+        if not raw:
+            return []
+        buckets: dict[int, list[OHLCV]] = {}
+        for c in raw:
+            bucket = (c.timestamp // period_s) * period_s
+            buckets.setdefault(bucket, []).append(c)
+        return [
+            OHLCV(
+                timestamp=ts,
+                open=group[0].open,
+                high=max(c.high for c in group),
+                low=min(c.low for c in group),
+                close=group[-1].close,
+                volume=0,
+                symbol=raw[0].symbol if raw else "",
+            )
+            for ts in sorted(buckets.keys())
+            for group in [buckets[ts]]
+        ]
 
     async def close(self) -> None:
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
+        if self._http and not self._http.is_closed:
+            await self._http.aclose()
+        if self._ws is not None:
+            with suppress(Exception):
+                await self._ws.close()
+            self._ws = None
 
     async def __aenter__(self) -> StockitySource:
         return self

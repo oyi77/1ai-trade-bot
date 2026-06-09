@@ -571,16 +571,13 @@ def _get_order_type(action: str, entry: float, price: float, threshold: float = 
 
 
 def format_signal_telegram(signal: dict) -> str:
-    """Format signal for Telegram channel posting."""
+    """Format signal for Telegram channel — Vilona aggressive style."""
     if not signal:
         return ""
 
     action = signal["action"]
     symbol = signal["symbol"]
     entry = signal["entry"]
-    price = signal.get("price", entry)
-    order_type = action  # EA market execution — selalu MARKET
-    emoji = "🟢" if action == "BUY" else "🔴"
     grade = signal["grade"]
     sl = signal["sl"]
     tp1 = signal["tp1"]
@@ -595,33 +592,50 @@ def format_signal_telegram(signal: dict) -> str:
 
     now = datetime.now(timezone(timedelta(hours=7)))
     wib = now.strftime("%Y.%m.%d %H:%M")
+    
+    emoji = "🟢" if action == "BUY" else "🔴"
+    pair_emoji = "🥇" if symbol in ("XAUUSD",) else "₿" if symbol in ("BTCUSD",) else "🛢" if symbol in ("USOIL",) else "💱"
+
+    # Grade-specific intensity
+    if grade == "A":
+        grade_label = "⚡ S-TIER"
+        callout = "🔥 FULL SEND — HIGHEST CONVICTION SETUP. JANGAN TIDUR."
+    elif grade == "B":
+        grade_label = "💎 A-TIER"
+        callout = "⚡ Valid entry area — tunggu konfirmasi M5 lalu GAS."
+    else:
+        grade_label = "📌 SETUP"
+        callout = "📌 Standard setup — atur risk management ketat."
+
+    # RR label
+    if rr >= 2.0:
+        rr_label = f"💰 RR 1:{rr} — JUICY!"
+    elif rr >= 1.5:
+        rr_label = f"📊 RR 1:{rr} — decent"
+    else:
+        rr_label = f"📊 RR 1:{rr}"
 
     lines = [
-        f"{emoji} <b>{order_type} {symbol}</b>",
+        f"{emoji} <b>{action} {symbol}</b> {pair_emoji}",
         f"━━━━━━━━━━━━━━━━━━━━━━",
-        f"🕐 {wib} WIB | Grade: <b>{grade}</b> | Conf: {conf*100:.0f}%",
+        f"🕐 {wib} WIB",
+        f"{grade_label} | <b>Conf {conf*100:.0f}%</b>",
         f"",
-        f"<b>🎯 Entry:</b> ${entry:.2f}",
-        f"<b>🛑 SL:</b> ${sl:.2f} ({pips_sl}pt)",
-        f"<b>✅ TP1:</b> ${tp1:.2f} (+{pips_target}pt)",
-        f"<b>✅ TP2:</b> ${tp2:.2f} (+{pips_target*2}pt)",
-        f"<b>📊 RR:</b> 1:{rr}",
+        f"🎯 <b>Entry:</b> <code>${entry:.2f}</code>",
+        f"🛑 <b>SL:</b> <code>${sl:.2f}</code> | -{pips_sl}pt",
+        f"✅ <b>TP1:</b> <code>${tp1:.2f}</code> | +{pips_target}pt",
+        f"✅ <b>TP2:</b> <code>${tp2:.2f}</code> | +{pips_target*2}pt",
+        f"{rr_label}",
         f"",
         f"━━━━━━━━━━━━━━━━━━━━━━",
         f"🏛 {macro} | {align}",
-        f"📈 {reason}",
+        f"🧠 <i>{reason[:250]}</i>",
         f"━━━━━━━━━━━━━━━━━━━━━━",
+        f"{callout}",
+        f"",
+        f"⚠️ <i>Risk 1% per trade. Full AI — verify sendiri.</i>",
+        f"💚 Server GRATIS → /donate | @berkahkaryaforexbotbot",
     ]
-
-    if grade == "A":
-        lines.append(f"🔥 <b>HIGH CONVICTION</b> — siap eksekusi!")
-    elif grade == "B":
-        lines.append(f"⚡ Signal valid — pantau entry area")
-    else:
-        lines.append(f"📌 Sinyal standar — atur risk management")
-
-    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
-    lines.append(f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
 
     return "\n".join(lines)
 

@@ -46,7 +46,7 @@ def trading_allowed(symbol):
     return True  # Stocks, others — always allowed during weekdays
 
 def load_trade_log():
-    path = os.path.join(PROJECT_DIR, "data", "trade_log.json")
+    path = os.path.join(PROJECT_DIR, "..", "data", "trade_log.json")
     try:
         with open(path) as f:
             return json.load(f)
@@ -68,6 +68,32 @@ def is_duplicate(log, signal):
                     return True
             except:
                 pass  # kalau gak bisa parse, lanjut cek
+    return False
+
+# ── Persistent dedup cache (survives across cron runs) ──────────────
+DEDUP_CACHE_PATH = os.path.join(PROJECT_DIR, "..", "data", "dedup_cache.json")
+DEDUP_WINDOW_SEC = 7200  # 2 jam — jangan kirim sinyal yg sama dalam 2 jam
+
+def load_dedup_cache():
+    try:
+        with open(DEDUP_CACHE_PATH) as f:
+            return json.load(f)
+    except: return {}
+
+def save_dedup_cache(cache):
+    os.makedirs(os.path.dirname(DEDUP_CACHE_PATH), exist_ok=True)
+    with open(DEDUP_CACHE_PATH, "w") as f:
+        json.dump(cache, f)
+
+def is_cached_duplicate(symbol, action):
+    """Check persistent dedup cache — lebih reliable dari trade_log."""
+    cache = load_dedup_cache()
+    key = f"{symbol}:{action}"
+    last_ts = cache.get(key, 0)
+    if time.time() - last_ts < DEDUP_WINDOW_SEC:
+        return True
+    cache[key] = time.time()
+    save_dedup_cache(cache)
     return False
 
 def main():
@@ -146,6 +172,12 @@ def main():
         
         # ── Dedup check ──
         if not args.force:
+            # 1. Persistent cache check (survives cron restarts)
+            if is_cached_duplicate(sig.get("symbol", sym), sig.get("action", "")):
+                if not args.quiet:
+                    log.info(f"  {sym}: CACHED duplicate — skipped")
+                continue
+            # 2. Trade log check (backward compat)
             trade_log = load_trade_log()
             if is_duplicate(trade_log, sig):
                 if not args.quiet:

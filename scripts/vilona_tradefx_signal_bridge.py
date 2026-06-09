@@ -200,19 +200,32 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "queue_size": len(PENDING),
             })
         elif path == "" or path == "/":
-            # Serve landing page
-            html_path = os.path.join(PROJECT_DIR, "scripts", "landing_page.html")
+            # Serve new dashboard HTML (proxied from dashboard server on 8768)
             try:
-                with open(html_path, "r") as f:
-                    content = f.read()
+                import urllib.request
+                req = urllib.request.Request("http://127.0.0.1:8768/")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    content = resp.read().decode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(content.encode())))
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(content.encode())
-            except FileNotFoundError:
-                self._json({"error": "page not found"}, 404)
+            except Exception as e:
+                # Fallback to old landing page
+                html_path = os.path.join(PROJECT_DIR, "scripts", "landing_page.html")
+                try:
+                    with open(html_path, "r") as f:
+                        content = f.read()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(content.encode())))
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(content.encode())
+                except FileNotFoundError:
+                    self._json({"error": "page not found"}, 404)
         elif path == "/dashboard":
             # 301 redirect to landing page
             self.send_response(301)

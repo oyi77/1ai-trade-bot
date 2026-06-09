@@ -158,6 +158,16 @@ except Exception as e:
     TRADE_TRACKER = False
     print(f"Trade tracker unavailable: {e}")
 
+# ── Unified Signal Feed ──
+try:
+    from scripts.signal_feed import add_signal as _feed_add, update_outcome as _feed_update
+    SIGNAL_FEED = True
+except Exception as e:
+    SIGNAL_FEED = False
+    print(f"Signal feed unavailable: {e}")
+    def _feed_add(*a, **kw): return ""
+    def _feed_update(*a, **kw): pass
+
 # ── Hermes Liquidity Hunter ──
 try:
     from hermes_liquidity_hunter import hermes_pipeline as hermes_liquidity_pipeline
@@ -2553,6 +2563,20 @@ def handle_command(cmd, text, chat_id, msg):
                         ]]
                     }
                     tg_send(text, chat_id, reply_markup=keyboard)
+                    # ── Save to unified feed (user-generated) ──
+                    try:
+                        username_raw = (msg.get("chat", {}).get("username", "") or 
+                                       msg.get("from", {}).get("username", "") or "")
+                        username = username_raw.lstrip("@") if username_raw else ""
+                        _entry_sv = sig.get("entry", price) or 0
+                        _sl_sv = sig.get("sl", 0) or 0
+                        _tp_sv = sig.get("tp", 0) or 0
+                        _feed_add(symbol=disp, direction=action, entry=_entry_sv, sl=_sl_sv, tp=_tp_sv,
+                                  confidence=sig.get("confidence",0), rr_ratio=sig.get("rr_ratio","?"),
+                                  engines=sig.get("engines",{}), source="user-generate",
+                                  source_user=username, price=price, grade=sig.get("grade",""))
+                    except Exception:
+                        pass
             else:
                 tg_send("❌ Analisa gagal — coba lagi nanti.", chat_id)
         elif not sub_norm:
@@ -2732,6 +2756,20 @@ def handle_command(cmd, text, chat_id, msg):
                                 ]]
                             }
                             tg_send(text, chat_id, reply_markup=keyboard)
+                    # ── Save to unified feed (user-generated) ──
+                    try:
+                        username_raw = (msg.get("chat", {}).get("username", "") or 
+                                       msg.get("from", {}).get("username", "") or "")
+                        username = username_raw.lstrip("@") if username_raw else ""
+                        _entry_sv = sig.get("entry", price) or 0
+                        _sl_sv = sig.get("sl", 0) or 0
+                        _tp_sv = sig.get("tp", 0) or 0
+                        _feed_add(symbol=disp, direction=action, entry=_entry_sv, sl=_sl_sv, tp=_tp_sv,
+                                  confidence=sig.get("confidence",0), rr_ratio=sig.get("rr_ratio","?"),
+                                  engines=sig.get("engines",{}), source="user-generate",
+                                  source_user=username, price=price, grade=sig.get("grade",""))
+                    except Exception:
+                        pass
                     else:
                         tg_send("❌ Analisa gagal — coba lagi nanti.", chat_id)
                 else:
@@ -3852,6 +3890,12 @@ def auto_analyze_loop():
                     else:
                         logger.warning(f"CHANNEL POST FAILED [mechanical]: tg_send returned None")
                     _mark_channel_post(pair, action, _entry, _sl, _tp)
+                    # ── Save to unified feed ──
+                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
+                              confidence=conf, rr_ratio=mech_sig.get("rr_ratio","?"),
+                              engines=mech_sig.get("engines",{}), source="channel-auto",
+                              price=price, grade=mech_sig.get("grade",""),
+                              source_name=mech_sig.get("source","mech"))
                 else:
                     logger.info(f"⏳ Channel rate limited [{disp}] — signal stored, not posted")
                 if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
@@ -3941,6 +3985,12 @@ def auto_analyze_loop():
                     else:
                         logger.warning(f"CHANNEL POST FAILED [AI-consensus]: tg_send returned None")
                     _mark_channel_post(pair, action, _entry, _sl, _tp)
+                    # ── Save to unified feed ──
+                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
+                              confidence=conf, rr_ratio=sig.get("rr_ratio","?"),
+                              engines=sig.get("engines",{}), source="channel-auto",
+                              price=price, grade=sig.get("grade",""),
+                              models=sig.get("_models",""), voters=sig.get("voters","?"))
                 else:
                     logger.info(f"⏳ Channel rate limited [{disp}] — AI signal stored, not posted")
 

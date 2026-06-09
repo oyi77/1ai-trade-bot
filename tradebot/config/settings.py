@@ -223,7 +223,17 @@ class Settings(BaseSettings):
     DUITKU_BASE_URL: str = "https://passport.duitku.com/webapi"
     DUITKU_CALLBACK_URL: str = ""
 
-    PAYMENT_STORE_PATH: str = str(Path.home() / "projects" / "1ai-trade-bot" / "data" / "payments.json")  # noqa: E501
+    # ═══════════════════════════════════════════════════════════════
+    #  LLM — AI Provider Keys (LangChain-compatible)
+    # ═══════════════════════════════════════════════════════════════
+    OPENAI_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
+    GEMINI_BACKUP_KEYS: str = ""  # comma-separated fallback keys
 
+    LLM_PREFERRED: str = "openai"  # "openai" | "deepseek" | "gemini"
+    LLM_MODEL: str = ""  # override default model
+    LLM_TEMPERATURE: float = 0.1
+    PAYMENT_STORE_PATH: str = str(Path.home() / "projects" / "1ai-trade-bot" / "data" / "payments.json")  # noqa: E501
 
 settings = Settings()

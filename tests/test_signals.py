@@ -442,11 +442,10 @@ class TestStockitySource:
             )
         )
         mock_client.aclose = AsyncMock()
-
         src = StockitySource()
         src._authtoken = "test-token"
         src._cookie = "cookie-value"
-        src._client = mock_client
+        src._http = mock_client
 
         candles = await src.fetch("CRYPTO_IDX")
         assert candles == []
