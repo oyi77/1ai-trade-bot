@@ -340,9 +340,34 @@ class StockityBot(BaseBot):
             )
         authtoken = args[0].strip()
         user_id = args[1].strip()
+        
+        # Update in-memory
         self._settings.update_credentials(authtoken, user_id)
+        
+        # Persist to .env file
+        try:
+            env_path = Path(".env")
+            content = env_path.read_text() if env_path.exists() else ""
+            lines = content.split("\n")
+
+            # Remove old STOCKITY_AUTHTOKEN and STOCKITY_USER_ID lines if exist
+            lines = [l for l in lines if not l.startswith("STOCKITY_AUTHTOKEN=") and not l.startswith("STOCKITY_USER_ID=")]  # noqa: E501
+            # Add new lines
+            lines.append(f"STOCKITY_AUTHTOKEN={authtoken}")
+            lines.append(f"STOCKITY_USER_ID={user_id}")
+            env_path.write_text("\n".join(lines))
+            LOG.info("✅ Cookies persisted to .env")
+        except Exception as e:
+            LOG.error(f"Failed to persist cookies: {e}")
+            return (
+                f"✅ *Credentials Updated!* (but failed to persist to .env)\n"
+                f"authtoken: `{authtoken[:20]}...`\n"
+                f"userId: `{user_id}`\n\n"
+                f"❌ Error: {e}"
+            )
+
         return (
-            "✅ *Credentials Updated!*\n"
+            "✅ *Credentials Updated & Persisted!*\n"
             f"authtoken: `{authtoken[:20]}...`\n"
             f"userId: `{user_id}`\n\n"
             "Next scan will use Stockity WS for CRYPTO_IDX, BTC_IDX, etc."

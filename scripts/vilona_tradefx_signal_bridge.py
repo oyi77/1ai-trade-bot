@@ -566,19 +566,29 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "tp2": data.get("tp2"),
                 "risk_percent": data.get("risk_percent", 1.0),
                 "confidence": data.get("confidence"),
+                "rr_ratio": data.get("rr_ratio", 0),
                 "comment": data.get("comment", "VTFX/AI"),
                 "source": data.get("source", "vtfx"),
                 "timestamp": data.get("timestamp"),
                 "received_at": time.time(),
                 "status": "pending",
                 "layers": data.get("layers", []),
-                "target_user": data.get("target_user"),  # optional: deliver to specific user
+                "target_user": data.get("target_user"),
             }
 
             broadcast_count = 0
 
             with LOCK:
                 HISTORY.append(signal)
+
+                # ── Write to EA signal file for ea_executor.py ──
+                try:
+                    from pathlib import Path
+                    ea_file = Path("/home/openclaw/projects/1ai-trade-bot/data/vilona_tradefx/ea_signal.json")
+                    ea_file.parent.mkdir(parents=True, exist_ok=True)
+                    ea_file.write_text(json.dumps(signal, indent=2, default=str))
+                except Exception:
+                    pass
 
                 # ── BROADCAST MODE: duplicate signal to instances / accounts ──
                 target = signal.get("target_user")  # optional: single-user routing

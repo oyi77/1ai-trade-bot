@@ -199,13 +199,14 @@ class TestDerivWSClient:
         assert "app_id=12345" in client.ws_url
 
     def test_ws_url_demo(self):
-        # ws_url returns otp directly when set (short-circuits demo URL)
+        # ws_url returns full demo URL with OTP when set
         client = DerivWSClient(otp="otp_abc", mode="demo")
-        assert client.ws_url == "otp_abc"
+        assert client.ws_url == "wss://api.derivws.com/trading/v1/options/ws/demo?otp=otp_abc"
 
     def test_ws_url_demo_without_otp(self):
+        # Without OTP, falls back to legacy endpoint
         client = DerivWSClient(mode="demo", app_id="test_app")
-        assert "demo" in client.ws_url
+        assert "app_id=test_app" in client.ws_url
 
     def test_event_handler_registration(self):
         client = DerivWSClient()

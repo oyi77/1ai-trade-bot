@@ -22,11 +22,13 @@ LOG = logging.getLogger("tradebot.signals.stockity")
 
 CANDLE_API = "https://api.stockity.com/candles/v1/{ric}/{time}/1"
 
-# RIC mapping: our symbol → Stockity RIC
-# NOTE: Stockity hanya punya 1 index (Z-CRY/IDX).
-# Semua nama lain adalah alias — kita cuma kirim 1x aja.
+# RIC mappings for Stockity API
+# WARNING: Only CRYPTO_IDX is tested. Others may fail silently.
 RIC_MAP: dict[str, str] = {
-    "CRYPTO_IDX": "Z-CRY/IDX",
+    "CRYPTO_IDX": "Z-CRY/IDX",  # Works ✓
+    "BTC_IDX": "BTC_IDX",        # Untested
+    "ETH_IDX": "ETH_IDX",        # Untested
+    "GOLD_IDX": "GOLD_IDX",      # Untested
 }
 
 PLATFORM_ASSETS: set[str] = {"CRYPTO_IDX"}
@@ -69,28 +71,33 @@ class StockitySource(BaseDataSource):
                 headers=headers,
             )
         return self._client
-
-    def _compute_time_param(self, minutes_back: int = 15) -> str:
-        """Compute the ``time`` query parameter for the Stockity API.
-
-        The API only serves data aligned to 15-minute boundaries
-        (``**:00``, ``**:15``, ``**:30``, ``**:45``).
-        """
+    def _compute_time_param(self, target_minute: int = 15) -> str:
+        """Compute time parameter for Stockity API, handling hour boundaries."""
         now = datetime.now(UTC)
-        bucket_15 = (now.minute // 15) * 15
-        blocks_back = max(1, minutes_back // 15)
-        target_minute = bucket_15 - (blocks_back * 15)
-        target_hour = now.hour
+        year, month, day, hour, minute = now.year, now.month, now.day, now.hour, now.minute
 
         if target_minute < 0:
+            # Wrap to previous hour
+            hour -= 1
+            if hour < 0:
+                # Midnight wraparound
+                hour = 23
+                day -= 1
+                if day < 1:
+                    # Month wraparound (use last day of previous month)
+                    month -= 1
+                    if month < 1:
+                        month = 12
+                        year -= 1
+                    # Simple: assume 30 days (Stockity won't need historical >30d usually)
+                    day = 30
             target_minute += 60
-            target_hour -= 1
-        if target_hour < 0:
-            target_hour += 24
 
-        return now.replace(
-            hour=target_hour, minute=target_minute, second=0, microsecond=0
-        ).strftime("%Y-%m-%dT%H:%M:00")
+        # Validate
+        assert 0 <= hour < 24, f"hour {hour} out of range"
+        assert 0 <= target_minute < 60, f"minute {target_minute} out of range"
+
+        return f"{year:04d}{month:02d}{day:02d}_{hour:02d}{target_minute:02d}"
 
     @staticmethod
     def _aggregate_candles(raw: list[OHLCV], period_s: int = 60) -> list[OHLCV]:
@@ -157,14 +164,19 @@ class StockitySource(BaseDataSource):
             )
             return []
 
-        # Map symbol to RIC
-        ric = RIC_MAP.get(sym_upper)
-        if ric is None:
-            LOG.debug("Stockity: no RIC mapping for %s", symbol)
+        # Validate symbol is supported
+        if sym_upper not in RIC_MAP:
+            LOG.warning(
+                f"Stockity: symbol {symbol} not in RIC_MAP. "
+                f"Supported: {list(RIC_MAP.keys())}"
+            )
             return []
 
+        # Map symbol to RIC
+        ric = RIC_MAP[sym_upper]
+
         # Build API URL
-        time_param = self._compute_time_param(minutes_back=15)
+        time_param = self._compute_time_param(target_minute=15)
         encoded_ric = url_quote(ric, safe="")
         url = CANDLE_API.format(ric=encoded_ric, time=time_param)
 

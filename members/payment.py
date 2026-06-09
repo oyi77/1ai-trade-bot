@@ -159,3 +159,50 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
     except Exception as e:
         logger.error("Tripay exception: %s", e)
         return {"error": f"Payment error: {str(e)[:100]}"}
+
+
+def _sign(raw: str) -> str:
+    """HMAC-SHA256 signature for Tripay API."""
+    import hashlib, hmac
+    return hmac.new(
+        TRIPAY_PRIVATE_KEY.encode(), raw.encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def check_tripay_status(merchant_ref: str) -> dict:
+    """Check Tripay transaction status by merchant_ref."""
+    if not TRIPAY_API_KEY or not TRIPAY_PRIVATE_KEY:
+        return {"success": False, "error": "Tripay API key not configured"}
+
+    import urllib.request, urllib.error
+
+    payload = {"merchant_ref": merchant_ref}
+    payload["signature"] = _sign(merchant_ref + TRIPAY_MERCHANT)
+
+    try:
+        req = urllib.request.Request(
+            f"{TRIPAY_BASE}/transaction/detail",
+            data=json.dumps(payload).encode(),
+            headers={
+                "Authorization": f"Bearer {TRIPAY_API_KEY}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()[:300]
+        logger.error("Tripay status check HTTP %s: %s", e.code, body)
+        return {"success": False, "error": f"HTTP {e.code}"}
+    except Exception as e:
+        logger.error("Tripay status check failed: %s", e)
+        return {"success": False, "error": str(e)[:200]}
+
+
+def is_tripay_paid(merchant_ref: str) -> bool:
+    """Returns True if Tripay payment is confirmed PAID."""
+    result = check_tripay_status(merchant_ref)
+    if result.get("success") and result.get("data"):
+        status = result["data"].get("status", "").upper()
+        return status in ("PAID", "SUCCESS", "SETTLEMENT")
+    return False

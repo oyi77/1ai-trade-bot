@@ -42,7 +42,7 @@ class Config:
 
     # ── Stockity auth ─────────────────────────────────────────────────
     STOCKITY_AUTHTOKEN: str = os.environ.get("STOCKITY_AUTHTOKEN", "")
-    STOCKITY_USER_ID: str = os.environ.get("STOCKITY_USER_ID", "182899260")
+    STOCKITY_USER_ID: str = os.environ.get("STOCKITY_USER_ID", "")
     STOCKITY_FULL_COOKIE: str = os.environ.get("STOCKITY_FULL_COOKIE", "")
 
     # ── Signal engine ─────────────────────────────────────────────────

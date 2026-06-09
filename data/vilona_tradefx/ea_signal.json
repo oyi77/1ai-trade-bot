@@ -1,1 +1,20 @@
-{"action": "SELL", "entry": 4334.7, "sl": 4336.2, "tp": 4333.8, "tp1": 4334.25, "tp2": 4333.8, "confidence": 0.55, "source": "mechanical_override", "rr_ratio": 0.6}
+{
+  "signal_id": "vtfx_1781039718336_3",
+  "symbol": "XAUUSD",
+  "action": "SELL",
+  "entry": 4260.6,
+  "sl": 4263.4,
+  "tp": 4256.4,
+  "tp1": 4256.4,
+  "tp2": 4252.2,
+  "risk_percent": 1.0,
+  "confidence": 0.74,
+  "rr_ratio": 0,
+  "comment": "VTFX/AI",
+  "source": "vtfx",
+  "timestamp": "2026-06-10T04:15:17+07:00",
+  "received_at": 1781039718.336612,
+  "status": "pending",
+  "layers": [],
+  "target_user": null
+}

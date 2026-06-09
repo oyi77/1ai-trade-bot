@@ -124,28 +124,59 @@ class DigitMartingaleStrategy:
         if daily_pnl <= self.daily_loss_limit:
             LOG.info("🛑 Daily SL HIT: $%.2f <= $%.2f — stopping trading", daily_pnl, self.daily_loss_limit)  # noqa: E501
             self.running = False
-            return TradeResult(0, 0, 0, 0, 0, self.cycle_count + 1,
-                               stopped_early=True, reason="daily_sl_hit")
+            return TradeResult(
+                profit=0.0,
+                total_stake=0.0,
+                trades=0,
+                wins=0,
+                losses=0,
+                win_rate=0.0,
+                cycles=self.cycle_count + 1
+            )
         if daily_pnl >= self.target_profit:
             LOG.info("✅ Daily TP HIT: $%.2f >= $%.2f — stopping trading", daily_pnl, self.target_profit)  # noqa: E501
             self.running = False
-            return TradeResult(0, 0, 0, 0, 0, self.cycle_count + 1,
-                               stopped_early=True, reason="daily_tp_hit")
-
-        ticks = await self.client.get_ticks_history(self.symbol, count=self.analysis_ticks)
-        if len(ticks) < self.analysis_ticks:
-            LOG.warning("Not enough ticks: %d/%d", len(ticks), self.analysis_ticks)
+            return TradeResult(
+                profit=0.0,
+                total_stake=0.0,
+                trades=0,
+                wins=0,
+                losses=0,
+                win_rate=0.0,
+                cycles=self.cycle_count + 1
+            )
+        # Fetch historical ticks for analysis
+        ticks = await self.client.get_ticks_history(
+            symbol=self.symbol, count=self.analysis_ticks
+        )
+        if not ticks or len(ticks) < self.analysis_ticks:
+            LOG.warning(f"Insufficient ticks: got {len(ticks) if ticks else 0}, need {self.analysis_ticks}")
+            self.cycle_count += 1
             self.running = False
-            return TradeResult(0, 0, 0, 0, 0, self.cycle_count + 1,
-                               stopped_early=True, reason="insufficient_ticks")
+            return TradeResult(
+                profit=0.0,
+                total_stake=0.0,
+                trades=0,
+                wins=0,
+                losses=0,
+                win_rate=0.0,
+                cycles=self.cycle_count + 1
+            )
 
         analysis = self.analyzer.analyze(ticks)
         if not analysis:
             LOG.info("No valid Momen pattern found, skipping")
             self.cycle_count += 1
             self.running = False
-            return TradeResult(0, 0, 0, 0, 0, self.cycle_count + 1,
-                               stopped_early=True, reason="no_pattern")
+            return TradeResult(
+                profit=0.0,
+                total_stake=0.0,
+                trades=0,
+                wins=0,
+                losses=0,
+                win_rate=0.0,
+                cycles=self.cycle_count + 1
+            )
 
         LOG.info("🎯 Pattern: carrier=%d M1@tick=%d M2@tick=%d confidence=%.0f%%",
                  analysis.carrier, analysis.momen1_tick, analysis.momen2_tick,
@@ -155,8 +186,15 @@ class DigitMartingaleStrategy:
             LOG.info("Confidence too low (%.0f%%), skipping", analysis.confidence * 100)
             self.cycle_count += 1
             self.running = False
-            return TradeResult(0, 0, 0, 0, 0, self.cycle_count + 1,
-                               stopped_early=True, reason="low_confidence")
+            return TradeResult(
+                profit=0.0,
+                total_stake=0.0,
+                trades=0,
+                wins=0,
+                losses=0,
+                win_rate=0.0,
+                cycles=self.cycle_count + 1
+            )
 
         return await self._execute_cycle(analysis)
 
@@ -185,35 +223,48 @@ class DigitMartingaleStrategy:
 
             LOG.info(f"   📍 OP {op}/{self.max_ops} stake=${stake:.2f}")
 
-            result = await self.client.buy_digit(
-                symbol=self.symbol,
-                contract_type=self.contract_type,
-                barrier=self.barrier,
-                stake=stake,
-                duration=self.duration,
-            )
+            try:
+                result = await self.client.buy_digit(
+                    symbol=self.symbol,
+                    contract_type=self.contract_type,
+                    barrier=self.barrier,
+                    stake=stake,
+                    duration=self.duration,
+                )
+            except Exception as e:
+                LOG.error(f"Buy digit exception: {e}")
+                losses += 1
+                total_stake += stake
+                trades += 1
+                stake = round(stake * self.stake_multiplier, 2)
+                continue
+
+            if not result:
+                LOG.warning(f"Buy failed for {self.symbol}")
+                losses += 1
+                total_stake += stake
+                trades += 1
+                stake = round(stake * self.stake_multiplier, 2)
+                continue
 
             total_stake += stake
             trades += 1
 
-            if result:
-                await asyncio.sleep(1)
-                await self.get_session_balance()
-                profit_run = self.balance - self.start_balance
+            await asyncio.sleep(1)
+            await self.get_session_balance()
+            profit_run = self.balance - self.start_balance
 
-                if profit_run > 0:
-                    LOG.info("   ✅ WIN! Current P/L: +$%.2f", profit_run)
-                    wins += 1
-                    stake = self.initial_stake
-                else:
-                    LOG.info("   ❌ LOSS! Martingale: $%.2f -> $%.2f",
-                             stake, stake * self.stake_multiplier)
-                    losses += 1
-                    stake = round(stake * self.stake_multiplier, 2)
-                    await asyncio.sleep(2)
+            if profit_run > 0:
+                LOG.info("   ✅ WIN! Current P/L: +$%.2f", profit_run)
+                wins += 1
+                stake = self.initial_stake
             else:
+                LOG.info("   ❌ LOSS! Martingale: $%.2f -> $%.2f",
+                         stake, stake * self.stake_multiplier)
                 losses += 1
                 stake = round(stake * self.stake_multiplier, 2)
+                await asyncio.sleep(2)
+
 
             if stake > self.initial_stake * MAX_STAKE_MULTIPLIER:
                 LOG.warning("Stake capped at $%.2f", self.initial_stake * MAX_STAKE_MULTIPLIER)
@@ -230,7 +281,10 @@ class DigitMartingaleStrategy:
         LOG.info("📊 Cycle %d done: +$%.2f (%d/%d wins, %.0f%%)",
                  self.cycle_count, final_profit, wins, trades, win_rate)
 
-        CognitiveDB.update_daily_counter(profit_delta=final_profit, won=(final_profit > 0))
+        try:
+            CognitiveDB.update_daily_counter(profit_delta=final_profit, won=(final_profit > 0))
+        except Exception as e:
+            LOG.warning(f"Failed to update cognitive counter: {e}")
 
         return TradeResult(
             profit=final_profit,

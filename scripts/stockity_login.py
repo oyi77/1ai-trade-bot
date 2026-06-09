@@ -84,8 +84,11 @@ def save_to_env(authtoken: str, user_id: str, env_path: Path = ENV_FILE):
 
 
 if __name__ == "__main__":
-    email = os.environ.get("STOCKITY_EMAIL", "ikangayuna@gmail.com")
-    password = os.environ.get("STOCKITY_PASS", "Utanglunas100%")
+    email = os.getenv('STOCKITY_EMAIL')
+    password = os.getenv('STOCKITY_PASSWORD')
+
+    if not email or not password:
+        raise ValueError("STOCKITY_EMAIL and STOCKITY_PASSWORD must be set in .env")
 
     print("🔑 Logging in...")
     authtoken, user_id = login(email, password)

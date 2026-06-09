@@ -181,9 +181,60 @@
       "close_price": 4336.3,
       "close_time": "2026-06-08T12:09:47.675936+07:00",
       "pnl": -1.6
+    },
+    {
+      "id": "ea_1781039634059",
+      "action": "BUY",
+      "symbol": "XAUUSD",
+      "entry": 4265.0,
+      "sl": 4255.0,
+      "tp": 4285.0,
+      "tp1": 4275.0,
+      "tp2": null,
+      "confidence": 0.72,
+      "source": "test_e2e",
+      "open_time": "2026-06-10T04:13:54.059531+07:00",
+      "status": "TP_HIT",
+      "close_price": 4335.09,
+      "close_time": "2026-06-10T04:13:57.155475+07:00",
+      "pnl": 70.09
+    },
+    {
+      "id": "ea_1781039658899",
+      "action": "SELL",
+      "symbol": "XAUUSD",
+      "entry": 4265.0,
+      "sl": 4270.0,
+      "tp": 4250.0,
+      "tp1": 4258.0,
+      "tp2": null,
+      "confidence": 0.78,
+      "source": "final_e2e_test",
+      "open_time": "2026-06-10T04:14:18.899631+07:00",
+      "status": "SL_HIT",
+      "close_price": 4335.09,
+      "close_time": "2026-06-10T04:14:22.123162+07:00",
+      "pnl": -70.09
+    },
+    {
+      "id": "ea_1781039708942",
+      "action": "SELL",
+      "symbol": "XAUUSD",
+      "entry": 4260.6,
+      "sl": 4263.4,
+      "tp": 4256.4,
+      "tp1": 4256.4,
+      "tp2": 4252.2,
+      "confidence": 0.74,
+      "source": "vtfx",
+      "open_time": "2026-06-10T04:15:08.942226+07:00",
+      "status": "SL_HIT",
+      "close_price": 4335.09,
+      "close_time": "2026-06-10T04:15:12.057573+07:00",
+      "pnl": -74.49
     }
   ],
-  "total_pnl": 1729.1999999999998,
-  "signals_processed": 11,
-  "last_signal_id": "SELL_4334.70"
+  "total_pnl": 1654.7099999999998,
+  "signals_processed": 14,
+  "last_signal_id": "SELL_4260.60"
 }

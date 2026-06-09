@@ -45,6 +45,7 @@ from tradebot.brokers.deriv.config import (
     REST_BASE,
     WS_LEGACY,
     WS_NEW_DEMO,
+    WS_NEW_REAL,
     WS_TIMEOUT,
 )
 
@@ -111,7 +112,6 @@ class DerivWSClient:
         result = await client.buy_digit("R_75", "DIGITMATCH", barrier=7, stake=0.35)
         await client.disconnect()
     """
-
     def __init__(self, api_token: str = "", app_id: str = "",
                  otp: str = "", pat_token: str = "", mode: str = "api",
                  account_id: str = ""):
@@ -131,20 +131,28 @@ class DerivWSClient:
         self._pending: dict[str, asyncio.Future] = {}
         self._msg_id = 0
         self._recv_task: asyncio.Task | None = None
-
-    # ── Properties ──
+        self._retry_count = 0
+        self._max_retries = 3
+        self._backoff_base = 1
 
     @property
     def ws_url(self) -> str:
+        # Prefer OTP URLs if OTP is available (obtained from REST API during connect)
         if self.otp:
-            return self.otp
-        if self.mode == "demo":
-            return f"{WS_NEW_DEMO}?otp={self.otp}"
+            if self.mode == "demo":
+                return f"{WS_NEW_DEMO}?otp={self.otp}"
+            elif self.mode == "real":
+                return f"{WS_NEW_REAL}?otp={self.otp}"
+        # For real mode with PAT token, use new endpoint (OTP will be added during connect)
+        if self.pat_token and self.account_id and self.mode == "real":
+            return WS_NEW_REAL
+        # Fall back to legacy (works without OTP)
         return f"{WS_LEGACY}?app_id={self.app_id}"
 
     @property
     def is_connected(self) -> bool:
         return self._connected and self._ws is not None
+
 
     # ── OTP Auth ──
 
@@ -243,9 +251,21 @@ class DerivWSClient:
             return True
 
         except Exception as e:
-            LOG.error("Connect failed: %s", e)
+            # Rate limit handling with retry
+            error_str = str(e)
+            if isinstance(e, dict) and e.get('error', {}).get('code') == 'RateLimit':
+                LOG.warning(f"Rate limited: {e}. Backoff 5s.")
+                await asyncio.sleep(5)
+                self._retry_count = min(self._retry_count + 1, self._max_retries)
+                if self._retry_count < self._max_retries:
+                    return await self.connect()
+            elif 'insufficient_balance' in error_str:
+                LOG.error(f"Insufficient balance: {e}")
+                raise
+            else:
+                LOG.error("Connect failed: %s", e)
+                raise
             self._connected = False
-            raise
 
     async def disconnect(self):
         """Clean disconnect — unsubscribe all, close WS."""
@@ -316,10 +336,11 @@ class DerivWSClient:
         """
         while self._running:
             try:
-                msg = await asyncio.wait_for(self._ws.recv(), timeout=5)
-            except TimeoutError:
+                msg = await asyncio.wait_for(self._ws.recv(), timeout=WS_TIMEOUT)
+            except asyncio.TimeoutError:
                 if not self._running:
                     break
+                # Ping/pong handles keepalive; long timeout is normal
                 if self._ws and not self._ws.closed:
                     with contextlib.suppress(Exception):
                         await self._ws.send(json.dumps({"ping": 1}))
@@ -542,18 +563,35 @@ class DerivWSClient:
 
         Supports: DIGITMATCH, DIGITOVER, DIGITUNDER, DIGITODD, DIGITEVEN
         """
-        if contract_type == "DIGITOVER" and barrier >= 9:
-            LOG.error("DIGITOVER barrier must be < 9")
-            return None
-        if contract_type == "DIGITUNDER" and barrier <= 0:
-            LOG.error("DIGITUNDER barrier must be > 0")
-            return None
+        # Bug 6: Complete barrier validation for all contract types
+        if contract_type == "DIGITMATCH":
+            if not (0 <= barrier <= 9):
+                LOG.error("DIGITMATCH barrier must be 0-9")
+                return None
+        elif contract_type == "DIGITOVER":
+            if not (0 <= barrier < 9):
+                LOG.error("DIGITOVER barrier must be 0-8")
+                return None
+        elif contract_type == "DIGITUNDER":
+            if not (0 < barrier <= 9):
+                LOG.error("DIGITUNDER barrier must be 1-9")
+                return None
+        elif contract_type == "DIGITODD":
+            if barrier is not None and barrier != 0:
+                LOG.error("DIGITODD ignores barrier; use 0 or None")
+                return None
+        elif contract_type == "DIGITEVEN":
+            if barrier is not None and barrier != 0:
+                LOG.error("DIGITEVEN ignores barrier; use 0 or None")
+                return None
 
         proposal = await self.get_proposal(
             symbol=symbol, contract_type=contract_type,
             barrier=str(barrier), amount=stake,
             duration=duration, duration_unit="t",
         )
+        
+        # Bug 7: Validate proposal response before using
         if not proposal or "error" in proposal:
             LOG.error("Proposal failed for %s(%s): %s",
                       contract_type, barrier, proposal)
@@ -562,10 +600,17 @@ class DerivWSClient:
         prop = proposal.get("proposal", {})
         proposal_id = prop.get("id")
         if not proposal_id:
+            LOG.error("Invalid proposal response: missing proposal ID")
             return None
 
-        ask_price = float(prop.get("ask_price", stake))
-        buy_price = min(max(ask_price * 1.1, ask_price + 0.5), stake * 2)
+        # Bug 7: Validate 'ask' field exists before using
+        if "ask_price" not in prop:
+            LOG.error("Invalid proposal: missing ask_price field")
+            return None
+        
+        # Bug 5: Binary options bought at ask price directly (not multiplied)
+        ask_price = float(prop.get("ask_price"))
+        buy_price = ask_price
 
         buy_resp = await self.buy_contract(proposal_id, buy_price)
         if not buy_resp or "error" in buy_resp:

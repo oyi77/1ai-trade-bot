@@ -393,36 +393,23 @@ def fetch_xauusd_spot() -> float | None:
     return None
 
 def fetch_price(pair="gold"):
+    """Fetch live price via UnifiedMarketData (yfinance). Single source of truth."""
     pair = _normalize_broker_symbol(pair.lower().strip())
-    if pair in ("gold", "xauusd"):
-        # Use spot gold API instead of Yahoo GC=F futures
-        spot = fetch_xauusd_spot()
-        if spot:
-            return spot
-        # Fallback to Yahoo GC=F if spot API fails
-        try:
-            quote = MARKET_DATA.get_quote("GC=F")
-            if quote and quote.price > 1000:
-                return quote.price
-        except: pass
-    elif pair in ("btc", "btcusd"):
-        try:
-            quote = MARKET_DATA.get_quote("BTC-USD")
-            if quote and quote.price > 100:
-                return quote.price
-        except: pass
-    elif pair in ("eth", "ethusd"):
-        try:
-            quote = MARKET_DATA.get_quote("ETH-USD")
-            if quote and quote.price > 10:
-                return quote.price
-        except: pass
-    elif MARKET_DATA:
-        try:
-            quote = MARKET_DATA.get_quote(pair.upper())
-            if quote and quote.price > 0:
-                return quote.price
-        except: pass
+    if not MARKET_DATA:
+        return None
+    try:
+        symbol_map = {
+            "gold": "GC=F", "xauusd": "GC=F",
+            "btc": "BTC-USD", "btcusd": "BTC-USD",
+            "eth": "ETH-USD", "ethusd": "ETH-USD",
+            "oil": "CL=F", "usoil": "CL=F",
+        }
+        symbol = symbol_map.get(pair, pair.upper())
+        quote = MARKET_DATA.get_quote(symbol)
+        if quote and quote.price > 0:
+            return quote.price
+    except Exception as e:
+        logger.debug(f"fetch_price({pair}) failed: {e}")
     return None
 
 def fetch_dxy():
@@ -727,13 +714,46 @@ def handle_payment_callback(callback_query):
 
     elif data.startswith("check:"):
         ref = data.split(":", 1)[1] if ":" in data else ""
-        tg_send(
-            "🔍 <b>Cek Status Pembayaran</b>\n━━━━━━━━━━━━━━━━\n"
-            "⏳ Pembayaran sedang diproses.\n"
-            "Biasanya butuh 1-5 menit setelah transfer.\n\n"
-            "Kalau sudah bayar dan belum upgrade, kirim bukti ke admin.",
-            chat_id
-        )
+        if not ref:
+            tg_send("❌ Referensi tidak valid.", chat_id)
+            return
+
+        tg_send("🔍 <b>Cek Status Pembayaran ke Tripay...</b>", chat_id)
+
+        # ── Check via Tripay API ──
+        try:
+            from members.payment import is_tripay_paid
+            if is_tripay_paid(ref):
+                # Upgrade user!
+                from members import upgrade_tier, mark_payment_paid
+                upgrade_tier(str(chat_id), "donor", 9999, ref)
+                mark_payment_paid(ref)
+                tg_send(
+                    "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    "👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                    "♾️ /analyze — UNLIMITED\n"
+                    "🤖 EA Auto-Trade — AKTIF PERMANEN\n\n"
+                    "Mari cetak profit! 🔥",
+                    chat_id
+                )
+            else:
+                tg_send(
+                    "⏳ <b>Pembayaran Belum Terkonfirmasi</b>\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    "Tripay belum menerima pembayaran untuk invoice ini.\n"
+                    "Pastikan kamu sudah menyelesaikan pembayaran.\n\n"
+                    "Biasanya butuh 1-5 menit setelah transfer.\n"
+                    "Kalau sudah lebih dari 10 menit, hubungi admin.",
+                    chat_id
+                )
+        except Exception as e:
+            logger.error(f"Tripay check failed: {e}")
+            tg_send(
+                "⚠️ <b>Cek status gagal</b>\n"
+                "Coba lagi nanti atau kirim bukti pembayaran ke admin: @codergaboets",
+                chat_id
+            )
 
     elif data.startswith("pricing:"):
         # Show donation info — no more old tiers
@@ -853,31 +873,53 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
     entry = sig.get("entry", price) or price
     sl = sig.get("sl", 0)
     tp = sig.get("tp", 0)
+    confidence = sig.get("confidence", 0)
+    rr = sig.get("rr_ratio", 0)
+    action = sig.get("action", "HOLD")
 
-    # --- XAUUSD spot offset: shift to real broker prices ---
-    if display in ("XAUUSD","GOLD") and entry and sl:
-        offset = get_xauusd_spot_offset()
-        if abs(offset) > 5:
-            entry = round(entry + offset, 2)
-            sl = round(sl + offset, 2)
-            if tp: tp = round(tp + offset, 2)
+    # ── QUALITY GATE ──
+    if action in ("BUY", "SELL"):
+        # Minimum confidence: 65%
+        if isinstance(confidence, (int, float)) and confidence < 0.65:
+            logger.info(f"⛔ Signal rejected: confidence {confidence:.0%} < 65%")
+            return
+        # Minimum RR: 1.5
+        if isinstance(rr, (int, float)) and rr > 0 and rr < 1.5:
+            logger.info(f"⛔ Signal rejected: RR 1:{rr:.1f} < 1:1.5")
+            return
+        # SL must be on correct side of entry
+        if (action == "BUY" and sl >= entry) or (action == "SELL" and sl <= entry):
+            logger.info(f"⛔ Signal rejected: SL on wrong side (entry={entry}, sl={sl})")
+            return
+
+    # --- XAUUSD: no offset needed (single source: UnifiedMarketData GC=F) ---
 
     payload = {
-        "action": sig.get("action", "HOLD"),
+        "action": action,
         "symbol": symbol,
         "entry": entry,
         "sl": sl,
         "tp": tp,
         "tp1": sig.get("tp1", sig.get("tp", 0)),
         "tp2": sig.get("tp2", 0),
-        "confidence": sig.get("confidence", 0),
+        "confidence": confidence,
         "risk_percent": sig.get("risk_percent", 1.0),
         "comment": sig.get("comment", f"VTFX/{sig.get('source', 'vilona-tradefx')}"),
         "source": sig.get("source", "vilona-tradefx"),
-        "layers": sig.get("layers", []),  # 🔥 Smart Layering™
-        "target_user": sig.get("target_user", ""),  # 🎯 per-user routing
+        "layers": sig.get("layers", []),
+        "target_user": sig.get("target_user", ""),
         "timestamp": wib_now().isoformat(),
+        "rr_ratio": rr,
     }
+
+    # ── Write to EA signal file (for ea_executor.py to pick up) ──
+    try:
+        ea_file = DATA_DIR / "ea_signal.json"
+        ea_file.write_text(json.dumps(payload, indent=2))
+        logger.info(f"📝 EA signal written: {action} {symbol} @ {entry} | conf={confidence:.0%} | RR=1:{rr:.1f}")
+    except Exception as e:
+        logger.error(f"Failed to write ea_signal.json: {e}")
+
     data = json.dumps(payload).encode()
     # Track trade for win rate
     if TRADE_TRACKER:
@@ -885,6 +927,8 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
             open_trade(sig, sig.get("entry", price), symbol, sig.get("source", "ai"),
                        sig.get("target_user", ""))
         except Exception: pass
+    # ── Post to bridge ──
+    posted = False
     for url in BRIDGE_URLS:
         try:
             req = urllib.request.Request(f"{url}/signal",
@@ -894,9 +938,12 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
                     "X-API-Key": MASTER_API_KEY
                 })
             urllib.request.urlopen(req, timeout=5)
-            return  # success, stop
+            posted = True
+            break  # success, stop
         except Exception:
             continue
+    if not posted:
+        logger.warning("Failed to post signal to any bridge URL")
 
 
 # ── MECHANICAL SIGNAL DETECTION ──

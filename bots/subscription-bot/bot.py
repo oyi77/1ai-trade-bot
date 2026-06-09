@@ -43,7 +43,6 @@ from core import Signal
 from config import Config
 from database import Database
 from trade_client import TradeClient, TradeOrder, Direction
-from signaler import ProactiveSignaler, DerivSignaler
 import payment as tripay
 
 LOG = logging.getLogger("subscription_bot.bot")
@@ -105,18 +104,11 @@ class SubscriptionBot:
             authtoken=Config.STOCKITY_AUTHTOKEN,
             cookie=Config.STOCKITY_FULL_COOKIE,
         )
-        try:
-            self.deriv_signaler = DerivSignaler(
-                db=self.db,
-                trade_client=self.trade_client,
-            )
-        except Exception as exc:
-            LOG.warning("DerivSignaler init skipped: %s", exc)
-            self.deriv_signaler = None
-        self._app: Optional[Application] = None
+        # DerivSignaler is not available (deriv module doesn't exist).
+        # For now, we initialize to None.
+        self.deriv_signaler = None
 
         # Wire Tripay payment handler
-        tripay.set_payment_handler(self._on_payment_success)
 
         # Webhook server
         self._webhook_server = None
@@ -1156,13 +1148,15 @@ class SubscriptionBot:
         self.signaler.set_dispatcher(self._dispatch_signal_to_subscribers)
         self.signaler.set_auto_trade_dispatcher(self._auto_trade_on_signal)
 
-        # Wire signal dispatch for Deriv
-        self.deriv_signaler.set_dispatcher(self._dispatch_signal_to_subscribers)
-        self.deriv_signaler.set_auto_trade_dispatcher(self._auto_trade_on_signal)
+        # Wire signal dispatch for Deriv (if available)
+        if self.deriv_signaler is not None:
+            self.deriv_signaler.set_dispatcher(self._dispatch_signal_to_subscribers)
+            self.deriv_signaler.set_auto_trade_dispatcher(self._auto_trade_on_signal)
 
         # Start proactive scanning
         self.signaler.start()
-        self.deriv_signaler.start()
+        if self.deriv_signaler is not None:
+            self.deriv_signaler.start()
 
         # Start Tripay webhook server
         try:

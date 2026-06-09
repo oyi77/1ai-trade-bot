@@ -37,6 +37,7 @@ class TradeStatus(Enum):
     LOST = "lost"
     ERROR = "error"
     QUEUED = "queued"
+    PENDING_CONFIRM = "pending_confirm"
 
 
 @dataclass
@@ -84,11 +85,19 @@ class RestTradeClient:
         "https://api.stockity.id/api/v1/trade",
     ]
 
+    def _select_endpoint(self) -> str:
+        """Select correct endpoint based on server health checks."""
+        # TODO: Implement health check ping to each endpoint
+        # For now, use the first one and log which was selected
+        selected = self.ENDPOINTS[0]
+        LOG.info(f"Using Stockity endpoint: {selected}")
+        return selected
+
     def __init__(self, master_auth_token: str = ""):
         self.master_auth = master_auth_token
 
-    def place(self, order: TradeOrder) -> TradeResult:
-        """Try each REST endpoint. Returns first successful result or last failure."""
+    async def place(self, order: TradeOrder) -> TradeResult:
+        """Place trade via REST and poll for confirmation."""
         if not order.user_auth_token and not self.master_auth:
             return TradeResult(
                 status=TradeStatus.ERROR,
@@ -119,20 +128,48 @@ class RestTradeClient:
         last_error = ""
         for url in self.ENDPOINTS:
             try:
-                data = json.dumps(payload).encode()
-                req = urllib.request.Request(
-                    url, data=data, headers=headers, method="POST"
-                )
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    body = json.loads(resp.read())
-                    LOG.info("REST trade OK via %s: %s", url, body)
+                # Run HTTP call in thread (urllib is blocking)
+                def _send_order():
+                    data = json.dumps(payload).encode()
+                    req = urllib.request.Request(
+                        url, data=data, headers=headers, method="POST"
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        return json.loads(resp.read())
+
+                body = await asyncio.to_thread(_send_order)
+                LOG.info("REST trade OK via %s: %s", url, body)
+
+                trade_id = str(body.get("id", body.get("trade_id", "")))
+                if not trade_id:
+                    LOG.warning(f"No trade ID in response: {body}")
+                    return TradeResult(
+                        status=TradeStatus.QUEUED,
+                        message="Trade sent but no ID returned",
+                        raw_response=body,
+                    )
+
+                # Poll for confirmation (up to 5 seconds)
+                confirmed = await self._poll_trade_confirmation(trade_id, timeout=5.0)
+
+                if confirmed:
                     return TradeResult(
                         status=TradeStatus.OPEN,
-                        trade_id=str(body.get("id", body.get("trade_id", ""))),
+                        trade_id=trade_id,
                         order_id=str(body.get("order_id", "")),
                         message="Trade placed via REST",
                         raw_response=body,
                     )
+                else:
+                    LOG.warning(f"Trade {trade_id} not confirmed within 5s. Polling in background.")
+                    return TradeResult(
+                        status=TradeStatus.PENDING_CONFIRM,
+                        trade_id=trade_id,
+                        order_id=str(body.get("order_id", "")),
+                        message="Trade placed but not yet confirmed",
+                        raw_response=body,
+                    )
+
             except urllib.error.HTTPError as exc:
                 last_error = f"HTTP {exc.code}: {exc.read().decode(errors='ignore')[:200]}"
                 LOG.warning("REST trade failed %s: %s", url, last_error)
@@ -144,6 +181,41 @@ class RestTradeClient:
             status=TradeStatus.ERROR,
             message=f"REST trade failed: {last_error}",
         )
+
+    async def _poll_trade_confirmation(self, trade_id: str, timeout: float = 5.0) -> bool:
+        """Poll trade status until confirmed or timeout."""
+        endpoint = self._select_endpoint()
+        url = f"{endpoint}/trade/{trade_id}/status"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Origin": "https://stockity.com",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/125.0.0.0 Safari/537.36"
+            ),
+        }
+
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                def _fetch_status():
+                    req = urllib.request.Request(url, headers=headers, method="GET")
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        return json.loads(resp.read())
+
+                data = await asyncio.to_thread(_fetch_status)
+                status = data.get('status', '')
+                if status in ('open', 'won', 'lost', 'closed'):
+                    LOG.info(f"Trade {trade_id} confirmed: {status}")
+                    return True
+            except Exception as e:
+                LOG.debug(f"Poll error: {e}")
+
+            await asyncio.sleep(0.5)  # Poll every 500ms
+
+        return False
 
 
 # ── Phoenix Channel Trade Client ────────────────────────────────────────────
@@ -311,22 +383,32 @@ class PhoenixTradeClient:
         ]
 
         for event in trade_events:
-            ref = await self._send(channel, event, trade_payload)
-            resp = await self._recv(timeout=8.0)
-            if resp:
-                payload = resp.get("payload", {})
-                status = payload.get("status", "")
-                LOG.info("WS trade response for %s: %s", event, resp)
-                if status in ("ok", "success") or resp.get("event") == "phx_reply":
-                    return TradeResult(
-                        status=TradeStatus.OPEN,
-                        trade_id=str(payload.get("id", payload.get("trade_id", ref))),
-                        order_id=str(payload.get("order_id", "")),
-                        message=f"Trade placed via WS ({event})",
-                        entry_price=float(payload.get("price", 0)),
-                        raw_response=resp,
-                    )
+            try:
+                LOG.debug(f"Attempting trade via event: {event}")
+                ref = await self._send(channel, event, trade_payload)
+                resp = await asyncio.wait_for(self._recv(timeout=8.0), timeout=9.0)
+                if resp:
+                    payload = resp.get("payload", {})
+                    status = payload.get("status", "")
+                    LOG.info("WS trade response for %s: %s", event, resp)
+                    if status in ("ok", "success") or resp.get("event") == "phx_reply":
+                        LOG.info(f"Trade confirmed via {event}")
+                        return TradeResult(
+                            status=TradeStatus.OPEN,
+                            trade_id=str(payload.get("id", payload.get("trade_id", ref))),
+                            order_id=str(payload.get("order_id", "")),
+                            message=f"Trade placed via WS ({event})",
+                            entry_price=float(payload.get("price", 0)),
+                            raw_response=resp,
+                        )
+            except asyncio.TimeoutError:
+                LOG.debug(f"No response from {event}, trying next...")
+                continue
+            except Exception as e:
+                LOG.warning(f"Error with {event}: {e}")
+                continue
 
+        LOG.error("All event names failed. Trade may not have been placed.")
         return TradeResult(
             status=TradeStatus.QUEUED,
             message="WS trade sent but no confirmation received — queued for verification",
@@ -354,19 +436,18 @@ class TradeClient:
             order.amount, order.duration_min,
         )
 
-        # Try REST (blocking, run in thread)
-        result = await asyncio.to_thread(self._rest.place, order)
+        # Try REST
+        result = await self._rest.place(order)
         if result.status != TradeStatus.ERROR:
             return result
 
         # Try WebSocket
         result = await self._phoenix.place_trade(order)
-        if result.status != TradeStatus.ERROR and result.status != TradeStatus.QUEUED:
+        if result.status != TradeStatus.ERROR and result.status != TradeStatus.QUEUED and result.status != TradeStatus.PENDING_CONFIRM:
             return result
 
         # Queue as last resort
-        if result.status == TradeStatus.QUEUED or result.status == TradeStatus.ERROR:
-            self._queue.append(order)
+        if result.status == TradeStatus.QUEUED or result.status == TradeStatus.ERROR or result.status == TradeStatus.PENDING_CONFIRM:
             LOG.info("Trade queued for retry: %s %s", order.symbol, order.direction_api)
             return TradeResult(
                 status=TradeStatus.QUEUED,

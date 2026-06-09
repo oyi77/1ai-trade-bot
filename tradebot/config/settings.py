@@ -195,6 +195,8 @@ class Settings(BaseSettings):
     #  SIGNALS — Market Data Source Configuration
     # ═══════════════════════════════════════════════════════════════
 
+    STOCKITY_EMAIL: str = ""
+    STOCKITY_PASSWORD: str = ""
     STOCKITY_AUTHTOKEN: str = ""
     STOCKITY_FULL_COOKIE: str = ""
     STOCKITY_USER_ID: str = ""
