@@ -542,7 +542,11 @@ class VilonaBot(BaseBot):
     # ── AI-powered analysis ──────────────────────────────────────────────
 
     async def _ai_analyze(self, pair: str = "gold") -> tuple[dict[str, Any] | None, str | None]:
-        """Analyze a pair using AI (OmniRoute / DeepSeek)."""
+        """
+        Analyze a pair using 2-Tier AI pipeline:
+          Tier 1 (Workhorse = Gemini): scores every setup. HALT if < 75%.
+          Tier 2 (Sniper = DeepSeek via OmniRoute): cross-check only Tier-1-passed setups.
+        """
         symbol = resolve_yahoo_symbol(pair)
         display = pair.upper()
 
@@ -566,7 +570,6 @@ class VilonaBot(BaseBot):
             return None, "No market data available."
 
         # Build prompt
-        SYSTEM_PROMPT = self._build_system_prompt()  # noqa: N806
         bars_text = json.dumps(ohlcv_bars, indent=2)
         user_prompt = (
             f"Analyze {display} ({symbol}) for BUY/SELL/HOLD decision.\n\n"
@@ -575,17 +578,131 @@ class VilonaBot(BaseBot):
             f"Return valid JSON only."
         )
 
-        # Call AI
+        # ════════════════════════════════════════════════════════════════════
+        # TIER 1 — WORKHORSE: Gemini (native API key from .env)
+        # ════════════════════════════════════════════════════════════════════
+        tier1_result = await self._call_tier1_gemini(user_prompt)
+        if tier1_result is None:
+            return None, "Gemini unreachable."
+
+        tier1_conf = tier1_result.get("confidence", 0)
+        if tier1_conf < 75:
+            LOG.info("⏭ Gemini confidence %.0f%% < 75%% — pipeline halted. No sniper call.", tier1_conf)
+            return {"action": "HOLD", "confidence": tier1_conf, "grade": "C",
+                    "reasoning": f"Gemini workhorse confidence {tier1_conf:.0f}% below threshold",
+                    "symbol": symbol, "source": "gemini-workhorse"}, None
+
+        LOG.info("✅ Gemini workhorse passed (%.0f%%). Escalating to sniper...", tier1_conf)
+
+        # ════════════════════════════════════════════════════════════════════
+        # TIER 2 — SNIPER: DeepSeek via OmniRoute (premium quota protected)
+        # ════════════════════════════════════════════════════════════════════
+        sniper_prompt = (
+            f"Gemini (Tier 1) analyzed {display} and found a potential setup with "
+            f"{tier1_conf:.0f}% confidence. Cross-check this trade:\n\n"
+            f"{user_prompt}\n\n"
+            f"Gemini findings: {json.dumps(tier1_result)}"
+        )
         try:
-            response = await self._call_ai(SYSTEM_PROMPT, user_prompt)
-            sig = extract_json(response)
+            sniper_response = await self._call_ai(
+                self._build_system_prompt(), sniper_prompt
+            )
+            sig = extract_json(sniper_response)
             if sig and sig.get("action") in ("BUY", "SELL", "HOLD"):
                 sig["symbol"] = symbol
+                sig["source"] = "gemini→deepseek-sniper"
+                sig["gemini_confidence"] = tier1_conf
+                LOG.info("🎯 Sniper confirmed: %s @ %.0f%%", sig["action"], sig.get("confidence", 0))
                 return sig, sig.get("reasoning", "")
         except Exception as e:
-            LOG.error("AI analysis failed: %s", e)
+            LOG.error("Sniper (DeepSeek) call failed: %s", e)
 
-        return None, "AI analysis failed."
+        # If sniper fails but Gemini was confident, return Gemini's finding as fallback
+        return tier1_result, tier1_result.get("reasoning", "Sniper unavailable — Gemini workhorse only.")
+
+    async def _call_tier1_gemini(self, user_prompt: str) -> dict[str, Any] | None:
+        """
+        Tier 1 Workhorse — native Gemini API (direct, no pool overhead).
+        Key: os.getenv('GEMINI_API_KEY').
+        Falls back to OmniRoute pool if native key is missing or fails.
+        """
+        SYSTEM_PROMPT = (  # noqa: N806
+            "You are Vilona Trade FX Tier-1 SMC Workhorse (Gemini). "
+            "Analyze the OHLCV data using Smart Money Concepts: BOS, FVG, liquidity sweeps, "
+            "order blocks, and market structure. "
+            "Return ONLY valid JSON with action, confidence (0-100), entry, sl, tp, reasoning. "
+            "If the setup is unclear or structure is messy, be honest and return HOLD with low confidence."
+        )
+        analysis_prompt = (
+            f"{SYSTEM_PROMPT}\n\n{user_prompt}\n\n"
+            'Return JSON: {"action":"BUY|SELL|HOLD","entry":0.0,"sl":0.0,"tp":0.0,'
+            '"confidence":0,"grade":"A|B|C|D","reasoning":"..."}'
+        )
+
+        gemini_key = self.gemini_key
+        if gemini_key:
+            try:
+                result = await self._call_gemini_native(gemini_key, analysis_prompt)
+                if result:
+                    return result
+                LOG.warning("Gemini native call returned None — trying OmniRoute pool.")
+            except Exception as e:
+                LOG.warning("Gemini native call failed: %s — falling back to OmniRoute pool.", e)
+        else:
+            LOG.info("No GEMINI_API_KEY set — using OmniRoute pool for Tier 1.")
+
+        # Fallback: OmniRoute pool with gemini model
+        try:
+            resp = await self._call_ai_with_model("gemini-2.0-flash", analysis_prompt)
+            return extract_json(resp)
+        except Exception as e:
+            LOG.error("Gemini Tier 1 (pool fallback) failed: %s", e)
+            return None
+
+    async def _call_gemini_native(self, api_key: str, prompt: str) -> dict[str, Any] | None:
+        """Call Gemini REST API directly (not via OmniRoute)."""
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            "gemini-2.0-flash:generateContent"
+            f"?key={api_key}"
+        )
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 1024,
+            },
+        }
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(
+            url, data=data,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=20) as r:
+            resp = json.loads(r.read())
+        text = resp["candidates"][0]["content"]["parts"][0]["text"]
+        return extract_json(text)
+
+    async def _call_ai_with_model(self, model: str, user_content: str) -> str:
+        """Call OmniRoute with a specific model override."""
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.deepseek_key or self.gemini_key or 'sk-no-key-configured'}",
+        }
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": user_content}],
+            "temperature": 0.3,
+            "max_tokens": 2048,
+        }
+        req = urllib.request.Request(
+            self.omniroute_url,
+            data=json.dumps(payload).encode(),
+            headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:
+            resp = json.loads(r.read())
+            return resp["choices"][0]["message"]["content"]
 
     def _build_system_prompt(self) -> str:
         return (

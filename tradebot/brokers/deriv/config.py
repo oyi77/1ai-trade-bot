@@ -6,7 +6,7 @@ Reads from tradebot.config.settings — NO hardcoded secrets.
 from tradebot.config import settings
 
 # ── WebSocket Endpoints ──
-WS_LEGACY = "wss://ws.binaryws.com/websockets/v3"
+WS_LEGACY = "wss://ws.derivws.com/websockets/v3"  # Updated from binaryws.com (deprecated)
 WS_NEW_DEMO = "wss://api.derivws.com/trading/v1/options/ws/demo"
 WS_NEW_REAL = "wss://api.derivws.com/trading/v1/options/ws/real"
 REST_BASE = "https://api.derivws.com"
@@ -14,7 +14,7 @@ REST_OTP = f"{REST_BASE}/trading/v1/options/accounts/{{account_id}}/otp"
 REST_ACCOUNTS = f"{REST_BASE}/trading/v1/options/accounts"
 
 # ── Connection Tuning (from settings) ──
-DEFAULT_APP_ID = settings.DERIV_APP_ID or "33uQ6fU4eIRvJc6jkYeEa"
+DEFAULT_APP_ID = settings.DERIV_APP_ID  # Must be set in .env (register at https://developers.deriv.com)
 PING_INTERVAL = settings.WS_PING_INTERVAL
 PING_TIMEOUT = settings.WS_PING_TIMEOUT
 WS_TIMEOUT = settings.WS_TIMEOUT

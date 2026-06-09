@@ -22,6 +22,9 @@ LOG_DIR = PROJECT_DIR / "logs"
 SIGNAL_FILE = DATA_DIR / "ea_signal.json"
 STATE_FILE = DATA_DIR / "ea_state.json"
 
+# Same offset as bot handler — gold-api.com spot → broker price
+XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
+
 LOG_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -50,22 +53,15 @@ def save_state(s):
     STATE_FILE.write_text(json.dumps(s, indent=2, default=str))
 
 def fetch_price(symbol="XAUUSD"):
-    """Fetch real-time price — GC=F via yfinance, fallback to gold-api.com."""
-    try:
-        sys.path.insert(0, str(PROJECT_DIR))
-        from market_data import UnifiedMarketData
-        md = UnifiedMarketData()
-        q = md.get_quote("gold", force=True)
-        if q and q.price > 100:
-            return q.price
-    except Exception:
-        pass
-    # Fallback
+    """Fetch real-time XAUUSD: gold-api.com spot + offset."""
     try:
         r = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=10)
-        return float(json.loads(r.read()).get("price", 0))
+        spot = float(json.loads(r.read()).get("price", 0))
+        if 2000 < spot < 6000:
+            return round(spot + XAUUSD_OFFSET, 2)
     except Exception:
-        return None
+        pass
+    return None
 
 def read_signal():
     if not SIGNAL_FILE.exists(): return None

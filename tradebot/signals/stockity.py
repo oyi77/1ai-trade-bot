@@ -70,34 +70,15 @@ class StockitySource(BaseDataSource):
                 timeout=httpx.Timeout(15.0),
                 headers=headers,
             )
-        return self._client
     def _compute_time_param(self, target_minute: int = 15) -> str:
-        """Compute time parameter for Stockity API, handling hour boundaries."""
-        now = datetime.now(UTC)
-        year, month, day, hour, minute = now.year, now.month, now.day, now.hour, now.minute
+        """Compute time parameter for Stockity API in ISO 8601 format.
 
-        if target_minute < 0:
-            # Wrap to previous hour
-            hour -= 1
-            if hour < 0:
-                # Midnight wraparound
-                hour = 23
-                day -= 1
-                if day < 1:
-                    # Month wraparound (use last day of previous month)
-                    month -= 1
-                    if month < 1:
-                        month = 12
-                        year -= 1
-                    # Simple: assume 30 days (Stockity won't need historical >30d usually)
-                    day = 30
-            target_minute += 60
-
-        # Validate
-        assert 0 <= hour < 24, f"hour {hour} out of range"
-        assert 0 <= target_minute < 60, f"minute {target_minute} out of range"
-
-        return f"{year:04d}{month:02d}{day:02d}_{hour:02d}{target_minute:02d}"
+        Stockity accepts ISO 8601 UTC timestamps like '2024-01-01T00:00:00Z'.
+        """
+        # Stockity expects ISO 8601 UTC format
+        from datetime import datetime, timedelta, timezone
+        target_time = datetime.now(timezone.utc) - timedelta(minutes=target_minute)
+        return target_time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     @staticmethod
     def _aggregate_candles(raw: list[OHLCV], period_s: int = 60) -> list[OHLCV]:

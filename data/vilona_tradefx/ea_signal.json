@@ -1,5 +1,5 @@
 {
-  "signal_id": "vtfx_1781039718336_3",
+  "signal_id": "vtfx_1781041816463_16",
   "symbol": "XAUUSD",
   "action": "SELL",
   "entry": 4260.6,
@@ -12,8 +12,8 @@
   "rr_ratio": 0,
   "comment": "VTFX/AI",
   "source": "vtfx",
-  "timestamp": "2026-06-10T04:15:17+07:00",
-  "received_at": 1781039718.336612,
+  "timestamp": "2026-06-10T04:50:15+07:00",
+  "received_at": 1781041816.4637992,
   "status": "pending",
   "layers": [],
   "target_user": null

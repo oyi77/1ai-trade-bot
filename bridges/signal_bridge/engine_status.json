@@ -1,7 +1,7 @@
 {
   "symbol": "XAUUSD",
   "price": 4260.6,
-  "timestamp": "2026-06-10T04:17:24.121241",
+  "timestamp": "2026-06-10T04:50:15.419497",
   "timeframes": {
     "D1": {
       "verdict": "SELL",
@@ -171,7 +171,7 @@
       "structure": {
         "s1": 4235.7,
         "r1": 4364.4,
-        "vwap": 4298.52,
+        "vwap": 4298.5,
         "near_support": false,
         "near_resistance": false,
         "range_pct": 3.02,
@@ -282,7 +282,7 @@
         "tv": {
           "direction": "HOLD",
           "confidence": 0.58,
-          "details": "RSI overbought | MACD bullish (+) | ADX 71 strong uptrend | BB squeeze (0.3%) | TV-score:58"
+          "details": "RSI overbought | MACD bullish (+) | ADX 70 strong uptrend | BB squeeze (0.3%) | TV-score:58"
         }
       },
       "weight": 0.08,
@@ -304,8 +304,5 @@
     "mtf_alignment": "ALIGNED",
     "counter_trend_flags": [],
     "macro_trend": "BEARISH"
-  },
-  "mtf_alignment": "ALIGNED",
-  "macro_trend": "BEARISH",
-  "counter_trend_flags": []
+  }
 }

@@ -188,8 +188,14 @@ CLAUDE_KEY = os.environ.get("CLAUDE_API_KEY", "")
 CHAT_ID = os.environ.get("VILONA_TRADEFX_CHAT_ID", "")
 OMNIROUTE_URL = os.environ.get("OMNIROUTE_URL", "http://localhost:20128/v1/chat/completions")
 
+# ── XAUUSD Price Offset ──
+# gold-api.com returns XAU commodity spot (~$4260). Real XAUUSD forex broker ~$4334.
+# Offset = broker_price - gold_api_price. Default +74.
+# Set via env: XAUUSD_PRICE_OFFSET=74 (atau sesuai broker lu)
+XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
+
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-OMNIROUTE_MODELS = ["nemotron-3-super-free", "qwen3.6-plus-free", "ling-2.6-1t-free"]
+OMNIROUTE_MODELS = ["deepseek-chat", "gpt-4o", "claude-sonnet-4-20250514"]
 
 
 def load_env():
@@ -393,13 +399,20 @@ def fetch_xauusd_spot() -> float | None:
     return None
 
 def fetch_price(pair="gold"):
-    """Fetch live price via UnifiedMarketData (yfinance). Single source of truth."""
+    """Fetch live price. XAUUSD: gold-api.com + offset → broker-real price."""
     pair = _normalize_broker_symbol(pair.lower().strip())
+    
+    # XAUUSD — gold-api.com spot + offset = harga broker
+    if pair in ("gold", "xauusd"):
+        spot = fetch_xauusd_spot()
+        if spot:
+            return round(spot + XAUUSD_OFFSET, 2)
+    
+    # Other pairs — yfinance
     if not MARKET_DATA:
         return None
     try:
         symbol_map = {
-            "gold": "GC=F", "xauusd": "GC=F",
             "btc": "BTC-USD", "btcusd": "BTC-USD",
             "eth": "ETH-USD", "ethusd": "ETH-USD",
             "oil": "CL=F", "usoil": "CL=F",
@@ -556,21 +569,44 @@ def _cleanup_expired_pending_signals():
 # ── Manual-mode guard: anti-spam + anti-opposite-flip per user ──
 USER_LAST_ANALYZE = {}  # chat_id -> timestamp
 USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
-MANUAL_THROTTLE_SECONDS = 60
+USER_LAST_PAIR = {}  # chat_id -> {"pair": str, "at": timestamp} — same-pair cooldown
+USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — donor quota
+
+MANUAL_THROTTLE_FREE = 60     # free user: 60 detik antar analisa
+MANUAL_THROTTLE_DONOR = 120   # donor: 120 detik antar analisa
+SAME_PAIR_COOLDOWN = 90       # same pair cooldown (all users)
+DONOR_DAILY_QUOTA = 60        # donor: 60x analisa/hari (cukup buat 1x tiap 12 menit)
+FREE_DAILY_QUOTA = 3          # free: 3x/hari
 DIRECTION_LOCK_SECONDS = 60
 
 # ── Custom donation input state ──
 DONATION_INPUT_STATE = {}  # chat_id -> True (waiting for user to type amount)
 
-def _is_manual_blocked(chat_id):
+def _is_manual_blocked(chat_id, pair=""):
+    """Multi-layer anti-abuse: cooldown + same-pair + donor daily quota + direction lock."""
     now = time.time()
-    # pending signal exists → must resolve first
+    is_donor = _is_donor(str(chat_id))
+    throttle = MANUAL_THROTTLE_DONOR if is_donor else MANUAL_THROTTLE_FREE
+
+    # Layer 1: pending signal exists → must resolve first
     if chat_id in PENDING_SIGNALS:
         return True, "⏰ Sinyal sebelumnya masih berjalan. Tekan Trade Auto/Skip atau tunggu 5 menit."
+
+    # Layer 2: general cooldown (donor=120s, free=60s)
     ts = USER_LAST_ANALYZE.get(chat_id)
-    if ts and (now - ts) < MANUAL_THROTTLE_SECONDS:
-        wait = int(MANUAL_THROTTLE_SECONDS - (now - ts))
-        return True, f"⏳ Tunggu {wait} detik sebelum analisa berikutnya."
+    if ts and (now - ts) < throttle:
+        wait = int(throttle - (now - ts))
+        label = "Donatur" if is_donor else "Free"
+        return True, f"⏳ [{label}] Tunggu {wait} detik sebelum analisa berikutnya."
+
+    # Layer 3: same-pair cooldown (all users: 90s)
+    if pair:
+        last_pair = USER_LAST_PAIR.get(chat_id, {})
+        if last_pair.get("pair") == pair and (now - last_pair.get("at", 0)) < SAME_PAIR_COOLDOWN:
+            wait = int(SAME_PAIR_COOLDOWN - (now - last_pair.get("at", 0)))
+            return True, f"📊 Kamu baru analisa {pair.upper()} {int(now - last_pair['at'])} detik lalu.\n⏳ Tunggu {wait} detik atau coba pair lain: /analyze btc"
+
+    # Layer 4: direction lock — prevent opposite-direction spam
     rec = USER_LAST_DIRECTION.get(chat_id)
     if rec and rec.get("action") in ("BUY", "SELL"):
         try:
@@ -582,8 +618,31 @@ def _is_manual_blocked(chat_id):
             pass
     return False, ""
 
-def _touch_manual(chat_id, action=None, asset=""):
+
+def _check_donor_quota(chat_id):
+    """Check & deduct donor daily quota. Returns (ok, remaining, message)."""
+    today = wib_now().strftime("%Y-%m-%d")
+    record = USER_DAILY_ANALYZE.get(chat_id, {})
+    if record.get("date") != today:
+        record = {"date": today, "count": 0}
+    
+    record["count"] += 1
+    USER_DAILY_ANALYZE[chat_id] = record
+    remaining = max(0, DONOR_DAILY_QUOTA - record["count"])
+    
+    if record["count"] > DONOR_DAILY_QUOTA:
+        return False, remaining, f"🛑 <b>Kuota Donatur Harian Penuh!</b>\n━━━━━━━━━━━━━━━━\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\n⏰ Reset: besok jam 00:00 WIB\n\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
+    
+    if remaining <= 5:
+        return True, remaining, None  # allow but warn later
+    
+    return True, remaining, None
+
+
+def _touch_manual(chat_id, action=None, asset="", pair=""):
     USER_LAST_ANALYZE[chat_id] = time.time()
+    if pair:
+        USER_LAST_PAIR[chat_id] = {"pair": pair, "at": time.time()}
     if action in ("BUY", "SELL"):
         USER_LAST_DIRECTION[chat_id] = {"action": action, "at": wib_now().isoformat(), "asset": asset}
 
@@ -1247,11 +1306,10 @@ def _call_omniroute(prompt, models=None):
 
 
 def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_data=None, display="XAUUSD", tier="starter"):
-    """Multi-AI consensus — tier-based model selection.
+    """Multi-AI consensus — Python screening first, AI verifies.
     
-    🆓 Starter (free):  DeepSeek + Gemini (2 models, zero cost)
-    ⭐ Pro (premium):    All 4 models — DeepSeek + GPT-4.1-mini + GPT-4o-mini + Gemini
-    👑 Elite (premium):  All 4 models + weighted voting (GPT-4.1-mini 1.2x weight)
+    🔬 MODE: VERIFY — AI receives mechanical signal + OHLCV, confirms/rejects/adjusts.
+    ⭐ Uses: DeepSeek V3 + GPT-4o (full models, no mini).
     """
     # Build analysis prompt
     data_section = f"💰 Current Price: ${price:.2f}"
@@ -1280,51 +1338,32 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         f"R:R minimum 1:2. {'⚠️ FRIDAY: SL +10-15 pips extra.' if wib_now().weekday()==4 else ''}"
     )
 
-    # ── TIER-BASED MODEL SELECTION ──
-    is_elite = (tier == "elite")
-    is_premium = premium or is_elite or (tier in ("pro", "elite", "testing"))
-
-    # Always try all models (OpenAI included — DeepSeek/Gemini often fail)
+    # ── PRIMARY: DeepSeek V3 (best reasoning/cost) ──
     deepseek = _call_deepseek(prompt)
-    gemini = _call_gemini(prompt)
-    gpt41 = _call_openai(prompt, model="gpt-4.1-mini")
-    gpt4o = _call_openai(prompt, model="gpt-4o-mini")
 
-    # Collect all valid signals
+    # ── SECONDARY: GPT-4o (full model, not mini) ──
+    gpt4o = _call_openai(prompt, model="gpt-4o")
+
+    # ── FALLBACK: OmniRoute with good models ──
+    omniroute = _call_omniroute(prompt)
+
+    # Collect all valid signals — minimum 2 model agreement required
     signals = []
     if deepseek and deepseek.get("action") in ("BUY", "SELL"):
-        signals.append({"sig": deepseek, "name": "DeepSeek", "weight": 1.0})
-    if gpt41 and gpt41.get("action") in ("BUY", "SELL"):
-        # Elite gets 1.2x reasoning bonus; Pro gets 1.0
-        w = 1.2 if is_elite else 1.0
-        signals.append({"sig": gpt41, "name": "GPT-4.1-mini", "weight": w})
+        signals.append({"sig": deepseek, "name": "DeepSeek-V3", "weight": 1.2})
     if gpt4o and gpt4o.get("action") in ("BUY", "SELL"):
-        signals.append({"sig": gpt4o, "name": "GPT-4o", "weight": 0.9})
-    if gemini and gemini.get("action") in ("BUY", "SELL"):
-        signals.append({"sig": gemini, "name": "Gemini", "weight": 1.0})
+        signals.append({"sig": gpt4o, "name": "GPT-4o", "weight": 1.0})
+    if omniroute and isinstance(omniroute, dict) and omniroute.get("action") in ("BUY", "SELL"):
+        signals.append({"sig": omniroute, "name": "Claude-Sonnet", "weight": 0.9})
 
     model_count = len(signals)
     tier_label = {"starter": "🆓 Free", "pro": "⭐ Pro", "elite": "👑 Elite", "testing": "🧪 Testing"}.get(tier, tier.upper())
-    
+
     # Count votes per direction
     buy_votes = [s for s in signals if s["sig"]["action"] == "BUY"]
     sell_votes = [s for s in signals if s["sig"]["action"] == "SELL"]
-    
-    # BEST: 3+ models agree → super consensus
-    if len(buy_votes) >= 3 or len(sell_votes) >= 3:
-        winner = buy_votes if len(buy_votes) >= 3 else sell_votes
-        conf = sum(s["sig"].get("confidence", 0) * s["weight"] for s in winner) / sum(s["weight"] for s in winner)
-        sig = winner[0]["sig"].copy()
-        sig["confidence"] = min(conf, 1.0)
-        sig["ensemble"] = "super"
-        sig["voters"] = len(winner)
-        sig["_model"] = "+".join(s["name"] for s in winner)
-        sig["_tier"] = tier_label
-        sig["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
-        logger.info(f"SUPER CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%}")
-        return sig
-    
-    # GOOD: 2 models agree → dual consensus
+
+    # 🏆 DUAL+: 2+ models agree
     if len(buy_votes) >= 2 or len(sell_votes) >= 2:
         winner = buy_votes if len(buy_votes) >= 2 else sell_votes
         conf = sum(s["sig"].get("confidence", 0) * s["weight"] for s in winner) / sum(s["weight"] for s in winner)
@@ -1334,11 +1373,11 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["voters"] = len(winner)
         sig["_model"] = "+".join(s["name"] for s in winner)
         sig["_tier"] = tier_label
-        sig["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
-        logger.info(f"DUAL CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%}")
+        sig["_models"] = f"{model_count}/2"
+        logger.info(f"AI CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%}")
         return sig
-    
-    # OK: 1 model with strong signal → solo
+
+    # ⚠️ SOLO: 1 model only — low confidence, still return for manual review
     if signals:
         best = max(signals, key=lambda s: s["sig"].get("confidence", 0) * s["weight"])
         sig = best["sig"].copy()
@@ -1346,30 +1385,20 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["voters"] = 1
         sig["_model"] = best["name"]
         sig["_tier"] = tier_label
-        sig["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
-        logger.info(f"SOLO [{best['name']}]: {sig['action']} conf={sig.get('confidence', 0):.0%}")
+        sig["_models"] = f"{model_count}/2"
+        logger.info(f"SOLO [{best['name']}]: {sig['action']} conf={sig.get('confidence', 0):.0%} — LOW CONFIDENCE")
         return sig
-    
-    # Any signal from any model (even HOLD)
-    for s, name in [(deepseek, "DeepSeek"), (gpt41, "GPT-4.1-mini"), (gpt4o, "GPT-4o"), (gemini, "Gemini")]:
+
+    # ❌ Nothing: return any model's HOLD or None
+    for s, name in [(deepseek, "DeepSeek-V3"), (gpt4o, "GPT-4o")]:
         if s:
-            s = dict(s)  # shallow copy — don't mutate original
-            s["ensemble"] = "solo"; s["voters"] = 1; s["_model"] = name
-            s["_tier"] = tier_label
-            s["_models"] = f"{model_count}/{'4' if is_premium else '2'}"
+            s = dict(s)
+            s["ensemble"] = "hold"; s["voters"] = 0
+            s["_model"] = name; s["_tier"] = tier_label
+            s["_models"] = f"0/2"
             return s
-    
-    # LAST RESORT: OmniRoute
-    logger.info("All 4 AI models failed — falling back to OmniRoute...")
-    result = _call_omniroute(prompt)
-    if result and isinstance(result, dict):
-        result.setdefault("voters", 1)
-        result.setdefault("ensemble", "fallback")
-        result.setdefault("_model", "omniroute-fallback")
-        result.setdefault("_tier", tier_label)
-        result.setdefault("_models", "1/1")
-        result.setdefault("grade", "D")
-    return result
+
+    return None
 
 
 def ask_ai(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv=None, display="XAUUSD", tier="starter"):
@@ -2199,9 +2228,15 @@ def handle_command(cmd, text, chat_id, msg):
         quota = _get_quota(chat_id)
 
         if is_donor:
+            # Donor daily quota tracking
+            today = wib_now().strftime("%Y-%m-%d")
+            record = USER_DAILY_ANALYZE.get(chat_id, {})
+            used = record.get("count", 0) if record.get("date") == today else 0
+            remaining = max(0, DONOR_DAILY_QUOTA - used)
             txt = (
                 f"👑 <b>STATUS: DONATUR SULTAN (VIP)</b>\n"
-                f"⚡️ Kuota AI: UNLIMITED ♾️\n"
+                f"⚡️ Kuota AI: {remaining}/{DONOR_DAILY_QUOTA}x hari ini (Reset 00:00 WIB)\n"
+                f"⏱️ Cooldown: {MANUAL_THROTTLE_DONOR}s antar analisa\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"Terima kasih telah menghidupi mesin AI ini! 🥂\n"
                 f"Seluruh fitur VIP, Auto-Trade, dan Bridge\n"
@@ -2313,13 +2348,22 @@ def handle_command(cmd, text, chat_id, msg):
             disp = display_map.get(sub_norm, sub_norm.upper())
             pair = pair_map[sub_norm]
 
-            # ── Manual anti-flip guard ──
-            blocked, reason = _is_manual_blocked(str(chat_id))
+            # ── DONOR DAILY QUOTA (anti-abuse) ──
+            if _is_donor(str(chat_id)):
+                ok, remaining, warn = _check_donor_quota(str(chat_id))
+                if not ok:
+                    tg_send(warn, chat_id)
+                    return
+                if remaining <= 5:
+                    tg_send(f"⚠️ <b>Sisa {remaining}x analisa hari ini</b> — gunakan bijak!\n⏰ Reset jam 00:00 WIB", chat_id)
+
+            # ── Manual anti-flip + rate-limit guard ──
+            blocked, reason = _is_manual_blocked(str(chat_id), pair=pair)
             if blocked:
                 tg_send(reason, chat_id)
                 return
 
-            _touch_manual(str(chat_id), asset=disp)
+            _touch_manual(str(chat_id), asset=disp, pair=pair)
             tg_send("🔍 Vilona Trade FX menganalisa... ~15 detik", chat_id)
             price = fetch_price(pair)
             dxy = fetch_dxy() if pair == "gold" else None
@@ -2421,6 +2465,13 @@ def handle_command(cmd, text, chat_id, msg):
                                         auto_text += f"{w}\n"
                         except: pass
                     auto_text += "<i>EA auto-eksekusi... 3-5 detik</i>"
+                    # Donation reminder for autosync
+                    if not _is_donor(str(chat_id)):
+                        auto_text += (
+                            "\n━━━━━━━━━━━━━━━━\n"
+                            "💡 <b>Kalau EA lo cuan, isi bensin AI ya!</b>\n"
+                            "Jangan diperas terus Bro 😄\n👉 /donate"
+                        )
                     tg_send(auto_text, chat_id)
                 else:
                     PENDING_SIGNALS[str(chat_id)] = {
@@ -2479,6 +2530,22 @@ def handle_command(cmd, text, chat_id, msg):
                                         text += f"\n{w}"
                         except: pass
                     text += "\n<i>⏰ Sinyal valid 5 menit</i>"
+                    # ── DONATION REMINDER ──
+                    is_donor = _is_donor(str(chat_id)) if chat_id else False
+                    if not is_donor:
+                        text += (
+                            "\n━━━━━━━━━━━━━━━━\n"
+                            "💡 <b>Kalau sinyal ini cuan, saatnya isi bensin AI!</b>\n"
+                            "Server analisa 24/7 butuh biaya API & GPU.\n"
+                            "Jangan cuma diperas aja Bro 😄\n"
+                            "👉 /donate — dukung seikhlasnya, AKTIF PERMANEN"
+                        )
+                    else:
+                        text += (
+                            "\n━━━━━━━━━━━━━━━━\n"
+                            "🤝 <b>Makasih udah jadi Donatur!</b>\n"
+                            "Server AI ini hidup karena support kamu. 🥂"
+                        )
                     keyboard = {
                         "inline_keyboard": [[
                             {"text": "🔥 Trade Auto", "callback_data": f"trade:{int(time.time())}"},
@@ -2642,6 +2709,22 @@ def handle_command(cmd, text, chat_id, msg):
                                                 text += f"\n{w}"
                                 except: pass
                             text += "\n<i>⏰ Sinyal valid 5 menit</i>"
+                            # ── DONATION REMINDER ──
+                            is_donor = _is_donor(str(chat_id)) if chat_id else False
+                            if not is_donor:
+                                text += (
+                                    "\n━━━━━━━━━━━━━━━━\n"
+                                    "💡 <b>Kalau sinyal ini cuan, saatnya isi bensin AI!</b>\n"
+                                    "Server analisa 24/7 butuh biaya API & GPU.\n"
+                                    "Jangan cuma diperas aja Bro 😄\n"
+                                    "👉 /donate — dukung seikhlasnya, AKTIF PERMANEN"
+                                )
+                            else:
+                                text += (
+                                    "\n━━━━━━━━━━━━━━━━\n"
+                                    "🤝 <b>Makasih udah jadi Donatur!</b>\n"
+                                    "Server AI ini hidup karena support kamu. 🥂"
+                                )
                             keyboard = {
                                 "inline_keyboard": [[
                                     {"text": "🔥 Trade Auto", "callback_data": f"trade:{int(time.time())}"},
@@ -3756,8 +3839,15 @@ def auto_analyze_loop():
                 time.sleep(120)  # 2 min cooldown after mechanical
                 continue
 
-            # ── AI Consensus ──
-            sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=(lkz or nykz),
+            # ── AI Consensus — ONLY in killzone hours when mechanical misses ──
+            # Python screening is primary. AI hanya sebagai verifikator saat killzone.
+            in_killzone = (lkz or nykz)
+            if not in_killzone:
+                logger.info(f"   [{disp}] Outside killzone — skip AI, wait for mechanical")
+                time.sleep(60)
+                continue
+
+            sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=True,
                           ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
             if not sig:
                 time.sleep(30)
@@ -3770,7 +3860,7 @@ def auto_analyze_loop():
                 conf = conf / 100
                 sig["confidence"] = conf
 
-            # Auto-push rules
+            # Auto-push rules — AI must clear higher bar than mechanical
             should_push = False
             if action in ("BUY","SELL"):
                 voters = sig.get("voters",0)
@@ -3779,13 +3869,15 @@ def auto_analyze_loop():
                 if isinstance(rr_val, str) and rr_val.startswith("1:"):
                     rr_val = float(rr_val[2:]) if rr_val[2:] else 0
                 rr_val = float(rr_val) if rr_val else 0
-                if rr_val > 0 and (rr_val < 1.5 or rr_val > 5.0):
-                    logger.info(f"   [{disp}] BLOCKED: RR 1:{rr_val:.1f} outside 1:1.5-5 range")
-                elif voters < 2:
-                    logger.info(f"   [{disp}] BLOCKED: solo call ({voters} model)")
-                elif (lkz or nykz) and conf >= 0.70:
-                    should_push = True
-                elif not (lkz or nykz) and conf >= 0.75:
+
+                # AI requires: 2+ model agreement + conf ≥ 70% + RR ≥ 1:1.5
+                if voters < 2:
+                    logger.info(f"   [{disp}] BLOCKED: solo AI call ({voters} model) — need ≥2")
+                elif conf < 0.70:
+                    logger.info(f"   [{disp}] BLOCKED: AI confidence {conf:.0%} < 70%")
+                elif rr_val > 0 and (rr_val < 1.5 or rr_val > 5.0):
+                    logger.info(f"   [{disp}] BLOCKED: RR 1:{rr_val:.1f} outside 1:1.5-5")
+                else:
                     should_push = True
 
             if should_push:

@@ -33,25 +33,21 @@ def load_trade_log():
     except: return []
 
 def is_duplicate(log, signal):
-    """Cek apakah signal sudah pernah dipost (dedup by symbol + entry + time gap)."""
-    entry = signal.get("entry", 0)
+    """Cek apakah signal sudah pernah dipost (dedup by symbol + action + time gap)."""
     action = signal.get("action", "")
     symbol = signal.get("symbol", "")
     now = time.time()
     
-    for s in log[-20:]:  # cek 20 terakhir buat coverage lebih luas
-        # Cek entry price sama (dalam $0.30 untuk forex, $1 untuk crypto)
-        threshold = 1.0 if symbol in ("BTCUSD",) else 0.30
+    for s in log[-30:]:  # cek 30 terakhir
         if (s.get("symbol") == symbol and 
-            s.get("action") == action and 
-            abs(s.get("entry", 0) - entry) < threshold):
-            # Cek time gap — minimal 60 menit untuk aset/sinyal yang sama
+            s.get("action") == action):
+            # Cek time gap — minimal 180 menit (3 jam) untuk sinyal yang sama
             try:
                 t1 = datetime.fromisoformat(s.get("timestamp", "")).timestamp()
-                if now - t1 < 3600:  # 60 menit
+                if now - t1 < 10800:  # 180 menit
                     return True
             except:
-                return True  # kalau gak bisa parse timestamp, anggap duplikat
+                pass  # kalau gak bisa parse, lanjut cek
     return False
 
 def main():
