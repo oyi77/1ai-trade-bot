@@ -3395,6 +3395,35 @@ _PER_ASSET_COOLDOWN = 1800        # 30 min per asset (any direction)
 _SAME_DIR_COOLDOWN = 3600         # 60 min same-direction on same asset
 _MAX_PER_ASSET_PER_DAY = 3        # max 3 signals per asset per day
 _channel_state = None             # lazy-loaded from disk
+
+# ── PER-PAIR LAST POST TRACKER (brute-force dedup, no fancy state) ──
+LAST_POST_DIR = DATA_DIR / "last_channel_post"
+LAST_POST_DIR.mkdir(parents=True, exist_ok=True)
+_LAST_POST_COOLDOWN = 1800  # 30 min — don't post same pair within this window
+
+def _get_last_post(pair_key: str) -> dict:
+    """Read last channel post for a pair. Returns empty dict if none/stale."""
+    try:
+        f = LAST_POST_DIR / f"{pair_key}.json"
+        if f.exists():
+            data = json.loads(f.read_text())
+            age = time.time() - data.get("ts", 0)
+            if age < _LAST_POST_COOLDOWN:
+                return data
+    except Exception:
+        pass
+    return {}
+
+def _set_last_post(pair_key: str, direction: str, entry: float):
+    """Record a channel post for a pair."""
+    try:
+        f = LAST_POST_DIR / f"{pair_key}.json"
+        f.write_text(json.dumps({
+            "pair": pair_key, "direction": direction,
+            "entry": round(entry, 1), "ts": time.time()
+        }))
+    except Exception:
+        pass
 _last_tpsl_alert = {}             # {(trade_id): timestamp}
 _ALERT_STATE_FILE = DATA_DIR / "tpsl_alert_state.json"
 
@@ -3451,7 +3480,17 @@ def _signal_dedup_hash(asset_key, direction, entry, sl, tp):
 def _can_post_to_channel(asset_key: str = "", direction: str = "", entry=0, sl=0, tp=0) -> bool:
     """Rate limit + dedup. Returns False if blocked."""
     state = _cs(); now = time.time(); today = wib_now().strftime("%Y%m%d")
-    # 0. Signal dedup — SAME content within 2h = BLOCK
+    # 0. PER-PAIR BRUTE DEDUP — 30 min cooldown (disk-persisted, ultra-reliable)
+    if asset_key and direction:
+        last = _get_last_post(asset_key)
+        if last:
+            same_dir = (last.get("direction") == direction)
+            last_entry = last.get("entry", 0)
+            entry_diff = abs(float(entry or 0) - float(last_entry)) if entry and last_entry else 999
+            if same_dir and entry_diff < 5.0:
+                logger.info(f"🚫 PAIR DEDUP [{asset_key}]: same {direction} direction, entry diff={entry_diff:.1f}")
+                return False
+    # 1. Signal dedup — SAME content within 2h = BLOCK
     if asset_key and direction:
         sig_hash = _signal_dedup_hash(asset_key, direction, entry, sl, tp)
         stored = state["signal_hashes"].get(sig_hash, 0)
@@ -3486,6 +3525,8 @@ def _mark_channel_post(asset_key: str = "", direction: str = "", entry=0, sl=0, 
         if entry and sl and tp:
             sh = _signal_dedup_hash(asset_key, direction, entry, sl, tp)
             state["signal_hashes"][sh] = now
+        # ── Per-pair direct dedup file (always saved) ──
+        _set_last_post(asset_key, direction, entry)
     _save_channel_state()
 
 def _can_post_tpsl_alert(trade_id: str) -> bool:
@@ -3917,48 +3958,185 @@ def auto_analyze_loop():
             else:
                 logger.info(f"   [{disp}] {action} | Grade:{sig.get('grade','?')} | conf={conf:.0%}")
 
-            # ── Market Pulse: MTF Top-Down Matrix every ~30 min ──
-            _mtf_symbol = {"gold": "XAUUSD", "btc": "BTCUSD", "oil": "USOIL"}.get(pair)
-            if _mtf_symbol and (time.time() - last_pulse_time) > 1800:
-                try:
-                    from engine_consensus import run_engine_consensus, _format_pulse_text
-                    mtf_result = run_engine_consensus(symbol=_mtf_symbol)
-                    if mtf_result and mtf_result.get("timeframes"):
-                        pulse_text = _format_pulse_text(mtf_result)
-                        send_to_channel(pulse_text)
-                        last_pulse_time = time.time()
-                        hier = mtf_result.get("hierarchical", {})
-                        logger.info(f"📊 MTF Market Pulse sent ({_mtf_symbol}): {hier.get('verdict','?')} ({hier.get('mtf_alignment','?')})")
-                except Exception as e:
-                    logger.warning(f"Market Pulse error: {e}")
-
-            # ── Active Signal: quality gate → post if valid ──
-            try:
-                _as_symbol = {"gold": "XAUUSD", "btc": "BTCUSD", "oil": "USOIL"}.get(pair, "XAUUSD")
-                if _as_symbol and mtf_result and mtf_result.get("hierarchical", {}).get("verdict") != "HOLD" and mtf_result.get("hierarchical", {}).get("consensus_score", 0) >= 0.5:
-                    from signal_calculator import compute_signal as _compute_sig, format_signal_telegram as _fmt_sig, log_signal as _log_sig
-                    sig = _compute_sig(result)
-                    if sig and sig.get("grade") in ("A", "B"):
-                        sig["symbol"] = _as_symbol
-                        text = _fmt_sig(sig)
-                        send_to_channel(text)
-                        # log to bridge + trade log
-                        try:
-                            from scripts.vilona_tradefx_signal_bridge import PROJECT_DIR
-                            import requests
-                            requests.post(f"https://phantomfx.aitradepulse.com/signal?api_key=VT-DONOR-0", json=sig, timeout=5)
-                        except Exception:
-                            pass
-                        _log_sig(sig)
-                        logger.info(f"🔥 ACTIVE SIGNAL posted: {sig['action']} {sig['symbol']} Grade {sig['grade']} RR 1:{sig['rr']}")
-            except Exception as e:
-                logger.warning(f"Signal generator error: {e}")
+            # ── Market Pulse DISABLED (user wants clean channel, signals only) ──
+            # ── Active Signal DISABLED (redundant — mechanical+AI consensus already covers this) ──
 
             time.sleep(90 if (lkz or nykz) else 120)
 
         except Exception as e:
             logger.error(f"Auto-analyze error: {e}")
             time.sleep(60)
+
+
+# ── END-OF-DAY RECAP + WEEKLY REPORT ──
+RECAP_SENT_FILE = DATA_DIR / ".last_recap_date"
+WEEKLY_SENT_FILE = DATA_DIR / ".last_weekly_date"
+
+def _compute_daily_recap() -> str | None:
+    """Generate end-of-day recap: signals, pips, winrate per asset."""
+    today = wib_now()
+    today_str = today.strftime("%Y%m%d")
+    lines = [f"📊 <b>DAILY RECAP — {today.strftime('%d %b %Y')}</b>", "━━━━━━━━━━━━━━━━"]
+    total_signals = 0
+    total_wins = 0
+    total_losses = 0
+    total_pips = 0.0
+    
+    # Load today's trades from trade_history.json
+    today_trades = []
+    try:
+        hist_file = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
+        if hist_file.exists():
+            all_trades = json.loads(hist_file.read_text()).get("trades", [])
+            today_trades = [t for t in all_trades if str(t.get("date","") or t.get("timestamp",""))[:8] == today_str]
+    except Exception:
+        pass
+    
+    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD"), ("oil","USOIL")]:
+        log = load_signal_log(pair_key)
+        sigs = log.get("signals_sent", 0)
+        if sigs == 0 and not any(t.get("symbol","").upper() == disp for t in today_trades):
+            continue
+        total_signals += sigs
+        
+        wins = 0; losses = 0; pips = 0.0
+        for t in today_trades:
+            if t.get("symbol", "").upper() == disp:
+                result = t.get("result", "").upper()
+                if result == "TP":
+                    wins += 1
+                    pips += abs(float(t.get("pips", 0) or 0))
+                elif result == "SL":
+                    losses += 1
+                    pips -= abs(float(t.get("pips", 0) or 0))
+        
+        total_wins += wins
+        total_losses += losses
+        total_pips += pips
+        
+        wr = f"{(wins/(wins+losses)*100):.0f}%" if (wins+losses) > 0 else "N/A"
+        lines.append(f"🏷 <b>{disp}</b>: {sigs} sinyal | {wins}W/{losses}L | WR {wr} | {pips:+.1f} pip")
+    
+    if total_signals == 0 and not today_trades:
+        return None
+    
+    total_trades = total_wins + total_losses
+    overall_wr = f"{(total_wins/total_trades*100):.0f}%" if total_trades > 0 else "N/A"
+    lines.append("━━━━━━━━━━━━━━━━")
+    lines.append(f"📈 <b>Total</b>: {total_signals} sinyal | {total_wins}W/{total_losses}L | WR {overall_wr} | {total_pips:+.1f} pip")
+    lines.append("")
+    if total_pips > 0:
+        lines.append("🟢 <b>PROFIT HARI INI!</b> Mesin AI bekerja dengan baik.")
+    elif total_pips < 0:
+        lines.append("🔴 <b>LOSS HARI INI.</b> Evaluasi ulang strategi, mungkin market sideways.")
+    else:
+        lines.append("⚪ <b>BREAKEVEN.</b> Tidak ada sinyal yang tersentuh TP/SL.")
+    lines.append("")
+    lines.append("💚 Jangan lupa isi bensin AI → /donate")
+    return "\n".join(lines)
+
+
+def _compute_weekly_report() -> str | None:
+    """Generate weekly performance report (Friday only)."""
+    now = wib_now()
+    if now.weekday() != 4:  # Only Friday
+        return None
+    
+    lines = [f"📈 <b>WEEKLY PERFORMANCE REPORT</b>", f"━━━━━━━━━━━━━━━━"]
+    lines.append(f"📅 {now.strftime('%d %b %Y')}")
+    lines.append("")
+    
+    today_str = now.strftime("%Y%m%d")
+    week_start = (now - __import__("datetime").timedelta(days=now.weekday())).strftime("%Y%m%d")
+    
+    # Load this week's trades
+    week_trades = []
+    try:
+        hist_file = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
+        if hist_file.exists():
+            all_trades = json.loads(hist_file.read_text()).get("trades", [])
+            week_trades = [t for t in all_trades 
+                          if week_start <= str(t.get("date","") or t.get("timestamp",""))[:8] <= today_str]
+    except Exception:
+        pass
+    
+    total_signals = 0; total_wins = 0; total_losses = 0; total_pips = 0.0
+    
+    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD"), ("oil","USOIL")]:
+        log = load_signal_log(pair_key)
+        sigs = log.get("signals_sent", 0)
+        if sigs == 0 and not any(t.get("symbol","").upper() == disp for t in week_trades):
+            continue
+        total_signals += sigs
+        
+        wins = 0; losses = 0; pips = 0.0
+        for t in week_trades:
+            if t.get("symbol", "").upper() == disp:
+                result = t.get("result", "").upper()
+                if result == "TP":
+                    wins += 1
+                    pips += abs(float(t.get("pips", 0) or 0))
+                elif result == "SL":
+                    losses += 1
+                    pips -= abs(float(t.get("pips", 0) or 0))
+        
+        total_wins += wins
+        total_losses += losses
+        total_pips += pips
+        
+        wr = f"{(wins/(wins+losses)*100):.0f}%" if (wins+losses) > 0 else "N/A"
+        lines.append(f"🏷 <b>{disp}</b>: {sigs} sinyal | {wins}W/{losses}L | WR {wr} | {pips:+.1f} pip")
+    
+    total_trades = total_wins + total_losses
+    overall_wr = f"{(total_wins/total_trades*100):.0f}%" if total_trades > 0 else "N/A"
+    lines.append("━━━━━━━━━━━━━━━━")
+    lines.append(f"📊 <b>Minggu Ini</b>: {total_signals} sinyal | {total_wins}W/{total_losses}L | WR {overall_wr} | {total_pips:+.1f} pip")
+    lines.append("")
+    if total_pips > 0:
+        lines.append("🟢 <b>PROFITABLE WEEK!</b> 🚀")
+    else:
+        lines.append("🔴 <b>LOSING WEEK.</b> Evaluasi engine untuk minggu depan.")
+    lines.append("")
+    lines.append("💚 Dukung server AI → /donate")
+    return "\n".join(lines)
+
+
+def _recap_report_loop():
+    """Background thread: send daily recap at 22:00 WIB + weekly report Friday 22:30 WIB."""
+    time.sleep(10)
+    while True:
+        try:
+            now = wib_now()
+            today_str = now.strftime("%Y%m%d")
+            
+            # ── Daily recap at 22:00-22:15 WIB ──
+            if now.hour == 22 and not is_weekend():
+                last_recap = ""
+                try: last_recap = RECAP_SENT_FILE.read_text().strip()
+                except: pass
+                if last_recap != today_str:
+                    recap = _compute_daily_recap()
+                    if recap:
+                        send_to_channel(recap)
+                        logger.info("📊 Daily recap sent to channel")
+                    RECAP_SENT_FILE.write_text(today_str)
+            
+            # ── Weekly report Friday 22:30-22:45 WIB ──
+            if now.weekday() == 4 and now.hour == 22 and now.minute >= 30:
+                last_weekly = ""
+                try: last_weekly = WEEKLY_SENT_FILE.read_text().strip()
+                except: pass
+                if last_weekly != today_str:
+                    report = _compute_weekly_report()
+                    if report:
+                        send_to_channel(report)
+                        logger.info("📈 Weekly report sent to channel")
+                    WEEKLY_SENT_FILE.write_text(today_str)
+            
+            time.sleep(300)  # Check every 5 min
+        except Exception as e:
+            logger.error(f"Recap/report error: {e}")
+            time.sleep(300)
 
 
 # ── Main ──
@@ -4003,6 +4181,11 @@ def main():
     auto_thread = threading.Thread(target=auto_analyze_loop, daemon=True)
     auto_thread.start()
     logger.info("Auto-analyze thread started")
+
+    # Start daily recap + weekly report thread
+    recap_thread = threading.Thread(target=_recap_report_loop, daemon=True)
+    recap_thread.start()
+    logger.info("Recap/Report thread started")
 
     # Start bot polling with exponential backoff
     state = load_state()

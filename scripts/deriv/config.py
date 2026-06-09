@@ -1,14 +1,14 @@
 """Deriv trading constants and configuration."""
+import os
 
-# ── WebSocket Endpoints ──
-WS_LEGACY = "wss://ws.binaryws.com/websockets/v3"
+WS_LEGACY = "wss://ws.derivws.com/websockets/v3"  # Updated from binaryws.com (deprecated)
 WS_NEW_DEMO = "wss://api.derivws.com/trading/v1/options/ws/demo"
 WS_NEW_REAL = "wss://api.derivws.com/trading/v1/options/ws/real"
 REST_BASE = "https://api.derivws.com"
 REST_OTP = f"{REST_BASE}/trading/v1/options/accounts/{{account_id}}/otp"
 REST_ACCOUNTS = f"{REST_BASE}/trading/v1/options/accounts"
 
-DEFAULT_APP_ID = "33uQ6fU4eIRvJc6jkYeEa"
+DEFAULT_APP_ID = os.environ.get("DERIV_APP_ID", "")  # Must be set in .env
 
 # ── Connection Tuning ──
 PING_INTERVAL = 20

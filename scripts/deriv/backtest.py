@@ -540,7 +540,7 @@ async def main():
 
     pat_token = os.getenv("DERIV_PAT_TOKEN",
                           "pat_0f2c09ae7ef25d3970e5829982e77206bd53c761c57e153f53dd99f8e1d11bb2")
-    app_id = os.getenv("DERIV_APP_ID", "33uQ6fU4eIRvJc6jkYeEa")
+    app_id = os.getenv("DERIV_APP_ID", "")  # Must be set in .env
     account_id = os.getenv("DERIV_ACCOUNT_ID", "DOT92925029")
 
     results = {}

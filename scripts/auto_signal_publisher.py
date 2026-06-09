@@ -25,6 +25,26 @@ log = logging.getLogger("auto_signal")
 
 WIB = timezone(timedelta(hours=7))
 
+# ── Killzone routing ───────────────────────────────────────────────
+FOREX_METAL_PAIRS = {"XAUUSD", "USOIL"}       # London/NY only
+CRYPTO_PAIRS = {"BTCUSD", "ETHUSD"}            # 24/7 — bypass killzone
+
+def killzone_active_wib(now=None):
+    """Return (london_active, ny_active). London=14-17WIB, NY=19-22WIB."""
+    if now is None:
+        now = datetime.now(WIB)
+    h = now.hour
+    return (14 <= h < 17, 19 <= h < 22)
+
+def trading_allowed(symbol):
+    """Check if trading is allowed for this symbol based on killzone routing."""
+    if symbol in CRYPTO_PAIRS:
+        return True  # Crypto 24/7
+    if symbol in FOREX_METAL_PAIRS:
+        lkz, nykz = killzone_active_wib()
+        return lkz or nykz  # Only London or NY
+    return True  # Stocks, others — always allowed during weekdays
+
 def load_trade_log():
     path = os.path.join(PROJECT_DIR, "data", "trade_log.json")
     try:
@@ -63,11 +83,25 @@ def main():
         log.error(f"Import error: {e}")
         return 1
 
-    # ── MTF Scan — FOKUS XAU aja ──
-    assets = ["XAUUSD"]
+    # ── MTF Scan — Multi-Asset + Killzone Routing ──
+    assets = [
+        {"symbol": "XAUUSD", "class": "forex_metal"},
+        {"symbol": "BTCUSD", "class": "crypto"},
+        {"symbol": "USOIL", "class": "forex_metal"},
+    ]
     results = {}
     
-    for sym in assets:
+    for asset in assets:
+        sym = asset["symbol"]
+        asset_class = asset["class"]
+        
+        # Killzone gate for forex/metals
+        if asset_class == "forex_metal" and not trading_allowed(sym):
+            if not args.quiet:
+                lkz, nykz = killzone_active_wib()
+                log.info(f"  {sym}: SKIPPED — outside London/NY killzone (London:{'🟢' if lkz else '🔴'} NY:{'🟢' if nykz else '🔴'})")  # noqa: E501
+            continue
+        
         if not args.quiet:
             log.info(f"Scanning {sym}...")
         result = run_engine_consensus(symbol=sym)

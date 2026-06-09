@@ -19,7 +19,17 @@ import re
 import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
+
+# ── Load .env explicitly (handler reads keys via os.environ.get) ────────
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path)
+except ImportError:
+    pass  # python-dotenv not installed — rely on systemd EnvironmentFile
 
 from tradebot.bots.base import BaseBot
 from tradebot.bots.vilona.signal_bridge import VilonaSignalBridge
@@ -51,7 +61,7 @@ AUTO_SCAN_ASSETS: list[tuple[str, str, str, bool]] = [
     # (internal_pair, display_name, yahoo_symbol, is_forex_metal)
     ("gold", "XAUUSD", "GC=F", True),
     ("btc", "BTCUSD", "BTC-USD", False),
-    ("oil", "USOIL", "CL=F", False),
+    ("oil", "USOIL", "CL=F", True),   # Oil = London/NY killzone (per user directive)
 ]
 
 # ── Market session helpers ─────────────────────────────────────────────────
@@ -158,7 +168,7 @@ def format_signal_basic(sig: dict[str, Any], price: float, display: str) -> str:
         )
 
     icon = "🟢" if action == "BUY" else "🔴"
-    return (
+    msg = (
         f"{icon} <b>{display.upper()}</b> — {action}\n"
         f"━━━━━━━━━━━━━━\n"
         f"Entry: <code>{entry:.4g}</code>\n"
@@ -169,11 +179,37 @@ def format_signal_basic(sig: dict[str, Any], price: float, display: str) -> str:
         f"Conf:  {confidence:.0%}\n"
         f"Model: {model}\n"
         f"━━━━━━━━━━━━━━\n"
-        f"💡 <i>{reasoning[:200]}</i>"
+        f"💡 <i>{reasoning[:200]}</i>\n"
+        f"\n"
+        f"⚡ 1% risk only. Full AI — verify sendiri.\n"
+        f"💚 Server ini GRATIS — dukung via /donate | @berkahkaryaforexbotbot"
     )
+    return msg
 
 
 # ── JSON extraction from AI output ────────────────────────────────────────
+
+def _parse_sse(raw: str) -> str | None:
+    """Parse Server-Sent Events (SSE) streaming response from OmniRoute.
+    Extracts concatenated content from `data:` lines.
+    Returns None if the response is not SSE format."""
+    if "data: " not in raw:
+        return None
+    parts: list[str] = []
+    for line in raw.split("\n"):
+        if line.startswith("data: "):
+            data_str = line[6:]
+            if data_str == "[DONE]":
+                break
+            try:
+                chunk = json.loads(data_str)
+                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                if "content" in delta:
+                    parts.append(delta["content"])
+            except (json.JSONDecodeError, KeyError, IndexError):
+                pass
+    return "".join(parts) if parts else None
+
 
 def extract_json(content: str) -> dict[str, Any] | None:
     """Robust JSON extraction from AI output — strips markdown, sanitizes."""
@@ -387,7 +423,9 @@ class VilonaBot(BaseBot):
                     if not self._running:
                         break
                     sig, reason = self._detect_mechanical_signal(pair)
-                    if sig and sig.get("action") != "HOLD":
+                    if reason and reason.startswith("⏳"):  # Killzone skip
+                        LOG.info("Auto-analysis skipped: %s", reason)
+                    elif sig and sig.get("action") != "HOLD":
                         display = pair.upper()
                         price = sig.get("entry", 0)
                         msg = format_signal_basic(sig, price, display)
@@ -402,8 +440,21 @@ class VilonaBot(BaseBot):
     # ── Mechanical signal detection ──────────────────────────────────────
 
     def _detect_mechanical_signal(self, pair: str = "gold", price: float | None = None, ohlcv_bars: list[dict[str, Any]] | None = None) -> tuple[dict[str, Any] | None, str | None]:  # noqa: E501
-        """Mechanical signal: Quant + FVG + Hermes → fire without AI consensus."""
+        """Mechanical signal: Quant + FVG + Hermes → fire without AI consensus.
+
+        Killzone routing:
+          - Forex/Metals (XAUUSD, USOIL): London/NY only
+          - Crypto (BTC-USD, ETH-USD): 24/7, bypass
+        """
         symbol = resolve_yahoo_symbol(pair)
+        display = pair.upper()
+
+        # ── Killzone gate ──────────────────────────────────────────
+        is_forex_metal = display in ("XAUUSD", "USOIL")
+        if is_forex_metal:
+            lkz, nykz = killzone_active()
+            if not (lkz or nykz):
+                return None, f"⏳ {display} mechanical signal SKIPPED — outside London/NY killzone"
 
         if not self._market_data:
             return None, None
@@ -546,9 +597,21 @@ class VilonaBot(BaseBot):
         Analyze a pair using 2-Tier AI pipeline:
           Tier 1 (Workhorse = Gemini): scores every setup. HALT if < 75%.
           Tier 2 (Sniper = DeepSeek via OmniRoute): cross-check only Tier-1-passed setups.
+          
+        Killzone routing:
+          - Forex/Metals (XAUUSD, USOIL): London/NY only
+          - Crypto (BTC, ETH): 24/7 bypass
         """
         symbol = resolve_yahoo_symbol(pair)
         display = pair.upper()
+
+        # ── Killzone gate ──────────────────────────────────────────
+        is_forex_metal = display in ("XAUUSD", "USOIL")
+        if is_forex_metal:
+            lkz, nykz = killzone_active()
+            if not (lkz or nykz):
+                LOG.info("⏳ AI analysis SKIPPED for %s — outside London/NY killzone", display)
+                return None, f"⏳ {display} AI analysis SKIPPED — outside London/NY killzone"
 
         # Fetch OHLCV
         ohlcv_bars = None
@@ -684,10 +747,10 @@ class VilonaBot(BaseBot):
         return extract_json(text)
 
     async def _call_ai_with_model(self, model: str, user_content: str) -> str:
-        """Call OmniRoute with a specific model override."""
+        """Call OmniRoute with a specific model override (handles SSE)."""
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.deepseek_key or self.gemini_key or 'sk-no-key-configured'}",
+            "Authorization": f"Bearer {self.deepseek_key or self.gemini_key or 'sk-no-...ured'}",
         }
         payload = {
             "model": model,
@@ -701,8 +764,11 @@ class VilonaBot(BaseBot):
             headers=headers,
         )
         with urllib.request.urlopen(req, timeout=30) as r:
-            resp = json.loads(r.read())
-            return resp["choices"][0]["message"]["content"]
+            raw = r.read().decode()
+        content = _parse_sse(raw)
+        if content:
+            return content
+        return json.loads(raw)["choices"][0]["message"]["content"]
 
     def _build_system_prompt(self) -> str:
         return (
@@ -717,7 +783,7 @@ class VilonaBot(BaseBot):
         )
 
     async def _call_ai(self, system: str, user: str) -> str:
-        """Call OmniRoute AI endpoint."""
+        """Call OmniRoute AI endpoint (handles SSE streaming)."""
         payload = {
             "model": "deepseek-chat",
             "messages": [
@@ -729,7 +795,7 @@ class VilonaBot(BaseBot):
         }
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.deepseek_key or 'sk-no-key-required'}",
+            "Authorization": f"Bearer {self.deepseek_key or 'sk-no-...ired'}",
         }
         req = urllib.request.Request(
             self.omniroute_url,
@@ -737,9 +803,14 @@ class VilonaBot(BaseBot):
             headers=headers,
         )
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
-                resp = json.loads(r.read())
-                return resp["choices"][0]["message"]["content"]
+            with urllib.request.urlopen(req, timeout=45) as r:
+                raw = r.read().decode()
+            # Parse SSE streaming response
+            content = _parse_sse(raw)
+            if content:
+                return content
+            # Fallback: try direct JSON
+            return json.loads(raw)["choices"][0]["message"]["content"]
         except Exception as e:
             raise RuntimeError(f"AI call failed: {e}")
 

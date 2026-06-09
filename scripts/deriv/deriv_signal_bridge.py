@@ -44,7 +44,7 @@ PORT = int(os.environ.get("DERIV_BRIDGE_PORT", "8082"))
 # ── PAT credentials (from env, fall back to __main__ defaults) ──
 PAT_TOKEN = os.environ.get("DERIV_PAT_TOKEN",
     "pat_0f2c09ae7ef25d3970e5829982e77206bd53c761c57e153f53dd99f8e1d11bb2")
-APP_ID = os.environ.get("DERIV_APP_ID", "33uQ6fU4eIRvJc6jkYeEa")
+APP_ID = os.environ.get("DERIV_APP_ID", "")  # Must be set in .env (register at https://developers.deriv.com)
 ACCOUNT_ID = os.environ.get("DERIV_ACCOUNT_ID", "DOT92925029")
 DEFAULT_SYMBOL = os.environ.get("DERIV_SYMBOL", "R_75")
 

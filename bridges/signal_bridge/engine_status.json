@@ -1,7 +1,7 @@
 {
   "symbol": "XAUUSD",
-  "price": 4260.6,
-  "timestamp": "2026-06-10T04:50:15.419497",
+  "price": 4253.5,
+  "timestamp": "2026-06-10T05:09:18.343616",
   "timeframes": {
     "D1": {
       "verdict": "SELL",
@@ -28,7 +28,7 @@
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 21:00)"
+          "details": "Outside killzone (UTC 22:00)"
         },
         "smc": {
           "direction": "SELL",
@@ -55,9 +55,9 @@
       "macro": {
         "trend": "BEARISH",
         "strength": 1.0,
-        "ema200_dist": -5.92,
+        "ema200_dist": -6.63,
         "rsi": 32.2,
-        "atr_pct": 1.04,
+        "atr_pct": 1.17,
         "sma_cross": "BEARISH"
       }
     },
@@ -86,7 +86,7 @@
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 21:00)"
+          "details": "Outside killzone (UTC 22:00)"
         },
         "smc": {
           "direction": "SELL",
@@ -113,7 +113,7 @@
       "macro": {
         "trend": "BEARISH",
         "strength": 1.0,
-        "ema200_dist": -3.58,
+        "ema200_dist": -3.59,
         "rsi": 25.3,
         "atr_pct": 0.24,
         "sma_cross": "BEARISH"
@@ -144,7 +144,7 @@
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 21:00)"
+          "details": "Outside killzone (UTC 22:00)"
         },
         "smc": {
           "direction": "SELL",
@@ -169,12 +169,12 @@
       },
       "weight": 0.2,
       "structure": {
-        "s1": 4235.7,
-        "r1": 4364.4,
-        "vwap": 4298.5,
+        "s1": 4228.6,
+        "r1": 4357.3,
+        "vwap": 4291.4,
         "near_support": false,
         "near_resistance": false,
-        "range_pct": 3.02,
+        "range_pct": 3.03,
         "structure_type": "expanded"
       }
     },
@@ -203,7 +203,7 @@
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 21:00)"
+          "details": "Outside killzone (UTC 22:00)"
         },
         "smc": {
           "direction": "BUY",
@@ -228,9 +228,9 @@
       },
       "weight": 0.12,
       "structure": {
-        "s1": 4235.7,
-        "r1": 4281.1,
-        "vwap": 4258.01,
+        "s1": 4228.6,
+        "r1": 4274.0,
+        "vwap": 4250.91,
         "near_support": false,
         "near_resistance": true,
         "range_pct": 1.07,
@@ -262,7 +262,7 @@
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Outside killzone (UTC 21:00)"
+          "details": "Outside killzone (UTC 22:00)"
         },
         "smc": {
           "direction": "BUY",
@@ -304,5 +304,8 @@
     "mtf_alignment": "ALIGNED",
     "counter_trend_flags": [],
     "macro_trend": "BEARISH"
-  }
+  },
+  "mtf_alignment": "ALIGNED",
+  "macro_trend": "BEARISH",
+  "counter_trend_flags": []
 }

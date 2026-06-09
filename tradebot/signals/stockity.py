@@ -70,6 +70,7 @@ class StockitySource(BaseDataSource):
                 timeout=httpx.Timeout(15.0),
                 headers=headers,
             )
+        return self._client
     def _compute_time_param(self, target_minute: int = 15) -> str:
         """Compute time parameter for Stockity API in ISO 8601 format.
 

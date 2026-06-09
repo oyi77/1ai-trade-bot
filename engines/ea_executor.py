@@ -124,6 +124,11 @@ def main():
                         logger.info(f"{emoji} CLOSED: {pos['action']} | {reason} | "
                                     f"PnL=${pos['pnl']:.2f} | "
                                     f"Entry=${pos['entry']:.2f} → Close=${close_price:.2f}")
+                        if reason == "TP_HIT":
+                            logger.info(
+                                "🎉🎉🎉 TP HIT! CUAN! 🎉🎉🎉 "
+                                "Server ini GRATIS — bantu dukung biaya AI: /donate | @berkahkaryaforexbotbot"
+                            )
                         state["closed"].append(pos)
                         state["total_pnl"] += pos["pnl"]
                     else:
