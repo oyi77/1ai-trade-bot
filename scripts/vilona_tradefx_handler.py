@@ -213,7 +213,7 @@ OMNIROUTE_MODELS = ["deepseek-chat", "gpt-4o", "claude-sonnet-4-20250514"]
 _AI_TOKEN_USAGE: dict[str, dict[str, int]] = {}
 
 # ── Grok (xAI) ──
-GROK_KEY = os.environ.get("GROK_API_KEY", "xai-Z0z54954ovqntReO5jdnuTIF4b6")
+GROK_KEY = os.environ.get("GROK_API_KEY", "")
 GROK_URL = "https://api.x.ai/v1/chat/completions"
 
 
@@ -2545,6 +2545,7 @@ def handle_command(cmd, text, chat_id, msg):
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🧠 /signal — Signal dari 9 engines\n"
                 f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
+                f"📰 /news — Grok News X/Twitter intel 👑\n"
                 f"📊 /dashboard — Live dashboard web\n"
                 f"📱 /help — Semua command\n"
                 f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot"
@@ -2582,6 +2583,7 @@ def handle_command(cmd, text, chat_id, msg):
             "📊 <b>TRADING TOOLS</b>",
             "/mapping — Mapping harian + level S/R",
             "/levels — SnR + FIBO + Engine Deep Dive 👑",
+            "/news — Grok News — X/Twitter intel 👑",
             "/killzone — Radar sesi market aktif",
             "/winrate — Statistik performa",
             "/history — Riwayat trade terakhir",
@@ -3430,6 +3432,107 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(mapping, chat_id)
         except Exception as e:
             tg_send(f"❌ Mapping error: {e}", chat_id)
+
+    elif cmd == "/news":
+        """Grok News — real-time X/Twitter market intelligence. Donor only."""
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                f"📰 <b>Grok News</b> [🔒 LOCKED]\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Grok News adalah <b>real-time market intelligence</b>\n"
+                f"dari X/Twitter — kasih tau apa yang bikin market\n"
+                f"gerak SEBELUM lu entry.\n"
+                f"\n"
+                f"🔥 <b>Contoh output:</b>\n"
+                f"   \"Fed Waller暗示 delay rate cut — DXY +0.3%\"\n"
+                f"   \"NFP beat expectations 280k vs 200k est\"\n"
+                f"   \"Gold跌破$2700 — institusi mulai take profit\"\n"
+                f"\n"
+                f"Kenapa ini penting?\n"
+                f"   → Tahu KENAPA market gerak, bukan cuma TEKNIKAL\n"
+                f"   → Hindarin entry pas news bom\n"
+                f"   → Dapetin edge sebelum orang lain\n"
+                f"\n"
+                f"🔋 <b>AI Power: ■□□□□ 33%</b> — Grok idle\n"
+                f"   AI lu cuma bisa liat chart doang...\n"
+                f"   Bayangin kalo bisa baca X/Twitter juga 😤\n"
+                f"\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚡ <b>/donate</b> — Rp 50k/bulan\n"
+                f"   Unlock Grok News + 2 AI + /levels\n"
+                f"   Kasih AI lu mata buat liat berita 🗞️",
+                chat_id
+            )
+            return
+
+        # Donor: call Grok for the requested asset
+        sub_norm = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_n = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth",
+                      "oil":"oil","usoil":"oil","eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_n = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD",
+                      "gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        pair = pair_map_n.get(sub_norm, "gold")
+        disp = disp_map_n.get(pair, "XAUUSD")
+
+        tg_send(f"📰 <b>Grok is scanning X/Twitter for {disp}...</b>\n<i>This takes ~5-10 seconds</i>", chat_id)
+
+        try:
+            price = fetch_price(pair) or 0
+            news = _call_grok_news(disp, price)
+
+            if not news:
+                tg_send(f"❌ Grok gagal fetch news untuk {disp}. Coba lagi nanti.", chat_id)
+                return
+
+            headline = news.get("headline", "No major catalysts")
+            sentiment = news.get("sentiment", "NEUTRAL")
+            impact = news.get("impact", "LOW")
+            detail = news.get("detail", "")
+
+            s_emoji = {"BULLISH": "🟢", "BEARISH": "🔴", "NEUTRAL": "⚪️"}.get(sentiment, "⚪️")
+            i_emoji = {"HIGH": "🔥", "MED": "📊", "LOW": "📎"}.get(impact, "")
+
+            if headline == "No major catalysts":
+                msg = (
+                    f"📰 <b>Grok News — {disp}</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"⚪️ <b>No major catalysts detected</b>\n"
+                    f"\n"
+                    f"Market currently quiet — no breaking news\n"
+                    f"or macro events affecting {disp} right now.\n"
+                    f"\n"
+                    f"💡 Fokus ke analisa teknikal — chart is king.\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📰 Grok News Active ✅ — real-time X/Twitter intel\n"
+                    f"🤝 <b>Your AI Partner keeps watching.</b>"
+                )
+            else:
+                token_used = _AI_TOKEN_USAGE.get("grok", {}).get("total", 0)
+                token_k = f"{token_used/1000:.1f}k" if token_used >= 1000 else str(token_used)
+
+                msg = (
+                    f"📰 <b>Grok News — {disp}</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"{s_emoji} <b>{headline}</b>\n"
+                    f"\n"
+                )
+                if detail:
+                    msg += f"💡 {detail}\n\n"
+                msg += (
+                    f"Sentiment: <b>{sentiment}</b> | Impact: {i_emoji} <b>{impact}</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🧠 {token_k} token dipakai — real-time analysis\n"
+                    f"📰 Grok News Active ✅ — X/Twitter intelligence\n"
+                    f"🤝 <b>AI Partner kasih lu edge.</b>\n"
+                    f"\n"
+                    f"💡 Combine dengan /signal untuk konfirmasi teknikal"
+                )
+
+            tg_send(msg, chat_id)
+
+        except Exception as e:
+            logger.warning(f"/news error: {e}")
+            tg_send(f"❌ Gagal fetch Grok News: {e}", chat_id)
 
     # ── NEW: Signal System Commands ──
     elif cmd == "/levels" or cmd == "/level":
@@ -4946,6 +5049,7 @@ def main():
             {"command": "price",    "description": "💰 Cek harga real-time"},
             {"command": "mapping",  "description": "📐 Mapping harian + level S/R"},
             {"command": "levels",   "description": "🏛 SnR + FIBO + Engine (Donor)"},
+            {"command": "news",     "description": "📰 Grok News — X/Twitter intel (Donor)"},
             {"command": "killzone", "description": "🎯 Radar sesi market aktif"},
             {"command": "donate",   "description": "⚡ Isi Bahan Bakar AI"},
             {"command": "status",   "description": "🛡 Cek Kuota & Akses VIP"},
@@ -5005,7 +5109,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
