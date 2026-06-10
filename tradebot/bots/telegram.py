@@ -23,7 +23,6 @@ from telegram.ext import (
     ContextTypes,
 )
 from tradebot.bots.handlers import register_standard_commands
-from tradebot.bots.subscription.database import SubscriptionDatabase
 from tradebot.config import settings
 from tradebot.services.plans import get_user_plan
 

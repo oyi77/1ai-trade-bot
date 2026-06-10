@@ -1,4 +1,4 @@
-"""Stockity Binary Bot — proactive signal dispatcher."""
-from tradebot.bots.stockity.bot import StockityBot
+"""Stockity module — now absorbed into UnifiedBot.
 
-__all__ = ["StockityBot"]
+Legacy StockityBot replaced by unified tradebot.bots.telegram.UnifiedBot
+"""

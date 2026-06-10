@@ -1,5 +1,2 @@
-"""Stockity Signal Subscription Bot — payment-gated trading signals."""
-from tradebot.bots.subscription.bot import SubscriptionTradingBot
-from tradebot.bots.subscription.database import SubscriptionDatabase
-
-__all__ = ["SubscriptionTradingBot", "SubscriptionDatabase"]
+"""Subscription module — merged into UnifiedBot. Legacy package kept for compat."""
+# Features moved to: tradebot/bots/telegram.py + tradebot/bots/handlers.py

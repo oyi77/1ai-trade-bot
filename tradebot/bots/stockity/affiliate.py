@@ -76,6 +76,17 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_affiliates_code ON affiliates(referral_code);
         CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(referrer_code);
         CREATE INDEX IF NOT EXISTS idx_whitelabels_owner ON whitelabels(owner_user_id);
+
+        CREATE TABLE IF NOT EXISTS linked_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL,
+            auth_token TEXT NOT NULL,
+            label TEXT DEFAULT 'default',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, auth_token)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_linked_user ON linked_accounts(user_id);
     """)
     # Migration: add columns if missing
     _migrate(conn)

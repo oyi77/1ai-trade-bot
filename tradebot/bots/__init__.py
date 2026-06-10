@@ -1,19 +1,10 @@
-"""tradebot.bots — Telegram bot package for trading signal dispatch.
+"""tradebot.bots — UNIFIED Telegram bot with all platform support.
 
-Bundles three bot implementations:
-- VilonaBot     — Multi-asset FX/commodity analyst with AI-driven signal generation
-- SubscriptionBot — Stockity binary-options subscription bot with payments
-- StockityBot   — Proactive binary-options signal dispatcher (autonomous scan loop)
+ONE bot class: UnifiedBot
+Supports: Stockity, Deriv, MT5, CCXT, Vilona
+All commands in handlers.py
 """
 
-from tradebot.bots.stockity import StockityBot
-from tradebot.bots.subscription import SubscriptionTradingBot
-from tradebot.bots.vilona import VilonaBot
-
-__all__ = [
-    "VilonaBot",
-    "SubscriptionTradingBot",
-    "StockityBot",
-]
-
 from tradebot.bots.telegram import UnifiedBot
+
+__all__ = ["UnifiedBot"]

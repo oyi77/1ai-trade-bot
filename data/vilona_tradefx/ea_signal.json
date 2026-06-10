@@ -1,20 +1,36 @@
 {
-  "signal_id": "vtfx_1781075706380_2",
-  "symbol": "USOIL",
+  "signal_id": "vtfx_1781079986563_3",
+  "symbol": "XAUUSD",
   "action": "SELL",
-  "entry": 88.17,
-  "sl": 88.32,
-  "tp": 87.94,
-  "tp1": 87.94,
-  "tp2": 87.72,
+  "entry": 4172.2,
+  "sl": 4196.2,
+  "tp": 4120.0,
+  "tp1": 4120.0,
+  "tp2": 0,
   "risk_percent": 1.0,
-  "confidence": 0.701,
-  "rr_ratio": 0,
-  "comment": "VTFX/AI",
-  "source": "vtfx",
-  "timestamp": "2026-06-10T14:15:05+07:00",
-  "received_at": 1781075706.3806617,
+  "confidence": 0.95,
+  "rr_ratio": "1:2.18",
+  "comment": "VTFX/vtfx/3L",
+  "source": "vilona-tradefx",
+  "timestamp": "2026-06-10T15:26:26.388282+07:00",
+  "received_at": 1781079986.563061,
   "status": "pending",
-  "layers": [],
-  "target_user": null
+  "layers": [
+    {
+      "entry": 4172.2,
+      "tp": 4162.2,
+      "risk_pct": 0.4
+    },
+    {
+      "entry": 4167.2,
+      "tp": 4147.2,
+      "risk_pct": 0.3
+    },
+    {
+      "entry": 4162.2,
+      "tp": 4132.2,
+      "risk_pct": 0.3
+    }
+  ],
+  "target_user": ""
 }
