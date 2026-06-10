@@ -163,6 +163,11 @@ def _send_trade_result(pos: dict, reason: str):
 
     # Calculate pips using per-symbol pip size
     pips = abs(entry - close_price) / _pip_size(symbol) if _pip_size(symbol) > 0 else 0.0
+    # Correct PnL: pips × pip_value (USOIL = $1/pip, XAUUSD = $10/pip, etc.)
+    pip_val = _pip_value(symbol)
+    pnl_usd = pips * pip_val
+    if not is_tp:
+        pnl_usd = -pnl_usd
     
     pips_text = f"{pips:.1f} pip" if pips < 100 else f"{pips:.0f} pip"
     msg = (
@@ -174,7 +179,7 @@ def _send_trade_result(pos: dict, reason: str):
         f"🛑 SL: <code>${sl:.2f}</code>\n"
         f"✅ TP: <code>${tp:.2f}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📉 {pips_text} (SL {abs(entry-sl):.2f})\n"
+        f"💵 PnL: {pnl_usd:+,.2f} | 📉 {pips_text}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
     )
 
