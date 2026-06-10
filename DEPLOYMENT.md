@@ -26,19 +26,23 @@ pm2 monit
 
 ```bash
 # Check listening port
-lsof -i :8888
-netstat -tuln | grep 8888
+# Port is now 8889 (changed from 8888 to avoid Docker SearXNG conflict)
+lsof -i :8889
+netstat -tuln | grep 8889
 
 # Access web dashboard (local)
-curl http://localhost:8888/
+curl http://localhost:8889/
+
+# Access via public domain (aitradepulse.com)
+curl https://tradebot.aitradepulse.com/
 ```
 
 ## Process Management Options
 
 ### Option A: PM2 (Recommended - Lightweight)
 
-PM2 is a lightweight Node.js process manager that runs Python apps perfectly.
-
+- Port: 8889 (changed from 8888; now from 9090 originally)
+- Domain: tradebot.aitradepulse.com
 **Already configured:**
 - Process name: `1ai-trade-bot`
 - Port: 8888

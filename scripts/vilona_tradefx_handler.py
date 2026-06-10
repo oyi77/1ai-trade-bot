@@ -2323,6 +2323,7 @@ def handle_command(cmd, text, chat_id, msg):
             welcome += (
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🧠 /signal — Signal dari 9 engines\n"
+                f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
                 f"📊 /dashboard — Live dashboard web\n"
                 f"📱 /help — Semua command\n"
                 f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot"
