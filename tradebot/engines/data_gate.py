@@ -222,11 +222,12 @@ class DataGate:
     def check_circuit(self, today_str: str, daily_losses: int = 0) -> DataGateResult:
         """Enforce daily max loss limit. Uses file-backed counter (survives restarts)."""
         # File-backed counter — persists across worker restarts
+        # Use project data/ dir (same as handler's DAILY_LOSS_FILE)
         import os as _os
-        _state_dir = _os.path.join(_os.path.dirname(__file__), "..", "data")
+        _state_dir = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "data")
         _os.makedirs(_state_dir, exist_ok=True)
-        _loss_file = _os.path.join(_state_dir, ".daily_loss_count")
-        _date_file = _os.path.join(_state_dir, ".daily_loss_date")
+        _loss_file = _os.path.join(_state_dir, ".worker_daily_loss_count")
+        _date_file = _os.path.join(_state_dir, ".worker_daily_loss_date")
         
         # Reset on new day
         try:
@@ -250,10 +251,10 @@ class DataGate:
     def record_loss(self, today_str: str):
         """Call when a trade hits SL. Increments the file-backed loss counter."""
         import os as _os
-        _state_dir = _os.path.join(_os.path.dirname(__file__), "..", "data")
+        _state_dir = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), "data")
         _os.makedirs(_state_dir, exist_ok=True)
-        _loss_file = _os.path.join(_state_dir, ".daily_loss_count")
-        _date_file = _os.path.join(_state_dir, ".daily_loss_date")
+        _loss_file = _os.path.join(_state_dir, ".worker_daily_loss_count")
+        _date_file = _os.path.join(_state_dir, ".worker_daily_loss_date")
         
         try:
             saved_date = open(_date_file).read().strip() if _os.path.exists(_date_file) else ""
