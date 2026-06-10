@@ -13,20 +13,51 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
-
-from telegram import Update
+import os
+import time
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
 )
-
 from tradebot.bots.handlers import register_standard_commands
+from tradebot.bots.subscription.database import SubscriptionDatabase
 from tradebot.config import settings
 from tradebot.services.plans import get_user_plan
 
 LOG = logging.getLogger("tradebot.bots.telegram")
+
+# ── Duration helpers ──────────────────────────────────────────────────────
+
+_DURATION_SECONDS: dict[str, int] = {
+    "daily": 86400,
+    "weekly": 86400 * 7,
+    "monthly": 86400 * 30,
+}
+
+PRICE_MAP: dict[str, int] = {
+    "daily": 15_000,
+    "weekly": 75_000,
+    "monthly": 200_000,
+}
+
+VALID_SYMBOLS: list[str] = ["CRYPTO_IDX", "BTC_IDX", "ETH_IDX", "GOLD_IDX"]
+
+
+def _expires_at(plan: str) -> int:
+    delta = _DURATION_SECONDS.get(plan, 86400)
+    return int(time.time()) + delta
+
+
+def _format_trade(row: dict[str, Any]) -> str:
+    ts = datetime.fromtimestamp(row["created_at"], tz=UTC).strftime("%m/%d %H:%M")
+    emoji = "✅" if row["status"] == "won" else ("❌" if row["status"] == "lost" else "⏳")
+    return (
+        f"{emoji} `{row['symbol']}` {row['direction']} "
+        f"| {ts} | PnL: {row['result_pnl']:+.2f}"
+    )
 
 
 class UnifiedBot:
@@ -44,11 +75,19 @@ class UnifiedBot:
         self._token = token or settings.TELEGRAM_BOT_TOKEN
         self._app: Application | None = None
         self._running = False
+        self.db = SubscriptionDatabase(
+            db_path=settings.STORAGE_DB_PATH or ""
+        )
+        self._admin_chat_id: int = int(
+            os.environ.get("ADMIN_CHAT_ID", "5220170786")
+        )
 
     # ── Build ──────────────────────────────────────────────────────
 
     def build(self) -> Application:
         """Build PTB Application with all handlers."""
+        self.db.create_tables()
+
         app = Application.builder().token(self._token).build()
 
         # Core commands
@@ -58,11 +97,18 @@ class UnifiedBot:
         app.add_handler(CommandHandler("scan", self._h_scan))
         app.add_handler(CommandHandler("stats", self._h_stats))
 
+        # Account linking
+        app.add_handler(CommandHandler("link", self._h_link))
+        app.add_handler(CommandHandler("unlink", self._h_unlink))
+
         # All shared commands (plans, signals, affiliate, whitelabel, admin)
         register_standard_commands(app)
 
         # Referral deep link handler
         app.add_handler(CommandHandler("start", self._h_ref_start))
+
+        # Callback queries
+        app.add_handler(CallbackQueryHandler(self._h_callback))
 
         LOG.info("UnifiedBot built with all handlers")
         return app
@@ -252,3 +298,194 @@ class UnifiedBot:
             "📡 /signals — Browse signals"
         )
         await update.message.reply_markdown(text)
+
+    # ── Helpers ──────────────────────────────────────────────────────────
+
+    async def _ensure_user(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        user = update.effective_user
+        chat = update.effective_chat
+        if not user or not chat:
+            return 0
+        self.db.register_user(
+            user_id=user.id,
+            chat_id=chat.id,
+            username=user.username or "",
+            first_name=user.first_name or "",
+            language_code=user.language_code or "en",
+        )
+        return user.id
+
+    def _is_admin(self, user_id: int) -> bool:
+        user = self.db.get_user(user_id)
+        return bool(user and (user.get("is_admin") == 1 or user_id == self._admin_chat_id))
+
+    async def _reply(
+        self,
+        update: Update,
+        text: str,
+        keyboard: list[list[InlineKeyboardButton]] | None = None,
+        parse_mode: str = "Markdown",
+    ) -> None:
+        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+        if update.callback_query:
+            try:
+                await update.callback_query.edit_message_text(
+                    text=text, parse_mode=parse_mode, reply_markup=reply_markup,
+                )
+            except Exception:
+                await update.callback_query.answer()
+                await update.callback_query.message.reply_text(
+                    text=text, parse_mode=parse_mode, reply_markup=reply_markup,
+                )
+        elif update.message:
+            await update.message.reply_text(
+                text=text, parse_mode=parse_mode, reply_markup=reply_markup,
+            )
+        else:
+            try:
+                chat_id = update.effective_chat.id
+                await update.get_bot().send_message(
+                    chat_id=chat_id, text=text, parse_mode=parse_mode, reply_markup=reply_markup,
+                )
+            except Exception:
+                LOG.warning("Could not reply — no chat context")
+
+    # ── Command: /link ───────────────────────────────────────────────────
+
+    async def _h_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user_id = await self._ensure_user(update, context)
+        args = context.args
+        existing = self.db.get_linked_accounts(user_id)
+        if len(existing) >= 3:
+            await self._reply(update, "⚠️ Maximum 3 linked accounts. Use /unlink to remove one first.")
+            return
+        if not args:
+            await self._reply(
+                update,
+                "🔗 *Link Your Stockity Account*\n\n"
+                "Usage: `/link <your_auth_token>`\n\n"
+                "Get your token from stockity.com → DevTools → Application → Local Storage.",
+            )
+            return
+        auth_token = args[0].strip()
+        if len(auth_token) < 20:
+            await self._reply(
+                update,
+                "❌ That doesn't look like a valid token. Use /link without arguments for instructions.",
+            )
+            return
+        existing_link = self.db.get_linked_account_by_auth(auth_token)
+        if existing_link:
+            await self._reply(update, "⚠️ This token is already linked to another account.")
+            return
+        label = f"account_{len(existing) + 1}"
+        if len(args) >= 2:
+            label = args[1]
+        link_id = self.db.link_account(user_id, auth_token, label=label)
+        await self._reply(
+            update,
+            f"✅ *Account Linked!*\n\nLabel: `{label}`\nID: `{link_id}`\n\nYour Stockity account is now connected.",
+        )
+
+    # ── Command: /unlink ─────────────────────────────────────────────────
+
+    async def _h_unlink(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user_id = await self._ensure_user(update, context)
+        accounts = self.db.get_linked_accounts(user_id)
+        if not accounts:
+            await self._reply(
+                update,
+                "ℹ️ You don't have any linked accounts.\nUse /link to connect your Stockity account.",
+            )
+            return
+        if context.args:
+            target = context.args[0].strip()
+            for acct in accounts:
+                if str(acct["id"]) == target or acct["account_label"] == target:
+                    self.db.unlink_account(acct["id"], user_id)
+                    await self._reply(
+                        update,
+                        f"✅ Account *{acct['account_label']}* (ID: {acct['id']}) unlinked.",
+                    )
+                    return
+            await self._reply(
+                update,
+                f"❌ No linked account matches `{target}`.\nUse /unlink to see your accounts.",
+            )
+            return
+        lines = ["🔗 *Your Linked Accounts*\n"]
+        for acct in accounts:
+            lines.append(
+                f"  `{acct['id']}` — {acct['account_label']}\n"
+                f"         Token: `{acct['stockity_auth'][:12]}...`\n"
+            )
+        lines.append("\nUse `/unlink <id>` to remove one.\nExample: `/unlink 1`")
+        await self._reply(update, "".join(lines))
+
+    # ── Signal dispatch ──────────────────────────────────────────────────
+
+    async def _dispatch_signal_to_subscribers(self, sig: Any) -> None:
+        """Send a signal to all active subscribers (category dispatch)."""
+        subscribers = self.db.get_active_subscribers()
+        if not subscribers:
+            return
+        text = f"📡 *Signal Alert*\n\n{self._signal_to_text(sig)}"
+        sent = 0
+        for user in subscribers:
+            try:
+                await self._app.bot.send_message(
+                    chat_id=user["chat_id"], text=text, parse_mode="Markdown",
+                )
+                sent += 1
+            except Exception as exc:
+                LOG.warning("Signal dispatch fail to %d: %s", user["user_id"], exc)
+            await asyncio.sleep(0.03)
+        LOG.info("Signal dispatched to %d/%d subscribers", sent, len(subscribers))
+
+    @staticmethod
+    def _signal_to_text(sig: Any) -> str:
+        """Format a signal object to human-readable text."""
+        try:
+            return sig.pretty()
+        except Exception:
+            return str(sig)
+
+    # ── Callback handler ─────────────────────────────────────────────────
+
+    async def _h_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        if not query:
+            return
+        data = query.data
+        await query.answer()
+
+        if data == "plans":
+            await self._reply(update, self._pricing_text())
+        elif data == "link":
+            await self._reply(
+                update,
+                "🔗 Use `/link <your_auth_token>` to connect your Stockity account.\n\n"
+                "Need help? Run /link without arguments.",
+            )
+        elif data == "signal_now":
+            await self._reply(update, "⏳ Scanning... Stand by.")
+            await self._reply(update, "⚠️ Live signal requires Stockity auth. Use /signal <symbol>.")
+        elif data == "stats":
+            await self._h_stats(update, context)
+        elif data.startswith("check_"):
+            merchant_ref = data[6:]
+            if merchant_ref:
+                from tradebot.bots.handlers import _h_confirm
+                context.args = [merchant_ref]
+                await _h_confirm(update, context)
+
+    @staticmethod
+    def _pricing_text() -> str:
+        return (
+            "📊 *Subscription Plans (IDR)*\n\n"
+            f"📅 *Daily* — Rp {PRICE_MAP['daily']:,}\n"
+            f"📆 *Weekly* — Rp {PRICE_MAP['weekly']:,} (save 28%)\n"
+            f"🗓 *Monthly* — Rp {PRICE_MAP['monthly']:,} (save 55%)\n\n"
+            "Use /subscribe <plan> to start.\n"
+            "Example: `/subscribe daily`"
+        )

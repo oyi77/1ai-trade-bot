@@ -1,7 +1,7 @@
 {
   "symbol": "XAUUSD",
-  "price": 4177.1,
-  "timestamp": "2026-06-10T15:17:16.759826",
+  "price": 4178.3,
+  "timestamp": "2026-06-10T15:18:24.403689",
   "timeframes": {
     "D1": {
       "verdict": "SELL",
@@ -55,8 +55,8 @@
       "macro": {
         "trend": "BEARISH",
         "strength": 1.0,
-        "ema200_dist": -7.84,
-        "rsi": 25.3,
+        "ema200_dist": -7.81,
+        "rsi": 25.4,
         "atr_pct": 1.18,
         "sma_cross": "BEARISH"
       }
@@ -113,9 +113,9 @@
       "macro": {
         "trend": "BEARISH",
         "strength": 1.0,
-        "ema200_dist": -5.2,
-        "rsi": 23.1,
-        "atr_pct": 0.31,
+        "ema200_dist": -5.17,
+        "rsi": 23.3,
+        "atr_pct": 0.3,
         "sma_cross": "BEARISH"
       }
     },
@@ -169,9 +169,9 @@
       },
       "weight": 0.2,
       "structure": {
-        "s1": 4171.1,
-        "r1": 4375.0,
-        "vwap": 4265.08,
+        "s1": 4171.0,
+        "r1": 4374.9,
+        "vwap": 4264.85,
         "near_support": true,
         "near_resistance": false,
         "range_pct": 4.88,
@@ -198,7 +198,7 @@
         "hermes": {
           "direction": "BUY",
           "confidence": 0.769,
-          "details": "Grade:A RR=1:4.0"
+          "details": "Grade:A RR=1:4.1"
         },
         "crt": {
           "direction": "HOLD",
@@ -223,14 +223,14 @@
         "tv": {
           "direction": "SELL",
           "confidence": 0.46,
-          "details": "RSI 46.6 (neutral) | MACD bearish (-) | ADX 2 (weak trend) | BB lower band bounce (oversold) | TV-score:27"
+          "details": "RSI 47.3 (neutral) | MACD bearish (-) | ADX 2 (weak trend) | BB lower band bounce (oversold) | TV-score:27"
         }
       },
       "weight": 0.12,
       "structure": {
-        "s1": 4171.1,
-        "r1": 4231.9,
-        "vwap": 4200.95,
+        "s1": 4171.0,
+        "r1": 4231.8,
+        "vwap": 4200.74,
         "near_support": true,
         "near_resistance": false,
         "range_pct": 1.46,
@@ -291,8 +291,8 @@
         "sweep_type": "NONE",
         "sniper_entry": "SELL",
         "micro_trend": "BEARISH",
-        "momentum": -0.453,
-        "momentum_8": -0.661
+        "momentum": -0.422,
+        "momentum_8": -0.63
       }
     }
   },
