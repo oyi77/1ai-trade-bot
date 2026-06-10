@@ -1103,11 +1103,11 @@ def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlc
         reasoning = f"🤖 MECHANICAL (Quant Only) | {quant_bias} bias ({confidence:.0%})"
         # Point-based SL/TP for XAUUSD/GOLD
         if display in ("XAUUSD", "GOLD"):
-            sl_val = round(price - 32, 2) if quant_bias == "BUY" else round(price + 32, 2)
-            tp_val = round(price + 52, 2) if quant_bias == "BUY" else round(price - 52, 2)
+            sl_val = round(price - 3.0, 2) if quant_bias == "BUY" else round(price + 3.0, 2)
+            tp_val = round(price + 5.0, 2) if quant_bias == "BUY" else round(price - 5.0, 2)
             rr_val = round(52/32, 2)
         else:
-            sl_val = price * 0.995 if quant_bias == "BUY" else price * 1.005
+            sl_val = price - 0.5 if quant_bias == "BUY" else price + 0.5  # generic 0.5% SL
             tp_val = price * 1.01 if quant_bias == "BUY" else price * 0.99
             rr_val = 2.0
         sig = {
@@ -1760,8 +1760,8 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             sl = round(price * (1 - sl_pct), 0) if action == "BUY" else round(price * (1 + sl_pct), 0)
             tp = round(price * (1 + tp_pct), 0) if action == "BUY" else round(price * (1 - tp_pct), 0)
         else:
-            sl = round(price * 0.995, 2) if action == "BUY" else round(price * 1.005, 2)
-            tp = round(price * 1.01, 2) if action == "BUY" else round(price * 0.99, 2)
+            sl = round(price - 0.50, 2) if action == "BUY" else round(price + 0.50, 2)
+            tp = round(price + 0.75, 2) if action == "BUY" else round(price - 0.75, 2)
 
     # --- XAUUSD spot offset: shift entry/SL/TP from futures -> spot ---
     if action in ("BUY","SELL") and display in ("XAUUSD","GOLD") and entry > 0:
