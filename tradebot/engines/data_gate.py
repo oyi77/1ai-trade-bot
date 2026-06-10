@@ -193,8 +193,9 @@ class DataGate:
     def pass_killzone(pair: str, hour: int, is_weekend: bool = False) -> DataGateResult:
         """Check if trading is allowed at this hour for this pair.
 
-        Forex/Metals: only London (07-16 UTC) or NY (12-21 UTC).
+        Forex/Metals: only London (14-16 WIB) or NY (19-21 WIB).
         Crypto: always pass (24/7).
+        Hour is expected in WIB (UTC+7).
         """
         pair_upper = pair.upper()
 
@@ -206,10 +207,10 @@ class DataGate:
         if is_weekend:
             return DataGateResult.SKIP_WEEKEND_FOREX
 
-        # London: 07:00-16:00 UTC (14:00-23:00 WIB)
-        in_london = 7 <= hour < 16
-        # New York: 12:00-21:00 UTC (19:00-04:00 WIB)
-        in_ny = 12 <= hour < 21
+        # London: 14:00-16:00 WIB (07:00-09:00 UTC)
+        in_london = 14 <= hour < 17
+        # New York: 19:00-21:00 WIB (12:00-14:00 UTC)
+        in_ny = 19 <= hour < 22
 
         if in_london or in_ny:
             return DataGateResult.PASS
