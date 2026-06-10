@@ -1735,18 +1735,15 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     
     if action == "BUY":
         sig["tp"] = round(entry + tp_dist, 2)
-        sig["tp1"] = round(entry + tp_dist, 2)
-        sig["tp2"] = round(entry + tp_dist * 1.5, 2)
     else:
         sig["tp"] = round(entry - tp_dist, 2)
-        sig["tp1"] = round(entry - tp_dist, 2)
-        sig["tp2"] = round(entry - tp_dist * 1.5, 2)
     
-    # Remove unrealistic TP3/TP4
-    sig.pop("tp3", None)
-    sig.pop("tp4", None)
+    # NOTE: tp1/tp2/tp3/tp4 NOT set here — dynamic distribution happens
+    # in fmt_signal() based on actual TP distance. This prevents forced
+    # 2-level TP with unrealistic spacing (e.g., 12-pip TP1 on XAUUSD).
+    
     sig["rr_ratio"] = f"1:{rr:.1f}"
-    logger.info(f"_clamp_sltp result: sl={sig['sl']} tp1={sig.get('tp1',0)} tp2={sig.get('tp2',0)}")
+    logger.info(f"_clamp_sltp result: sl={sig['sl']} tp={sig['tp']:.2f}")
     
     return sig
 
@@ -1876,21 +1873,21 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             # Forex 5-digit
             min_tp1 = 0.0015; lvl2_min = 0.0030; lvl3_min = 0.0050; lvl4_min = 0.0080
 
-        levels = 1
-        if tp_dist >= lvl4_min: levels = 4
-        elif tp_dist >= lvl3_min: levels = 3
-        elif tp_dist >= lvl2_min: levels = 2
+        num_tp = 1
+        if tp_dist >= lvl4_min: num_tp = 4
+        elif tp_dist >= lvl3_min: num_tp = 3
+        elif tp_dist >= lvl2_min: num_tp = 2
 
         if action == "BUY":
             tp1 = round(entry + min_tp1, 2)
-            if levels >= 2: tp2 = round(entry + tp_dist * 0.50, 2)
-            if levels >= 3: tp3 = round(entry + tp_dist * 0.75, 2)
-            if levels >= 4: tp4 = tp
+            if num_tp >= 2: tp2 = round(entry + tp_dist * 0.50, 2)
+            if num_tp >= 3: tp3 = round(entry + tp_dist * 0.75, 2)
+            if num_tp >= 4: tp4 = tp
         else:
             tp1 = round(entry - min_tp1, 2)
-            if levels >= 2: tp2 = round(entry - tp_dist * 0.50, 2)
-            if levels >= 3: tp3 = round(entry - tp_dist * 0.75, 2)
-            if levels >= 4: tp4 = tp
+            if num_tp >= 2: tp2 = round(entry - tp_dist * 0.50, 2)
+            if num_tp >= 3: tp3 = round(entry - tp_dist * 0.75, 2)
+            if num_tp >= 4: tp4 = tp
 
     # Winrate stats
     wr_text = ""
