@@ -3448,59 +3448,96 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send("\n".join(lines), chat_id)
 
     elif cmd == "/signal":
-        """Run MTF engine + signal calculator, show formatted signal."""
-        tg_send("<i>🧠 Scanning MTF Matrix + 9 engines...</i>", chat_id)
+        """Run MTF engine + signal calculator, show formatted signal. Supports /signal xauusd, /signal btc, etc."""
+        sub_norm = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_s = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_s = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        pair = pair_map_s.get(sub_norm, "gold")
+        disp = disp_map_s.get(pair, "XAUUSD")
+        
+        from engine_consensus import run_engine_consensus
+        from signal_calculator import compute_signal, format_signal_telegram
+        
         try:
-            from engine_consensus import run_engine_consensus
-            from signal_calculator import compute_signal, format_signal_telegram
-            
             result = run_engine_consensus(symbol="XAUUSD")
-            if not result:
-                tg_send("❌ Engine consensus gagal — coba lagi nanti.", chat_id)
-                return
-            
-            hier = result.get("hierarchical", {})
-            verdict = hier.get("verdict", "HOLD")
-            score = hier.get("consensus_score", 0) * 100
-            align = hier.get("mtf_alignment", "NONE")
-            macro = hier.get("macro_trend", "NEUTRAL")
-            
-            msg = (
-                f"🏛 <b>MTF TOP-DOWN MATRIX</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"Macro: {macro}\n"
-                f"Alignment: {align}\n"
-                f"Consensus: {score:.0f}%\n"
-                f"Verdict: <b>{verdict}</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-            )
-            
-            # Show per-TF summary
-            tfs = result.get("timeframes", {})
-            for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
-                tf = tfs.get(tf_name, {})
-                if tf:
-                    v = tf.get("verdict", "?")
-                    c = tf.get("consensus_pct", 0) * 100
-                    msg += f"{tf_name}: {v} ({c:.0f}%)\n"
-            
-            sig = compute_signal(result)
-            if sig:
-                msg += f"━━━━━━━━━━━━━━━━━━━━━\n"
-                msg += format_signal_telegram(sig)
-                tg_send(msg, chat_id)
-                
-                # Log to trade log
-                try:
-                    from signal_calculator import log_signal
-                    log_signal(sig)
-                except: pass
-            else:
-                msg += f"\n⚠️ Quality gate blocked — belum memenuhi syarat entry."
-                tg_send(msg, chat_id)
-                
         except Exception as e:
-            tg_send(f"❌ Signal error: {e}", chat_id)
+            tg_send(f"❌ Engine consensus error: {e}", chat_id)
+            return
+        
+        if not result:
+            tg_send(f"❌ Engine consensus gagal untuk {disp}.", chat_id)
+            return
+        
+        hier = result.get("hierarchical", {})
+        verdict = hier.get("verdict", "HOLD")
+        score = hier.get("consensus_score", 0) * 100
+        align = hier.get("mtf_alignment", "NONE")
+        macro = hier.get("macro_trend", "NEUTRAL")
+        
+        # ── Header with asset ──
+        v_emoji = {"BUY":"🟢","SELL":"🔴","HOLD":"⚪️"}.get(verdict,"⚪️")
+        msg = (
+            f"🏛 <b>MTF MATRIX — {disp}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Macro: {macro} | Alignment: {align}\n"
+            f"Consensus: {score:.0f}% | Verdict: {v_emoji} <b>{verdict}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+        )
+        
+        # Show per-TF with engine names
+        engines = result.get("engines", {})
+        tfs = result.get("timeframes", {})
+        active_count = 0
+        for tf_name in ["D1","H4","H1","M15","M5"]:
+            tf = tfs.get(tf_name,{})
+            if tf:
+                v = tf.get("verdict","HOLD")
+                c = tf.get("consensus_pct",0)*100
+                e_list = tf.get("active_engines",[])
+                eng_str = f" ({len(e_list)} eng)" if e_list else ""
+                d = {"BUY":"🟢","SELL":"🔴","HOLD":"⚪️"}.get(v,"⚪️")
+                msg += f"{d} {tf_name}: {v} {c:.0f}%{eng_str}\n"
+                if v != "HOLD":
+                    active_count += 1
+        
+        msg += f"━━━━━━━━━━━━━━━━━━━━━\n"
+        
+        # ── Smart message based on result ──
+        sig = compute_signal(result)
+        if sig and sig.get("action") in ("BUY","SELL"):
+            msg += format_signal_telegram(sig)
+            try:
+                from signal_calculator import log_signal
+                log_signal(sig)
+            except: pass
+        elif verdict == "HOLD" and score == 0 and active_count == 0:
+            msg += (
+                f"📭 <b>Tidak ada setup valid untuk {disp}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Semua timeframe menunjukkan HOLD —\n"
+                f"market sedang sideways atau konsolidasi.\n\n"
+                f"💡 Tunggu sesi London/NY untuk volatilitas.\n"
+                f"🔍 Coba /levels {sub_norm} untuk cek level.\n"
+            )
+        elif align == "CONFLICT":
+            msg += (
+                f"⚠️ <b>MTF Conflict — sinyal tidak konsisten</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Timeframe tidak searah — market belum\n"
+                f"memberikan konfirmasi yang jelas.\n\n"
+                f"💡 Pantau /mapping atau tunggu 15-30 menit.\n"
+            )
+        else:
+            msg += (
+                f"⚠️ <b>Quality gate blocked</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Sinyal terdeteksi tapi tidak memenuhi\n"
+                f"syarat minimum (conf ≥65%, RR ≥1:1.5).\n\n"
+                f"💡 Coba /analyze {sub_norm} untuk sinyal AI.\n"
+            )
+        
+        tg_send(msg, chat_id)
 
     elif cmd == "/mtf":
         """Show MTF matrix (5TF × 9 engines)."""
