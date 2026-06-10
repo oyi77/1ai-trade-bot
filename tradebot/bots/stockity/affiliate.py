@@ -1,15 +1,10 @@
 """
-Affiliate & Whitelabel system for StockityBot.
+Affiliate + Whitelabel — referral tracking and white-label bots with revenue share.
 
-Affiliate:
-  - Users get unique referral codes
-  - Track referrals via /start ref_<code>
-  - Earn commissions on referred user subscriptions
-
-Whitelabel:
-  - Users run their own bot instance with custom token
-  - All commands mirrored, custom branding
-  - Managed via /whitelabel command
+Admin-configurable:
+  - Whitelabel revenue share (default 10%)
+  - Affiliate commission rate (default 20%)
+  - Whitelabel eligibility: active paid plan OR donated ≥100K IDR
 """
 
 from __future__ import annotations
@@ -18,6 +13,7 @@ import hashlib
 import logging
 import secrets
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,6 +21,7 @@ from typing import Any
 LOG = logging.getLogger(__name__)
 
 DB_PATH = Path("data/affiliate.db")
+MIN_DONATION_FOR_WHITELABEL = 100_000  # IDR
 
 
 # ── Database ──────────────────────────────────────────────────────────
@@ -34,11 +31,13 @@ def _get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(str(DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
 def init_db() -> None:
-    """Create tables if they don't exist."""
+    """Create tables if they don't exist. Idempotent."""
     conn = _get_db()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS affiliates (
@@ -66,18 +65,31 @@ def init_db() -> None:
             owner_user_id TEXT NOT NULL UNIQUE,
             bot_token TEXT NOT NULL,
             bot_username TEXT,
-            custom_name TEXT DEFAULT 'My Trading Bot',
+            custom_name TEXT DEFAULT 'Trading Bot',
             custom_description TEXT,
+            revenue_share REAL DEFAULT 10.0,
             active BOOLEAN DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
         CREATE INDEX IF NOT EXISTS idx_affiliates_code ON affiliates(referral_code);
         CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(referrer_code);
         CREATE INDEX IF NOT EXISTS idx_whitelabels_owner ON whitelabels(owner_user_id);
     """)
+    # Migration: add columns if missing
+    _migrate(conn)
     conn.commit()
     conn.close()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add missing columns to existing tables."""
+    cols = [r["name"] for r in conn.execute("PRAGMA table_info(whitelabels)").fetchall()]
+    if "revenue_share" not in cols:
+        conn.execute("ALTER TABLE whitelabels ADD COLUMN revenue_share REAL DEFAULT 10.0")
+    if "updated_at" not in cols:
+        conn.execute("ALTER TABLE whitelabels ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))")
 
 
 # ── Models ────────────────────────────────────────────────────────────
@@ -102,6 +114,7 @@ class Whitelabel:
     bot_username: str = ""
     custom_name: str = "Trading Bot"
     custom_description: str = ""
+    revenue_share: float = 10.0
     active: bool = True
 
 
@@ -109,6 +122,34 @@ def _generate_code(user_id: str) -> str:
     """Generate a unique 8-char referral code."""
     seed = f"{user_id}{secrets.token_hex(4)}"
     return hashlib.sha256(seed.encode()).hexdigest()[:8]
+
+
+# ── Eligibility ───────────────────────────────────────────────────────
+
+def can_use_whitelabel(user_id: str) -> tuple[bool, str]:
+    """Check if user is eligible for whitelabel.
+
+    Requirements (one of):
+      - Active paid plan (Pro, Elite, Whale)
+      - Total donations ≥ 100K IDR
+    """
+    from tradebot.services.plans import Plan, get_user_plan, get_total_donations
+
+    plan = get_user_plan(user_id)
+    if plan != Plan.FREE:
+        return True, f"Active plan: {plan.value}"
+
+    donated = get_total_donations(user_id)
+    if donated >= MIN_DONATION_FOR_WHITELABEL:
+        return True, f"Total donations: Rp {donated:,}"
+
+    return False, (
+        f"Whitelabel requires:\n"
+        f"• Active paid plan (Pro/Elite/Whale)\n"
+        f"• OR donations ≥ Rp {MIN_DONATION_FOR_WHITELABEL:,}\\\n\n"
+        f"Your donations: Rp {donated:,}\\n"
+        f"Upgrade: /plans | Donate: /donate"
+    )
 
 
 # ── Affiliate API ─────────────────────────────────────────────────────
@@ -120,7 +161,6 @@ def get_or_create_affiliate(user_id: str) -> Affiliate:
     row = conn.execute(
         "SELECT * FROM affiliates WHERE user_id = ?", (user_id,)
     ).fetchone()
-
     if row:
         conn.close()
         return Affiliate(
@@ -130,7 +170,6 @@ def get_or_create_affiliate(user_id: str) -> Affiliate:
             total_earned=row["total_earned"],
             total_referrals=row["total_referrals"],
         )
-
     code = _generate_code(user_id)
     conn.execute(
         "INSERT INTO affiliates (user_id, referral_code) VALUES (?, ?)",
@@ -164,16 +203,13 @@ def record_referral(referred_user_id: str, referrer_code: str) -> bool:
     """Record a new referral. Returns True if first time."""
     init_db()
     conn = _get_db()
-
-    # Check if already referred
     existing = conn.execute(
-        "SELECT id FROM referrals WHERE referred_user_id = ?", (referred_user_id,)
+        "SELECT id FROM referrals WHERE referred_user_id = ? AND referrer_code = ?",
+        (referred_user_id, referrer_code),
     ).fetchone()
-
     if existing:
         conn.close()
         return False
-
     conn.execute(
         "INSERT INTO referrals (referred_user_id, referrer_code) VALUES (?, ?)",
         (referred_user_id, referrer_code),
@@ -194,34 +230,35 @@ def get_referral_stats(user_id: str) -> dict[str, Any]:
     aff = conn.execute(
         "SELECT * FROM affiliates WHERE user_id = ?", (user_id,)
     ).fetchone()
-
     if not aff:
         conn.close()
-        return {"error": "Not an affiliate yet. Use /affiliate to get started."}
-
-    referrals = conn.execute(
-        "SELECT * FROM referrals WHERE referrer_code = ? ORDER BY created_at DESC LIMIT 20",
+        return {"referrals": [], "total_referrals": 0, "total_earned": 0, "code": ""}
+    refs = conn.execute(
+        "SELECT * FROM referrals WHERE referrer_code = ? ORDER BY created_at DESC LIMIT 50",
         (aff["referral_code"],),
     ).fetchall()
-
     conn.close()
-
     return {
-        "referral_code": aff["referral_code"],
-        "referral_link": f"https://t.me/StockityBot?start=ref_{aff['referral_code']}",
-        "commission_rate": aff["commission_rate"],
-        "total_earned": aff["total_earned"],
+        "referrals": [dict(r) for r in refs],
         "total_referrals": aff["total_referrals"],
-        "recent_referrals": [
-            {
-                "user_id": r["referred_user_id"],
-                "subscribed": bool(r["subscribed"]),
-                "tier": r["subscription_tier"],
-                "commission": r["commission_paid"],
-            }
-            for r in referrals
-        ],
+        "total_earned": aff["total_earned"],
+        "code": aff["referral_code"],
+        "commission_rate": aff["commission_rate"],
     }
+
+
+def set_affiliate_rate(user_id: str, rate: float) -> bool:
+    """Admin: set affiliate commission rate."""
+    init_db()
+    conn = _get_db()
+    conn.execute(
+        "UPDATE affiliates SET commission_rate = ? WHERE user_id = ?",
+        (max(0, min(100, rate)), user_id),
+    )
+    conn.commit()
+    conn.close()
+    LOG.info("Affiliate rate for %s set to %.1f%%", user_id, rate)
+    return True
 
 
 # ── Whitelabel API ────────────────────────────────────────────────────
@@ -231,6 +268,7 @@ def create_whitelabel(
     bot_token: str,
     bot_username: str = "",
     custom_name: str = "Trading Bot",
+    revenue_share: float = 10.0,
 ) -> Whitelabel:
     """Register a whitelabel bot."""
     init_db()
@@ -238,9 +276,9 @@ def create_whitelabel(
 
     conn.execute(
         """INSERT OR REPLACE INTO whitelabels
-           (owner_user_id, bot_token, bot_username, custom_name)
-           VALUES (?, ?, ?, ?)""",
-        (owner_user_id, bot_token, bot_username, custom_name),
+           (owner_user_id, bot_token, bot_username, custom_name, revenue_share, active, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, datetime('now'))""",
+        (owner_user_id, bot_token, bot_username, custom_name, revenue_share),
     )
     conn.commit()
     conn.close()
@@ -249,6 +287,7 @@ def create_whitelabel(
         bot_token=bot_token,
         bot_username=bot_username,
         custom_name=custom_name,
+        revenue_share=revenue_share,
         active=True,
     )
 
@@ -267,9 +306,10 @@ def get_whitelabel(owner_user_id: str) -> Whitelabel | None:
     return Whitelabel(
         owner_user_id=row["owner_user_id"],
         bot_token=row["bot_token"],
-        bot_username=row["bot_username"],
-        custom_name=row["custom_name"],
-        custom_description=row["custom_description"],
+        bot_username=row["bot_username"] or "",
+        custom_name=row["custom_name"] or "Trading Bot",
+        custom_description=row["custom_description"] or "",
+        revenue_share=float(row.get("revenue_share", 10.0)),
         active=bool(row["active"]),
     )
 
@@ -279,11 +319,25 @@ def deactivate_whitelabel(owner_user_id: str) -> bool:
     init_db()
     conn = _get_db()
     conn.execute(
-        "UPDATE whitelabels SET active = 0 WHERE owner_user_id = ?",
+        "UPDATE whitelabels SET active = 0, updated_at = datetime('now') WHERE owner_user_id = ?",
         (owner_user_id,),
     )
     conn.commit()
     conn.close()
+    return True
+
+
+def set_whitelabel_share(owner_user_id: str, share: float) -> bool:
+    """Admin: set whitelabel revenue share percentage."""
+    init_db()
+    conn = _get_db()
+    conn.execute(
+        "UPDATE whitelabels SET revenue_share = ?, updated_at = datetime('now') WHERE owner_user_id = ?",
+        (max(0, min(100, share)), owner_user_id),
+    )
+    conn.commit()
+    conn.close()
+    LOG.info("Whitelabel share for %s set to %.1f%%", owner_user_id, share)
     return True
 
 
@@ -299,9 +353,10 @@ def get_all_active_whitelabels() -> list[Whitelabel]:
         Whitelabel(
             owner_user_id=row["owner_user_id"],
             bot_token=row["bot_token"],
-            bot_username=row["bot_username"],
-            custom_name=row["custom_name"],
-            custom_description=row["custom_description"],
+            bot_username=row["bot_username"] or "",
+            custom_name=row["custom_name"] or "Trading Bot",
+            custom_description=row["custom_description"] or "",
+            revenue_share=float(row.get("revenue_share", 10.0)),
             active=True,
         )
         for row in rows

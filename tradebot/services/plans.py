@@ -186,6 +186,12 @@ def init_plan_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_donations_user ON donations(user_id);
         CREATE INDEX IF NOT EXISTS idx_invoices_user ON payment_invoices(user_id);
         CREATE INDEX IF NOT EXISTS idx_invoices_ref ON payment_invoices(merchant_ref);
+
+        CREATE TABLE IF NOT EXISTS plan_config (
+            plan            TEXT PRIMARY KEY,
+            price_idr       INTEGER NOT NULL,
+            updated_at      INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+        );
     """)
     conn.commit()
     conn.close()
@@ -363,7 +369,42 @@ def get_total_donations(user_id: str) -> int:
     return row["total"] if row else 0
 
 
-# ── Plan Stats ────────────────────────────────────────────────────────
+# ── Configurable Pricing ──────────────────────────────────────────────
+
+def get_plan_price(plan: Plan) -> int:
+    """Get price for a plan, checking DB overrides first."""
+    init_plan_db()
+    conn = _get_db()
+    row = conn.execute(
+        "SELECT price_idr FROM plan_config WHERE plan = ?", (plan.value,)
+    ).fetchone()
+    conn.close()
+    if row:
+        return int(row["price_idr"])
+    return PLAN_DETAILS[plan]["price_idr"]
+
+
+def set_plan_price(plan: Plan, price_idr: int) -> bool:
+    """Admin: override a plan's price."""
+    init_plan_db()
+    conn = _get_db()
+    conn.execute(
+        """INSERT OR REPLACE INTO plan_config (plan, price_idr, updated_at)
+           VALUES (?, ?, strftime('%s','now'))""",
+        (plan.value, max(0, price_idr)),
+    )
+    conn.commit()
+    conn.close()
+    LOG.info("Plan %s price set to Rp %s", plan.value, price_idr)
+    return True
+
+
+def get_all_plan_prices() -> dict[str, int]:
+    """Get all current plan prices (with overrides)."""
+    return {p.value: get_plan_price(p) for p in Plan}
+
+
+ # ── Plan Stats ────────────────────────────────────────────────────────
 
 def get_plan_stats() -> dict[str, int]:
     """Get count of users per plan."""
