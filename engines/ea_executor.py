@@ -5,6 +5,12 @@ ea_executor.py — Vilona EA Signal Executor (Paper + Live Ready)
 Reads ea_signal.json written by vilona_tradefx_handler.py.
 Executes trades. Monitors SL/TP. Full audit log.
 
+FASE 1+2 refactor (2026-06-10):
+  - Uses SAME offset as handler: spot + XAUUSD_OFFSET (from env, default 74)
+  - Close price = TP/SL price (not market price) — matches handler behavior
+  - NO independent Telegram broadcast (single source of truth: handler)
+  - Writes trade_result.json for handler to pick up and broadcast
+
 Usage:
     python3 ea_executor.py          # paper trading (default)
     python3 ea_executor.py --live    # live trading
@@ -21,62 +27,12 @@ DATA_DIR = PROJECT_DIR / "data" / "vilona_tradefx"
 LOG_DIR = PROJECT_DIR / "logs"
 SIGNAL_FILE = DATA_DIR / "ea_signal.json"
 STATE_FILE = DATA_DIR / "ea_state.json"
+TRADE_RESULT_FILE = DATA_DIR / "trade_result.json"  # for handler broadcast
 
-# ── Telegram notification ──
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "@vilonaaichanel")
-TG_ENABLED = bool(TELEGRAM_BOT_TOKEN)
-
-def tg_send(text: str) -> bool:
-    """Send Telegram message to channel."""
-    # 🛑 EMERGENCY KILL SWITCH — blocked at ea_executor level
-    logger.warning("tg_send: KILL SWITCH ACTIVE — message suppressed")
-    return False
-    if not TG_ENABLED:
-        return False
-    try:
-        payload = json.dumps({
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True,
-        }).encode()
-        req = urllib.request.Request(
-            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
-            return data.get("ok", False)
-    except Exception as e:
-        logger.error(f"tg_send failed: {e}")
-        return False
-
-# Dynamic offset — matches vilona_tradefx_handler.get_xauusd_spot_offset()
-XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "0"))
-
-def _get_xauusd_offset() -> float:
-    """Calculate dynamic offset: futures minus spot.
-    Handler uses spot-futures (to convert futures→spot for display).
-    ea_executor uses futures-spot (to convert spot→futures for matching signal prices)."""
-    if XAUUSD_OFFSET != 0:
-        return XAUUSD_OFFSET  # explicit override from env
-    try:
-        import yfinance as yf
-        gc = yf.Ticker("GC=F")
-        fut = gc.fast_info.last_price
-        if not fut or fut < 1000:
-            return 0
-        spot_r = urllib.request.urlopen(
-            urllib.request.Request("https://api.gold-api.com/price/XAU",
-                                    headers={"User-Agent": "Vilona/1.0"}), timeout=5)
-        spot = float(json.loads(spot_r.read()).get("price", 0))
-        if 2000 < spot < 6000:
-            return fut - spot  # inverse of handler: futures minus spot
-    except Exception:
-        pass
-    return 0
+# ── OFFSET: MATCHES HANDLER EXACTLY (spot + XAUUSD_OFFSET) ──
+# Handler: fetch_price → spot + XAUUSD_OFFSET (env, default 74)
+# ea_executor MUST use the same reference so entry/sl/tp are in the same price space
+XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
 
 LOG_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -97,7 +53,6 @@ def wib_now(): return datetime.now(WIB)
 # ── Per-symbol pip helpers (consistent with trade_tracker.py) ──
 
 def _pip_size(symbol: str) -> float:
-    """Pip size for the symbol."""
     s = symbol.upper()
     if s in ("XAUUSD", "GOLD"):   return 0.1
     if s in ("BTCUSD", "BTC"):    return 1.0
@@ -107,20 +62,20 @@ def _pip_size(symbol: str) -> float:
     return 0.0001
 
 def _pip_value(symbol: str) -> float:
-    """Pip value in USD for 1 standard lot."""
     s = symbol.upper()
-    if s in ("XAUUSD", "GOLD"): return 1.0
+    if s in ("XAUUSD", "GOLD"): return 10.0   # $10 per pip (1 standard lot)
     if s in ("BTCUSD", "BTC"):  return 1.0
     if s in ("ETHUSD", "ETH"):  return 0.01
     if s.endswith("JPY"):       return 9.0
     return 10.0
 
 def _pnl_from_pips(entry: float, close: float, symbol: str, is_loss: bool) -> float:
-    """Compute PnL in USD from entry/close prices (1 standard lot)."""
     ps = _pip_size(symbol)
     pips = abs(entry - close) / ps if ps > 0 else 0.0
     value = pips * _pip_value(symbol)
     return -value if is_loss else value
+
+# ── State ──
 
 def load_state():
     try:
@@ -133,14 +88,17 @@ def load_state():
 def save_state(s):
     STATE_FILE.write_text(json.dumps(s, indent=2, default=str))
 
+# ── Price feed (SAME reference as handler: spot + static offset) ──
+
 def fetch_price(symbol="XAUUSD"):
-    """Fetch real-time XAUUSD: gold-api.com spot + dynamic offset."""
+    """Fetch XAUUSD: gold-api.com spot + XAUUSD_OFFSET.
+    MATCHES handler's fetch_price('gold') EXACTLY — same price space.
+    """
     try:
         r = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=10)
         spot = float(json.loads(r.read()).get("price", 0))
         if 2000 < spot < 6000:
-            offset = _get_xauusd_offset()
-            return round(spot + offset, 2)
+            return round(spot + XAUUSD_OFFSET, 2)
     except Exception:
         pass
     return None
@@ -151,7 +109,12 @@ def read_signal():
         return json.loads(SIGNAL_FILE.read_text())
     except: return None
 
+# ── Position checking (close_price = TP/SL price, NOT market price) ──
+
 def check_position(pos, price):
+    """Check if position hit SL or TP. Returns (reason, close_price).
+    close_price = TP or SL price (not market price) — matches handler behavior.
+    """
     if not price: return None
     entry = pos["entry"]
     sl = pos["sl"]
@@ -159,89 +122,81 @@ def check_position(pos, price):
     tp1 = pos.get("tp1", tp)
     target_tp = tp1 if tp1 and tp1 > 0 else tp
     action = pos["action"]
+
     if action == "BUY":
-        if price <= sl: return ("SL_HIT", price)
-        if price >= target_tp: return ("TP_HIT", price)
-    else:
-        if price >= sl: return ("SL_HIT", price)
-        if price <= target_tp: return ("TP_HIT", price)
+        if price <= sl: return ("SL_HIT", sl)
+        if price >= target_tp: return ("TP_HIT", target_tp)
+    else:  # SELL
+        if price >= sl: return ("SL_HIT", sl)
+        if price <= target_tp: return ("TP_HIT", target_tp)
     return None
 
+# ── Trade result file writer (for handler broadcast) ──
 
-def _send_trade_result(pos: dict, reason: str):
-    """Send trade result notification to Telegram channel."""
-    if not TG_ENABLED:
-        return
-    
-    action = pos.get("action", "?")
-    symbol = pos.get("symbol", "?")
+def _write_trade_result(pos: dict, reason: str):
+    """Write trade result to file so handler can broadcast via send_to_channel.
+    SINGLE SOURCE OF TRUTH — no independent Telegram sending from ea_executor.
+    """
     entry = pos.get("entry", 0)
     close_price = pos.get("close_price", 0)
+    symbol = pos.get("symbol", "XAUUSD")
+    action = pos.get("action", "?")
     pnl = pos.get("pnl", 0)
-    sl = pos.get("sl", 0)
-    tp = pos.get("tp", 0)
-
-    is_tp = reason == "TP_HIT"
-    emoji = "✅" if is_tp else "❌"
-    outcome_text = "TAKE PROFIT 🎯" if is_tp else "STOP LOSS 🛑"
-    pnl_sign = "+" if pnl >= 0 else ""
-    dir_emoji = "🟢" if action == "BUY" else "🔴"
-
-    # Calculate pips using per-symbol pip size
     pips = abs(entry - close_price) / _pip_size(symbol) if _pip_size(symbol) > 0 else 0.0
-    # Correct PnL: pips × pip_value (USOIL = $1/pip, XAUUSD = $10/pip, etc.)
-    pip_val = _pip_value(symbol)
-    pnl_usd = pips * pip_val
-    if not is_tp:
-        pnl_usd = -pnl_usd
-    
-    pips_text = f"{pips:.1f} pip" if pips < 100 else f"{pips:.0f} pip"
-    msg = (
-        f"{emoji} <b>TRADE CLOSED</b> — {outcome_text}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{dir_emoji} <b>{action} {symbol}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎯 Entry: <code>${entry:.2f}</code>\n"
-        f"🛑 SL: <code>${sl:.2f}</code>\n"
-        f"✅ TP: <code>${tp:.2f}</code>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💵 PnL: {pnl_usd:+,.2f} | 📉 {pips_text}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-    )
+    is_tp = reason == "TP_HIT"
 
-    if is_tp:
-        msg += (
-            f"🎉 <b>CUAN! Profit secured!</b>\n"
-            f"💰 Server GRATIS — dukung biaya AI:\n"
-            f"/donate | @berkahkaryaforexbotbot\n"
-        )
-    else:
-        msg += (
-            f"🛑 SL terkena. Disiplin risk management.\n"
-            f"Next setup tunggu konfirmasi ulang.\n"
-            f"💚 Tetap semangat — /analyze untuk sinyal baru\n"
-        )
+    result = {
+        "timestamp": wib_now().isoformat(),
+        "action": action,
+        "symbol": symbol,
+        "entry": entry,
+        "close_price": close_price,
+        "sl": pos.get("sl", 0),
+        "tp": pos.get("tp", 0),
+        "pips": round(pips, 1),
+        "pnl_usd": round(pnl, 2),
+        "outcome": reason,
+        "paper": DRY_RUN,
+    }
 
-    tg_send(msg)
+    try:
+        existing = []
+        if TRADE_RESULT_FILE.exists():
+            existing = json.loads(TRADE_RESULT_FILE.read_text())
+        existing.append(result)
+        if len(existing) > 100:
+            existing = existing[-100:]
+        TRADE_RESULT_FILE.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+    except Exception as e:
+        logger.error(f"Failed to write trade result: {e}")
+
+
+# ══════════════════════════════════════════════════════════════
+#  MAIN LOOP
+# ══════════════════════════════════════════════════════════════
 
 def main():
     mode = "PAPER TRADING" if DRY_RUN else "🔴 LIVE TRADING"
-    logger.info("=" * 50)
+    logger.info("=" * 60)
     logger.info(f"EA EXECUTOR STARTED | {mode}")
+    logger.info(f"Offset: spot + {XAUUSD_OFFSET} (matches handler)")
     logger.info(f"Signal file: {SIGNAL_FILE}")
-    logger.info("=" * 50)
+    logger.info(f"Trade results → {TRADE_RESULT_FILE} (for handler broadcast)")
+    logger.info("Telegram broadcast: DISABLED (handler is single source of truth)")
+    logger.info("=" * 60)
 
     state = load_state()
     logger.info(f"State: {len(state['positions'])} open, "
                 f"{state['signals_processed']} processed, "
                 f"PnL=${state['total_pnl']:.2f}")
 
-    last_mtime = SIGNAL_FILE.stat().st_mtime if SIGNAL_FILE.exists() else 0
+    # Start with mtime=0 so the FIRST iteration always picks up an existing signal
+    last_mtime = 0
     interval = 3
 
     while True:
         try:
-            # 1. Check open positions
+            # ── 1. Check open positions ──
             price = fetch_price()
 
             if price and state["positions"]:
@@ -251,32 +206,40 @@ def main():
                     if result:
                         reason, close_price = result
                         is_loss = reason == "SL_HIT"
-                        pnl = _pnl_from_pips(pos["entry"], close_price, pos.get("symbol", "XAUUSD"), is_loss)
+                        pnl = _pnl_from_pips(
+                            pos["entry"], close_price,
+                            pos.get("symbol", "XAUUSD"), is_loss
+                        )
                         pos["status"] = reason
                         pos["close_price"] = close_price
                         pos["close_time"] = wib_now().isoformat()
                         pos["pnl"] = round(pnl, 2)
 
+                        # Pips for logging
+                        ps = _pip_size(pos.get("symbol", "XAUUSD"))
+                        pips_closed = abs(pos["entry"] - close_price) / ps
+
                         emoji = "🟢" if reason == "TP_HIT" else "🔴"
-                        logger.info(f"{emoji} CLOSED: {pos['action']} | {reason} | "
-                                    f"PnL=${pos['pnl']:.2f} | "
-                                    f"Entry=${pos['entry']:.2f} → Close=${close_price:.2f}")
+                        logger.info(
+                            f"{emoji} CLOSED: {pos['action']} {pos.get('symbol','?')} | {reason} | "
+                            f"PnL=${pos['pnl']:.2f} ({pips_closed:.1f} pip) | "
+                            f"Entry=${pos['entry']:.2f} → Close=${close_price:.2f} "
+                            f"(SL=${pos['sl']:.2f} TP=${pos['tp']:.2f})"
+                        )
                         if reason == "TP_HIT":
-                            logger.info(
-                                "🎉🎉🎉 TP HIT! CUAN! 🎉🎉🎉 "
-                                "Server ini GRATIS — bantu dukung biaya AI: /donate | @berkahkaryaforexbotbot"
-                            )
+                            logger.info("🎉 TP HIT! CUAN! 🎉")
+
                         state["closed"].append(pos)
                         state["total_pnl"] += pos["pnl"]
-                        
-                        # ── Telegram notification ──
-                        _send_trade_result(pos, reason)
+
+                        # ── Write to trade_result.json (handler picks up for broadcast) ──
+                        _write_trade_result(pos, reason)
                     else:
                         new_positions.append(pos)
                 state["positions"] = new_positions
                 save_state(state)
 
-            # 2. Check for new signals
+            # ── 2. Check for new signals ──
             if SIGNAL_FILE.exists():
                 mtime = SIGNAL_FILE.stat().st_mtime
                 if mtime > last_mtime:
@@ -318,26 +281,29 @@ def main():
                         }
 
                         if DRY_RUN:
-                            logger.info(f"📝 PAPER: {sig['action']} {pos['symbol']} @ ${pos['entry']:.2f} | "
-                                        f"SL=${pos['sl']:.2f} TP=${pos['tp']:.2f} | "
-                                        f"conf={conf:.0%} RR=1:{rr:.1f} | {sig.get('source','?')}")
+                            logger.info(
+                                f"📝 PAPER: {sig['action']} {pos['symbol']} @ ${pos['entry']:.2f} | "
+                                f"SL=${pos['sl']:.2f} TP=${pos['tp']:.2f} | "
+                                f"conf={conf:.0%} RR=1:{rr:.1f} | {sig.get('source','?')}"
+                            )
                             state["positions"].append(pos)
                             state["signals_processed"] += 1
                             state["last_signal_id"] = sig_fp
                             save_state(state)
                             logger.info(f"✅ POSITION OPEN: {pos['action']} @ ${pos['entry']:.2f}")
 
-            # 3. Status heartbeat
+            # ── 3. Status heartbeat ──
             if state["positions"]:
                 p = state["positions"][0]
                 current = f"${price:.2f}" if price else "N/A"
                 pnl_est = ""
                 if price and p["entry"]:
-                    est = abs(price - p["entry"])
                     direction = 1 if p["action"] == "BUY" else -1
                     pnl_est = f" | Est.PnL=${(price - p['entry']) * direction:.2f}"
-                logger.info(f"💼 {p['action']} @ ${p['entry']:.2f} | Current={current}{pnl_est} | "
-                            f"SL=${p['sl']:.2f} TP=${p['tp']:.2f}")
+                logger.info(
+                    f"💼 {p['action']} @ ${p['entry']:.2f} | Current={current}{pnl_est} | "
+                    f"SL=${p['sl']:.2f} TP=${p['tp']:.2f}"
+                )
 
             time.sleep(interval)
 
