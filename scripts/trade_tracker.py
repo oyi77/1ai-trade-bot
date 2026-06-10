@@ -384,16 +384,45 @@ def format_trade_close_alert(trade: dict) -> str:
             pass
     called_line = f" | 🕐 {called_on}" if called_on else ""
 
-    return (
-        f"{emoji} <b>TRADE CLOSED — {outcome_label}</b>\n"
+    result = trade["outcome"]
+    is_win = result == "TP_HIT"
+    
+    msg = (
+        f"📢 <b>TRADE RESULT — {outcome_label}</b>\n"
+        f"   ⬆️ Signal sebelumnya{called_line}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📊 {action} {symbol} | Entry: {entry} → Close: {close_p}\n"
         f"📐 Pips: <b>{pips:+.1f}</b> | P&L: <b>${usd:+.2f}</b> (Rp {idr:+,})\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📈 Winrate: {wr:.1f}% ({wins}W/{losses}L — {total} sinyal){called_line}\n"
+        f"📈 Winrate: {wr:.1f}% ({wins}W/{losses}L — {total} sinyal)\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot"
     )
+    
+    if is_win:
+        msg += (
+            f"🎉 <b>CUAN! Profit secured!</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"\n"
+            f"🤝 AI Partner lu makin tajem.\n"
+            f"   Tapi signal selanjutnya bisa lebih akurat lagi.\n"
+            f"   Bayangin 3 AI + Grok News analisa bareng.\n"
+            f"\n"
+            f"⚡ <b>/donate</b> — Rp 50k/bulan\n"
+            f"   Unlock AI Signal + Grok News + /levels\n"
+        )
+    else:
+        msg += (
+            f"💪 Loss is part of the game.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"\n"
+            f"🔋 AI butuh lebih banyak tenaga buat analisa.\n"
+            f"   1 AI doang kadang miss — 3 AI lebih presisi.\n"
+            f"\n"
+            f"⚡ <b>/donate</b> — upgrade AI lu sekarang\n"
+            f"   Jangan biarin AI lu kerja sendirian\n"
+        )
+    
+    return msg
 
 
 def format_trade_close_with_cta(trade: dict) -> tuple:
@@ -424,43 +453,46 @@ def format_trade_close_with_cta(trade: dict) -> tuple:
         # ── TP HIT — Victory copywriting ──
         text = (
             f"{emoji} <b>TRADE CLOSED — {outcome_label}</b>\n"
-            f"━━━━━━━━━━━━━━━━\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📊 {action} {symbol} | {pips:+.1f} pips | Rp {idr:+,}\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"🤖 AI baru saja mendaratkan profit untukmu! 🥂\n"
-            f"Server yang mengolah jutaan data ini tidak pernah\n"
-            f"tidur dan butuh biaya API & GPU yang besar.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎉 <b>CUAN! AI Partner lu mendaratkan profit!</b>\n"
             f"\n"
-            f"Jika profit hari ini membuat harimu lebih baik,\n"
-            f"yuk siram bahan bakar ke server AI kita agar\n"
-            f"besok makin buas! 🔥\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"📈 Win Rate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}"
+            f"🤝 AI Partner lu makin tajem tiap hari.\n"
+            f"   Tapi signal bisa lebih akurat lagi kalo\n"
+            f"   lu upgrade ke full AI + Grok News.\n"
+            f"   Bayangin 3 AI analisa bareng...\n"
+            f"\n"
+            f"📰 Grok News [🔒 LOCKED]\n"
+            f"   Real-time X/Twitter context\n"
+            f"\n"
+            f"⬇️ Dukung AI Partner lu ⬇️\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📈 Winrate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}"
         )
         markup = {"inline_keyboard": [
             [{"text": "☕️ Traktir Kopi Server (Rp15k)", "callback_data": "donate:coffee"}],
             [{"text": "🚀 Isi Bensin AI (Nominal Bebas)", "callback_data": "donate:fuel"}],
         ]}
     else:
-        # ── SL HIT — Humble learning copywriting ──
+        # ── SL HIT — Humble learning + upgrade funnel ──
         text = (
             f"{emoji} <b>TRADE CLOSED — {outcome_label}</b>\n"
-            f"━━━━━━━━━━━━━━━━\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"📊 {action} {symbol} | {pips:+.1f} pips | Rp {idr:+,}\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"😔 Pergerakan market terlalu liar hari ini.\n"
-            f"Sebagai AI, saya mencatat kekalahan ini sebagai\n"
-            f"dataset baru.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"😔 Market liar hari ini. AI catat sebagai lesson.\n"
             f"\n"
-            f"Saya sedang belajar ulang dan menyempurnakan\n"
-            f"kalkulasi untuk setup berikutnya.\n"
-            f"Maafkan saya untuk hari ini. 🙏\n"
+            f"🔋 <b>AI Power: ■□□□□ 33%</b> — cuma 1 AI kerja\n"
+            f"   Makin banyak AI = makin sedikit false signal.\n"
+            f"   Upgrade ke 3 AI + Grok News biar lebih presisi.\n"
             f"\n"
-            f"Walau sedang merah, jika kamu tetap ingin\n"
-            f"mendukung AI ini belajar menjadi lebih pintar,\n"
-            f"pintu dukungan selalu terbuka.\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"📈 Win Rate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}"
+            f"📰 Grok News [🔒 LOCKED]\n"
+            f"   Mungkin SL ini bisa dihindari kalo ada context.\n"
+            f"\n"
+            f"⬇️ Dukung AI biar makin pinter ⬇️\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📈 Winrate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}"
         )
         markup = {"inline_keyboard": [
             [{"text": "📚 Dukung AI Belajar (Tripay)", "callback_data": "donate:learn"}],

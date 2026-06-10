@@ -571,7 +571,7 @@ def _get_order_type(action: str, entry: float, price: float, threshold: float = 
 
 
 def format_signal_telegram(signal: dict) -> str:
-    """Format signal for Telegram channel — Vilona aggressive style."""
+    """Format signal for Telegram — engine-driven with AI Partner funnel."""
     if not signal:
         return ""
 
@@ -621,10 +621,10 @@ def format_signal_telegram(signal: dict) -> str:
         f"🕐 {wib} WIB",
         f"{grade_label} | <b>Conf {conf*100:.0f}%</b>",
         f"",
-        f"🎯 <b>Entry:</b> <code>${entry:.2f}</code>",
-        f"🛑 <b>SL:</b> <code>${sl:.2f}</code> | -{pips_sl}pt",
-        f"✅ <b>TP1:</b> <code>${tp1:.2f}</code> | +{pips_target}pt",
-        f"✅ <b>TP2:</b> <code>${tp2:.2f}</code> | +{pips_target*2}pt",
+        f"📍 <b>Entry:</b> <b>${entry:.2f}</b>",
+        f"🔴 <b>SL:</b> <b>${sl:.2f}</b> | -{pips_sl}pt",
+        f"🟢 <b>TP1:</b> <b>${tp1:.2f}</b> | +{pips_target}pt",
+        f"🟢 <b>TP2:</b> <b>${tp2:.2f}</b> | +{pips_target*2}pt",
         f"{rr_label}",
         f"",
         f"━━━━━━━━━━━━━━━━━━━━━━",
@@ -634,8 +634,23 @@ def format_signal_telegram(signal: dict) -> str:
         f"{callout}",
         f"",
         f"⚠️ <i>Risk 1% per trade. Full AI — verify sendiri.</i>",
-        f"💚 Server GRATIS → /donate | @berkahkaryaforexbotbot",
+        f"━━━━━━━━━━━━━━━━━━━━━━",
+        f"",
     ]
+
+    # Battery + AI Partner funnel — engine signal = basic, AI = premium
+    lines.append(f"🔋 <b>Engine Power: ■■□□□ 67%</b> — 8 engine analisa teknikal")
+    lines.append(f"")
+    lines.append(f"🤖 Tapi ini <b>Engine Signal</b> — belum AI Consensus.")
+    lines.append(f"   Engine kasih arah, AI yang kasih Entry/SL/TP presisi.")
+    lines.append(f"   Dengan 2-3 AI + Grok News, signal lu lebih akurat.")
+    lines.append(f"")
+    lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
+    lines.append(f"   <i>Real-time X/Twitter market context...</i>")
+    lines.append(f"")
+    lines.append(f"⚡ <b>/donate</b> — Rp 50k/bulan")
+    lines.append(f"   Unlock AI Signal + Grok News + /levels + SnR/FIBO")
+    lines.append(f"   Jangan cuma andelin engine — kasih AI lu kerjaan beneran")
 
     return "\n".join(lines)
 
