@@ -32,7 +32,7 @@ except ImportError:
     pass  # python-dotenv not installed — rely on systemd EnvironmentFile
 
 from tradebot.bots.base import BaseBot
-from tradebot.bots.platforms.signal_bridge import VilonaSignalBridge
+from tradebot.bots.platforms.vilona_bridge import VilonaSignalBridge
 
 LOG = logging.getLogger("tradebot.bots.vilona.handler")
 
