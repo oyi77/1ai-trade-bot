@@ -19,7 +19,13 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from tradebot.bots.base import BaseBot
+from tradebot.brokers.stockity.broker import StockityBroker
+from tradebot.brokers.stockity.rest import StockityREST
 from tradebot.config import settings
+from tradebot.bots.stockity.affiliate import (
+    get_or_create_affiliate, record_referral,
+    get_referral_stats, create_whitelabel, get_whitelabel, deactivate_whitelabel,
+)
 
 LOG = logging.getLogger("tradebot.bots.stockity.bot")
 
@@ -501,6 +507,113 @@ class StockityBot(BaseBot):
         msg = await upd.message.reply_text("⏳ Generating QRIS...")
         reply = await self._cmd_deposit(ctx.args or [])
         await msg.edit_text(reply, parse_mode="Markdown")
+
+    # ── Balance ───────────────────────────────────────────────────────
+
+    async def _cmd_balance(self, args: list[str], chat_id: str | None = None) -> str:
+        broker = StockityBroker()
+        try:
+            await broker.connect()
+            await asyncio.sleep(3)
+            s = broker.stats
+            lines = [
+                "💰 *Stockity Account*",
+                f"Balance: `{s['balance']:,}` {s['currency']} (~${s['balance_usd']:.2f})",
+                f"Open: {s['open_positions']} | Closed: {s['total_trades']}",
+                f"Wins: {s['wins']} | Losses: {s['losses']} | WR: {s['winrate']:.1f}%",
+            ]
+            if broker.open_positions:
+                lines.append("\n*Open Positions:*")
+                for p in broker.open_positions[:5]:
+                    lines.append(f"  {p.get('trend','?').upper()} {p.get('option_type','?')} @ {p.get('open_rate')}")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"❌ {e}"
+        finally:
+            await broker.close()
+
+    async def _cmd_deposit(self, args: list[str], chat_id: str | None = None) -> str:
+        if not args:
+            return "💳 *Deposit*\n\n`/deposit <amount>`\nMin: Rp 50,000 via QRIS."
+        try:
+            amount = int(args[0])
+        except ValueError:
+            return f"❌ Invalid: `{args[0]}`"
+        if amount < 50000:
+            return "❌ Min Rp 50,000"
+        api = StockityREST()
+        try:
+            r = await api.deposit(amount=amount, handler="qris")
+            if r and r.get("success"):
+                url = r.get("redirect_url", "")
+                return f"💳 *Deposit Rp {amount:,}*\n\n[🔗 Bayar via QRIS]({url})\n`{url}`"
+            return "❌ Deposit gagal"
+        finally:
+            await api.close()
+
+    async def _cmd_affiliate(self, args: list[str], chat_id: str | None = None) -> str:
+        user_id = str(chat_id) if chat_id else "unknown"
+        aff = get_or_create_affiliate(user_id)
+        stats = get_referral_stats(user_id)
+        return (
+            f"🤝 *Affiliate Program*\n\n"
+            f"Kode: `{aff.referral_code}`\n"
+            f"Link: {stats.get('referral_link', '')}\n\n"
+            f"Referrals: {aff.total_referrals}\n"
+            f"Komisi: {aff.commission_rate}%\n"
+            f"Earned: ${aff.total_earned:.2f}\n\n"
+            f"Share link & earn {aff.commission_rate}% commission!"
+        )
+
+    async def _cmd_whitelabel(self, args: list[str], chat_id: str | None = None) -> str:
+        user_id = str(chat_id) if chat_id else "unknown"
+        if not args:
+            wl = get_whitelabel(user_id)
+            if wl:
+                return (
+                    f"🏷 *Whitelabel Bot*\n\n"
+                    f"Nama: {wl.custom_name}\n"
+                    f"Username: @{wl.bot_username}\n"
+                    f"Status: {'✅ Active' if wl.active else '❌ Inactive'}\n\n"
+                    f"Deactivate: `/whitelabel deactivate`"
+                )
+            return (
+                "🏷 *Whitelabel Bot*\n\n"
+                "Run your own branded trading bot!\n\n"
+                "`/whitelabel <bot_token> <username>`\n\n"
+                "1. Create bot via @BotFather\n"
+                "2. Copy token\n"
+                "3. Register here"
+            )
+        if args[0] == "deactivate":
+            deactivate_whitelabel(user_id)
+            return "✅ Whitelabel deactivated."
+        if len(args) >= 2:
+            token = args[0]
+            username = args[1].lstrip("@")
+            create_whitelabel(user_id, token, username)
+            return f"✅ Whitelabel @{username} registered!\nStart: t.me/{username}"
+        return "❌ Format: `/whitelabel <bot_token> <username>`"
+
+    # ── PTB wrappers ───────────────────────────────────────────────────
+
+    async def _ptb_cmd_balance(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        msg = await upd.message.reply_text("⏳ Checking...")
+        reply = await self._cmd_balance([])
+        await msg.edit_text(reply, parse_mode="Markdown")
+
+    async def _ptb_cmd_deposit(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        msg = await upd.message.reply_text("⏳ Generating QRIS...")
+        reply = await self._cmd_deposit(ctx.args or [])
+        await msg.edit_text(reply, parse_mode="Markdown")
+
+    async def _ptb_cmd_affiliate(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        reply = await self._cmd_affiliate([], upd.effective_chat.id)
+        await upd.message.reply_markdown(reply)
+
+    async def _ptb_cmd_whitelabel(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        reply = await self._cmd_whitelabel(ctx.args or [], upd.effective_chat.id)
+        await upd.message.reply_markdown(reply)
 
     # ── Run ─────────────────────────────────────────────────────────────
 
