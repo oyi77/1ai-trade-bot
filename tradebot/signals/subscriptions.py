@@ -13,10 +13,9 @@ Signal Categories:
 from __future__ import annotations
 
 import logging
+import sqlite3
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
-import sqlite3
 from pathlib import Path
 
 from tradebot.models.signal import Signal

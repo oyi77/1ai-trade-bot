@@ -19,7 +19,6 @@ import asyncio
 import logging
 import signal
 import sys
-from pathlib import Path
 
 import uvicorn
 
@@ -56,10 +55,9 @@ class App:
         if not tasks:
             LOG.warning("Nothing to start (web=False, bot=False)")
 
-        try:
+        import contextlib
+        with contextlib.suppress(asyncio.CancelledError):
             await asyncio.gather(*tasks, return_exceptions=True)
-        except asyncio.CancelledError:
-            pass
 
     async def _run_web(self) -> None:
         """Run FastAPI via uvicorn."""

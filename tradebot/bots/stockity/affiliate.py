@@ -13,7 +13,6 @@ import hashlib
 import logging
 import secrets
 import sqlite3
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -144,7 +143,7 @@ def can_use_whitelabel(user_id: str) -> tuple[bool, str]:
       - Active paid plan (Pro, Elite, Whale)
       - Total donations ≥ 100K IDR
     """
-    from tradebot.services.plans import Plan, get_user_plan, get_total_donations
+    from tradebot.services.plans import Plan, get_total_donations, get_user_plan
 
     plan = get_user_plan(user_id)
     if plan != Plan.FREE:

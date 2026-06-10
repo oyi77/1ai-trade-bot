@@ -15,6 +15,7 @@ import asyncio
 import logging
 import os
 import time
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
@@ -22,6 +23,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
 )
+
 from tradebot.bots.handlers import register_standard_commands
 from tradebot.config import settings
 from tradebot.services.plans import get_user_plan
