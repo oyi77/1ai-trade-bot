@@ -186,7 +186,6 @@ def main():
         text = format_signal_telegram(sig)
         
         try:
-            sys.path.insert(0, os.path.join(PROJECT_DIR, "scripts"))
             from vilona_tradefx_handler import send_to_channel
             result = send_to_channel(text)
             if result:

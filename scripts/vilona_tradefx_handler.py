@@ -469,7 +469,7 @@ def tg_send(text, chat_id=None, reply_markup=None):
     # Use unique Unicode placeholder markers (safe across Python 3.11-3.13)
     TAG_OPEN = "\ue000"   # Private Use Area — won't appear in normal text
     TAG_CLOSE = "\ue001"
-    text = re.sub(r'<(/?[abciosu][^>]*)>', TAG_OPEN + r'\1' + TAG_CLOSE, text)
+    text = re.sub(r'<(/?[abciopstu][^>]*)>', TAG_OPEN + r'\1' + TAG_CLOSE, text)
     text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     text = text.replace(TAG_OPEN, '<').replace(TAG_CLOSE, '>')
     
@@ -591,8 +591,8 @@ USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
 USER_LAST_PAIR = {}  # chat_id -> {"pair": str, "at": timestamp} — same-pair cooldown
 USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — donor quota
 
-MANUAL_THROTTLE_FREE = 60     # free user: 60 detik antar analisa
-MANUAL_THROTTLE_DONOR = 120   # donor: 120 detik antar analisa
+MANUAL_THROTTLE_FREE = 120   # free user: 120 detik antar analisa
+MANUAL_THROTTLE_DONOR = 60   # donor: 60 detik antar analisa (lebih cepet)
 SAME_PAIR_COOLDOWN = 90       # same pair cooldown (all users)
 DONOR_DAILY_QUOTA = 60        # donor: 60x analisa/hari (cukup buat 1x tiap 12 menit)
 FREE_DAILY_QUOTA = 3          # free: 3x/hari
@@ -1641,10 +1641,10 @@ def _sig_quality_pass(sig: dict, quant_result: dict | None = None, display: str 
     is_crypto = display.upper() in ("BTCUSD", "ETHUSD", "BTC", "ETH")
     if not is_crypto:
         try:
-            kz = killzone() if callable(killzone) else session(wib_now().hour)
-        except:
-            kz = session(wib_now().hour) if 'session' in dir() else ""
-        if "ASIA" in str(kz).upper() and "LONDON" not in str(kz).upper():
+            london_kz, ny_kz = killzone(wib_now().hour)
+        except Exception:
+            london_kz, ny_kz = False, False
+        if not london_kz and not ny_kz:
             return True, "Asia session — lower volatility"
 
     return True, "Quality Gate PASS"
@@ -1852,6 +1852,10 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             if tp2: tp2 = round(tp2 + offset, 2)
             if tp3: tp3 = round(tp3 + offset, 2)
             if tp4: tp4 = round(tp4 + offset, 2)
+            # Recompute entry zone AFTER offset shift
+            zone_half = entry * 0.0005
+            zone_lo = entry - zone_half
+            zone_hi = entry + zone_half
 
     # Generate TP levels if only single TP provided
     if not tp1 and tp > 0 and entry > 0:
@@ -5066,155 +5070,8 @@ def auto_analyze_loop():
                     except Exception as e:
                         logger.error(f"Daily mapping failed: {e}")
 
-                # ── WEEKEND CRYPTO MODE: skip forex/commodities, allow crypto ──
-                # Rotate through assets but skip non-crypto
-                for _ in range(len(AUTO_SCAN_ASSETS)):
-                    pair, disp, yahoo_sym, is_forex = AUTO_SCAN_ASSETS[asset_idx % len(AUTO_SCAN_ASSETS)]
-                    asset_idx += 1
-                    if is_crypto_pair(pair):
-                        break  # found a crypto pair to scan
-                else:
-                    time.sleep(300)
-                    continue  # no crypto in rotation (shouldn't happen)
-
-                # For crypto on weekends: skip session/trading-hour checks, scan 24/7
-                logger.info(f"🟡 WEEKEND CRYPTO [{disp}] — scanning...")
-                # ── Inline signal pipeline for weekend crypto ──
-                # (copies weekday flow: check outcomes → mechanical → AI consensus)
-                
-                # Check trade outcomes (TP/SL hits)
-                if TRADE_TRACKER:
-                    try:
-                        closed_trades = check_outcomes({disp: None})
-                        price = fetch_price(pair)
-                        if price: closed_trades = check_outcomes({disp: price})
-                        for ct in closed_trades:
-                            try:
-                                trade_id = ct.get("id", ct.get("trade_id", ""))
-                                if trade_id and not _can_post_tpsl_alert(str(trade_id)):
-                                    continue
-                                # Send to channel (text only — buttons gak work di channel)
-                                alert_text = format_trade_close_alert(ct)
-                                send_to_channel(alert_text)
-                            except Exception: pass
-                    except Exception: pass
-
-                price = fetch_price(pair)
-                if not price:
-                    time.sleep(60)
-                    continue
-
-                dxy = fetch_dxy() if pair == "gold" else None
-                lkz, nykz = killzone(h)
-                kz = "London" if lkz else ("NY" if nykz else "Outside")
-
-                # Mechanical signal detection
-                mech_sig = None
-                if MARKET_DATA and is_forex:
-                    try:
-                        m1_bars = MARKET_DATA.get_ohlcv(yahoo_sym, "1m", 200)
-                        if m1_bars and len(m1_bars) >= 30:
-                            ohlcv_m1 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
-                                          "low": b.low, "close": b.close, "volume": b.volume} for b in m1_bars]
-                            mech_sig, mech_reason = detect_mechanical_signal(
-                                pair.upper(), disp, price, ohlcv_m1)
-                            if mech_sig:
-                                logger.info(f"⚡ MECHANICAL [{disp}]: {mech_sig['action']} | {mech_sig['source']}")
-                    except Exception as e:
-                        logger.debug(f"Mechanical check [{disp}]: {e}")
-
-                if mech_sig and mech_sig["action"] in ("BUY", "SELL"):
-                    action = mech_sig["action"]
-                    mech_sig = _clamp_sltp(mech_sig, disp)  # enforce SL direction + bounds
-                    conf = mech_sig["confidence"]
-                    log_key = f"auto_{pair}"
-                    log = asset_logs.get(log_key, load_signal_log(pair))
-                    last_time = log.get("last_signal_time")
-                    last_action = log.get("last_action")
-                    if last_time and last_action:
-                        try:
-                            last_dt = datetime.fromisoformat(last_time)
-                            if (wib_now() - last_dt).total_seconds() < 600 and last_action != action:
-                                logger.info(f"BLOCKED [{disp}]: {action} after {last_action}")
-                                time.sleep(60)
-                                continue
-                        except: pass
-                    logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
-                    # ── BTC 2-bar confirmation (gate channel + bridge) ──
-                    if disp == "BTCUSD" and not _consec_2bar_confirm("BTCUSD", action):
-                        logger.info(f"⏳ BTC 2-BAR WAIT: {action} — waiting for next bar confirm")
-                        continue
-                    text = fmt_signal(mech_sig, price, dxy, h, disp, "$")
-                    _entry = mech_sig.get("entry", price) or 0
-                    _sl = mech_sig.get("sl", 0) or 0
-                    _tp = mech_sig.get("tp", 0) or 0
-                    if _can_post_to_channel(pair, action, _entry, _sl, _tp):
-                        send_to_channel(text)
-                        _mark_channel_post(pair, action, _entry, _sl, _tp)
-                        if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
-                            mech_sig = enrich_signal_with_layers(mech_sig)
-                        post_signal_to_bridge(mech_sig, price, disp)
-                    else:
-                        logger.info(f"BLOCKED weekend [{disp}]: rate limited — skip bridge")
-                    log["signals_sent"] = log.get("signals_sent", 0) + 1
-                    log["last_signal_time"] = wib_now().isoformat()
-                    log["last_action"] = action
-                    log["last_price"] = price
-                    log["last_signal"] = {"action": action, "entry": mech_sig.get("entry", price),
-                        "sl": mech_sig.get("sl", 0), "tp": mech_sig.get("tp", 0),
-                        "tp1": mech_sig.get("tp1", 0), "tp2": mech_sig.get("tp2", 0),
-                        "confidence": conf, "source": mech_sig.get("source", "mech"),
-                        "rr_ratio": mech_sig.get("rr_ratio", 0)}
-                    asset_logs[log_key] = log
-                    # Per-asset signal file (avoid race between threads)
-                    (DATA_DIR / f"ea_signal_{pair}.json").write_text(json.dumps(log["last_signal"]))
-                    save_signal_log(log, pair)
-                else:
-                    # AI consensus (simplified for weekend - just DeepSeek/OmniRoute)
-                    sig = ask_ai(price, dxy, "WeekendCrypto", kz, 0, premium=False,
-                                  ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
-                    if sig and sig.get("action") in ("BUY", "SELL"):
-                        # Normalize confidence + quality gates
-                        wc = sig.get("confidence", 0)
-                        if isinstance(wc, (int,float)) and wc > 10:
-                            sig["confidence"] = wc / 100; wc = wc / 100
-                        voters = sig.get("voters", 0)
-                        rr = sig.get("rr_ratio", 0)
-                        if isinstance(rr, str) and rr.startswith("1:"):
-                            rr = float(rr[2:]) if rr[2:] else 0
-                        rr = float(rr) if rr else 0
-                        if wc < 0.70:
-                            logger.info(f"   [{disp}] BLOCKED: low confidence {wc:.0%}")
-                        elif voters < 3:
-                            logger.info(f"   [{disp}] BLOCKED: solo call ({voters} model)")
-                        elif rr > 0 and (rr < 1.5 or rr > 5.0):
-                            logger.info(f"   [{disp}] BLOCKED: RR 1:{rr:.1f} outside range")
-                        else:
-                            logger.info(f"AI PUSH [{disp}]: {sig['action']} | conf={wc:.0%}")
-                            # ── Rate-limit check BEFORE bridge push (anti-oversignal weekend) ──
-                            _entry = sig.get("entry", price) or 0
-                            _sl = sig.get("sl", 0) or 0
-                            _tp = sig.get("tp", 0) or 0
-                            if _can_post_to_channel(pair, sig["action"], _entry, _sl, _tp):
-                                if LAYERING_ENGINE:
-                                    sig = enrich_signal_with_layers(sig)
-                                post_signal_to_bridge(sig, price, disp)
-                                text = fmt_signal(sig, price, dxy, h, disp, "$")
-                                send_to_channel(text)
-                                _mark_channel_post(pair, sig["action"], _entry, _sl, _tp)
-                            else:
-                                logger.info(f"BLOCKED weekend [{disp}]: rate limited — skip bridge+channel")
-                        # Weekend signal log (separate from weekday for accurate tracking)
-                        wk_log_key = f"weekend_{pair}"
-                        wk_log = asset_logs.get(wk_log_key, load_signal_log(f"weekend_{pair}"))
-                        wk_log["signals_sent"] = wk_log.get("signals_sent", 0) + 1
-                        wk_log["last_signal_time"] = wib_now().isoformat()
-                        wk_log["last_action"] = sig["action"]
-                        wk_log["last_price"] = price
-                        save_signal_log(wk_log, f"weekend_{pair}")
-                        asset_logs[wk_log_key] = wk_log
-
-                time.sleep(120)  # 2 min between weekend crypto scans
+                # ── Weekend: no crypto scanning, just sleep ──
+                time.sleep(300)
                 continue  # back to top of while loop
 
             # ── WEEKDAY: Reset mapping tracker for new day ──
@@ -5262,6 +5119,11 @@ def auto_analyze_loop():
                             if ct.get("outcome") == "SL_HIT":
                                 new_count = _increment_daily_loss()
                                 logger.warning(f"⛔ SL HIT — daily losses: {new_count}/3")
+                                # Re-check breaker after increment
+                                if new_count >= 3:
+                                    logger.warning(f"⛔ CIRCUIT BREAKER TRIGGERED mid-cycle: {new_count}/3")
+                                    time.sleep(600)
+                                    continue
                             # Send to channel (text only — buttons gak work di channel)
                             alert_text = format_trade_close_alert(ct)
                             send_to_channel(alert_text)

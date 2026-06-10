@@ -246,7 +246,7 @@ def main():
                     last_mtime = mtime
                     sig = read_signal()
                     if sig and sig.get("action") in ("BUY", "SELL"):
-                        sig_fp = f"{sig.get('action','')}_{sig.get('entry',0):.2f}"
+                        sig_fp = f"{sig.get('action','')}_{sig.get('entry',0):.2f}_{sig.get('sl',0):.2f}"
                         if state["last_signal_id"] == sig_fp:
                             continue
 

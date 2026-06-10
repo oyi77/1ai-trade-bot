@@ -219,19 +219,52 @@ class DataGate:
 
     # ── Circuit Breaker ──
 
-    def check_circuit(self, today_str: str, daily_losses: int) -> DataGateResult:
-        """Enforce daily max loss limit."""
-        if today_str != self.last_day:
+    def check_circuit(self, today_str: str, daily_losses: int = 0) -> DataGateResult:
+        """Enforce daily max loss limit. Uses file-backed counter (survives restarts)."""
+        # File-backed counter — persists across worker restarts
+        import os as _os
+        _state_dir = _os.path.join(_os.path.dirname(__file__), "..", "data")
+        _os.makedirs(_state_dir, exist_ok=True)
+        _loss_file = _os.path.join(_state_dir, ".daily_loss_count")
+        _date_file = _os.path.join(_state_dir, ".daily_loss_date")
+        
+        # Reset on new day
+        try:
+            saved_date = open(_date_file).read().strip() if _os.path.exists(_date_file) else ""
+            if saved_date != today_str:
+                open(_loss_file, "w").write("0")
+                open(_date_file, "w").write(today_str)
+                self.daily_losses = 0
+            else:
+                self.daily_losses = int(open(_loss_file).read().strip() or "0")
+        except Exception:
             self.daily_losses = 0
-            self.last_day = today_str
-
-        self.daily_losses = daily_losses
+        
         if self.daily_losses >= self.daily_loss_limit:
             log.warning("⛔ CIRCUIT BREAKER: %d/%d losses today — STOP",
                        self.daily_losses, self.daily_loss_limit)
             return DataGateResult.SKIP_CIRCUIT_BREAKER
-
+        
         return DataGateResult.PASS
+    
+    def record_loss(self, today_str: str):
+        """Call when a trade hits SL. Increments the file-backed loss counter."""
+        import os as _os
+        _state_dir = _os.path.join(_os.path.dirname(__file__), "..", "data")
+        _os.makedirs(_state_dir, exist_ok=True)
+        _loss_file = _os.path.join(_state_dir, ".daily_loss_count")
+        _date_file = _os.path.join(_state_dir, ".daily_loss_date")
+        
+        try:
+            saved_date = open(_date_file).read().strip() if _os.path.exists(_date_file) else ""
+            if saved_date != today_str:
+                open(_loss_file, "w").write("1")
+                open(_date_file, "w").write(today_str)
+            else:
+                current = int(open(_loss_file).read().strip() or "0") + 1
+                open(_loss_file, "w").write(str(current))
+        except Exception:
+            pass
 
     # ── Full Pipeline ──
 

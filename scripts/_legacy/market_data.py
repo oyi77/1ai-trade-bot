@@ -305,6 +305,10 @@ class UnifiedMarketData:
 
             tk = yf.Ticker(yahoo_symbol)
             df = tk.history(period=period, interval=interval)
+            # Fallback: XAUUSD_SPOT → GC=F (XAUUSD_SPOT is invalid yfinance ticker)
+            if (df.empty and yahoo_symbol == "XAUUSD_SPOT"):
+                tk = yf.Ticker("GC=F")
+                df = tk.history(period=period, interval=interval)
             if df.empty:
                 return None
 

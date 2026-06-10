@@ -109,9 +109,21 @@ def update_outcome(symbol: str, entry_price: float, result: str, pips: float):
     """Mark a signal as TP or SL."""
     feed = _load_feed()
     updated = False
+    # Asset-aware threshold: XAU=5.0, crypto=200, forex=0.005, USOIL=0.3
+    sym = symbol.upper()
+    if sym in ("XAUUSD", "GOLD"):
+        threshold = 5.0
+    elif sym in ("BTCUSD", "ETHUSD"):
+        threshold = 200.0
+    elif sym in ("USOIL", "OIL"):
+        threshold = 0.3
+    elif sym.endswith("JPY"):
+        threshold = 0.5
+    else:
+        threshold = 0.005  # forex 5-digit
     for sig in feed["signals"]:
         if (sig["symbol"] == symbol.upper() and 
-            abs(sig["entry"] - entry_price) < 5.0 and
+            abs(sig["entry"] - entry_price) < threshold and
             sig["status"] == "pending"):
             sig["status"] = result.lower()
             sig["outcome_pips"] = round(float(pips), 1)
