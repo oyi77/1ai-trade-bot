@@ -957,7 +957,7 @@ async function fetchAll(){
       lastTradeLog=signals;
     }catch(e){}
     
-    // Priority: XAUUSD > BTCUSD > USOIL
+    // Priority: XAUUSD only
     var xauSig=signals.filter(function(s){return (s.symbol||'').includes('XAU')});
     var btcSig=signals.filter(function(s){return (s.symbol||'').includes('BTC')});
     var oilSig=signals.filter(function(s){return (s.symbol||'').includes('OIL')});
