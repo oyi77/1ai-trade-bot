@@ -99,7 +99,7 @@ class SubscriptionTradingBot(BaseBot):
             LOG.warning("Stockity signal generator unavailable")
 
         try:
-            from tradebot.services.bridge_server import BridgeServer  # type: ignore
+            # BridgeServer moved to tradebot.web.server (unified)
             self._bridge = BridgeServer()
         except ImportError:
             self._bridge = None

@@ -15,3 +15,5 @@ __all__ = [
     "SubscriptionTradingBot",
     "StockityBot",
 ]
+
+from tradebot.bots.telegram import UnifiedBot

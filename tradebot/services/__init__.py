@@ -1,6 +1,5 @@
 """Long-running services."""
 
-from .bridge_server import BridgeServer
 from .health import HealthCheckResult, HealthReport, HealthService, HealthStatus
 from .payment import PaymentService
 from .publisher import SignalPublisher

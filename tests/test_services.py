@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tradebot.services.bridge_server import BridgeHandler, BridgeServer
 from tradebot.services.health import (
     HealthCheckResult,
     HealthReport,
@@ -538,93 +537,3 @@ class TestTelegramService:
         text = svc.send_message.call_args[0][0]
         assert "-0.35" in text
 
-
-# ── bridge_server.py ───────────────────────────────────────────────────────
-
-
-class TestBridgeServer:
-    """BridgeServer initialization and state management."""
-
-    def test_init_defaults(self):
-        srv = BridgeServer()
-        assert srv.host == "0.0.0.0"
-        assert srv.port == 8082
-        assert isinstance(srv.state, dict)
-
-    def test_init_with_params(self):
-        state = {"signal": {"direction": "CALL"}}
-        srv = BridgeServer(host="127.0.0.1", port=9999, state=state)
-        assert srv.host == "127.0.0.1"
-        assert srv.port == 9999
-        assert srv.state["signal"]["direction"] == "CALL"
-
-    def test_state_shared_with_handler(self):
-        state = {"connected": True}
-        BridgeServer(state=state)
-        assert BridgeHandler.server_state is state
-
-    def test_handler_signal_endpoint_data(self):
-        state = {
-            "signal": {"symbol": "R_75", "direction": "CALL", "confidence": 0.85},
-        }
-        BridgeHandler.server_state = state
-        signal = BridgeHandler.server_state.get("signal", {"status": "no_signal"})
-        assert signal["symbol"] == "R_75"
-        assert signal["direction"] == "CALL"
-
-    def test_handler_no_signal_fallback(self):
-        BridgeHandler.server_state = {}
-        signal = BridgeHandler.server_state.get(
-            "signal", {"status": "no_signal"},
-        )
-        assert signal["status"] == "no_signal"
-
-    def test_handler_status_endpoint_data(self):
-        state = {"engines": ["engine1", "engine2"], "connected": True}
-        BridgeHandler.server_state = state
-        status = {
-            "status": "ok",
-            "engine_count": len(BridgeHandler.server_state.get("engines", [])),
-            "connected": BridgeHandler.server_state.get("connected", False),
-        }
-        assert status["engine_count"] == 2
-        assert status["connected"] is True
-
-    def test_handler_balance_endpoint_data(self):
-        state = {"balance": {"balance": 1000.50, "currency": "USD"}}
-        BridgeHandler.server_state = state
-        bal = BridgeHandler.server_state.get("balance", {"balance": None})
-        assert bal["balance"] == 1000.50
-
-    def test_handler_unknown_path_fallback(self):
-        BridgeHandler.server_state = {}
-        result = {"error": "not_found"}
-        assert result["error"] == "not_found"
-
-    def test_start_and_stop(self):
-        """BridgeServer can start and stop on a real port."""
-        import socket
-
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("127.0.0.1", 0))
-            free_port = s.getsockname()[1]
-
-        srv = BridgeServer(
-            host="127.0.0.1", port=free_port,
-            state={"signal": {"ok": True}},
-        )
-        thread = Thread(target=srv.start, daemon=True)
-        thread.start()
-        time.sleep(0.2)
-
-        conn = HTTPConnection("127.0.0.1", free_port, timeout=2)
-        try:
-            conn.request("GET", "/signal")
-            resp = conn.getresponse()
-            body = json.loads(resp.read())
-            assert body["ok"] is True
-            assert resp.status == 200
-        finally:
-            conn.close()
-            srv.stop()
-            thread.join(timeout=2)

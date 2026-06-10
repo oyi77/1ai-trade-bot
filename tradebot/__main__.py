@@ -1,4 +1,4 @@
-"""Allow `python -m tradebot` as entry point."""
-from .cli import main
+"""Entry point: python -m tradebot — starts everything (web + bot)."""
+from tradebot.app import main
 
 main()

@@ -172,3 +172,39 @@ async def api_set_affiliate_rate(
         _admin_gate(request)
     set_affiliate_rate(user_id, rate)
     return JSONResponse({"ok": True, "user_id": user_id, "rate": rate})
+
+# ── Bridge API (merged from tradebot/services/bridge_server.py) ──────
+
+_bridge_state: dict = {}
+
+
+def set_bridge_state(state: dict) -> None:
+    """Update bridge state from external signal pipelines."""
+    _bridge_state.update(state)
+
+
+@app.get("/api/bridge/signal")
+async def bridge_signal():
+    return _bridge_state.get("signal", {"status": "no_signal"})
+
+
+@app.get("/api/bridge/status")
+async def bridge_status():
+    return {
+        "status": "ok",
+        "engine_count": len(_bridge_state.get("engines", [])),
+        "connected": _bridge_state.get("connected", False),
+    }
+
+
+@app.get("/api/bridge/balance")
+async def bridge_balance():
+    return _bridge_state.get("balance", {"balance": None})
+
+
+# ── Health ─────────────────────────────────────────────────────────
+
+@app.get("/health")
+async def health_check():
+    from tradebot.services.health import check_all
+    return check_all()
