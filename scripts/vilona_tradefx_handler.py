@@ -1686,7 +1686,7 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     
     XAUUSD 3-digit: 1 pip = 0.10. SL must be 20-35 pip. TP = SL * RR (max 1:3).
     """
-    action = sig.get("action", "")
+    action = sig.get("action", "").upper()
     if action not in ("BUY", "SELL"):
         return sig
     
