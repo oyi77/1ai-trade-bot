@@ -1003,7 +1003,8 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
     try:
         ea_file = DATA_DIR / "ea_signal.json"
         ea_file.write_text(json.dumps(payload, indent=2))
-        logger.info(f"📝 EA signal written: {action} {symbol} @ {entry} | conf={confidence:.0%} | RR=1:{rr:.1f}")
+        rr_display = float(str(rr).replace("1:", "")) if isinstance(rr, str) and rr.startswith("1:") else float(rr) if rr else 0
+        logger.info(f"📝 EA signal written: {action} {symbol} @ {entry} | conf={confidence:.0%} | RR=1:{rr_display:.1f}")
     except Exception as e:
         logger.error(f"Failed to write ea_signal.json: {e}")
 
@@ -1471,10 +1472,11 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     if not is_free_tier:
         gpt4o = _call_openai(prompt, model="gpt-4o")
 
-    # OmniRoute (Claude-Sonnet) — only for elite or channel
-    omniroute = None
-    if tier == "elite" or premium:
-        omniroute = _call_omniroute(prompt)
+    # OmniRoute (Claude-Sonnet) — DISABLED: HTTP 400 broken, direct API calls used instead
+    # omniroute = None
+    # if tier == "elite" or premium:
+    #     omniroute = _call_omniroute(prompt)
+    omniroute = None  # OmniRoute disabled — DeepSeek + GPT-4o direct calls sufficient
 
     # Grok News — real-time X/Twitter market context (donors only)
     grok_news = None
