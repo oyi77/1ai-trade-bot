@@ -1870,15 +1870,17 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     lines.append(f"")
     if token_total > 0:
         token_k = f"{token_total/1000:.1f}k" if token_total >= 1000 else str(token_total)
-        # Approx cost: DeepSeek ~$0.27/M, GPT-4o ~$5/M, Grok ~$3/M — blended ~$1.5/M
-        cost_rp = int(token_total * 1.5 / 1000)  # ~Rp 1.5 per 1K tokens
+        cost_rp = int(token_total * 1.5 / 1000)
         cost_rp = max(cost_rp, 1)
+        # Dynamic battery based on actual AI models + Grok
+        has_grok = bool(grok_news)
+        battery_pct = min(100, model_count * 33 + (33 if has_grok else 0))
+        bar_count = min(3, model_count + (1 if has_grok else 0))
+        bars = "■" * max(1, bar_count) + "□" * (3 - max(1, bar_count))
 
         if is_free:
-            # ── FREE TIER: Battery + kelaparan + Grok tease ──
-            battery_pct = 33  # 1 dari 3 AI
-            bars = "■" * 1 + "□" * 2
-            lines.append(f"🔋 <b>AI Power: {bars} {battery_pct}%</b> — cuma 1/3 AI yang kerja buat lu")
+            # ── FREE TIER: Dynamic battery + kelaparan + Grok tease preview ──
+            lines.append(f"🔋 <b>AI Power: {bars} {battery_pct}%</b> — {model_count}/3 AI yang kerja buat lu")
             lines.append(f"")
             lines.append(f"🧠 {token_k} token dipakai (Rp {cost_rp})")
             lines.append(f"   Prompt: {token_prompt} | Respon: {token_comp}")
@@ -1888,20 +1890,18 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             lines.append(f"   Bayangin kalo 3 AI + Grok News analisa bareng:")
             lines.append(f"   → Entry lebih presisi, SL lebih ketat, TP lebih akurat")
             lines.append(f"")
-            # Grok News tease — bikin penasaran
+            # Grok News tease with preview snippet
             lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
-            lines.append(f"   <i>Real-time X/Twitter market context...</i>")
-            lines.append(f"   🔓 <b>Unlock → /donate</b>")
+            lines.append(f"   🔍 <i>Preview: Market-moving headlines dari X/Twitter...</i>")
+            lines.append(f"   🗞️  Breaking news, FOMC, NFP, CPI, geopolitics — all real-time")
+            lines.append(f"   🔓 <b>Unlock → /news {display.lower()}</b> atau /donate")
             lines.append(f"")
             lines.append(f"⚡ <b>Rp 50k/bulan</b> — lebih murah dari 1x loss SL")
-            lines.append(f"   Dapet 2 AI + Grok News + /levels + SnR/FIBO")
+            lines.append(f"   Dapet 2 AI + Grok News + /levels + /news")
             lines.append(f"   <b>/donate</b> sekarang — jangan biarin AI lu kerja sendirian")
 
         else:
             # ── DONOR TIER: Full power flex + AI Partner narrative ──
-            battery_pct = min(100, model_count * 33 + (33 if grok_news else 0))
-            bar_count = min(3, model_count + (1 if grok_news else 0))
-            bars = "■" * bar_count + "□" * (3 - bar_count)
             lines.append(f"🔋 <b>AI Power: {bars} {battery_pct}%</b> — full throttle")
             lines.append(f"")
             lines.append(f"🧠 {token_k} token dipakai (Rp {cost_rp})")
@@ -1913,8 +1913,9 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
                 news_str = _format_news_context(grok_news)
                 if news_str:
                     lines.append(f"📰 <b>Grok News Active</b> ✅ — real-time X/Twitter intel")
+                    lines.append(f"   💡 Detail: /news {display.lower()}")
             else:
-                lines.append(f"📰 Grok News [🔒 LOCKED] — <b>/donate</b> buat unlock")
+                lines.append(f"📰 Grok News [🔒 LOCKED] — <b>/news {display.lower()}</b> buat unlock")
 
             lines.append(f"")
             lines.append(f"🤝 <b>AI Partner lu makin cerdas.</b>")
