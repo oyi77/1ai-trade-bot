@@ -1,0 +1,34 @@
+[Unit]
+Description=1ai-trade-bot — Unified Trading Platform
+Documentation=file:///home/openclaw/projects/1ai-trade-bot/README.md
+After=network.target
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/home/linuxbrew/.linuxbrew/bin/python3 -m tradebot --host 0.0.0.0 --port 8888
+
+# Process Management
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tradebot
+
+# Resource Limits
+MemoryMax=512M
+CPUQuota=80%
+TasksMax=256
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/home/openclaw/projects/1ai-trade-bot
+
+[Install]
+WantedBy=multi-user.target
