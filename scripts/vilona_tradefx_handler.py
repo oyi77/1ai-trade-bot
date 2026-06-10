@@ -3209,7 +3209,7 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"❌ Mapping error: {e}", chat_id)
 
     # ── NEW: Signal System Commands ──
-    elif cmd == "/levels":
+    elif cmd == "/levels" or cmd == "/level":
         """Premium: Deep SnR+FIBO + Engine Analysis. Free: upsell gate."""
         # ── PREMIUM GATE ──
         if not _is_donor(str(chat_id)):
