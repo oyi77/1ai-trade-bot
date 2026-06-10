@@ -2680,8 +2680,7 @@ def handle_command(cmd, text, chat_id, msg):
                                 quant_result = analyze_quantitative_pattern(qdata, pattern_size=5)
                         except: pass
                     quality = _sig_quality_pass(sig, quant_result, disp)
-                    levels = _compute_levels(ohlcv_bars, price) if ohlcv_bars else ""
-                    text = fmt_signal(sig, price, dxy, wib_now().hour, disp, curr, quality=quality, levels=levels)
+                    text = fmt_signal(sig, price, dxy, wib_now().hour, disp, curr, quality=quality)
                     # 🔥 Inject Quant Consensus + Guardrail (after main signal)
                     if quant_result:
                         quant_block, guard_warnings = append_quant_consensus_ui(sig, quant_result, disp)
@@ -3206,6 +3205,109 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"❌ Mapping error: {e}", chat_id)
 
     # ── NEW: Signal System Commands ──
+    elif cmd == "/levels":
+        """Deep SnR Analysis — SMC Order Blocks, FVG, Liquidity Zones, Session Levels."""
+        sub_norm = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_l = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_l = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        pair = pair_map_l.get(sub_norm, "gold")
+        disp = disp_map_l.get(pair, "XAUUSD")
+        
+        tg_send(f"🔬 <b>Analyzing {disp} structure...</b>", chat_id)
+        price = fetch_price(pair)
+        if not price:
+            tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
+            return
+        
+        ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+        if not ohlcv_bars or len(ohlcv_bars) < 20:
+            tg_send(f"❌ Data OHLCV tidak cukup untuk analisa {disp}.", chat_id)
+            return
+        
+        lines = [f"🏛 <b>LEVEL ANALYSIS — {disp} @ {price}</b>",
+                 f"━━━━━━━━━━━━━━━━━━━━━━"]
+        
+        # ── 1. SMC Order Blocks ──
+        try:
+            if SMC_ENGINE:
+                smc = analyze_smc_scalper(ohlcv_bars, disp)
+                if smc:
+                    smc_block = format_smc_block(smc)
+                    if smc_block:
+                        lines.append("")
+                        lines.append("🏦 <b>SMC ORDER BLOCKS</b>")
+                        lines.append(smc_block.rstrip())
+        except: pass
+        
+        # ── 2. FVG (Fair Value Gaps) ──
+        try:
+            if FVG_ENGINE:
+                fvg_result = detect_fvg(ohlcv_bars, price, disp)
+                if fvg_result and fvg_result.get("fvgs"):
+                    lines.append("")
+                    lines.append("📐 <b>FAIR VALUE GAPS</b>")
+                    for fvg in fvg_result["fvgs"][:3]:
+                        top = fvg.get("top", 0)
+                        bot = fvg.get("bottom", 0)
+                        fvg_type = fvg.get("type", "?").upper()
+                        filled = "✅ filled" if fvg.get("filled") else "⏳ open"
+                        lines.append(f"  {fvg_type} FVG: {bot:.2f} — {top:.2f} ({filled})")
+        except: pass
+        
+        # ── 3. Liquidity Zones ──
+        try:
+            if HERMES_LIQUIDITY_ENGINE:
+                liq = detect_liquidity_zones(ohlcv_bars, price)
+                if liq:
+                    eqh = liq.get("equal_highs", [])
+                    eql = liq.get("equal_lows", [])
+                    if eqh or eql:
+                        lines.append("")
+                        lines.append("💧 <b>LIQUIDITY ZONES</b>")
+                        for h in eqh[:2]:
+                            lines.append(f"  🔼 EQL High: {h.get('level', 0):.2f} ({h.get('touches', 0)}x)")
+                        for l in eql[:2]:
+                            lines.append(f"  🔽 EQL Low: {l.get('level', 0):.2f} ({l.get('touches', 0)}x)")
+        except: pass
+        
+        # ── 4. Session Levels ──
+        try:
+            from session_levels import get_session_levels
+            sess = get_session_levels(disp)
+            if sess:
+                asia_h = sess.get("asia_high")
+                asia_l = sess.get("asia_low")
+                london_h = sess.get("london_high")
+                london_l = sess.get("london_low")
+                if asia_h or london_h:
+                    lines.append("")
+                    lines.append("🕐 <b>SESSION LEVELS</b>")
+                    if asia_h:
+                        lines.append(f"  🌏 Asia: {asia_l:.2f} — {asia_h:.2f}")
+                    if london_h:
+                        lines.append(f"  🇬🇧 London: {london_l:.2f} — {london_h:.2f}")
+        except: pass
+        
+        # ── 5. CRT/TBS ──
+        try:
+            if CRT_ENGINE:
+                crt_result = analyze_crt_setup(ohlcv_bars, disp)
+                if crt_result:
+                    crt_block = format_crt_block(crt_result)
+                    if crt_block:
+                        lines.append("")
+                        lines.append("🏯 <b>CRT / TBS SETUP</b>")
+                        lines.append(crt_block.rstrip())
+        except: pass
+        
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("🔍 Gunakan /analyze untuk sinyal entry dari level ini.")
+        lines.append("⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
+        
+        tg_send("\n".join(lines), chat_id)
+
     elif cmd == "/signal":
         """Run MTF engine + signal calculator, show formatted signal."""
         tg_send("<i>🧠 Scanning MTF Matrix + 9 engines...</i>", chat_id)
