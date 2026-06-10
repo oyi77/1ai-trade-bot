@@ -1681,6 +1681,76 @@ def _compute_levels(ohlcv_bars: list, price: float) -> str:
         return ""
 
 
+def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
+    """Enforce realistic SL/TP bounds. Prevents 80-pip SL or 760-pip TP.
+    
+    XAUUSD 3-digit: 1 pip = 0.10. SL must be 20-35 pip. TP = SL * RR (max 1:3).
+    """
+    action = sig.get("action", "")
+    if action not in ("BUY", "SELL"):
+        return sig
+    
+    entry = sig.get("entry", 0)
+    sl = sig.get("sl", 0)
+    if not entry or not sl:
+        return sig
+    
+    # Pip sizes per asset
+    pip_sizes = {"XAUUSD": 0.10, "GOLD": 0.10, "USOIL": 0.01, "BTCUSD": 1.0, "ETHUSD": 0.01}
+    pip_size = pip_sizes.get(display.upper(), 0.01)
+    
+    sl_dist_pts = abs(entry - sl)
+    sl_pips = sl_dist_pts / pip_size
+    
+    MIN_SL = 20   # min 20 pip
+    MAX_SL = 35   # max 35 pip
+    MAX_TP = 100  # max 100 pip TP
+    
+    clamped = False
+    
+    # Clamp SL
+    if sl_pips < MIN_SL:
+        sl_dist_pts = MIN_SL * pip_size
+        clamped = True
+    elif sl_pips > MAX_SL:
+        sl_dist_pts = MAX_SL * pip_size
+        clamped = True
+    
+    if clamped:
+        if action == "BUY":
+            sig["sl"] = round(entry - sl_dist_pts, 2)
+        else:
+            sig["sl"] = round(entry + sl_dist_pts, 2)
+        sl_pips = sl_dist_pts / pip_size
+    
+    # Recalculate TP based on clamped SL and RR
+    rr = sig.get("rr_ratio", 0)
+    if isinstance(rr, str) and rr.startswith("1:"):
+        rr = float(rr[2:])
+    rr = float(rr) if rr else 2.0
+    rr = max(1.5, min(rr, 3.0))  # cap RR 1:1.5 to 1:3
+    
+    tp_dist = sl_pips * rr * pip_size
+    if tp_dist / pip_size > MAX_TP:
+        tp_dist = MAX_TP * pip_size
+    
+    if action == "BUY":
+        sig["tp"] = round(entry + tp_dist, 2)
+        sig["tp1"] = round(entry + tp_dist, 2)
+        sig["tp2"] = round(entry + tp_dist * 1.5, 2)
+    else:
+        sig["tp"] = round(entry - tp_dist, 2)
+        sig["tp1"] = round(entry - tp_dist, 2)
+        sig["tp2"] = round(entry - tp_dist * 1.5, 2)
+    
+    # Remove unrealistic TP3/TP4
+    sig.pop("tp3", None)
+    sig.pop("tp4", None)
+    sig["rr_ratio"] = f"1:{rr:.1f}"
+    
+    return sig
+
+
 def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None, levels=""):
     """Format signal Telegram-style — quality-aware dual format.
     
@@ -1805,18 +1875,19 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
 
     # Pip distances — Exness 3-digit broker
     def _pips(dist, asset=display):
-        if asset in ("XAUUSD","GOLD"):
+        a = asset.upper()
+        if a in ("XAUUSD","GOLD"):
             return f"{dist / 0.10:.0f} pip"     # 3-digit: 1 pip = 0.10
-        elif asset == "USOIL":
+        elif a == "USOIL":
             return f"{dist / 0.01:.0f} pip"     # 3-digit: 1 pip = 0.01
-        elif asset in ("EURUSD","GBPUSD","USDJPY"):
+        elif a in ("EURUSD","GBPUSD","USDJPY"):
             return f"{dist / 0.00010:.1f} pip"  # 5-digit forex
-        elif asset == "BTCUSD":
-            return f"${dist:.0f}"               # BTC: raw dollars
-        elif asset == "ETHUSD":
-            return f"${dist:.0f}"               # ETH: raw dollars
+        elif a == "BTCUSD":
+            return f"{dist:.0f} pip"            # BTC: 1 pip = 1.0
+        elif a == "ETHUSD":
+            return f"{dist:.0f} pip"            # ETH: ~$1/pip
         else:
-            return f"{dist:.0f} pt"
+            return f"{dist:.0f} pip"            # generic
 
     def _tp_pips(tp_val):
         if entry and tp_val:
@@ -2832,6 +2903,8 @@ def handle_command(cmd, text, chat_id, msg):
                     sig["confidence"] = c / 100
                 # Apply Elite custom params
                 sig = apply_elite_params(sig, elite_params, price, disp)
+                # ── SL/TP CLAMPING: enforce 20-35 pip SL, realistic TP ──
+                sig = _clamp_sltp(sig, disp)
                 curr = "Rp" if is_idx else "$"
                 # Quality gate for manual analyze
                 voters = sig.get("voters", 0)
@@ -4829,6 +4902,8 @@ def auto_analyze_loop():
 
                 if LAYERING_ENGINE:
                     sig = enrich_signal_with_layers(sig)
+                # Clamp SL/TP to realistic bounds before pushing
+                sig = _clamp_sltp(sig, disp)
                 post_signal_to_bridge(sig, price, disp)
 
                 # ── Post to channel (with rate limiter) ──
