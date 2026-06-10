@@ -1471,8 +1471,98 @@ def apply_elite_params(sig: dict, params: dict, price: float, display: str = "XA
     return sig
 
 
-def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
-    """Format signal Telegram-style — clean, structured, professional like SIGNAL x GMFX."""
+# ═══════════════════════════════════════════════════════════════
+# SIGNAL QUALITY GATE — Memisahkan Actionable vs Market Pulse
+# ═══════════════════════════════════════════════════════════════
+
+def _sig_quality_pass(sig: dict, quant_result: dict | None = None, display: str = "XAUUSD") -> tuple[bool, str]:
+    """Quality gate. Returns (passed, grade_reason).
+    'A' = full pass | 'B' = pass with warning | 'C' = REJECT -> downgrade to pulse
+    """
+    action = sig.get("action", "HOLD")
+    if action == "HOLD":
+        return False, "Market sideways — no clear direction"
+
+    conf = sig.get("confidence", 0)
+    if isinstance(conf, (int, float)) and conf > 10:
+        conf = conf / 100
+
+    # Gate 1: Confidence
+    if conf < 0.65:
+        return False, f"Confidence {conf:.0%} < 65%"
+
+    # Gate 2: Voters
+    voters = sig.get("voters", sig.get("ensemble", 0))
+    if isinstance(voters, str) and "/" in voters:
+        voters = int(voters.split("/")[0])
+    voters = int(voters) if voters else 0
+    if voters < 2:
+        return False, f"Only {voters} model agreed (min 2)"
+
+    # Gate 3: RR
+    rr = sig.get("rr_ratio", 0)
+    if isinstance(rr, str) and rr.startswith("1:"):
+        rr = float(rr[2:]) if rr[2:] else 0
+    rr = float(rr) if rr else 0
+    if rr > 0 and rr < 1.5:
+        return False, f"RR 1:{rr:.1f} too poor"
+
+    # Gate 4: Quant direction alignment
+    if quant_result:
+        qv = quant_result.get("quant_verdict", "")
+        dominant = quant_result.get("dominant_next", "")
+        if qv == "GREEN" and action == "SELL":
+            return False, f"Quant says BUY but signal SELL — conflict"
+        if qv == "RED" and action == "BUY":
+            return False, f"Quant says SELL but signal BUY — conflict"
+
+    # Gate 5: Session (soft — downgrade to B for Asia on forex/metals)
+    is_crypto = display.upper() in ("BTCUSD", "ETHUSD", "BTC", "ETH")
+    if not is_crypto:
+        try:
+            kz = killzone() if callable(killzone) else session(wib_now().hour)
+        except:
+            kz = session(wib_now().hour) if 'session' in dir() else ""
+        if "ASIA" in str(kz).upper() and "LONDON" not in str(kz).upper():
+            return True, "Asia session — lower volatility"
+
+    return True, "Quality Gate PASS"
+
+
+def _compute_levels(ohlcv_bars: list, price: float) -> str:
+    """Compute SnR + FIBO context line from OHLCV."""
+    if not ohlcv_bars or len(ohlcv_bars) < 10 or not price:
+        return ""
+    try:
+        closes = [float(b.get("c", b.get("close", 0))) for b in ohlcv_bars[-50:]]
+        highs = [float(b.get("h", b.get("high", 0))) for b in ohlcv_bars[-50:]]
+        lows = [float(b.get("l", b.get("low", 0))) for b in ohlcv_bars[-50:]]
+        sh = max(highs[-20:]) if len(highs) >= 20 else max(highs) if highs else 0
+        sl_ = min(lows[-20:]) if len(lows) >= 20 else min(lows) if lows else 0
+        if not sh or not sl_:
+            return ""
+        res = min([h for h in highs if h > price], default=sh)
+        sup = max([l for l in lows if l < price], default=sl_)
+        rng = sh - sl_
+        f50 = sl_ + rng * 0.50 if rng > 0 else 0
+        f618 = sl_ + rng * 0.618 if rng > 0 else 0
+        parts = [f"📍 SnR: Support {sup:.2f} | Resistance {res:.2f}"]
+        if f50:
+            parts.append(f"📐 FIBO 50: {f50:.2f} | 61.8: {f618:.2f}")
+        return "\\n".join(parts)
+    except:
+        return ""
+
+
+def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None, levels=""):
+    """Format signal Telegram-style — quality-aware dual format.
+    
+    quality: tuple (passed: bool, reason: str) from _sig_quality_pass()
+    levels: SnR/FIBO context string from _compute_levels()
+    
+    If quality PASS → "SINYAL SELL/BUY" (actionable)
+    If quality FAIL → "MARKET PULSE" (info only, no execution)
+    """
     action = sig.get("action","HOLD")
     emoji = {"BUY":"🟢","SELL":"🔴","HOLD":"⚪️"}.get(action,"⚪️")
     grade = sig.get("grade","D")
@@ -1492,6 +1582,17 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
     models_display = sig.get("_models","")
     voters = sig.get("voters", sig.get("ensemble", "?"))
     now_wib = wib_now()
+
+    # ── Determine format mode ──
+    q_passed, q_reason = quality if quality else (None, None)
+    if q_passed is None:
+        # Auto-detect from confidence/voters if no quality gate result provided
+        q_passed = conf >= 0.65 and action != "HOLD"
+        q_reason = "Quality Gate PASS" if q_passed else "Low confidence — info only"
+    
+    is_actionable = q_passed and action in ("BUY", "SELL")
+    header_emoji = emoji if is_actionable else "⚪️"
+    header_label = f"SINYAL {action}" if is_actionable else "MARKET PULSE"
 
     # --- MIN SL GUARD: override if AI sets SL too tight (backtest-proven minimum) ---
     if action in ("BUY","SELL") and entry and sl and price:
@@ -1594,7 +1695,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
         return f"Rp{v:,.0f}" if is_idx else f"{currency}{v:.2f}"
 
     lines = [
-        f"{emoji} <b>SINYAL {action} — {display}</b>",
+        f"{header_emoji} <b>{header_label} — {display}</b>",
         f"━━━━━━━━━━━━━━━━━━━━━━",
         f"🕐 {now_wib.strftime('%Y.%m.%d %H:%M')} WIB | Session: {session(h)}",
         f"📍 Entry: {_fmt(entry)}",
@@ -1606,13 +1707,28 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$"):
         if tp_val and tp_val > 0:
             lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
 
+    # SnR + FIBO context (only for actionable signals)
+    if levels and is_actionable:
+        lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append(levels)
+
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
     if ai_line:
         lines.append(ai_line)
     lines.append(f"📐 RR 1:{rr} | Confidence: {conf:.0%}")
     if wr_text:
         lines.append(wr_text)
+
+    # Quality gate indicator
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+    if is_actionable:
+        lines.append(f"✅ {q_reason}")
+    else:
+        lines.append(f"⚠️ <b>MARKET PULSE — Info Only</b>")
+        lines.append(f"💡 {q_reason}")
+        lines.append(f"🔍 Gunakan sebagai konfirmasi SnR/FIBO manual.")
+    lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+
     lines.append(f"⚠️ <i>NFA — Not Financial Advice. Sinyal hasil deteksi otomatis AI untuk edukasi. Keputusan & risiko trading sepenuhnya ada padamu. Selalu pakai manajemen risiko.</i>")
     lines.append(f"")
     lines.append(f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
@@ -2549,8 +2665,8 @@ def handle_command(cmd, text, chat_id, msg):
                         "expires": time.time() + PENDING_SIGNAL_TTL,
                     }
                     _save_pending_signals()
-                    text = fmt_signal(sig, price, dxy, wib_now().hour, disp, curr)
-                    # 🔥 Inject Quant Consensus + Guardrail
+                    # ── Quality Gate + SnR/FIBO context ──
+                    quant_result = None
                     if QUANT_ENGINE and ohlcv_bars:
                         try:
                             qdata = [{"timestamp": b.get("t", b.get("timestamp",0)),
@@ -2562,11 +2678,17 @@ def handle_command(cmd, text, chat_id, msg):
                                      for b in ohlcv_bars]
                             if qdata:
                                 quant_result = analyze_quantitative_pattern(qdata, pattern_size=5)
-                                quant_block, guard_warnings = append_quant_consensus_ui(sig, quant_result, disp)
-                                text += quant_block
-                                for w in guard_warnings:
-                                    text += f"\n{w}"
                         except: pass
+                    quality = _sig_quality_pass(sig, quant_result, disp)
+                    levels = _compute_levels(ohlcv_bars, price) if ohlcv_bars else ""
+                    text = fmt_signal(sig, price, dxy, wib_now().hour, disp, curr, quality=quality, levels=levels)
+                    # 🔥 Inject Quant Consensus + Guardrail (after main signal)
+                    if quant_result:
+                        quant_block, guard_warnings = append_quant_consensus_ui(sig, quant_result, disp)
+                        if quant_block:
+                            text += quant_block
+                            for w in guard_warnings:
+                                text += f"\n{w}"
                     # 🏯 CRT/TBS Layer
                     if CRT_ENGINE and ohlcv_bars:
                         try:
