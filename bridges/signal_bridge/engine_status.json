@@ -1,19 +1,19 @@
 {
-  "symbol": "USOIL",
-  "price": 88.05,
-  "timestamp": "2026-06-10T14:00:49.945324",
+  "symbol": "XAUUSD",
+  "price": 4202.6,
+  "timestamp": "2026-06-10T14:12:18.640747",
   "timeframes": {
     "D1": {
       "verdict": "SELL",
-      "consensus_pct": 0.6666666666666666,
+      "consensus_pct": 0.75,
       "buy_count": 1,
-      "sell_count": 2,
-      "total": 3,
+      "sell_count": 3,
+      "total": 4,
       "engines": {
         "quant": {
-          "direction": "BUY",
-          "confidence": 0.3571,
-          "details": "G:36% R:36%"
+          "direction": "SELL",
+          "confidence": 0.5128,
+          "details": "G:38% R:51%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -31,9 +31,9 @@
           "details": "Invalid Asian range"
         },
         "smc": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no setup"
+          "direction": "SELL",
+          "confidence": 0.75,
+          "details": "Grade=KUAT \ud83d\udfe2 score=15"
         },
         "trend": {
           "direction": "HOLD",
@@ -41,37 +41,37 @@
           "details": "no break"
         },
         "ultimate": {
-          "direction": "SELL",
-          "confidence": 0.25,
-          "details": "Grade:CUKUP \ud83d\udfe1 score=6/24"
+          "direction": "BUY",
+          "confidence": 0.20833333333333334,
+          "details": "Grade:LEMAH \u26aa score=5/24"
         },
         "tv": {
           "direction": "SELL",
-          "confidence": 0.66,
-          "details": "RSI 33.0 (bullish bias) | MACD bearish (-) | ADX 28 strong downtrend | BB mid range (22%) | TV-score:17"
+          "confidence": 0.4,
+          "details": "RSI oversold | MACD bearish (-) | ADX 48 strong downtrend | BB lower band bounce (oversold) | TV-score:30"
         }
       },
       "weight": 0.35,
       "macro": {
         "trend": "BEARISH",
-        "strength": 0.67,
-        "ema200_dist": 13.04,
-        "rsi": 33.0,
-        "atr_pct": 2.43,
+        "strength": 1.0,
+        "ema200_dist": -7.07,
+        "rsi": 26.7,
+        "atr_pct": 1.11,
         "sma_cross": "BEARISH"
       }
     },
     "H4": {
       "verdict": "SELL",
-      "consensus_pct": 0.6666666666666666,
-      "buy_count": 0,
-      "sell_count": 2,
-      "total": 3,
+      "consensus_pct": 0.8333333333333334,
+      "buy_count": 1,
+      "sell_count": 5,
+      "total": 6,
       "engines": {
         "quant": {
           "direction": "SELL",
-          "confidence": 0.4628,
-          "details": "G:40% R:46%"
+          "confidence": 0.5119,
+          "details": "G:37% R:51%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -79,57 +79,57 @@
           "details": "no gap"
         },
         "hermes": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no sweep"
+          "direction": "BUY",
+          "confidence": 0.902,
+          "details": "Grade:A RR=1:35.3"
         },
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Range too small (13 < 20.0 pips)"
+          "details": "Range too large (513 > 100.0 pips)"
         },
         "smc": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no setup"
+          "direction": "SELL",
+          "confidence": 0.75,
+          "details": "Grade=KUAT \ud83d\udfe2 score=14"
         },
         "trend": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no break"
+          "direction": "SELL",
+          "confidence": 0.5,
+          "details": "Grade=BAGUS \ud83d\udd35 score=7"
         },
         "ultimate": {
           "direction": "SELL",
-          "confidence": 0.375,
-          "details": "Grade:CUKUP \ud83d\udfe1 score=9/24"
+          "confidence": 0.4166666666666667,
+          "details": "Grade:CUKUP \ud83d\udfe1 score=10/24"
         },
         "tv": {
-          "direction": "HOLD",
-          "confidence": 0.57,
-          "details": "RSI 64.1 (bearish bias) | MACD bullish (+) | ADX 36 strong uptrend | BB squeeze (3.1%) | TV-score:43"
+          "direction": "SELL",
+          "confidence": 0.7,
+          "details": "RSI 34.1 (bullish bias) | MACD bearish (-) | ADX 34 strong downtrend | BB squeeze (5.0%) | TV-score:15"
         }
       },
       "weight": 0.25,
       "macro": {
         "trend": "BEARISH",
-        "strength": 0.83,
-        "ema200_dist": -4.4,
-        "rsi": 64.1,
-        "atr_pct": 0.4,
+        "strength": 1.0,
+        "ema200_dist": -4.44,
+        "rsi": 34.1,
+        "atr_pct": 0.26,
         "sma_cross": "BEARISH"
       }
     },
     "H1": {
       "verdict": "SELL",
-      "consensus_pct": 0.6666666666666666,
-      "buy_count": 0,
-      "sell_count": 2,
-      "total": 3,
+      "consensus_pct": 0.8333333333333334,
+      "buy_count": 1,
+      "sell_count": 5,
+      "total": 6,
       "engines": {
         "quant": {
           "direction": "SELL",
-          "confidence": 0.4561,
-          "details": "G:39% R:46%"
+          "confidence": 0.4889,
+          "details": "G:38% R:49%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -137,58 +137,58 @@
           "details": "no gap"
         },
         "hermes": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no sweep"
+          "direction": "BUY",
+          "confidence": 0.902,
+          "details": "Grade:A RR=1:23.2"
         },
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Range too small (13 < 20.0 pips)"
+          "details": "Range too large (513 > 100.0 pips)"
         },
         "smc": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no setup"
+          "direction": "SELL",
+          "confidence": 0.75,
+          "details": "Grade=KUAT \ud83d\udfe2 score=14"
         },
         "trend": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no break"
+          "direction": "SELL",
+          "confidence": 0.5,
+          "details": "Grade=BAGUS \ud83d\udd35 score=7"
         },
         "ultimate": {
           "direction": "SELL",
-          "confidence": 0.375,
-          "details": "Grade:CUKUP \ud83d\udfe1 score=9/24"
+          "confidence": 0.4166666666666667,
+          "details": "Grade:CUKUP \ud83d\udfe1 score=10/24"
         },
         "tv": {
-          "direction": "HOLD",
-          "confidence": 0.57,
-          "details": "RSI 64.1 (bearish bias) | MACD bullish (+) | ADX 36 strong uptrend | BB squeeze (3.1%) | TV-score:43"
+          "direction": "SELL",
+          "confidence": 0.7,
+          "details": "RSI 34.1 (bullish bias) | MACD bearish (-) | ADX 34 strong downtrend | BB squeeze (5.0%) | TV-score:15"
         }
       },
       "weight": 0.2,
       "structure": {
-        "s1": 85.95,
-        "r1": 90.0,
-        "vwap": 88.04,
+        "s1": 4170.0,
+        "r1": 4364.4,
+        "vwap": 4260.4,
         "near_support": false,
         "near_resistance": false,
-        "range_pct": 4.6,
+        "range_pct": 4.63,
         "structure_type": "expanded"
       }
     },
     "M15": {
       "verdict": "SELL",
-      "consensus_pct": 1.0,
-      "buy_count": 0,
-      "sell_count": 4,
-      "total": 4,
+      "consensus_pct": 0.6,
+      "buy_count": 1,
+      "sell_count": 3,
+      "total": 5,
       "engines": {
         "quant": {
           "direction": "SELL",
-          "confidence": 0.4468,
-          "details": "G:30% R:45%"
+          "confidence": 0.5682,
+          "details": "G:34% R:57%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -196,58 +196,58 @@
           "details": "no gap"
         },
         "hermes": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no sweep"
+          "direction": "BUY",
+          "confidence": 0.815,
+          "details": "Grade:A RR=1:303.4"
         },
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Range too small (13 < 20.0 pips)"
+          "details": "Range too large (513 > 100.0 pips)"
         },
         "smc": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no setup"
+          "direction": "SELL",
+          "confidence": 0.55,
+          "details": "Grade=BAGUS \ud83d\udd35 score=11"
         },
         "trend": {
-          "direction": "SELL",
-          "confidence": 0.7,
-          "details": "Grade=KUAT \ud83d\udfe2 score=8"
+          "direction": "HOLD",
+          "confidence": 0,
+          "details": "no break"
         },
         "ultimate": {
           "direction": "SELL",
-          "confidence": 0.2916666666666667,
-          "details": "Grade:CUKUP \ud83d\udfe1 score=7/24"
+          "confidence": 0.3333333333333333,
+          "details": "Grade:CUKUP \ud83d\udfe1 score=8/24"
         },
         "tv": {
-          "direction": "SELL",
-          "confidence": 0.4,
-          "details": "RSI oversold | MACD bearish (-) | ADX 59 strong downtrend | BB lower band bounce (oversold) | TV-score:30"
+          "direction": "HOLD",
+          "confidence": 0.63,
+          "details": "RSI 69.3 (bearish bias) | MACD bullish (+) | ADX 52 strong uptrend | BB squeeze (1.3%) | TV-score:63"
         }
       },
       "weight": 0.12,
       "structure": {
-        "s1": 87.61,
-        "r1": 89.4,
-        "vwap": 88.5,
-        "near_support": true,
-        "near_resistance": false,
-        "range_pct": 2.03,
+        "s1": 4170.0,
+        "r1": 4221.3,
+        "vwap": 4191.44,
+        "near_support": false,
+        "near_resistance": true,
+        "range_pct": 1.22,
         "structure_type": "normal"
       }
     },
     "M5": {
-      "verdict": "BUY",
-      "consensus_pct": 0.6666666666666666,
+      "verdict": "HOLD",
+      "consensus_pct": 0.5,
       "buy_count": 2,
-      "sell_count": 0,
-      "total": 3,
+      "sell_count": 2,
+      "total": 4,
       "engines": {
         "quant": {
-          "direction": "BUY",
-          "confidence": 0.5205,
-          "details": "G:52% R:36%"
+          "direction": "SELL",
+          "confidence": 0.5325,
+          "details": "G:31% R:53%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -255,14 +255,14 @@
           "details": "no gap"
         },
         "hermes": {
-          "direction": "HOLD",
-          "confidence": 0,
-          "details": "no sweep"
+          "direction": "BUY",
+          "confidence": 0.681,
+          "details": "Grade:A RR=1:16.6"
         },
         "crt": {
           "direction": "HOLD",
           "confidence": 0,
-          "details": "Range too small (13 < 20.0 pips)"
+          "details": "Range too large (513 > 100.0 pips)"
         },
         "smc": {
           "direction": "HOLD",
@@ -276,13 +276,13 @@
         },
         "ultimate": {
           "direction": "BUY",
-          "confidence": 0.5,
-          "details": "Grade:BAGUS \ud83d\udd35 score=12/24"
+          "confidence": 0.4166666666666667,
+          "details": "Grade:CUKUP \ud83d\udfe1 score=10/24"
         },
         "tv": {
-          "direction": "HOLD",
-          "confidence": 0.52,
-          "details": "RSI 45.1 (neutral) | MACD bullish (+) | ADX 12 (weak trend) | BB squeeze (0.7%) | TV-score:48"
+          "direction": "SELL",
+          "confidence": 0.46,
+          "details": "RSI 50.0 (neutral) | MACD bearish (-) | ADX 16 (weak trend) | BB squeeze (0.7%) | TV-score:27"
         }
       },
       "weight": 0.08,
@@ -291,20 +291,18 @@
         "sweep_type": "NONE",
         "sniper_entry": "NONE",
         "micro_trend": "NEUTRAL",
-        "momentum": 0.091,
-        "momentum_8": 0.399
+        "momentum": 0.033,
+        "momentum_8": -0.204
       }
     }
   },
   "hierarchical": {
     "verdict": "SELL",
-    "consensus_score": 0.9583,
-    "weighted_buy": 0.0417,
-    "weighted_sell": 0.9583,
+    "consensus_score": 0.92,
+    "weighted_buy": 0.0,
+    "weighted_sell": 0.92,
     "mtf_alignment": "ALIGNED",
-    "counter_trend_flags": [
-      "M5 BUY counter-trend vs D1/H4 BEARISH"
-    ],
+    "counter_trend_flags": [],
     "macro_trend": "BEARISH"
   }
 }

@@ -132,8 +132,11 @@ class StockityBot(BaseBot):
             "scan": self._cmd_scan,
             "stats": self._cmd_stats,
             "cookies": self._cmd_cookies,
+            "cookies": self._cmd_cookies,
         }
-
+        # Account commands (deposit, balance)
+        from tradebot.bots.stockity.account_cmds import register_account_commands
+        register_account_commands(self, self._command_handlers)
     async def start(self) -> None:
         await super().start()
         self._schedule_background(self._proactive_cycle())
@@ -392,6 +395,9 @@ class StockityBot(BaseBot):
         app.add_handler(CommandHandler("stats", self._ptb_cmd_stats))
         app.add_handler(CommandHandler("cookies", self._ptb_cmd_cookies))
 
+        # Account commands
+        from tradebot.bots.stockity.account_cmds import register_account_ptb
+        register_account_ptb(self, app)
         self._app = app
         return app
 
