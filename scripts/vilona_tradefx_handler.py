@@ -1213,6 +1213,8 @@ LAW #2 — REALISTIC: Target 5-15%/bulan, bukan 100%.
 LAW #3 — COMPOUNDING > JACKPOT: $1,000 @ 10%/bln → 12 bln: $3,138 | 5 thn: $300K+
 LAW #4 — DUAL RISK TIER: SKC ≥ 8.7 → 1% risk | SKC 7.0-8.6 → 0.5% risk | SKC < 7.0 → SKIP
 LAW #5 — DON'T CHASE: Entry hanya setelah candle CLOSED dengan konfirmasi.
+LAW #6 — PIP CALCULATION: XAUUSD broker 3-digit → 1 pip = 0.10. USOIL 3-digit → 1 pip = 0.01. BTCUSD → 1 pip = 1.0. Forex → 1 pip = 0.00010 (5-digit) / 0.01 (JPY). entry/sl/tp = HARGA ABSOLUTE. sl_pips/tp_pips = JARAK dalam pip.
+LAW #7 — SL/TP RULES: SL 20-35 pip dari entry. TP = SL × RR (min 1:2). UNTUK XAUUSD 3-DIGIT: SL 20 pip = 2.0 poin harga. SL 30 pip = 3.0 poin harga. JANGAN kasih SL 30 poin (= 300 pip!). Contoh SELL entry=4334: SL=4337.00 (+3.0 poin = 30 pip), TP=4328.00 (−6.0 poin = 60 pip) untuk RR 1:2.
 
 ═══════════════════════════════════════════
 🔬 SKC SCORING ENGINE (Max 10 pts)
@@ -1458,7 +1460,9 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         f"🔴 Circuit Breaker: Loss hari ini: {loss_count}/3\n"
         f"{learning_context}{news_protocol}\n{data_section}\n\n"
         f"Analisis {display} dengan SMC + SnR. Entry/SL/TP wajib dari data.\n"
-        f"R:R minimum 1:2. {'⚠️ FRIDAY: SL +10-15 pips extra.' if wib_now().weekday()==4 else ''}"
+        f"R:R minimum 1:2. {'⚠️ FRIDAY: SL +10-15 pips extra.' if wib_now().weekday()==4 else ''}\n"
+        f"⚡ XAUUSD 3-DIGIT: 1 pip = 0.10. SL 30 pip = 3.0 poin harga. TP 60 pip = 6.0 poin.\n"
+        f"Contoh SELL 4334 → SL=4337.00 TP=4328.00 (60 pip = RR 1:2)"
     )
 
     # ── TIER-BASED MODEL SELECTION ──
