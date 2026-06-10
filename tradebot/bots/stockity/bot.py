@@ -29,6 +29,12 @@ from tradebot.bots.stockity.affiliate import (
 from tradebot.brokers.stockity.broker import StockityBroker
 from tradebot.brokers.stockity.rest import StockityREST
 from tradebot.config import settings
+from tradebot.services.plans import (
+    Plan, PLAN_DETAILS, PLAN_UPGRADE_PATH, get_user_plan,
+    set_user_plan, create_invoice, confirm_payment, can_access_category,
+    can_auto_trade, add_donation, get_user_donations, get_total_donations,
+    get_plan_stats, get_total_revenue,
+)
 from tradebot.signals.subscriptions import (
     CATEGORY_DESCRIPTIONS,
     CATEGORY_EMOJI,
@@ -678,6 +684,135 @@ class StockityBot(BaseBot):
         else:
             unsubscribe_user(user_id, None)
             return "✅ Unsubscribed from *all* signals"
+
+    # ── Plan & Subscription ────────────────────────────────────────────
+
+    async def _cmd_plans(self, args: list[str], chat_id: str | None = None) -> str:
+        user_id = str(chat_id) if chat_id else "unknown"
+        current = get_user_plan(user_id)
+        stats = get_plan_stats()
+
+        lines = ["💳 *Trading Plans*\n"]
+        for plan in Plan:
+            det = PLAN_DETAILS[plan]
+            marker = "✅ *CURRENT*" if plan == current else ""
+            upgrade_hint = ""
+            if plan == current and PLAN_UPGRADE_PATH[plan]:
+                next_plan = PLAN_UPGRADE_PATH[plan]
+                next_price = PLAN_DETAILS[next_plan]["price_display"]
+                upgrade_hint = f" → `/upgrade {next_plan.value}`"
+            elif plan != current and plan != Plan.FREE:
+                upgrade_hint = f" — `/upgrade {plan.value}`"
+
+            lines.append(
+                f"{det['emoji']} *{det['name']}* — {det['price_display']} {marker}\n"
+                f"  _{det['description']}_{upgrade_hint}"
+            )
+
+        lines.append(f"\n📊 *Stats:* {sum(stats.values())} users | "
+                      f"Revenue: Rp {get_total_revenue():,}")
+
+        # Show donations if any
+        total_donated = get_total_donations(user_id)
+        if total_donated > 0:
+            lines.append(f"\n❤️ Your donations: Rp {total_donated:,} — terima kasih!")
+        lines.append("To donate: `/donate <amount>`")
+        return "\n".join(lines)
+
+    async def _cmd_upgrade(self, args: list[str], chat_id: str | None = None) -> str:
+        user_id = str(chat_id) if chat_id else "unknown"
+        if not args:
+            return await self._cmd_plans([], chat_id)
+
+        plan_name = args[0].lower()
+        try:
+            target = Plan(plan_name)
+        except ValueError:
+            valid = ", ".join(p.value for p in Plan if p != Plan.FREE)
+            return f"❌ Unknown plan: `{plan_name}`\nAvailable: {valid}"
+
+        if target == Plan.FREE:
+            return "ℹ️ Free plan doesn't require payment. Use `/plans` to see options."
+
+        current = get_user_plan(user_id)
+        if current == target:
+            return f"ℹ️ You're already on the *{target.value}* plan."
+
+        det = PLAN_DETAILS[target]
+        amount = det["price_idr"]
+        ref = create_invoice(user_id, target, amount)
+
+        # Generate payment link via Tripay if configured
+        payment_url = ""
+        payment_methods = "QRIS / Bank Transfer"
+        try:
+            from tradebot.services.payment import PaymentService
+            svc = PaymentService()
+            result = await svc.create_payment(
+                merchant_ref=ref,
+                amount=amount,
+                customer_name=f"User {user_id}",
+                customer_email=f"{user_id}@telegram.user",
+                customer_phone="",
+                items=[{"name": f"TradeBot {target.value.title()} Plan", "price": amount, "quantity": 1}],
+            )
+            if result and result.get("pay_url"):
+                payment_url = result["pay_url"]
+                payment_methods = result.get("payment_methods", payment_methods)
+        except Exception:
+            pass
+
+        return (
+            f"🧾 *Upgrade to {det['name']}*\n\n"
+            f"Plan: *{target.value.upper()}*\n"
+            f"Price: *Rp {amount:,}*\n"
+            f"Duration: 30 days\n"
+            f"Ref: `{ref}`\n\n"
+            f"💳 *Payment:*\n"
+            f"{payment_methods}\n"
+            + (f"\n[Pay Now]({payment_url})\n" if payment_url else "") +
+            f"\nAfter payment, confirm with:\n"
+            f"`/confirm {ref}`"
+        )
+
+    async def _cmd_donate(self, args: list[str], chat_id: str | None = None) -> str:
+        user_id = str(chat_id) if chat_id else "unknown"
+        if not args:
+            total = get_total_donations(user_id)
+            donations = get_user_donations(user_id)
+            lines = ["❤️ *Donations*\n"]
+            lines.append("Support the bot development!\n")
+            lines.append("Usage: `/donate <amount>`\n")
+            lines.append(f"Minimal: Rp 1.000")
+            lines.append(f"Maksimal: Rp 10.000.000\n")
+            if total > 0:
+                lines.append(f"*Your total:* Rp {total:,}")
+            if donations:
+                lines.append("\n*Recent:*")
+                for d in donations[:5]:
+                    lines.append(f"  • Rp {d['amount_idr']:,} — {d.get('message','')[:30]}")
+            return "\n".join(lines)
+
+        try:
+            amount = int(args[0])
+        except ValueError:
+            return "❌ Invalid amount. Use: `/donate 50000`"
+
+        if amount < 1000:
+            return "❌ Minimum donation: Rp 1.000"
+        if amount > 10_000_000:
+            return "❌ Maximum donation: Rp 10.000.000"
+
+        message = " ".join(args[1:]) if len(args) > 1 else ""
+        donation_id = add_donation(user_id, amount, message)
+
+        return (
+            f"❤️ *Thank You!*\n\n"
+            f"Donation: *Rp {amount:,}*\n"
+            f"ID: `DON-{donation_id}`\n"
+            + (f"Message: _{message}_\n" if message else "") +
+            f"\nYour support keeps the bot running! 🚀"
+        )
 
     # ── PTB wrappers ────────────────────────────────────────────────
 

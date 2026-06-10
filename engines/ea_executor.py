@@ -69,6 +69,34 @@ logger = logging.getLogger("ea-executor")
 
 def wib_now(): return datetime.now(WIB)
 
+# ── Per-symbol pip helpers (consistent with trade_tracker.py) ──
+
+def _pip_size(symbol: str) -> float:
+    """Pip size for the symbol."""
+    s = symbol.upper()
+    if s in ("XAUUSD", "GOLD"):   return 0.1
+    if s in ("BTCUSD", "BTC"):    return 1.0
+    if s in ("ETHUSD", "ETH"):    return 0.01
+    if s.endswith("JPY"):         return 0.01
+    if s in ("USOIL", "OIL", "CL"): return 0.01
+    return 0.0001
+
+def _pip_value(symbol: str) -> float:
+    """Pip value in USD for 1 standard lot."""
+    s = symbol.upper()
+    if s in ("XAUUSD", "GOLD"): return 1.0
+    if s in ("BTCUSD", "BTC"):  return 1.0
+    if s in ("ETHUSD", "ETH"):  return 0.01
+    if s.endswith("JPY"):       return 9.0
+    return 10.0
+
+def _pnl_from_pips(entry: float, close: float, symbol: str, is_loss: bool) -> float:
+    """Compute PnL in USD from entry/close prices (1 standard lot)."""
+    ps = _pip_size(symbol)
+    pips = abs(entry - close) / ps if ps > 0 else 0.0
+    value = pips * _pip_value(symbol)
+    return -value if is_loss else value
+
 def load_state():
     try:
         if STATE_FILE.exists():
@@ -133,13 +161,8 @@ def _send_trade_result(pos: dict, reason: str):
     pnl_sign = "+" if pnl >= 0 else ""
     dir_emoji = "🟢" if action == "BUY" else "🔴"
 
-    # Calculate pips (XAUUSD: 0.10/pip, BTC: 1/pt, others: pip)
-    if "XAU" in symbol.upper():
-        pips = abs(entry - close_price) * 10
-    elif "BTC" in symbol.upper():
-        pips = abs(entry - close_price)
-    else:
-        pips = abs(entry - close_price) * 10000
+    # Calculate pips using per-symbol pip size
+    pips = abs(entry - close_price) / _pip_size(symbol) if _pip_size(symbol) > 0 else 0.0
     
     pips_text = f"{pips:.1f} pip" if pips < 100 else f"{pips:.0f} pip"
     msg = (
@@ -196,9 +219,8 @@ def main():
                     result = check_position(pos, price)
                     if result:
                         reason, close_price = result
-                        pnl = abs(pos["entry"] - close_price)
-                        if reason == "SL_HIT":
-                            pnl = -pnl
+                        is_loss = reason == "SL_HIT"
+                        pnl = _pnl_from_pips(pos["entry"], close_price, pos.get("symbol", "XAUUSD"), is_loss)
                         pos["status"] = reason
                         pos["close_price"] = close_price
                         pos["close_time"] = wib_now().isoformat()
