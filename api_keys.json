@@ -223,7 +223,20 @@
       "tier": "elite",
       "label": "Master Key - Bro",
       "created": "2026-06-08T10:15:04.873031",
-      "rate_limit": 0
+      "rate_limit": 0,
+      "features": [
+        "layering",
+        "multi_pair",
+        "ai_consensus",
+        "killzone_filter",
+        "priority_signal",
+        "news_filter",
+        "trailing_stop",
+        "custom_risk",
+        "auto_trade",
+        "signal_poll",
+        "priority"
+      ]
     }
   },
   "default_tier": "starter",
