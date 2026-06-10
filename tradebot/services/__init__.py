@@ -8,7 +8,7 @@ from .watchdog import WatchdogService
 
 __all__ = [
     "TelegramService",
-    "BridgeServer",
+    "PaymentService",
     "HealthService",
     "HealthReport",
     "HealthCheckResult",

@@ -135,7 +135,7 @@ from tradebot.models import (
 from tradebot.pipeline import SignalPipeline, TradeExecutor
 
 # ── Services ──
-from tradebot.services import BridgeServer, TelegramService
+from tradebot.services import TelegramService
 
 # ── Storage ──
 from tradebot.storage import AbstractStorage, CognitiveDB, SQLiteStorage, TieredCache
