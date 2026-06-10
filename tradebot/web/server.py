@@ -46,14 +46,23 @@ templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 
 def _admin_gate(request: Request) -> None:
-    """Check admin access from query param or header."""
+    """Check admin access from query param, header, or localhost."""
     admin_ids = [uid.strip() for uid in (settings.ADMIN_USER_IDS or "").split(",") if uid.strip()]
     if "ALL" in [u.upper() for u in admin_ids]:
         return  # Anyone is admin
-    # In production, use session/auth. For now, allow localhost.
+
+    # Check localhost first (development)
     host = request.client.host if request.client else ""
-    if host not in ("127.0.0.1", "localhost", "::1"):
-        raise HTTPException(403, "Admin access required. Use from localhost or configure ADMIN_USER_IDS.")
+    if host in ("127.0.0.1", "localhost", "::1"):
+        return
+
+    # Check query param or header (production with explicit admin ID)
+    admin_id = request.query_params.get("admin_id") or request.headers.get("X-Admin-ID")
+    if admin_id and _is_admin(admin_id):
+        return
+
+    # Deny all others
+    raise HTTPException(403, "Admin access required. Use from localhost or pass ?admin_id=YOUR_ID or X-Admin-ID header.")
 
 
 def _is_admin(user_id: str) -> bool:
