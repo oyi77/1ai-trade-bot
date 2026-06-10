@@ -221,16 +221,15 @@ def get_daily_mapping() -> dict:
 
 
 def get_today_trades() -> list:
-    """Get today's trades for stats. Filters by WIB date prefix YYYYMMDD."""
-    today = datetime.now(WIB).strftime("%Y%m%d")
+    """Get today's trades for stats. Filters by WIB date from open_time."""
+    today_iso = datetime.now(WIB).strftime("%Y-%m-%d")
     try:
         if TRADE_HISTORY.exists():
             all_data = json.loads(TRADE_HISTORY.read_text())
             trades = all_data.get("trades", [])
-            today8 = today
             return [
                 t for t in trades
-                if str(t.get("date", "") or t.get("timestamp", ""))[:8] == today8
+                if str(t.get("open_time", t.get("close_time", "")))[:10] == today_iso
             ]
     except Exception as exc:
         LOG.warning("get_today_trades failed: %s", exc)
