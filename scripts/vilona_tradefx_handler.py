@@ -1858,29 +1858,39 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             zone_hi = entry + zone_half
 
     # Generate TP levels if only single TP provided
+    # Dynamic: 1-4 levels based on total TP distance
+    # XAUUSD: <45pip→1 level, 45-70→2, 70-100→3, >100→4
     if not tp1 and tp > 0 and entry > 0:
         tp_dist = abs(tp - entry)
-        if action == "BUY":
-            tp1 = round(entry + tp_dist * 0.25, 2)
-            tp2 = round(entry + tp_dist * 0.50, 2)
-            tp3 = round(entry + tp_dist * 0.75, 2)
-            tp4 = tp
+        # Asset-aware min TP1 and level thresholds (in points)
+        if display in ("XAUUSD", "GOLD"):
+            min_tp1 = 3.0    # 30 pip
+            lvl2_min = 4.5   # 45 pip total for 2 levels
+            lvl3_min = 7.0   # 70 pip total for 3 levels
+            lvl4_min = 10.0  # 100 pip total for 4 levels
+        elif display == "USOIL":
+            min_tp1 = 0.30; lvl2_min = 0.45; lvl3_min = 0.70; lvl4_min = 1.0
+        elif display in ("BTCUSD", "ETHUSD"):
+            min_tp1 = 600; lvl2_min = 900; lvl3_min = 1400; lvl4_min = 2000
         else:
-            tp1 = round(entry - tp_dist * 0.25, 2)
-            tp2 = round(entry - tp_dist * 0.50, 2)
-            tp3 = round(entry - tp_dist * 0.75, 2)
-            tp4 = tp
+            # Forex 5-digit
+            min_tp1 = 0.0015; lvl2_min = 0.0030; lvl3_min = 0.0050; lvl4_min = 0.0080
 
-    # ── MIN TP1 GUARD: XAUUSD 30 pip minimum ──
-    if action in ("BUY","SELL") and entry > 0 and tp1 > 0:
-        tp1_dist = abs(tp1 - entry)
-        min_tp_map = {"XAUUSD": 3.0, "GOLD": 3.0, "USOIL": 0.30, "BTCUSD": 600, "ETHUSD": 50}
-        min_tp = min_tp_map.get(display, 0)
-        if min_tp > 0 and tp1_dist < min_tp:
-            if action == "BUY":
-                tp1 = round(entry + min_tp, 2)
-            else:
-                tp1 = round(entry - min_tp, 2)
+        levels = 1
+        if tp_dist >= lvl4_min: levels = 4
+        elif tp_dist >= lvl3_min: levels = 3
+        elif tp_dist >= lvl2_min: levels = 2
+
+        if action == "BUY":
+            tp1 = round(entry + min_tp1, 2)
+            if levels >= 2: tp2 = round(entry + tp_dist * 0.50, 2)
+            if levels >= 3: tp3 = round(entry + tp_dist * 0.75, 2)
+            if levels >= 4: tp4 = tp
+        else:
+            tp1 = round(entry - min_tp1, 2)
+            if levels >= 2: tp2 = round(entry - tp_dist * 0.50, 2)
+            if levels >= 3: tp3 = round(entry - tp_dist * 0.75, 2)
+            if levels >= 4: tp4 = tp
 
     # Winrate stats
     wr_text = ""
