@@ -218,8 +218,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(page_content.encode())
             except Exception:
-                # Fallback: serve landing_page.html directly
-                html_path = os.path.join(PROJECT_DIR, "scripts", "landing_page.html")
+                # Fallback: serve Cornix dashboard directly
+                html_path = os.path.join(PROJECT_DIR, "tradebot", "web", "templates", "public_dashboard_id.html")
                 try:
                     with open(html_path, "r") as f:
                         page_content = f.read()
