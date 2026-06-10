@@ -65,21 +65,22 @@ class StockityBroker:
         await broker.close()
     """
 
-    def __init__(self) -> None:
+    def __init__(self, deal_type: str = "demo") -> None:
         self._cookie: str = settings.STOCKITY_FULL_COOKIE
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._ref_counter: int = 0
         self._listener_task: asyncio.Task[None] | None = None
         self._connected: bool = False
+        self._deal_type: str = deal_type  # "demo" or "real"
         # Balance tracking (native currency, no conversion)
-        self._balance_raw: int = 0  # Raw server units
-        self._balance_currency: str = ""  # Detected dynamically
+        self._balance_raw: int = 0
+        self._balance_currency: str = ""
         self._balance_version: int = 0
         self._account_type: str = ""
         # Position tracking
-        self._open_positions: dict[str, dict] = {}  # uuid → position
-        self._closed_positions: list[dict] = []  # completed trades
-        self._total_pnl: int = 0  # Running P&L
+        self._open_positions: dict[str, dict] = {}
+        self._closed_positions: list[dict] = []
+        self._total_pnl: int = 0
         self._total_wins: int = 0
         self._total_losses: int = 0
         # Subscriptions
@@ -378,29 +379,36 @@ class StockityBroker:
         if not self._connected:
             await self.connect()
 
-        # RULE: Binary options MUST expire at :00 or :30 minute marks
-        # (top of hour or half past)
         now = datetime.now(UTC)
         now_ms = int(now.timestamp() * 1000)
 
-        # Find next valid boundary (:00 or :30)
-        minute = now.minute
-        if minute < 30:
-            # Next boundary is :30 of current hour
-            expire_dt = now.replace(minute=30, second=0, microsecond=0)
+        # Calculate expire_at based on option_type
+        if option_type == "blitz":
+            expire_val = now_ms + 5000  # 5 seconds in ms
+        elif option_type == "binary":
+            # Next :00 or :30 boundary, expire in seconds
+            minute = now.minute
+            if minute < 30:
+                expire_dt = now.replace(minute=30, second=0, microsecond=0)
+            else:
+                expire_dt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            expire_val = int(expire_dt.timestamp())
         else:
-            # Next boundary is :00 of next hour
-            expire_dt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-
-        expire_ts = int(expire_dt.timestamp())  # Unix timestamp in SECONDS
+            # Default to next boundary
+            minute = now.minute
+            if minute < 30:
+                expire_dt = now.replace(minute=30, second=0, microsecond=0)
+            else:
+                expire_dt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            expire_val = int(expire_dt.timestamp())
 
         payload = {
             "ric": _symbol_to_ric(symbol),
-            "amount": int(amount * 100000000),  # HAR shows 7400000000 for $74
+            "amount": int(amount * 100000000),
             "created_at": now_ms,
-            "deal_type": "demo",
-            "expire_at": expire_ts,  # Unix timestamp (seconds)
-            "option_type": "binary",
+            "deal_type": self._deal_type,
+            "expire_at": expire_val,
+            "option_type": option_type,
             "trend": direction.lower(),
             "tournament_id": None,
             "is_state": False,
@@ -434,6 +442,33 @@ class StockityBroker:
                 error=str(e),
             )
 
+
+    @property
+    def deal_type(self) -> str:
+        """Account type: demo or real."""
+        return self._deal_type
+
+    @property
+    def trade_history(self) -> list[dict]:
+        """Complete trade history (closed positions)."""
+        return self._closed_positions
+
+    def get_history(
+        self,
+        option_type: str | None = None,
+        trend: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict]:
+        """Filter trade history by option_type, trend, or status."""
+        results = self._closed_positions
+        if option_type:
+            results = [t for t in results if t.get("option_type") == option_type]
+        if trend:
+            results = [t for t in results if t.get("trend") == trend]
+        if status:
+            results = [t for t in results if t.get("status") == status]
+        return results[-limit:]
     async def close(self) -> None:
         """Close WebSocket connection."""
         if self._listener_task is not None:
