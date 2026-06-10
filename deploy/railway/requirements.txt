@@ -1,0 +1,9 @@
+# Vilona Autonomous Worker — minimal deps for 4-pillar protocol
+# Core
+yfinance>=0.2.0
+
+# Webhook push (stdlib urllib — no extra deps needed)
+
+# Data (stdlib json, sqlite3, pathlib — no extra deps needed)
+
+# Resilience (stdlib time, random, functools — no extra deps needed)

@@ -1,0 +1,6 @@
+# Vilona Worker — Railway deployment
+# ───────────────────────────────────────
+# Railway auto-detects this file.
+# Runs the 4-Pillar Autonomous Production Worker.
+
+worker: python3 -m tradebot.engines.vilona_worker

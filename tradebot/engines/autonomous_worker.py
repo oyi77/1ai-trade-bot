@@ -92,7 +92,11 @@ def _get_phantomfx():
 
 WIB = timezone(timedelta(hours=7))
 HEARTBEAT_PATH = PROJECT_DIR / "data" / "vilona_tradefx" / "heartbeat.json"
-HEARTBEAT_INTERVAL = 15  # seconds between heartbeats
+HEARTBEAT_INTERVAL = 60  # seconds between heartbeats (Railway-ready: 1/min)
+WEBHOOK_INTERVAL = 120   # seconds between full dashboard webhook pushes
+
+# Railway / cloud detection
+ON_RAILWAY = bool(os.environ.get("RAILWAY_SERVICE_ID", ""))
 
 
 class AutonomousWorker:
@@ -149,6 +153,9 @@ class AutonomousWorker:
             tmp.rename(HEARTBEAT_PATH)
         except Exception:
             pass
+
+        # Fire-and-forget webhook heartbeat
+        self.sync.push_heartbeat()
 
     # ── Price Fetch (resilient) ──
 
@@ -316,6 +323,11 @@ class AutonomousWorker:
                 # For autonomous mode: just log we're healthy
                 self.sync.push_health()
                 _get_resilience().REPORT.record_success()
+
+                # Periodic full dashboard webhook push
+                if cycle_start - getattr(self, '_last_webhook', 0) > WEBHOOK_INTERVAL:
+                    self.sync.push_webhook()
+                    self._last_webhook = cycle_start
 
                 # ── 9. Heartbeat ──
                 self._pulse({"state": "healthy", "pair": disp, "price": price})
