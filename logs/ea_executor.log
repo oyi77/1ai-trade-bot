@@ -15488,3 +15488,7 @@
 2026-06-10 12:24:50,067 [INFO] Signal file: /home/openclaw/projects/1ai-trade-bot/data/vilona_tradefx/ea_signal.json
 2026-06-10 12:24:50,067 [INFO] ==================================================
 2026-06-10 12:24:50,067 [INFO] State: 0 open, 18 processed, PnL=$58623.40
+2026-06-10 14:15:10,176 [INFO] 📝 PAPER: SELL USOIL @ $88.17 | SL=$88.32 TP=$87.94 | conf=70% RR=1:0.0 | vtfx
+2026-06-10 14:15:10,176 [INFO] ✅ POSITION OPEN: SELL @ $88.17
+2026-06-10 14:15:10,176 [INFO] 💼 SELL @ $88.17 | Current=$4273.60 | Est.PnL=$-4185.43 | SL=$88.32 TP=$87.94
+2026-06-10 14:15:13,919 [INFO] 🔴 CLOSED: SELL | SL_HIT | PnL=$-4187.13 | Entry=$88.17 → Close=$4275.30

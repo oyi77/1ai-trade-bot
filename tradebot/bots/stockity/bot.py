@@ -132,11 +132,9 @@ class StockityBot(BaseBot):
             "scan": self._cmd_scan,
             "stats": self._cmd_stats,
             "cookies": self._cmd_cookies,
-            "cookies": self._cmd_cookies,
+            "balance": self._cmd_balance,
+            "deposit": self._cmd_deposit,
         }
-        # Account commands (deposit, balance)
-        from tradebot.bots.stockity.account_cmds import register_account_commands
-        register_account_commands(self, self._command_handlers)
     async def start(self) -> None:
         await super().start()
         self._schedule_background(self._proactive_cycle())
@@ -395,12 +393,11 @@ class StockityBot(BaseBot):
         app.add_handler(CommandHandler("stats", self._ptb_cmd_stats))
         app.add_handler(CommandHandler("cookies", self._ptb_cmd_cookies))
 
-        # Account commands
-        from tradebot.bots.stockity.account_cmds import register_account_ptb
-        register_account_ptb(self, app)
+        app.add_handler(CommandHandler("balance", self._ptb_cmd_balance))
+        app.add_handler(CommandHandler("deposit", self._ptb_cmd_deposit))
+
         self._app = app
         return app
-
     # ── PTB command wrappers ────────────────────────────────────────────
 
     async def _ptb_cmd_start(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -434,6 +431,76 @@ class StockityBot(BaseBot):
     async def _ptb_cmd_cookies(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         LOG.info("📨 /cookies from chat_id=%s", upd.effective_chat.id)
         await upd.message.reply_markdown(await self._cmd_cookies(ctx.args or []))
+
+
+
+        """Show account balance, positions, winrate."""
+        broker = StockityBroker()
+        try:
+            await broker.connect()
+            await asyncio.sleep(3)
+            s = broker.stats
+            lines = [
+                "💰 *Stockity Account*",
+                f"Balance: `{s['balance']:,}` {s['currency']} (~${s['balance_usd']:.2f})",
+                f"Open: {s['open_positions']} | Closed: {s['total_trades']}",
+                f"Wins: {s['wins']} | Losses: {s['losses']} | WR: {s['winrate']:.1f}%",
+                f"P&L: `{s['total_pnl_raw']:,}` {s['currency']}",
+            ]
+            if broker.open_positions:
+                lines.append("\n*Open Positions:*")
+                for p in broker.open_positions[:5]:
+                    lines.append(
+                        f"  {p.get('trend','?').upper():4s} {p.get('option_type','?'):6s} "
+                        f"@ {p.get('open_rate',0)} | {p.get('close_time','?')[:16]}"
+                    )
+            return "\n".join(lines)
+        except Exception as e:
+            return f"❌ Balance: {e}"
+        finally:
+            await broker.close()
+
+    async def _cmd_deposit(self, args: list[str], chat_id: str | None = None) -> str:
+        """Generate QRIS deposit payment link."""
+        if not args:
+            return (
+                "💳 *Deposit Stockity*\n\n"
+                "`/deposit <amount>`\n"
+                "Contoh: `/deposit 150000`\n\n"
+                "Min: Rp 50,000 | via QRIS."
+            )
+        try:
+            amount = int(args[0])
+        except ValueError:
+            return f"❌ Invalid: `{args[0]}`"
+        if amount < 50000:
+            return f"❌ Min Rp 50,000"
+
+        api = StockityREST()
+        try:
+            r = await api.deposit(amount=amount, handler="qris")
+            if r and r.get("success"):
+                url = r.get("redirect_url", "")
+                return (
+                    f"💳 *Deposit Rp {amount:,}*\n\n"
+                    f"[🔗 Bayar via QRIS]({url})\n\n"
+                    f"`{url}`"
+                )
+            return "❌ Deposit gagal"
+        finally:
+            await api.close()
+
+    # ── PTB wrappers: balance + deposit ─────────────────────────────────
+
+    async def _ptb_cmd_balance(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        msg = await upd.message.reply_text("⏳ Checking...")
+        reply = await self._cmd_balance([])
+        await msg.edit_text(reply, parse_mode="Markdown")
+
+    async def _ptb_cmd_deposit(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        msg = await upd.message.reply_text("⏳ Generating QRIS...")
+        reply = await self._cmd_deposit(ctx.args or [])
+        await msg.edit_text(reply, parse_mode="Markdown")
 
     # ── Run ─────────────────────────────────────────────────────────────
 
