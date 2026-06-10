@@ -18,6 +18,7 @@ class BrokerPlatform(StrEnum):
     STOCKITY = "stockity"
     DERIV = "deriv"
     MT5 = "mt5"
+    CEX = "ccxt"
 
 
 class TradeDirection(StrEnum):
@@ -130,6 +131,9 @@ def get_broker(platform: str | BrokerPlatform) -> BaseBroker:
     elif platform_enum == BrokerPlatform.MT5:
         from tradebot.brokers.mt5.broker import MT5Broker
         return MT5Broker()
+    elif platform_enum == BrokerPlatform.CEX:
+        from tradebot.brokers.ccxt.broker import CCXTBroker
+        return CCXTBroker(exchange="bitget")  # Default to Bitget
     else:
         raise ValueError(f"Unsupported platform: {platform}")
 

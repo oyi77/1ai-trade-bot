@@ -8,6 +8,7 @@ from .base import (
     TradeStatus,
     get_broker,
 )
+from .ccxt.broker import CCXTBroker
 from .mt5.broker import MT5Broker
 
 # Re-export for backwards compatibility
@@ -17,6 +18,7 @@ __all__ = [
     "BaseBroker",
     "Broker",
     "BrokerPlatform",
+    "CCXTBroker",
     "MT5Broker",
     "TradeDirection",
     "TradeResult",
