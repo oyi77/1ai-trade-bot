@@ -283,11 +283,29 @@ class SignalHandler(BaseHTTPRequestHandler):
                     "account_id": account_id,
                 }
                 MASTER_INSTANCES[api_key][account_id] = instance_id
-                # Seed new instance with latest global signal if available
-                if is_new and PENDING:
-                    sig_copy = dict(PENDING[-1])  # copy latest, don't pop
-                    sig_copy["_for_instance"] = instance_id
-                    PENDING_BY_INSTANCE[instance_id].append(sig_copy)
+                # Seed new instance with latest pending signal from multiple sources
+                if is_new:
+                    seed_sig = None
+                    # Priority 1: global PENDING (shared queue)
+                    if PENDING:
+                        seed_sig = PENDING[-1]
+                    # Priority 2: key-level queue
+                    elif api_key in PENDING_BY_KEY and PENDING_BY_KEY[api_key]:
+                        seed_sig = PENDING_BY_KEY[api_key][-1]
+                    # Priority 3: other instance queues under same key
+                    elif api_key in MASTER_INSTANCES:
+                        for other_acct in MASTER_INSTANCES[api_key]:
+                            other_iid = MASTER_INSTANCES[api_key][other_acct]
+                            if other_iid != instance_id and other_iid in PENDING_BY_INSTANCE and PENDING_BY_INSTANCE[other_iid]:
+                                seed_sig = PENDING_BY_INSTANCE[other_iid][-1]
+                                break
+                    # Priority 4: history fallback (latest signal ever seen)
+                    if seed_sig is None and HISTORY:
+                        seed_sig = HISTORY[-1]
+                    if seed_sig is not None:
+                        sig_copy = dict(seed_sig)
+                        sig_copy["_for_instance"] = instance_id
+                        PENDING_BY_INSTANCE[instance_id].append(sig_copy)
                 result = self._poll_signal(api_key, tier, instance_id=instance_id)
             else:
                 # ── Legacy mode (no account_id) ──
