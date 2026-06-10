@@ -1730,6 +1730,10 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
 
     lines.append(f"⚠️ <i>NFA — Not Financial Advice. Sinyal hasil deteksi otomatis AI untuk edukasi. Keputusan & risiko trading sepenuhnya ada padamu. Selalu pakai manajemen risiko.</i>")
+    if is_actionable:
+        pair_hint = display.lower()
+        lines.append(f"")
+        lines.append(f"💡 Cek <b>/levels {pair_hint}</b> untuk SnR + FIBO + SL placement")
     lines.append(f"")
     lines.append(f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
 
@@ -3206,7 +3210,33 @@ def handle_command(cmd, text, chat_id, msg):
 
     # ── NEW: Signal System Commands ──
     elif cmd == "/levels":
-        """Deep SnR Analysis — SMC Order Blocks, FVG, Liquidity Zones, Session Levels."""
+        """Premium: Deep SnR+FIBO + Engine Analysis. Free: upsell gate."""
+        # ── PREMIUM GATE ──
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "👑 <b>FITUR PREMIUM — Khusus Donatur</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "/levels adalah fitur analisa level profesional:\n"
+                "📐 SnR + FIBO Retracement\n"
+                "🏦 SMC Order Blocks\n"
+                "📊 Fair Value Gaps\n"
+                "💧 Liquidity Zones\n"
+                "🕐 Session Levels\n"
+                "\n"
+                "🔒 Fitur ini eksklusif untuk Donatur.\n"
+                "\n"
+                "💚 <b>ISI BAHAN BAKAR AI</b>\n"
+                "Donasi sekali — akses permanen!\n"
+                "👉 /donate — Lihat opsi donasi\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Server AI ini memproses jutaan data\n"
+                "tiap hari. Butuh biaya API & GPU\n"
+                "yang besar. Support kamu sangat\n"
+                "berarti. 🥂",
+                chat_id
+            )
+            return
+        
         sub_norm = _normalize_broker_symbol(sub or "xauusd")
         pair_map_l = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
                       "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
@@ -3228,7 +3258,120 @@ def handle_command(cmd, text, chat_id, msg):
         lines = [f"🏛 <b>LEVEL ANALYSIS — {disp} @ {price}</b>",
                  f"━━━━━━━━━━━━━━━━━━━━━━"]
         
-        # ── 1. SMC Order Blocks ──
+        # ═══════════════════════════════════════
+        # LAYER 1: SnR + FIBO (Retail-friendly)
+        # ═══════════════════════════════════════
+        try:
+            bars_for_snr = ohlcv_bars[-50:]
+            closes = [float(b.get("c", b.get("close", 0))) for b in bars_for_snr]
+            highs = [float(b.get("h", b.get("high", 0))) for b in bars_for_snr]
+            lows = [float(b.get("l", b.get("low", 0))) for b in bars_for_snr]
+            
+            if closes and highs and lows and price:
+                # ── Swing high/low with touch confirmation ──
+                # Find local swings (not just highest/lowest — need retrace > ATR)
+                atr = sum(abs(highs[i] - lows[i]) for i in range(min(20, len(closes)))) / min(20, len(closes))
+                
+                # Resistance: cluster of highs near same level
+                res_levels = []
+                sup_levels = []
+                tolerance = atr * 0.3
+                
+                for i, h in enumerate(highs):
+                    # Check if this high is a local swing (higher than ±2 neighbors)
+                    if i >= 2 and i < len(highs)-2:
+                        if h > max(highs[i-2], highs[i-1], highs[i+1], highs[i+2]):
+                            merged = False
+                            for r in res_levels:
+                                if abs(h - r["level"]) < tolerance:
+                                    r["touches"] += 1
+                                    r["level"] = (r["level"] * (r["touches"]-1) + h) / r["touches"]
+                                    merged = True
+                                    break
+                            if not merged:
+                                res_levels.append({"level": h, "touches": 1})
+                
+                for i, l in enumerate(lows):
+                    if i >= 2 and i < len(lows)-2:
+                        if l < min(lows[i-2], lows[i-1], lows[i+1], lows[i+2]):
+                            merged = False
+                            for s in sup_levels:
+                                if abs(l - s["level"]) < tolerance:
+                                    s["touches"] += 1
+                                    s["level"] = (s["level"] * (s["touches"]-1) + l) / s["touches"]
+                                    merged = True
+                                    break
+                            if not merged:
+                                sup_levels.append({"level": l, "touches": 1})
+                
+                # Filter: only levels with 2+ touches
+                res_levels = [r for r in res_levels if r["touches"] >= 2 and r["level"] > price]
+                sup_levels = [s for s in sup_levels if s["touches"] >= 2 and s["level"] < price]
+                res_levels.sort(key=lambda x: x["level"])
+                sup_levels.sort(key=lambda x: x["level"], reverse=True)
+                
+                # FIBO from most recent swing
+                all_swings = [(h, "H") for h in highs] + [(l, "L") for l in lows]
+                swing_high = max(highs[-30:]) if len(highs) >= 30 else max(highs)
+                swing_low = min(lows[-30:]) if len(lows) >= 30 else min(lows)
+                fib_range = swing_high - swing_low
+                
+                lines.append("")
+                lines.append("📐 <b>SIMPLE SnR + FIBO</b>")
+                lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                
+                # Resistance
+                lines.append("🔴 <b>Resistance:</b>")
+                for r in res_levels[:3]:
+                    lines.append(f"  {r['level']:.2f} ({r['touches']}x rejection)")
+                if not res_levels:
+                    lines.append(f"  {swing_high:.2f} (swing high)")
+                
+                # Support
+                lines.append("🟢 <b>Support:</b>")
+                for s in sup_levels[:3]:
+                    lines.append(f"  {s['level']:.2f} ({s['touches']}x bounce)")
+                if not sup_levels:
+                    lines.append(f"  {swing_low:.2f} (swing low)")
+                
+                # FIBO
+                if fib_range > 0 and swing_high > 0 and swing_low > 0:
+                    fib_382 = swing_low + fib_range * 0.382
+                    fib_50 = swing_low + fib_range * 0.50
+                    fib_618 = swing_low + fib_range * 0.618
+                    lines.append("📏 <b>FIBO Retracement:</b>")
+                    lines.append(f"  38.2%: {fib_382:.2f}")
+                    lines.append(f"  50.0%: {fib_50:.2f}")
+                    lines.append(f"  61.8%: {fib_618:.2f}")
+                
+                # SL placement recommendation
+                if res_levels:
+                    nearest_res = res_levels[0]["level"]
+                    wick_buffer = atr * 0.15
+                    safe_sl = nearest_res + wick_buffer
+                    lines.append("")
+                    lines.append(f"💡 <b>SL Placement:</b>")
+                    lines.append(f"  📍 Di atas resistance + buffer wick")
+                    lines.append(f"  🎯 {safe_sl:.2f} (+{wick_buffer:.2f} buffer)")
+                elif sup_levels:
+                    nearest_sup = sup_levels[0]["level"]
+                    wick_buffer = atr * 0.15
+                    safe_sl = nearest_sup - wick_buffer
+                    lines.append("")
+                    lines.append(f"💡 <b>SL Placement:</b>")
+                    lines.append(f"  📍 Di bawah support + buffer wick")
+                    lines.append(f"  🎯 {safe_sl:.2f} (-{wick_buffer:.2f} buffer)")
+        except: pass
+        
+        # ═══════════════════════════════════════
+        # LAYER 2: Engine Deep Dive (Advanced)
+        # ═══════════════════════════════════════
+        lines.append("")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("🏦 <b>ENGINE DEEP DIVE</b>")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        
+        # ── SMC Order Blocks ──
         try:
             if SMC_ENGINE:
                 smc = analyze_smc_scalper(ohlcv_bars, disp)
@@ -3236,11 +3379,10 @@ def handle_command(cmd, text, chat_id, msg):
                     smc_block = format_smc_block(smc)
                     if smc_block:
                         lines.append("")
-                        lines.append("🏦 <b>SMC ORDER BLOCKS</b>")
                         lines.append(smc_block.rstrip())
         except: pass
         
-        # ── 2. FVG (Fair Value Gaps) ──
+        # ── FVG ──
         try:
             if FVG_ENGINE:
                 fvg_result = detect_fvg(ohlcv_bars, price, disp)
@@ -3248,14 +3390,13 @@ def handle_command(cmd, text, chat_id, msg):
                     lines.append("")
                     lines.append("📐 <b>FAIR VALUE GAPS</b>")
                     for fvg in fvg_result["fvgs"][:3]:
-                        top = fvg.get("top", 0)
-                        bot = fvg.get("bottom", 0)
+                        top = fvg.get("top", 0); bot = fvg.get("bottom", 0)
                         fvg_type = fvg.get("type", "?").upper()
                         filled = "✅ filled" if fvg.get("filled") else "⏳ open"
                         lines.append(f"  {fvg_type} FVG: {bot:.2f} — {top:.2f} ({filled})")
         except: pass
         
-        # ── 3. Liquidity Zones ──
+        # ── Liquidity ──
         try:
             if HERMES_LIQUIDITY_ENGINE:
                 liq = detect_liquidity_zones(ohlcv_bars, price)
@@ -3271,25 +3412,21 @@ def handle_command(cmd, text, chat_id, msg):
                             lines.append(f"  🔽 EQL Low: {l.get('level', 0):.2f} ({l.get('touches', 0)}x)")
         except: pass
         
-        # ── 4. Session Levels ──
+        # ── Session ──
         try:
             from session_levels import get_session_levels
             sess = get_session_levels(disp)
             if sess:
-                asia_h = sess.get("asia_high")
-                asia_l = sess.get("asia_low")
-                london_h = sess.get("london_high")
-                london_l = sess.get("london_low")
+                asia_h = sess.get("asia_high"); asia_l = sess.get("asia_low")
+                london_h = sess.get("london_high"); london_l = sess.get("london_low")
                 if asia_h or london_h:
                     lines.append("")
                     lines.append("🕐 <b>SESSION LEVELS</b>")
-                    if asia_h:
-                        lines.append(f"  🌏 Asia: {asia_l:.2f} — {asia_h:.2f}")
-                    if london_h:
-                        lines.append(f"  🇬🇧 London: {london_l:.2f} — {london_h:.2f}")
+                    if asia_h: lines.append(f"  🌏 Asia: {asia_l:.2f} — {asia_h:.2f}")
+                    if london_h: lines.append(f"  🇬🇧 London: {london_l:.2f} — {london_h:.2f}")
         except: pass
         
-        # ── 5. CRT/TBS ──
+        # ── CRT/TBS ──
         try:
             if CRT_ENGINE:
                 crt_result = analyze_crt_setup(ohlcv_bars, disp)
@@ -3303,7 +3440,7 @@ def handle_command(cmd, text, chat_id, msg):
         
         lines.append("")
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("🔍 Gunakan /analyze untuk sinyal entry dari level ini.")
+        lines.append("🔍 /analyze — Dapatkan sinyal entry dari level ini")
         lines.append("⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
         
         tg_send("\n".join(lines), chat_id)
