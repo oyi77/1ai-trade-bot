@@ -1871,6 +1871,17 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             tp3 = round(entry - tp_dist * 0.75, 2)
             tp4 = tp
 
+    # ── MIN TP1 GUARD: XAUUSD 30 pip minimum ──
+    if action in ("BUY","SELL") and entry > 0 and tp1 > 0:
+        tp1_dist = abs(tp1 - entry)
+        min_tp_map = {"XAUUSD": 3.0, "GOLD": 3.0, "USOIL": 0.30, "BTCUSD": 600, "ETHUSD": 50}
+        min_tp = min_tp_map.get(display, 0)
+        if min_tp > 0 and tp1_dist < min_tp:
+            if action == "BUY":
+                tp1 = round(entry + min_tp, 2)
+            else:
+                tp1 = round(entry - min_tp, 2)
+
     # Winrate stats
     wr_text = ""
     if TRADE_TRACKER:
