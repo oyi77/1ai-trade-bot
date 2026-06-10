@@ -7,7 +7,7 @@ import uvicorn
 def main():
     parser = argparse.ArgumentParser(description="1ai-trade-bot Web Dashboard")
     parser.add_argument("--host", default="0.0.0.0", help="Bind host")
-    parser.add_argument("--port", type=int, default=9090, help="Bind port")
+    parser.add_argument("--port", type=int, default=8888, help="Bind port")
     parser.add_argument("--reload", action="store_true", help="Auto-reload on changes")
     args = parser.parse_args()
 

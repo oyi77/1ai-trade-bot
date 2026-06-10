@@ -10,7 +10,7 @@ Usage:
   python -m tradebot              # Start everything
   python -m tradebot --web-only   # Web dashboard only
   python -m tradebot --bot-only   # Telegram bot only
-  python -m tradebot --port 9090  # Custom port
+  python -m tradebot --port 8888  # Custom port
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ LOG = logging.getLogger("tradebot.app")
 class App:
     """Orchestrates all subsystems."""
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 9090):
+    def __init__(self, host: str = "0.0.0.0", port: int = 8888):
         self.host = host
         self.port = port
         self._bot_task: asyncio.Task | None = None
@@ -89,7 +89,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="1ai-trade-bot — Unified Trading Platform")
     parser.add_argument("--host", default="0.0.0.0", help="Web server bind host")
-    parser.add_argument("--port", type=int, default=9090, help="Web server port")
+    parser.add_argument("--port", type=int, default=8888, help="Web server port")
     parser.add_argument("--web-only", action="store_true", help="Only start web dashboard")
     parser.add_argument("--bot-only", action="store_true", help="Only start Telegram bot")
     args = parser.parse_args()
