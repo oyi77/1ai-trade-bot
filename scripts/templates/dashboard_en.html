@@ -786,47 +786,61 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     </div>
   </div>
 
-  <!-- DONATION CTA -->
+  <!-- DONATION CTA — TRIPAY AUTO CHECKOUT -->
   <div class="kpi-card mb-6" style="background:linear-gradient(135deg, rgba(6,78,59,0.10), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.2)">
-    <div class="flex flex-col md:flex-row items-center gap-6">
-      <div class="flex-1 text-center md:text-left">
-        <h3 class="text-base font-bold text-emerald-400 mb-2">💚 Fuel the AI</h3>
-        <p class="text-sm text-slate-400 leading-relaxed">
-          Transfer to the bank account below, then enter your Telegram ID for manual activation by admin.
+    <div class="flex flex-col items-center gap-4">
+      <div class="text-center w-full">
+        <h3 class="text-base font-bold text-emerald-400 mb-1">💚 Fuel the AI</h3>
+        <p class="text-xs text-slate-400 mb-4">
+          Donate via <b>Tripay</b> — QRIS / VA / Alfamart. <b>Auto-activated!</b>
         </p>
-        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
-          <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-            <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">🏦 BCA</div>
-            <div class="text-sm font-bold text-white font-mono">8531425531</div>
-            <div class="text-xs text-slate-400">a.n. MOH SUHUD</div>
-          </div>
-          <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-            <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">📱 QRIS / E-Wallet</div>
-            <div class="text-sm font-bold text-white">Dana · OVO · GoPay</div>
-            <div class="text-xs text-slate-400">Confirm to @codergaboets</div>
-          </div>
+        
+        <!-- Amount buttons -->
+        <div class="flex flex-wrap justify-center gap-2 mb-4">
+          <button onclick="document.getElementById('fuel-amount-input').value='10000'" 
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp10K</button>
+          <button onclick="document.getElementById('fuel-amount-input').value='25000'" 
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp25K</button>
+          <button onclick="document.getElementById('fuel-amount-input').value='50000'" 
+                  class="fuel-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp50K</button>
+          <button onclick="document.getElementById('fuel-amount-input').value='100000'" 
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp100K</button>
+          <button onclick="document.getElementById('fuel-amount-input').value='250000'" 
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp250K</button>
         </div>
-        <div class="mt-4 bg-emerald-500/5 border border-emerald-400/10 rounded-xl p-4">
-          <label class="text-xs text-slate-400 block mb-2">🆔 Your Telegram User ID (required!):</label>
-          <div class="flex gap-2">
-            <input id="fuel-chat-id" type="text" placeholder="e.g. 5220170786" 
-                   class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
-            <button onclick="reportFuelDonation()" 
-                    class="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-2 rounded-lg text-sm transition-all whitespace-nowrap">
-              ✅ I've Transferred
-            </button>
+        
+        <!-- Input form -->
+        <div class="max-w-md mx-auto bg-slate-800/40 rounded-xl p-4 border border-slate-700/40">
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="text-[10px] text-slate-500 block mb-1">🆔 Telegram User ID *</label>
+              <input id="fuel-chat-id" type="text" placeholder="5220170786" 
+                     class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
+            </div>
+            <div>
+              <label class="text-[10px] text-slate-500 block mb-1">💰 Amount (Rp)</label>
+              <input id="fuel-amount-input" type="number" value="50000" min="10000"
+                     class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
+            </div>
           </div>
-          <div id="fuel-report-result" class="mt-2 text-xs hidden"></div>
-          <p class="text-[10px] text-slate-600 mt-2">Admin will activate manually within 1×24 hours. You'll get Telegram notification.</p>
+          <div class="mb-3">
+            <label class="text-[10px] text-slate-500 block mb-1">👤 Telegram Username (optional)</label>
+            <input id="fuel-username" type="text" placeholder="@username" 
+                   class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
+          </div>
+          <button onclick="fuelDonate()" 
+                  class="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-3 rounded-lg text-sm transition-all">
+            ⚡ Pay via Tripay
+          </button>
+          <div id="fuel-loading" class="hidden text-center text-slate-400 text-xs mt-3">
+            <span class="animate-pulse">⏳ Creating payment...</span>
+          </div>
+          <div id="fuel-result" class="hidden mt-3"></div>
         </div>
-      </div>
-      <div class="shrink-0 text-center">
-        <div class="text-4xl mb-2">🤖</div>
-        <div class="text-xs text-slate-500">Or via Bot</div>
-        <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
-           class="inline-block mt-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">
-          @berkahkaryaforexbotbot
-        </a>
+        
+        <div class="text-[10px] text-slate-600 mt-3">
+          💚 After payment, <b>VIP DONOR</b> status activates automatically in seconds!
+        </div>
       </div>
     </div>
   </div>
@@ -1281,16 +1295,32 @@ function renderFuelDonorWall(donors) {
   }).join('');
 }
 
-async function fuelDonate(amount) {
+async function fuelDonate() {
+  const chatId = document.getElementById('fuel-chat-id').value.trim();
+  const amount = parseInt(document.getElementById('fuel-amount-input').value);
+  const username = document.getElementById('fuel-username').value.trim() || 'Guest';
   const loading = document.getElementById('fuel-loading');
   const result = document.getElementById('fuel-result');
   
+  // Validate
+  if (!chatId || chatId.length < 4) {
+    result.classList.remove('hidden');
+    result.innerHTML = '<div class="text-red-400 text-xs">❌ Enter a valid Telegram User ID</div>';
+    return;
+  }
+  if (!amount || amount < 10000) {
+    result.classList.remove('hidden');
+    result.innerHTML = '<div class="text-red-400 text-xs">❌ Minimum donation is Rp10.000</div>';
+    return;
+  }
+  
+  // Disable button
   document.querySelectorAll('.fuel-btn').forEach(b => b.disabled = true);
   loading.classList.remove('hidden');
   result.classList.add('hidden');
   
   try {
-    const resp = await fetch('/api/fuel/create?amount=' + amount + '&chat_id=web&username=Guest');
+    const resp = await fetch('/api/fuel/create?amount=' + amount + '&chat_id=' + encodeURIComponent(chatId) + '&username=' + encodeURIComponent(username));
     const data = await resp.json();
     
     loading.classList.add('hidden');
@@ -1301,16 +1331,38 @@ async function fuelDonate(amount) {
         <div class="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-5 text-center">
           <div class="text-3xl mb-3">✅</div>
           <div class="text-sm font-bold text-emerald-400 mb-2">Payment Ready!</div>
-          <div class="text-xs text-slate-400 mb-4">Rp ${amount.toLocaleString('en-US')} via Tripay</div>
+          <div class="text-xs text-slate-400 mb-4">Rp ${amount.toLocaleString('en-US')} via Tripay — QRIS / VA / Alfamart</div>
           <a href="${data.payment_url}" target="_blank" rel="noopener" 
              class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold py-3 px-8 rounded-lg transition-colors">
             💳 Pay Now
           </a>
           <div class="text-[10px] text-slate-500 mt-3">
-            ⚡ After payment, the bot automatically activates your VIP Donor status.
+            ⚡ After payment, <b>VIP DONOR</b> status activates automatically in seconds!
           </div>
           <div class="text-[10px] text-slate-600 mt-1">
             Ref: ${data.merchant_ref}
+          </div>
+        </div>`;
+    } else if (data.qr_url) {
+      // Show QR code if available
+      result.innerHTML = `
+        <div class="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-5 text-center">
+          <div class="text-sm font-bold text-emerald-400 mb-2">🔳 Scan QRIS</div>
+          <img src="${data.qr_url}" class="mx-auto w-48 h-48 mb-3 rounded-lg" alt="QRIS">
+          <div class="text-xs text-slate-400 mb-2">Rp ${amount.toLocaleString('en-US')}</div>
+          <div class="text-[10px] text-slate-500">
+            ⚡ After payment, <b>VIP DONOR</b> status activates automatically!
+          </div>
+        </div>`;
+    } else if (data.pay_code) {
+      result.innerHTML = `
+        <div class="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-5 text-center">
+          <div class="text-xl mb-2">🏧</div>
+          <div class="text-sm font-bold text-emerald-400 mb-2">Payment Code</div>
+          <div class="text-2xl font-mono font-bold text-white mb-3">${data.pay_code}</div>
+          <div class="text-xs text-slate-400 mb-2">Rp ${amount.toLocaleString('en-US')}</div>
+          <div class="text-[10px] text-slate-500">
+            ⚡ After payment, <b>VIP DONOR</b> status activates automatically!
           </div>
         </div>`;
     } else {
@@ -1332,33 +1384,6 @@ async function fuelDonate(amount) {
       </div>`;
   } finally {
     document.querySelectorAll('.fuel-btn').forEach(b => b.disabled = false);
-  }
-}
-
-/* ═══ FUEL DONATION REPORT (manual transfer) ═══ */
-async function reportFuelDonation() {
-  const chatId = document.getElementById('fuel-chat-id').value.trim();
-  const result = document.getElementById('fuel-report-result');
-  result.classList.remove('hidden');
-
-  if (!chatId || chatId.length < 5) {
-    result.innerHTML = '<div class="text-red-400">❌ Enter a valid Telegram User ID</div>';
-    return;
-  }
-
-  result.innerHTML = '<div class="text-slate-400">⏳ Sending report...</div>';
-
-  try {
-    const resp = await fetch('/api/fuel/report?chat_id=' + encodeURIComponent(chatId));
-    const data = await resp.json();
-    if (data.success) {
-      result.innerHTML = '<div class="text-emerald-400">✅ Report sent! Admin will activate within 1×24 hours. Monitor your Telegram.</div>';
-      document.getElementById('fuel-chat-id').value = '';
-    } else {
-      result.innerHTML = '<div class="text-red-400">❌ Failed: ' + (data.error || 'unknown error') + '</div>';
-    }
-  } catch (e) {
-    result.innerHTML = '<div class="text-red-400">❌ Failed: ' + e.message + '</div>';
   }
 }
 

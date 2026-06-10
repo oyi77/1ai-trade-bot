@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime, timezone
 import logging
 from contextlib import suppress
 from enum import StrEnum
@@ -207,9 +208,13 @@ class StockityBroker:
         payload = {
             "ric": _symbol_to_ric(symbol),
             "direction": direction.lower(),
-            "amount": amount,
+            "amount": int(amount * 100),  # Convert to cents (integer)
             "duration": duration,
             "type": "binary",
+            "trend": direction.lower(),  # Required by Phoenix
+            "deal_type": "buy",  # Required
+            "option_type": "binary",  # Required
+            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
 
         try:
