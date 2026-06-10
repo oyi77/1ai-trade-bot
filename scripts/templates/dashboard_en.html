@@ -786,7 +786,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     </div>
   </div>
 
-  <!-- DONATION CTA — TRIPAY AUTO CHECKOUT -->
+  <!-- DONATION CTA — TRIPAY AUTO CHECKOUT (MOBILE OPTIMIZED) -->
   <div class="kpi-card mb-6" style="background:linear-gradient(135deg, rgba(6,78,59,0.10), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.2)">
     <div class="flex flex-col items-center gap-4">
       <div class="text-center w-full">
@@ -795,41 +795,61 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
           Donate via <b>Tripay</b> — QRIS / VA / Alfamart. <b>Auto-activated!</b>
         </p>
         
-        <!-- Amount buttons -->
-        <div class="flex flex-wrap justify-center gap-2 mb-4">
+        <!-- Amount buttons — single column on mobile, row on desktop -->
+        <div class="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-3 mb-4">
           <button onclick="document.getElementById('fuel-amount-input').value='10000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp10K</button>
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp10K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='25000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp25K</button>
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp25K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='50000'" 
-                  class="fuel-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp50K</button>
+                  class="fuel-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp50K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='100000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp100K</button>
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp100K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='250000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">Rp250K</button>
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp250K</button>
         </div>
         
         <!-- Input form -->
         <div class="max-w-md mx-auto bg-slate-800/40 rounded-xl p-4 border border-slate-700/40">
-          <div class="grid grid-cols-2 gap-3 mb-3">
+          <!-- Single column layout on mobile; two cols on sm+ -->
+          <div class="flex flex-col sm:grid sm:grid-cols-2 gap-3 mb-3">
             <div>
               <label class="text-[10px] text-slate-500 block mb-1">🆔 Telegram User ID *</label>
-              <input id="fuel-chat-id" type="text" placeholder="5220170786" 
-                     class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
+              <div class="flex gap-2">
+                <input id="fuel-chat-id" type="text" placeholder="5220170786" 
+                       class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-3 text-white text-base font-mono outline-none focus:border-emerald-500">
+                <button onclick="window.open('https://t.me/userinfobot','_blank')" 
+                        class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-3 rounded-lg transition-all whitespace-nowrap">
+                  🤖 Get ID
+                </button>
+              </div>
             </div>
             <div>
               <label class="text-[10px] text-slate-500 block mb-1">💰 Amount (Rp)</label>
               <input id="fuel-amount-input" type="number" value="50000" min="10000"
-                     class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
+                     class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-3 text-white text-base font-mono outline-none focus:border-emerald-500">
             </div>
           </div>
           <div class="mb-3">
             <label class="text-[10px] text-slate-500 block mb-1">👤 Telegram Username (optional)</label>
             <input id="fuel-username" type="text" placeholder="@username" 
-                   class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
+                   class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-3 text-white text-sm font-mono outline-none focus:border-emerald-500">
           </div>
+          
+          <!-- 🔽 Collapsible: How to get Telegram ID -->
+          <details class="mb-3 bg-slate-900/60 rounded-lg border border-slate-700/40 overflow-hidden">
+            <summary class="text-xs text-slate-400 cursor-pointer px-3 py-2.5 hover:text-slate-200 transition-colors select-none">
+              ❓ How to get Telegram ID?
+            </summary>
+            <div class="px-3 pb-3 text-xs text-slate-400 space-y-1.5">
+              <p>📱 <b>Method 1:</b> Message <a href="https://t.me/userinfobot" target="_blank" class="text-blue-400">@userinfobot</a> — it replies with your ID</p>
+              <p>📱 <b>Method 2:</b> Message <b>@berkahkaryaforexbotbot</b> then type <code class="text-emerald-400">/myid</code></p>
+              <p>📱 <b>Method 3:</b> Open <a href="https://t.me/userinfobot" target="_blank" class="text-blue-400">t.me/userinfobot</a> in your browser, tap START</p>
+            </div>
+          </details>
+          
           <button onclick="fuelDonate()" 
-                  class="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-3 rounded-lg text-sm transition-all">
+                  class="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-4 rounded-lg text-sm transition-all">
             ⚡ Pay via Tripay
           </button>
           <div id="fuel-loading" class="hidden text-center text-slate-400 text-xs mt-3">

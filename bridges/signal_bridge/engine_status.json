@@ -1,7 +1,7 @@
 {
   "symbol": "BTCUSD",
-  "price": 61243.99,
-  "timestamp": "2026-06-10T12:30:20.260079",
+  "price": 61232.37,
+  "timestamp": "2026-06-10T12:45:05.124455",
   "timeframes": {
     "D1": {
       "verdict": "SELL",
@@ -55,7 +55,7 @@
       "macro": {
         "trend": "BEARISH",
         "strength": 1.0,
-        "ema200_dist": -21.13,
+        "ema200_dist": -21.15,
         "rsi": 13.7,
         "atr_pct": 2.34,
         "sma_cross": "BEARISH"
@@ -106,15 +106,15 @@
         "tv": {
           "direction": "SELL",
           "confidence": 0.6,
-          "details": "RSI 53.0 (neutral) | MACD bearish (-) | ADX 20 (weak trend) | BB squeeze (3.1%) | TV-score:20"
+          "details": "RSI 52.8 (neutral) | MACD bearish (-) | ADX 20 (weak trend) | BB squeeze (3.1%) | TV-score:20"
         }
       },
       "weight": 0.25,
       "macro": {
         "trend": "BEARISH",
         "strength": 0.83,
-        "ema200_dist": -4.81,
-        "rsi": 53.0,
+        "ema200_dist": -4.83,
+        "rsi": 52.8,
         "atr_pct": 0.33,
         "sma_cross": "BEARISH"
       }
@@ -164,14 +164,14 @@
         "tv": {
           "direction": "SELL",
           "confidence": 0.6,
-          "details": "RSI 53.0 (neutral) | MACD bearish (-) | ADX 20 (weak trend) | BB squeeze (3.1%) | TV-score:20"
+          "details": "RSI 52.8 (neutral) | MACD bearish (-) | ADX 20 (weak trend) | BB squeeze (3.1%) | TV-score:20"
         }
       },
       "weight": 0.2,
       "structure": {
         "s1": 60743.05,
         "r1": 62860.11,
-        "vwap": 61566.14,
+        "vwap": 61565.09,
         "near_support": false,
         "near_resistance": false,
         "range_pct": 3.46,
@@ -223,14 +223,14 @@
         "tv": {
           "direction": "SELL",
           "confidence": 0.7,
-          "details": "RSI 38.8 (bullish bias) | MACD bearish (-) | ADX 50 strong downtrend | BB squeeze (1.4%) | TV-score:15"
+          "details": "RSI 38.2 (bullish bias) | MACD bearish (-) | ADX 45 strong downtrend | BB squeeze (1.4%) | TV-score:15"
         }
       },
       "weight": 0.12,
       "structure": {
         "s1": 61030.09,
         "r1": 61931.96,
-        "vwap": 61435.29,
+        "vwap": 61435.16,
         "near_support": true,
         "near_resistance": false,
         "range_pct": 1.47,
@@ -240,14 +240,14 @@
     "M5": {
       "verdict": "HOLD",
       "consensus_pct": 0.5,
-      "buy_count": 2,
+      "buy_count": 1,
       "sell_count": 2,
       "total": 4,
       "engines": {
         "quant": {
-          "direction": "BUY",
-          "confidence": 0.4778,
-          "details": "G:48% R:32%"
+          "direction": "SELL",
+          "confidence": 0.5679,
+          "details": "G:35% R:57%"
         },
         "fvg": {
           "direction": "HOLD",
@@ -265,9 +265,9 @@
           "details": "Outside killzone (UTC 5:00)"
         },
         "smc": {
-          "direction": "SELL",
-          "confidence": 0.75,
-          "details": "Grade=KUAT \ud83d\udfe2 score=14"
+          "direction": "BUY",
+          "confidence": 0.35,
+          "details": "Grade=CUKUP \ud83d\udfe1 score=8"
         },
         "trend": {
           "direction": "HOLD",
@@ -275,14 +275,14 @@
           "details": "no break"
         },
         "ultimate": {
-          "direction": "BUY",
-          "confidence": 0.625,
-          "details": "Grade:BAGUS \ud83d\udd35 score=15/24"
+          "direction": "SELL",
+          "confidence": 0.4583333333333333,
+          "details": "Grade:BAGUS \ud83d\udd35 score=11/24"
         },
         "tv": {
-          "direction": "SELL",
-          "confidence": 0.54,
-          "details": "RSI 37.7 (bullish bias) | MACD bearish (-) | ADX 44 strong downtrend | BB squeeze (0.9%) | TV-score:23"
+          "direction": "HOLD",
+          "confidence": 0.57,
+          "details": "RSI 45.3 (neutral) | MACD bullish (+) | ADX 19 (weak trend) | BB squeeze (0.8%) | TV-score:43"
         }
       },
       "weight": 0.08,
@@ -291,8 +291,8 @@
         "sweep_type": "NONE",
         "sniper_entry": "NONE",
         "micro_trend": "NEUTRAL",
-        "momentum": 0.213,
-        "momentum_8": -0.007
+        "momentum": 0.001,
+        "momentum_8": 0.163
       }
     }
   },

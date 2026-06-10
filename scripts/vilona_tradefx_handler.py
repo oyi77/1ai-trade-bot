@@ -3,7 +3,7 @@
 Vilona Trade FX Telegram Bot Handler
 Grab forex data + generate signals even without MT5/EA.
 
-Commands: /start /help /price /analyze /data /killzone /status /subscribe /autosync /genkey /listkeys /mykey
+Commands: /start /help /price /analyze /data /killzone /status /subscribe /autosync /genkey /listkeys /mykey /myid
 """
 import hashlib, json, logging, os, re, sys, threading, time, urllib.request
 from datetime import datetime, timezone, timedelta
@@ -2211,6 +2211,15 @@ def handle_command(cmd, text, chat_id, msg):
             # New user → ultimatum video (single message)
             send_ultimatum_video(chat_id)
 
+    elif cmd == "/myid":
+        text = (
+            f"🆔 <b>Telegram ID kamu:</b>\n"
+            f"<code>{chat_id}</code>\n\n"
+            f"Gunakan ID ini untuk donasi di website kami\n"
+            f"👉 <a href='https://phantomfx.aitradepulse.com'>phantomfx.aitradepulse.com</a>"
+        )
+        tg_send(text, chat_id)
+
     elif cmd == "/help":
         help_lines = [
             "⚙️ <b>VILONA AI — COMMAND CENTER</b>",
@@ -4373,7 +4382,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/winrate","/history","/recap","/mapping","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:

@@ -333,8 +333,10 @@ class VilonaBot(BaseBot):
             "autosync": self._cmd_autosync,
             "donate": self._cmd_donate,
             "genkey": self._cmd_genkey,
-            "listkeys": self._cmd_listkeys,
+            "listkeys": self._cmd_genkey,
             "mykey": self._cmd_mykey,
+            "ea": self._cmd_ea,
+            "download": self._cmd_ea,
             # Group 1 — Market Info
             "data": self._cmd_data,
             "killzone": self._cmd_killzone,
@@ -871,6 +873,9 @@ class VilonaBot(BaseBot):
             "🔧 <b>POWER TOOLS</b>",
             "/autosync — Auto-trade ke EA",
             "/bridge_status — Cek koneksi EA",
+            "/ea — Download EA Bridge MT5",
+            "/genkey — Generate License EA (Donatur)",
+            "/mykey — Lihat License EA kamu",
             "",
             "━━━━━━━━━━━━━━━━",
             "📞 Jalur Privat Investor: @codergaboets",
@@ -998,13 +1003,49 @@ class VilonaBot(BaseBot):
         )
 
     async def _cmd_genkey(self, args: list[str], chat_id: str | None = None) -> str:
-        return "🔑 License key generation: use admin panel or POST /admin/generate-key"
-
-    async def _cmd_listkeys(self, args: list[str], chat_id: str | None = None) -> str:
-        return "🔑 License keys: use admin panel on localhost:8765/admin/keys"
+        """Generate EA license key — admin only, or donor self-service."""
+        from license_manager import cmd_genkey, is_admin
+        from members import get_member
+        
+        target = str(chat_id or "")
+        member = get_member(target)
+        is_donor = member and member.get("tier") == "donor"
+        
+        if not is_admin(target) and not is_donor:
+            return (
+                "⛔ <b>Akses Dibatasi</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "/genkey hanya untuk Donatur VIP.\n\n"
+                "💚 Dukung server AI dulu:\n"
+                "/donate — Isi Bahan Bakar AI\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "Setelah donasi, bot akan otomatis\n"
+                "mengaktifkan status Donatur kamu."
+            )
+        
+        sub = " ".join(args) if args else target
+        return cmd_genkey(target, sub)
 
     async def _cmd_mykey(self, args: list[str], chat_id: str | None = None) -> str:
-        return "🔑 Your license key: check with admin or use /genkey"
+        """Show user's own EA license key."""
+        from license_manager import cmd_mykey
+        return cmd_mykey(str(chat_id or ""))
+
+    async def _cmd_ea(self, args: list[str], chat_id: str | None = None) -> str:
+        """Download EA Bridge."""
+        return (
+            "📥 <b>DOWNLOAD EA BRIDGE</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "🔗 <a href='https://phantomfx.aitradepulse.com/ea/download/'>Klik di sini untuk download EA MT5</a>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "📋 <b>Cara Install:</b>\n"
+            "1. Download file .ex5\n"
+            "2. Copy ke folder <code>Experts</code> MT5\n"
+            "3. Restart MT5\n"
+            "4. Masukkan License Key dari /mykey\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "🔑 Belum punya key? /genkey\n"
+        )
 
     # ── Group 1: Market Info ──────────────────────────────────────────────
 
