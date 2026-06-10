@@ -50,8 +50,30 @@ def tg_send(text: str) -> bool:
         logger.error(f"tg_send failed: {e}")
         return False
 
-# Same offset as bot handler — gold-api.com spot → broker price
-XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
+# Dynamic offset — matches vilona_tradefx_handler.get_xauusd_spot_offset()
+XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "0"))
+
+def _get_xauusd_offset() -> float:
+    """Calculate dynamic offset: futures minus spot.
+    Handler uses spot-futures (to convert futures→spot for display).
+    ea_executor uses futures-spot (to convert spot→futures for matching signal prices)."""
+    if XAUUSD_OFFSET != 0:
+        return XAUUSD_OFFSET  # explicit override from env
+    try:
+        import yfinance as yf
+        gc = yf.Ticker("GC=F")
+        fut = gc.fast_info.last_price
+        if not fut or fut < 1000:
+            return 0
+        spot_r = urllib.request.urlopen(
+            urllib.request.Request("https://api.gold-api.com/price/XAU",
+                                    headers={"User-Agent": "Vilona/1.0"}), timeout=5)
+        spot = float(json.loads(spot_r.read()).get("price", 0))
+        if 2000 < spot < 6000:
+            return fut - spot  # inverse of handler: futures minus spot
+    except Exception:
+        pass
+    return 0
 
 LOG_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -109,12 +131,13 @@ def save_state(s):
     STATE_FILE.write_text(json.dumps(s, indent=2, default=str))
 
 def fetch_price(symbol="XAUUSD"):
-    """Fetch real-time XAUUSD: gold-api.com spot + offset."""
+    """Fetch real-time XAUUSD: gold-api.com spot + dynamic offset."""
     try:
         r = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=10)
         spot = float(json.loads(r.read()).get("price", 0))
         if 2000 < spot < 6000:
-            return round(spot + XAUUSD_OFFSET, 2)
+            offset = _get_xauusd_offset()
+            return round(spot + offset, 2)
     except Exception:
         pass
     return None
