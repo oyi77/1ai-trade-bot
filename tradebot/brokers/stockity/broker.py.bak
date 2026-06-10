@@ -105,15 +105,18 @@ class StockityBroker:
         self._ws = await websockets.connect(STOCKITY_PHOENIX_WS, additional_headers=headers)
         LOG.info("✓ Connected to Phoenix Channels")
 
-        # Join essential topics
-        for topic in ["connection", "bo", "account"]:
+        # Join ALL topics exactly as the real client does (from HAR)
+        for topic in [
+            "connection", "marathon", "account", "tournament", "user",
+            "cfd_zero_spread", "bo", "asset", "copy_trading",
+        ]:
             await self._join_topic(topic)
 
-        # Join asset topic (gives majority_opinion + social_trading)
-        await self._join_topic("asset:Z-CRY/IDX")
+        # Join asset-specific topics
+        for asset_ric in ["Z-CRY/IDX", "Z-AUD/USD2"]:
+            await self._join_topic(f"range_stream:{asset_ric}")
 
         self._listener_task = asyncio.create_task(self._listen())
-
         self._connected = True
         LOG.info("✓ StockityBroker ready")
         
