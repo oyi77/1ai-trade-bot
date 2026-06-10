@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center gap-6">
+            <a href="/" class="text-gray-300 hover:text-white">← Dashboard</a>
+            <h1 class="text-xl font-bold text-blue-400">🤖 Whitelabel Bots</h1>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        {% if whitelabels %}
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-gray-400 text-sm bg-gray-850 border-b border-gray-700">
+                        <th class="px-6 py-4">Bot</th>
+                        <th class="px-6 py-4">Username</th>
+                        <th class="px-6 py-4">Owner ID</th>
+                        <th class="px-6 py-4">Revenue Share</th>
+                        <th class="px-6 py-4">Status</th>
+                        <th class="px-6 py-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for wl in whitelabels %}
+                    <tr class="border-b border-gray-700 hover:bg-gray-750 transition">
+                        <td class="px-6 py-4 font-medium">{{ wl.custom_name }}</td>
+                        <td class="px-6 py-4 text-blue-400">@{{ wl.bot_username }}</td>
+                        <td class="px-6 py-4 text-gray-400 font-mono text-sm">{{ wl.owner_user_id }}</td>
+                        <td class="px-6 py-4">
+                            <span class="text-emerald-400 font-semibold">{{ wl.revenue_share }}%</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 rounded-full text-xs
+                                {{ 'bg-emerald-900 text-emerald-300' if wl.active else 'bg-red-900 text-red-300' }}">
+                                {{ 'Active' if wl.active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button onclick="editShare('{{ wl.owner_user_id }}', {{ wl.revenue_share }})"
+                                    class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition">
+                                Edit Share
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-16 text-gray-500">
+            <p class="text-4xl mb-4">🤖</p>
+            <p class="text-lg">No whitelabel bots yet.</p>
+            <p class="text-sm mt-2">Users create them with /whitelabel in Telegram.</p>
+        </div>
+        {% endif %}
+    </main>
+
+    <div id="shareModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-96 border border-gray-700">
+            <h3 class="text-lg font-semibold mb-4">Edit Revenue Share</h3>
+            <form onsubmit="submitShare(event)">
+                <input type="hidden" id="shareUser" name="user_id">
+                <label class="block text-sm text-gray-400 mb-2">Share (%)</label>
+                <input type="number" id="shareValue" name="share"
+                       class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white mb-4"
+                       min="0" max="100" step="0.1" required>
+                <div class="flex gap-3 justify-end">
+                    <button type="button" onclick="document.getElementById('shareModal').classList.add('hidden')"
+                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Cancel</button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function editShare(userId, share) {
+            document.getElementById('shareUser').value = userId;
+            document.getElementById('shareValue').value = share;
+            document.getElementById('shareModal').classList.remove('hidden');
+        }
+        async function submitShare(e) {
+            e.preventDefault();
+            const form = new FormData(e.target);
+            const res = await fetch('/api/whitelabel/share', { method: 'POST', body: form });
+            if (res.ok) location.reload();
+            else alert('Failed');
+        }
+    </script>
+</body>
+</html>

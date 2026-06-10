@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center gap-6">
+            <a href="/" class="text-gray-300 hover:text-white">← Dashboard</a>
+            <h1 class="text-xl font-bold text-emerald-400">💳 Plan Management</h1>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for name, detail in plans.items() %}
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">{{ detail.emoji }}</span>
+                        <div>
+                            <h3 class="text-lg font-semibold capitalize">{{ name }}</h3>
+                            <p class="text-gray-400 text-sm">{{ detail.description }}</p>
+                        </div>
+                    </div>
+                    <span class="text-emerald-400 font-mono text-lg">
+                        {% if name == 'free' %}
+                            Free
+                        {% else %}
+                            Rp {{ "{:,}".format(prices[name]) }}
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="space-y-2 text-sm text-gray-400">
+                    <div>📡 Categories: {{ detail.signal_categories|length }}</div>
+                    <div>📊 Signals/day: {{ detail.max_signals_per_day }}</div>
+                    <div>🤖 Auto-trade: {{ '✅' if detail.auto_trade else '❌' }}</div>
+                    <div>🖥 Platforms: {{ detail.max_platforms }}</div>
+                    <div>📅 History: {{ detail.history_days }} days</div>
+                    <div>🎯 Priority: {{ '✅' if detail.priority_support else '❌' }}</div>
+                    <div>🔌 API: {{ '✅' if detail.api_access else '❌' }}</div>
+                </div>
+                {% if name != 'free' %}
+                <button onclick="editPrice('{{ name }}', {{ prices[name] }})"
+                        class="mt-4 w-full bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg transition text-sm">
+                    Edit Price
+                </button>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <div id="priceModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-96 border border-gray-700">
+            <h3 class="text-lg font-semibold mb-4">Edit Plan Price</h3>
+            <form onsubmit="submitPrice(event)">
+                <input type="hidden" id="pricePlan" name="plan">
+                <label class="block text-sm text-gray-400 mb-2">Price (IDR)</label>
+                <input type="number" id="priceValue" name="price"
+                       class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white mb-4"
+                       min="0" required>
+                <div class="flex gap-3 justify-end">
+                    <button type="button" onclick="document.getElementById('priceModal').classList.add('hidden')"
+                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Cancel</button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition font-medium">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function editPrice(plan, price) {
+            document.getElementById('pricePlan').value = plan;
+            document.getElementById('priceValue').value = price;
+            document.getElementById('priceModal').classList.remove('hidden');
+        }
+        async function submitPrice(e) {
+            e.preventDefault();
+            const form = new FormData(e.target);
+            const res = await fetch('/api/plan/set', { method: 'POST', body: form });
+            if (res.ok) location.reload();
+            else alert('Failed');
+        }
+    </script>
+</body>
+</html>

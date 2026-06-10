@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .stat-card { @apply bg-gray-800 rounded-xl p-6 border border-gray-700; }
+        .table-row { @apply border-b border-gray-700 hover:bg-gray-750; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <h1 class="text-xl font-bold text-emerald-400">📡 1ai-trade-bot</h1>
+                <a href="/" class="text-gray-300 hover:text-white transition">Dashboard</a>
+                <a href="/plans" class="text-gray-300 hover:text-white transition">Plans</a>
+                <a href="/whitelabels" class="text-gray-300 hover:text-white transition">Whitelabels</a>
+            </div>
+            <div class="text-sm text-gray-500">
+                {% if admin_ids %}Admin: {{ admin_ids }}{% else %}No admin configured{% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="stat-card">
+                <div class="text-gray-400 text-sm mb-1">Total Users</div>
+                <div class="text-3xl font-bold">{{ stats.values()|sum }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="text-gray-400 text-sm mb-1">Total Revenue</div>
+                <div class="text-3xl font-bold text-emerald-400">Rp {{ "{:,}".format(revenue) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="text-gray-400 text-sm mb-1">Active Whitelabels</div>
+                <div class="text-3xl font-bold text-blue-400">{{ whitelabels|length }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="text-gray-400 text-sm mb-1">Platforms</div>
+                <div class="text-3xl font-bold text-purple-400">4</div>
+            </div>
+        </div>
+
+        <!-- Plan Distribution -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-lg font-semibold mb-4">📊 Plan Distribution</h2>
+                <div class="space-y-3">
+                    {% for plan_name, count in stats.items() %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300 capitalize">{{ plan_name }}</span>
+                        <div class="flex items-center gap-3">
+                            <div class="w-48 bg-gray-700 rounded-full h-3">
+                                {% set total = stats.values()|sum %}
+                                {% set pct = (count / total * 100) if total > 0 else 0 %}
+                                <div class="bg-emerald-500 rounded-full h-3" style="width: {{ pct }}%"></div>
+                            </div>
+                            <span class="text-gray-400 text-sm w-12 text-right">{{ count }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-lg font-semibold mb-4">💳 Plan Pricing</h2>
+                <div class="space-y-3">
+                    {% for plan_name, price in prices.items() %}
+                    {% if plan_name != 'free' %}
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300 capitalize">{{ plan_name }}</span>
+                        <div class="flex items-center gap-3">
+                            <span class="text-emerald-400 font-mono">Rp {{ "{:,}".format(price) }}</span>
+                            <button onclick="editPrice('{{ plan_name }}', {{ price }})"
+                                    class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition">
+                                Edit
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Whitelabel Bots -->
+        {% if whitelabels %}
+        <div class="mt-8 bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4">🤖 Active Whitelabel Bots</h2>
+            <table class="w-full">
+                <thead>
+                    <tr class="text-left text-gray-400 text-sm border-b border-gray-700">
+                        <th class="pb-3">Bot</th>
+                        <th class="pb-3">Owner</th>
+                        <th class="pb-3">Revenue Share</th>
+                        <th class="pb-3">Status</th>
+                        <th class="pb-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for wl in whitelabels %}
+                    <tr class="table-row">
+                        <td class="py-3">
+                            <div class="font-medium">{{ wl.custom_name }}</div>
+                            <div class="text-gray-500 text-sm">@{{ wl.bot_username }}</div>
+                        </td>
+                        <td class="py-3 text-gray-400 font-mono text-sm">{{ wl.owner_user_id }}</td>
+                        <td class="py-3">
+                            <span class="text-emerald-400">{{ wl.revenue_share }}%</span>
+                        </td>
+                        <td class="py-3">
+                            <span class="px-2 py-1 rounded-full text-xs {{ 'bg-emerald-900 text-emerald-300' if wl.active else 'bg-red-900 text-red-300' }}">
+                                {{ 'Active' if wl.active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td class="py-3">
+                            <button onclick="editShare('{{ wl.owner_user_id }}', {{ wl.revenue_share }})"
+                                    class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded transition">
+                                Edit Share
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </main>
+
+    <!-- Edit Price Modal -->
+    <div id="priceModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-96 border border-gray-700">
+            <h3 class="text-lg font-semibold mb-4">Edit Plan Price</h3>
+            <form id="priceForm" onsubmit="submitPrice(event)">
+                <input type="hidden" id="pricePlan" name="plan">
+                <label class="block text-sm text-gray-400 mb-2">Price (IDR)</label>
+                <input type="number" id="priceValue" name="price"
+                       class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white mb-4"
+                       min="0" required>
+                <div class="flex gap-3 justify-end">
+                    <button type="button" onclick="closeModal('priceModal')"
+                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Cancel</button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg transition font-medium">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Share Modal -->
+    <div id="shareModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-96 border border-gray-700">
+            <h3 class="text-lg font-semibold mb-4">Edit Revenue Share</h3>
+            <form id="shareForm" onsubmit="submitShare(event)">
+                <input type="hidden" id="shareUser" name="user_id">
+                <label class="block text-sm text-gray-400 mb-2">Share (%)</label>
+                <input type="number" id="shareValue" name="share"
+                       class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white mb-4"
+                       min="0" max="100" step="0.1" required>
+                <div class="flex gap-3 justify-end">
+                    <button type="button" onclick="closeModal('shareModal')"
+                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Cancel</button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function editPrice(plan, currentPrice) {
+            document.getElementById('pricePlan').value = plan;
+            document.getElementById('priceValue').value = currentPrice;
+            document.getElementById('priceModal').classList.remove('hidden');
+        }
+
+        function editShare(userId, currentShare) {
+            document.getElementById('shareUser').value = userId;
+            document.getElementById('shareValue').value = currentShare;
+            document.getElementById('shareModal').classList.remove('hidden');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        async function submitPrice(e) {
+            e.preventDefault();
+            const form = new FormData(e.target);
+            const res = await fetch('/api/plan/set', { method: 'POST', body: form });
+            if (res.ok) { location.reload(); }
+            else { alert('Failed to update price'); }
+        }
+
+        async function submitShare(e) {
+            e.preventDefault();
+            const form = new FormData(e.target);
+            const res = await fetch('/api/whitelabel/share', { method: 'POST', body: form });
+            if (res.ok) { location.reload(); }
+            else { alert('Failed to update share'); }
+        }
+    </script>
+</body>
+</html>
