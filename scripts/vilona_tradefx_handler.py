@@ -2827,6 +2827,7 @@ def handle_command(cmd, text, chat_id, msg):
                             tg_send(text, chat_id, reply_markup=keyboard)
                     # ── Save to unified feed (user-generated) ──
                     try:
+                        disp = sub.upper()  # fix undefined `disp` in unknown-symbol branch
                         username_raw = (msg.get("chat", {}).get("username", "") or 
                                        msg.get("from", {}).get("username", "") or "")
                         username = username_raw.lstrip("@") if username_raw else ""
@@ -2837,9 +2838,8 @@ def handle_command(cmd, text, chat_id, msg):
                                   confidence=sig.get("confidence",0), rr_ratio=sig.get("rr_ratio","?"),
                                   engines=sig.get("engines",{}), source="user-generate",
                                   source_user=username, price=price, grade=sig.get("grade",""))
-                    except Exception:
-                        pass
-                    else:
+                    except Exception as e:
+                        logger.error(f"feed_add failed ({disp}): {e}")
                         tg_send("❌ Analisa gagal — coba lagi nanti.", chat_id)
                 else:
                     tg_send(f"❌ '{sub}' tidak dikenali.\n\n"
