@@ -306,7 +306,7 @@ class TestVilonaCommandRegistration:
 
     def test_command_count(self, vilona_bot):
         """Exactly 24 commands registered."""
-        assert len(vilona_bot._command_handlers) == 24
+        assert len(vilona_bot._command_handlers) == 26
 
     def test_all_handlers_callable(self, vilona_bot):
         """Each registered handler is callable (async or sync)."""
