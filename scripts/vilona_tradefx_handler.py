@@ -33,6 +33,7 @@ try:
     from license_manager import cmd_genkey, cmd_listkeys, cmd_revokekey, cmd_mykey, is_admin
     LICENSE_ENGINE = True
 except ImportError:
+    cmd_genkey = cmd_listkeys = cmd_revokekey = cmd_mykey = is_admin = None
     LICENSE_ENGINE = False
 # Legacy subscription system — deprecated, all features now free
 SUBSCRIPTION_ENGINE = False
@@ -4611,6 +4612,54 @@ def handle_command(cmd, text, chat_id, msg):
             f"🔥 /signal — Cek signal sekarang",
             chat_id
         )
+
+    elif cmd == "/mykey":
+        """Show user's own EA license key."""
+        if not LICENSE_ENGINE:
+            tg_send("🔧 License engine belum aktif. Hubungi @codergaboets.", chat_id)
+            return
+        try:
+            result = cmd_mykey(str(chat_id))
+            tg_send(result, chat_id)
+        except Exception as e:
+            logger.error(f"mykey error: {e}")
+            tg_send("❌ Gagal cek license. Coba lagi atau hubungi @codergaboets.", chat_id)
+
+    elif cmd == "/genkey":
+        """Admin: Generate EA license key."""
+        if not LICENSE_ENGINE:
+            tg_send("🔧 License engine belum aktif. Hubungi @codergaboets.", chat_id)
+            return
+        try:
+            result = cmd_genkey(str(chat_id), sub, msg)
+            tg_send(result, chat_id)
+        except Exception as e:
+            logger.error(f"genkey error: {e}")
+            tg_send("❌ Gagal generate key.", chat_id)
+
+    elif cmd == "/listkeys":
+        """Admin: List all EA license keys."""
+        if not LICENSE_ENGINE:
+            tg_send("🔧 License engine belum aktif. Hubungi @codergaboets.", chat_id)
+            return
+        try:
+            result = cmd_listkeys(str(chat_id))
+            tg_send(result, chat_id)
+        except Exception as e:
+            logger.error(f"listkeys error: {e}")
+            tg_send("❌ Gagal list keys.", chat_id)
+
+    elif cmd == "/revokekey":
+        """Admin: Revoke EA license key."""
+        if not LICENSE_ENGINE:
+            tg_send("🔧 License engine belum aktif. Hubungi @codergaboets.", chat_id)
+            return
+        try:
+            result = cmd_revokekey(str(chat_id), sub)
+            tg_send(result, chat_id)
+        except Exception as e:
+            logger.error(f"revokekey error: {e}")
+            tg_send("❌ Gagal revoke key.", chat_id)
 
     elif cmd == "/restart_bot":
         """Admin-only: Exit so systemd auto-restarts."""
