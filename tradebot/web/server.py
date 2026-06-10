@@ -1,13 +1,39 @@
 """
 Web Admin Dashboard — FastAPI + Jinja2 + Tailwind CSS
 
-Serves:
-  /                    Dashboard home (revenue, users, signals)
-  /plans               Plan management (view/edit pricing)
-  /whitelabels         Whitelabel bots (view/edit revenue shares)
-  /affiliates          Affiliate management (view/edit commission rates)
-  /signals             Live signal feed
-  /api/...             REST API for all data
+Public routes (no auth):
+  /                    302 → /landing
+  /landing             Marketing landing page
+  /dashboard           302 → /dashboard/en or /dashboard/id (Accept-Language)
+  /dashboard/en        Public signal dashboard (English)
+  /dashboard/id        Public signal dashboard (Indonesian)
+  /dashboard/bilingual Public signal dashboard (bilingual)
+  /signals             Public signals feed
+  /api/feed            Recent signals (channel + user)
+  /api/user_activity   User-generated signals
+  /api/feed/stats      Feed stats (win rate, total pips)
+  /api/trade_stats     Trade history stats
+  /api/mapping         Daily mapping data
+  /api/today_trades    Today's trades
+  /api/transparency    LP transparency data
+  /api/backtest        Backtest results
+  /api/donors          Donor list
+  /api/daily_analyze   Daily analyze request counts
+  /api/daily_recap     Daily trade recap
+  /api/fuel/create     Tripay donation payment (POST)
+  /api/fuel/stats      AI Fuel donation progress
+  /api/fuel/report     Manual transfer report (POST)
+
+Admin routes (session auth required):
+  /login               Admin login
+  /admin               Dashboard home (revenue, users, signals)
+  /admin/plans         Plan management (view/edit pricing)
+  /admin/whitelabels   Whitelabel bots (view/edit revenue shares)
+  /logout              Clear session
+
+Bridge (admin):
+  /api/bridge/*        Signal bridge state
+  /health              Health check
 
 Run: python -m tradebot.web.server --port 9090
 """
@@ -18,7 +44,7 @@ import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -35,6 +61,33 @@ from tradebot.services.plans import (
     get_plan_stats,
     get_total_revenue,
     set_plan_price,
+)
+from tradebot.web.public_dashboard import (
+    get_backtest_data as _get_backtest_data,
+)
+from tradebot.web.public_dashboard import (
+    get_daily_analyze_stats as _get_daily_analyze_stats,
+)
+from tradebot.web.public_dashboard import (
+    get_daily_mapping as _get_daily_mapping,
+)
+from tradebot.web.public_dashboard import (
+    get_donor_list as _get_donor_list,
+)
+from tradebot.web.public_dashboard import (
+    get_fuel_stats as _get_fuel_stats,
+)
+from tradebot.web.public_dashboard import (
+    get_today_trades as _get_today_trades,
+)
+from tradebot.web.public_dashboard import (
+    get_trade_stats as _get_trade_stats,
+)
+from tradebot.web.public_dashboard import (
+    get_transparency_data as _get_transparency_data,
+)
+from tradebot.web.public_dashboard import (
+    save_fuel_report as _save_fuel_report,
 )
 
 LOG = logging.getLogger("tradebot.web")
@@ -108,9 +161,9 @@ async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login", status_code=302)
 
-# ── Pages ─────────────────────────────────────────────────────────────
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+# ── Admin Pages ────────────────────────────────────────────────────────
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard(request: Request):
     _check_auth(request)
     stats = get_plan_stats()
     revenue = get_total_revenue()
@@ -119,7 +172,7 @@ async def dashboard(request: Request):
 
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
-        "title": "1ai-trade-bot Dashboard",
+        "title": "1ai-trade-bot Admin Dashboard",
         "stats": stats,
         "revenue": revenue,
         "prices": prices,
@@ -129,8 +182,8 @@ async def dashboard(request: Request):
     })
 
 
-@app.get("/plans", response_class=HTMLResponse)
-async def plans_page(request: Request):
+@app.get("/admin/plans", response_class=HTMLResponse)
+async def admin_plans_page(request: Request):
     _check_auth(request)
     return templates.TemplateResponse("plans.html", {
         "request": request,
@@ -140,14 +193,196 @@ async def plans_page(request: Request):
     })
 
 
-@app.get("/whitelabels", response_class=HTMLResponse)
-async def whitelabels_page(request: Request):
+@app.get("/admin/whitelabels", response_class=HTMLResponse)
+async def admin_whitelabels_page(request: Request):
     _check_auth(request)
     return templates.TemplateResponse("whitelabels.html", {
         "request": request,
         "title": "Whitelabel Management",
         "whitelabels": get_all_active_whitelabels(),
     })
+
+
+# ── Public Pages (no auth) ─────────────────────────────────────────────
+@app.get("/")
+async def root_redirect():
+    """Root: redirect to public landing (preserves old scripts/dashboard_server.py behavior)."""
+    return RedirectResponse(url="/landing", status_code=302)
+
+
+@app.get("/landing", response_class=FileResponse)
+async def landing_page():
+    """Public marketing landing page (served as raw HTML — no Jinja parsing)."""
+    return FileResponse(
+        path=str(TEMPLATE_DIR / "landing.html"),
+        media_type="text/html",
+    )
+
+
+@app.get("/signals", response_class=HTMLResponse)
+async def signals_page(request: Request):
+    """Public signals feed (alias for /dashboard)."""
+    return templates.TemplateResponse("public_dashboard.html", {
+        "request": request,
+        "title": "Vilona TradeFX — AI Signal Dashboard",
+    })
+
+
+@app.get("/dashboard", response_class=RedirectResponse)
+async def dashboard_redirect(request: Request):
+    """Match old scripts/dashboard_server.py:646-660 Accept-Language redirect."""
+    accept_lang = request.headers.get("accept-language", "")
+    target = "/dashboard/id" if "id" in accept_lang.lower() else "/dashboard/en"
+    return RedirectResponse(url=target, status_code=302)
+
+
+@app.get("/dashboard/en", response_class=HTMLResponse)
+async def dashboard_en(request: Request):
+    """Public signal dashboard (English)."""
+    return templates.TemplateResponse(
+        "public_dashboard_en.html",
+        {"request": request, "title": "Vilona TradeFX — AI Signal Dashboard"},
+    )
+
+
+@app.get("/dashboard/id", response_class=HTMLResponse)
+async def dashboard_id(request: Request):
+    """Public signal dashboard (Indonesian)."""
+    return templates.TemplateResponse(
+        "public_dashboard_id.html",
+        {"request": request, "title": "Vilona TradeFX — Dasbor Sinyal AI"},
+    )
+
+
+@app.get("/dashboard/bilingual", response_class=HTMLResponse)
+async def dashboard_bilingual(request: Request):
+    """Public signal dashboard (bilingual)."""
+    return templates.TemplateResponse(
+        "public_dashboard_bilingual.html",
+        {"request": request, "title": "Vilona TradeFX — AI Signal Dashboard"},
+    )
+
+
+
+# ── Public APIs (no auth) ──────────────────────────────────────────────
+@app.get("/api/feed")
+async def api_feed():
+    """Recent signals (channel + user)."""
+    from scripts.signal_feed import get_recent_signals  # type: ignore[import-not-found]
+
+    return {"signals": get_recent_signals(50)}
+
+
+@app.get("/api/user_activity")
+async def api_user_activity():
+    """User-generated signals."""
+    from scripts.signal_feed import get_user_signals  # type: ignore[import-not-found]
+
+    return {"signals": get_user_signals(50)}
+
+
+@app.get("/api/feed/stats")
+async def api_feed_stats():
+    """Public feed stats (renamed from old /api/stats to avoid admin API collision)."""
+    from scripts.signal_feed import get_stats  # type: ignore[import-not-found]
+
+    return get_stats()
+
+
+@app.get("/api/trade_stats")
+async def api_trade_stats():
+    """Trade history summary stats."""
+    return _get_trade_stats()
+
+
+@app.get("/api/mapping")
+async def api_mapping():
+    """Daily mapping data."""
+    return _get_daily_mapping()
+
+
+@app.get("/api/today_trades")
+async def api_today_trades():
+    """Today's trades."""
+    return {"trades": _get_today_trades()}
+
+
+@app.get("/api/transparency")
+async def api_transparency():
+    """LP transparency data."""
+    return _get_transparency_data()
+
+
+@app.get("/api/backtest")
+async def api_backtest():
+    """Backtest results (XAUUSD, grid, per-engine)."""
+    return _get_backtest_data()
+
+
+@app.get("/api/donors")
+async def api_donors():
+    """Donor list."""
+    return {"donors": _get_donor_list()}
+
+
+@app.get("/api/daily_analyze")
+async def api_daily_analyze():
+    """Per-day analyze request counts."""
+    return _get_daily_analyze_stats()
+
+
+@app.get("/api/daily_recap")
+async def api_daily_recap():
+    """Daily trade recap from trade_tracker."""
+    try:
+        from scripts.trade_tracker import get_daily_trades  # type: ignore[import-not-found]
+
+        return get_daily_trades()
+    except Exception as exc:
+        LOG.warning("api_daily_recap failed: %s", exc)
+        return {"error": str(exc), "trades": [], "total_signals": 0}
+
+
+@app.get("/api/fuel/stats")
+async def api_fuel_stats():
+    """AI Fuel donation progress."""
+    return _get_fuel_stats()
+
+
+@app.post("/api/fuel/create")
+async def api_fuel_create(
+    amount: int,
+    chat_id: str = "web",
+    username: str = "Guest",
+):
+    """Create a Tripay donation payment for AI Fuel."""
+    if amount < 10000:
+        return JSONResponse(
+            {"success": False, "error": "Minimum donasi Rp10.000"}, status_code=400
+        )
+    try:
+        from members.payment import create_tripay_payment  # type: ignore[import-not-found]
+
+        result = create_tripay_payment(
+            chat_id=chat_id, username=username, tier="donor", amount=amount
+        )
+        if result.get("success"):
+            return result
+        return JSONResponse(result, status_code=500)
+    except Exception as exc:
+        LOG.warning("api_fuel_create failed: %s", exc)
+        return JSONResponse(
+            {"success": False, "error": f"Tripay error: {str(exc)[:200]}"},
+            status_code=500,
+        )
+
+
+@app.post("/api/fuel/report")
+async def api_fuel_report(chat_id: str):
+    """Receive a manual transfer confirmation from the website (dedup by chat_id)."""
+    body, status = _save_fuel_report(chat_id)
+    return JSONResponse(body, status_code=status)
+
 
 
 # ── API ───────────────────────────────────────────────────────────────
