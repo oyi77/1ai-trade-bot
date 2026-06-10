@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "1ai-trade-bot",
       script: "/home/linuxbrew/.linuxbrew/bin/python3",
-      args: "-m tradebot --host 0.0.0.0 --port 8888",
+      args: "-m tradebot --host 0.0.0.0 --port 8889",
       cwd: "/home/openclaw/projects/1ai-trade-bot",
       exec_mode: "fork",
       instances: 1,
