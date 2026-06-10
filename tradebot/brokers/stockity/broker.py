@@ -18,18 +18,18 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone, timedelta
 import logging
 from contextlib import suppress
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
 import websockets
 from websockets.protocol import State
 
+from tradebot.brokers.base import TradeResult
+from tradebot.brokers.base import TradeStatus as BaseTradeStatus
 from tradebot.config import settings
-from tradebot.models import Trade
-from tradebot.brokers.base import TradeResult, TradeStatus as BaseTradeStatus
 
 LOG = logging.getLogger("tradebot.brokers.stockity")
 
@@ -189,8 +189,9 @@ class StockityBroker:
         symbol: str,
         direction: str,
         amount: float,
-        duration: int = 60,
-    ) -> Trade:
+        duration: int | None = None,
+        option_type: str = "blitz",
+    ) -> TradeResult:
         """Place a binary options trade on Stockity.
 
         Args:
@@ -205,18 +206,22 @@ class StockityBroker:
         if not self._connected:
             await self.connect()
 
-        # HAR format: expire_at is the next 30-minute boundary (Unix timestamp in seconds)
-        now = datetime.now(timezone.utc)
+        # RULE: Binary options MUST expire at :00 or :30 minute marks
+        # (top of hour or half past)
+        now = datetime.now(UTC)
         now_ms = int(now.timestamp() * 1000)
-        # Round up to next 30-minute boundary
+
+        # Find next valid boundary (:00 or :30)
         minute = now.minute
-        next_30 = ((minute // 30) + 1) * 30
-        if next_30 >= 60:
-            expire_dt = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if minute < 30:
+            # Next boundary is :30 of current hour
+            expire_dt = now.replace(minute=30, second=0, microsecond=0)
         else:
-            expire_dt = now.replace(minute=next_30, second=0, microsecond=0)
-        expire_ts = int(expire_dt.timestamp())
-        
+            # Next boundary is :00 of next hour
+            expire_dt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+
+        expire_ts = int(expire_dt.timestamp())  # Unix timestamp in SECONDS
+
         payload = {
             "ric": _symbol_to_ric(symbol),
             "amount": int(amount * 100000000),  # HAR shows 7400000000 for $74

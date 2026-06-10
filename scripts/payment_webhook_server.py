@@ -64,15 +64,22 @@ def verify_tripay_signature(body: bytes, callback_sig: str) -> bool:
     return hmac.compare_digest(expected, callback_sig)
 
 
-def upgrade_member(chat_id: str, tier: str, days: int, merchant_ref: str = ""):
-    """Upgrade member ke DONATUR via members.db (SQLite)."""
+def upgrade_member(chat_id: str, tier: str, days: int, merchant_ref: str = "") -> bool:
+    """Upgrade member ke DONATUR via members.db (SQLite). Returns True on full success."""
     try:
         from members import upgrade_tier as mem_upgrade, mark_payment_paid
         mem_upgrade(chat_id, tier, days, merchant_ref)
-        mark_payment_paid(merchant_ref)
         log.info(f"Upgraded in members.db: {chat_id} → {tier}")
+        try:
+            mark_payment_paid(merchant_ref)
+            log.info(f"Payment marked paid: {merchant_ref}")
+        except Exception as e:
+            log.error(f"mark_payment_paid failed for ref {merchant_ref}: {e}")
+            # Upgrade succeeded but payment marker failed — log and continue
+        return True
     except Exception as e:
-        log.warning(f"members.db upgrade failed: {e}")
+        log.error(f"members.db upgrade failed for {chat_id}: {e}")
+        return False
 
 
 class WebhookHandler(BaseHTTPRequestHandler):
@@ -92,7 +99,10 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path
-        content_len = int(self.headers.get("Content-Length", 0))
+        try:
+            content_len = int(self.headers.get("Content-Length", 0))
+        except (ValueError, TypeError):
+            content_len = 0
         body = self.rfile.read(content_len) if content_len else b""
 
         log.info(f"Webhook: {path} ({content_len} bytes)")
@@ -114,7 +124,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         # Verify signature
         callback_sig = self.headers.get("X-Callback-Signature", "")
-        if callback_sig and not verify_tripay_signature(body, callback_sig):
+        if not callback_sig or not verify_tripay_signature(body, callback_sig):
             log.warning(f"Invalid Tripay signature for: {data.get('merchant_ref', '?')}")
             self._json({"error": "invalid signature"}, 403)
             return
@@ -138,8 +148,8 @@ class WebhookHandler(BaseHTTPRequestHandler):
             parts = merchant_ref.split("-")
             if len(parts) >= 2 and parts[0] == "VTFX":
                 chat_id = parts[1]
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(f"Failed to extract chat_id from ref {merchant_ref}: {e}")
 
         if not chat_id:
             log.error(f"Cannot extract chat_id from ref: {merchant_ref}")
@@ -150,7 +160,10 @@ class WebhookHandler(BaseHTTPRequestHandler):
         tier, days = "donor", DONOR_DAYS
 
         # Upgrade member to DONOR
-        upgrade_member(chat_id, tier, days, merchant_ref)
+        if not upgrade_member(chat_id, tier, days, merchant_ref):
+            log.error(f"Member upgrade failed for {chat_id} — returning 500 for retry")
+            self._json({"status": "error", "message": "upgrade_failed"}, 500)
+            return
 
         # ── DONATUR message (no subscription, no ref display) ──
         channel_link = "https://t.me/vilonaaichanel"
@@ -160,7 +173,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         msg = (
             f"🔥 <b>BOOM! Bahan bakar server sudah masuk.</b>\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💰 <b>Rp{total_amount:,}</b> — Makasih Bro!\n"
+            f"💰 <b>Rp{int(total_amount):,}</b> — Makasih Bro!\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
             f"\n"
@@ -188,7 +201,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
             [{"text": "📢 Join Channel Sinyal", "url": channel_link}],
             [{"text": "👥 Join Group Diskusi", "url": group_link}],
         ]}
-        tg_send(msg, chat_id, reply_markup=markup)
+        result = tg_send(msg, chat_id, reply_markup=markup)
+        if result is None:
+            log.warning(f"tg_send DM to {chat_id} returned None (message may not have been delivered)")
 
         # Notify group — Social Proof (semangat gotong royong)
         if GROUP_CHAT_ID:
@@ -196,7 +211,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 f"🔥 <b>BAHAN BAKAR AI MASUK! 🚀</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"💰 Ada kawan yang baru men-support server AI\n"
-                f"sebesar <b>Rp{total_amount:,}</b>!\n"
+                f"sebesar <b>Rp{int(total_amount):,}</b>!\n"
                 f"\n"
                 f"Terima kasih orang baik! Mesin AI kita\n"
                 f"makin buas hari ini berkat dukunganmu. 🥂\n"
@@ -204,7 +219,9 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 f"💚 Mau ikut bensin server? /donate\n"
                 f"📢 Signal real-time: @vilonaaichanel"
             )
-            tg_send(group_msg, GROUP_CHAT_ID)
+            group_result = tg_send(group_msg, GROUP_CHAT_ID)
+            if group_result is None:
+                log.warning("tg_send to GROUP_CHAT_ID returned None (group notification may not have been delivered)")
 
         log.info(f"✅ Donation complete: {chat_id} → DONATUR (ref={merchant_ref[:16]} amount={total_amount})")
         self._json({"status": "ok", "chat_id": chat_id, "donor": True})

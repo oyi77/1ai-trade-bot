@@ -17,7 +17,7 @@ PRICING = {
     },
 }
 
-MIN_DONATION = 10000  # Minimum donasi Rp10.000
+MIN_DONATION = int(os.environ.get("TRIPAY_MIN_DONATION", "10000"))  # Minimum donasi Rp10.000
 
 # ── Tripay Config ─────────────────────────────────────────
 _TRIPAY_KEY = os.environ.get("TRIPAY_API_KEY", "")
@@ -65,7 +65,7 @@ def get_pricing_table() -> str:
 
 
 def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
-                          method: str = "QRIS2", amount: int = None) -> dict:
+                          method: str = "QRIS", amount: int = None) -> dict:
     """Create Tripay donation transaction. Returns dict with payment_url.
     
     tier is now 'donor' by default. amount overrides the donation amount.
@@ -98,7 +98,7 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
             "quantity": 1,
         }],
         "callback_url": TRIPAY_CALLBACK,
-        "return_url": "https://t.me/berkahkaryaforexbotbot",
+        "return_url": os.environ.get("TRIPAY_RETURN_URL", "https://t.me/berkahkaryaforexbotbot"),
         "expired_time": int(time.time()) + 3600,
     }
 
@@ -133,7 +133,7 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
                     payload=result,
                 )
             except ImportError:
-                pass
+                logger.warning("payment order tracking unavailable — import insert_payment_order failed")
 
             return {
                 "success": True,
@@ -177,7 +177,7 @@ def check_tripay_status(merchant_ref: str) -> dict:
     import urllib.request, urllib.error
 
     payload = {"merchant_ref": merchant_ref}
-    payload["signature"] = _sign(merchant_ref + TRIPAY_MERCHANT)
+    payload["signature"] = _sign(TRIPAY_MERCHANT + merchant_ref)
 
     try:
         req = urllib.request.Request(

@@ -494,7 +494,7 @@ def tg_send(text, chat_id=None, reply_markup=None):
 
 # ── Signal bridge ──
 BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
-MASTER_API_KEY="VT-MASTER-734AD731F5FB"  # auto-detected from api_keys.json
+MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "VT-MASTER-734AD731F5FB")
 
 
 def _fetch_json_url(url, timeout=5):
@@ -638,11 +638,12 @@ def _check_donor_quota(chat_id):
     
     record["count"] += 1
     USER_DAILY_ANALYZE[chat_id] = record
-    remaining = max(0, DONOR_DAILY_QUOTA - record["count"])
     
+    # Check quota AFTER increment — user gets exactly QUOTA x per day
     if record["count"] > DONOR_DAILY_QUOTA:
-        return False, remaining, f"🛑 <b>Kuota Donatur Harian Penuh!</b>\n━━━━━━━━━━━━━━━━\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\n⏰ Reset: besok jam 00:00 WIB\n\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
+        return False, max(0, DONOR_DAILY_QUOTA - record["count"]), f"🛑 <b>Kuota Donatur Harian Penuh!</b>\\n━━━━━━━━━━━━━━━━\\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\\n⏰ Reset: besok jam 00:00 WIB\\n\\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
     
+    remaining = max(0, DONOR_DAILY_QUOTA - record["count"])
     if remaining <= 5:
         return True, remaining, None  # allow but warn later
     
