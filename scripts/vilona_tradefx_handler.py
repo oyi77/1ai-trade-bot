@@ -1770,6 +1770,10 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     if isinstance(rr, str) and rr.startswith("1:"):
         rr = rr[2:]
     entry = sig.get("entry") or price or 0
+    # ── Entry Zone: ±0.05% range dari entry price ──
+    zone_half = entry * 0.0005 if entry > 0 else 0
+    zone_lo = entry - zone_half if zone_half else entry
+    zone_hi = entry + zone_half if zone_half else entry
     sl = sig.get("sl") or 0
     tp = sig.get("tp") or 0
     tp1 = sig.get("tp1", 0)
@@ -1915,12 +1919,16 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     is_idx = display in ("BBCA","BBRI","IHSG")
     def _fmt(v):
         return f"Rp{v:,.0f}" if is_idx else f"{currency}{v:.2f}"
+    def _fmt_zone(lo, hi):
+        return f"Rp{lo:,.0f} — Rp{hi:,.0f}" if is_idx else f"{currency}{lo:.2f} — {currency}{hi:.2f}"
+
+    zone_label = "🟢 BUY ZONE" if action == "BUY" else ("🔴 SELL ZONE" if action == "SELL" else "📍 Entry Zone")
 
     lines = [
         f"{header_emoji} <b>{header_label} — {display}</b>",
         f"━━━━━━━━━━━━━━━━━━━━━━",
         f"🕐 {now_wib.strftime('%Y.%m.%d %H:%M')} WIB | Session: {session(h)}",
-        f"📍 Entry: {_fmt(entry)}",
+        f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}",
         f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}",
     ]
 
