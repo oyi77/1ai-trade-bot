@@ -1,10 +1,77 @@
 # Repository Guidelines
 
+> **Read this first if you are an AI agent.** Sections marked 🤖 are critical guardrails.
+
 ## Project Overview
 
 TradeBot (`tradebot` v0.2.0) is a modular, async Python trading framework for multi-broker signal analysis and automated trade execution. It connects to Deriv (binary options via WebSocket), MetaTrader 5, Binance, Yahoo Finance, and forex data sources. An 11-engine consensus pipeline (with MTF hierarchical analysis) analyzes market ticks and produces trading signals dispatched through a quality gate and middleware chain to brokers. Three Telegram bots (Vilona, Stockity, Subscription) handle signal distribution and payment-gated access.
 
 **Runtime:** Python 3.11+ (developed on 3.13). All async via `asyncio`.
+
+---
+
+## 🤖 AI Agent Guardrails (READ FIRST)
+
+These rules are non-negotiable. They exist because prior AI runs left the codebase messy. Future AIs MUST comply.
+
+### Never suppress type errors
+- **Forbidden:** `as any`, `# type: ignore` (without explicit justification), `cast(Any, ...)`, dynamic monkey-patches that defeat the type checker.
+- **Fix root causes.** If mypy fails, change the code or the type — don't silence it.
+- `# type: ignore[import-not-found]` is acceptable ONLY for cross-package imports where the dependency is genuinely missing at type-check time and documented in the commit message.
+
+### Never use silent except blocks
+- **Forbidden:** `except: pass`, `except Exception: pass`, `except: continue`, swallowing errors without a log.
+- **Required:** `LOG.warning("op failed: %s", exc)` (or `LOG.error` for recoverable-then-raise flows). If the error is genuinely ignorable, use `LOG.debug` and a comment explaining why.
+- The pre-existing codebase already migrated away from this — do not reintroduce it.
+
+### Comments and docstrings — minimal, necessary
+- **Default: no comments.** Code should be self-documenting.
+- **Acceptable exceptions** (justify in commit message):
+  1. Explaining a non-obvious algorithmic choice, security reason, or performance optimization.
+  2. Public API docstrings (Google or NumPy style) for functions exposed across packages.
+  3. Referencing a bug fix or external spec (e.g., `# Fixes issue #123`).
+- **Forbidden:** BDD-style given/when/then comments, restating the obvious, decorating with emojis, narrative "story" comments.
+- **Banned phrases** in comments: "this function", "this method", "this class", "note that", "we do X here".
+- If a hook or linter fires on a comment, justify it briefly or remove the comment.
+
+### Git commit style
+- **Format:** `<type>: <subject> — <detail>` (em-dash ` — `, not hyphen)
+- **Types:** `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`, `ci:`, `style:`, `perf:`, `build:`
+- **Body:** wrap at 72 chars, explain WHY not WHAT
+- **Co-author trailer:** every commit must end with:
+  ```
+  Co-authored-by: Sisyphus <clio-agent@sisyphuslabs.ai>
+  ```
+  Plus body line: `Ultraworked with [Sisyphus](https://github.com/code-yeongyu/oh-my-openagent)`
+- **Atomic commits:** 3+ files → 2+ commits; 5+ files → 3+ commits. Split by concern, not by file type.
+- **Tests paired with implementation:** test file in the same commit as the code it tests.
+
+### What NEVER to commit (gitignored — see `.gitignore`)
+- **Runtime data:** `data/*`, `bridges/signal_bridge/engine_status.json`, `bridges/signal_bridge/dashboard.html.bak`, `logs/*.log`
+- **Databases:** `*.db`, `*.sqlite`, `*.sqlite3`
+- **Env/secrets:** `.env`, `.env.*` (except `.env.example`)
+- **AI agent scratch space:** `.omo/`, `.aider*`, `.opencode/`, `.claude/`
+- **Package manager artifacts:** `uv.lock`, `poetry.lock`, `Pipfile.lock`
+- **Cache:** `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`, `__pycache__/`, `*.pyc`
+- **Restored dead code:** `scripts/dashboard_server.py` (deleted in `d99df1f` unification — must not be re-added)
+
+If you see any of these in `git status`, do not commit them. If they're tracked, untrack with `git rm --cached <file>` and update `.gitignore`.
+
+### One server, one bot, one entry point
+The codebase has been unified. The principle is:
+- **1 FastAPI app** (port 9090) — serves admin + public + API + bridge
+- **1 bot class** (`UnifiedBot`) — replaces VilonaBot/StockityBot/SubscriptionBot
+- **1 entry point** — `python -m tradebot`
+- **3 admin pages** (login, dashboard, plans, whitelabels — at `/admin/*`)
+- **5 public pages** (landing, signals, dashboard/en/id/bilingual — all under `/`)
+- **12 public APIs** under `/api/*` (no auth)
+- **No legacy aliases.** If you see a backup or alternate path, delete it — don't add backward-compat redirects.
+
+### When to update AGENTS.md
+- Test counts change (currently 849 — update if you change this)
+- New pattern is established and used in 3+ files
+- New guardrail rule learned from a bug or anti-pattern incident
+- A section is wrong (correct it; don't leave stale info)
 
 ---
 
@@ -29,6 +96,11 @@ Storage (SQLiteStorage / CognitiveDB / TieredCache)
 Monitoring (MetricsCollector / HealthProbe / TradeTracker)
     ↓
 Notifications (TelegramService / EventBus / SignalPublisher)
+    ↓
+Web (Unified FastAPI on port 9090)
+    ├─ Public: /landing, /signals, /dashboard/{en,id,bilingual}
+    ├─ Admin: /admin, /admin/plans, /admin/whitelabels (session auth)
+    └─ APIs: /api/feed, /api/transparency, /api/backtest, /api/donors, /api/fuel/* (12 public)
 ```
 
 **Key abstraction layers:**
@@ -57,8 +129,9 @@ Notifications (TelegramService / EventBus / SignalPublisher)
 | `tradebot/utils/` | AsyncRateLimiter, async_retry, validators |
 | `tradebot/bots/` | Telegram bots: Vilona, Stockity, Subscription |
 | `tradebot/cli.py` | Unified CLI (14 subcommands) |
-| `tests/` | 893 tests across 25 files |
-| `scripts/` | Legacy standalone scripts (63 files) — deprecated, use `tradebot` package |
+| `tests/` | 849 tests across 25 files |
+| `scripts/` | Legacy standalone scripts (~70 files) — most absorbed into `tradebot` package. `scripts/_legacy/` is archive; do not import. |
+| `.omo/` | AI agent scratch space (gitignored) — plans, todo lists, internal notes |
 | `docs/` | API reference, ops runbook, ownership protocol |
 | `deploy/systemd/` | Systemd service files |
 | `.github/workflows/` | CI pipeline |
@@ -241,7 +314,7 @@ class ValidationMiddleware:
 ## Testing & QA
 
 ### Running Tests
-# Full suite (893 tests, ~55s)
+# Full suite (849 tests, ~55s)
 python -m pytest tests/ -v
 
 # Single file
@@ -278,7 +351,8 @@ python -m pytest tests/ -x --tb=short
 
 ### Quality Gates
 - **Lint:** 0 ruff errors (enforced)
-- **Tests:** 893 passing, 0 failures
+- **Tests:** 849 passing, 0 failures
 - **Anti-patterns:** Zero `except Exception: pass` (all log the exception)
 - **Duplications:** Zero duplicate test functions within the same test class
 - **Legacy absorption:** All scripts/ functionality absorbed into tradebot/ package
+- **Working tree:** Clean (no dirty runtime data — if you see it, you broke gitignore)
