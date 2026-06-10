@@ -1005,12 +1005,13 @@ class VilonaBot(BaseBot):
     async def _cmd_genkey(self, args: list[str], chat_id: str | None = None) -> str:
         """Generate EA license key — admin only, or donor self-service."""
         from license_manager import cmd_genkey, is_admin
+
         from members import get_member
-        
+
         target = str(chat_id or "")
         member = get_member(target)
         is_donor = member and member.get("tier") == "donor"
-        
+
         if not is_admin(target) and not is_donor:
             return (
                 "⛔ <b>Akses Dibatasi</b>\n"
@@ -1022,7 +1023,7 @@ class VilonaBot(BaseBot):
                 "Setelah donasi, bot akan otomatis\n"
                 "mengaktifkan status Donatur kamu."
             )
-        
+
         sub = " ".join(args) if args else target
         return cmd_genkey(target, sub)
 

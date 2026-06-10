@@ -19,12 +19,23 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from tradebot.bots.base import BaseBot
+from tradebot.bots.stockity.affiliate import (
+    create_whitelabel,
+    deactivate_whitelabel,
+    get_or_create_affiliate,
+    get_referral_stats,
+    get_whitelabel,
+)
 from tradebot.brokers.stockity.broker import StockityBroker
 from tradebot.brokers.stockity.rest import StockityREST
 from tradebot.config import settings
-from tradebot.bots.stockity.affiliate import (
-    get_or_create_affiliate, record_referral,
-    get_referral_stats, create_whitelabel, get_whitelabel, deactivate_whitelabel,
+from tradebot.signals.subscriptions import (
+    CATEGORY_DESCRIPTIONS,
+    CATEGORY_EMOJI,
+    SignalCategory,
+    get_user_subscriptions,
+    subscribe_user,
+    unsubscribe_user,
 )
 
 LOG = logging.getLogger("tradebot.bots.stockity.bot")
@@ -347,10 +358,10 @@ class StockityBot(BaseBot):
             )
         authtoken = args[0].strip()
         user_id = args[1].strip()
-        
+
         # Update in-memory
         self._settings.update_credentials(authtoken, user_id)
-        
+
         # Persist to .env file
         try:
             env_path = Path(".env")
@@ -480,7 +491,7 @@ class StockityBot(BaseBot):
         except ValueError:
             return f"❌ Invalid: `{args[0]}`"
         if amount < 50000:
-            return f"❌ Min Rp 50,000"
+            return "❌ Min Rp 50,000"
 
         api = StockityREST()
         try:
@@ -613,6 +624,73 @@ class StockityBot(BaseBot):
 
     async def _ptb_cmd_whitelabel(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         reply = await self._cmd_whitelabel(ctx.args or [], upd.effective_chat.id)
+        await upd.message.reply_markdown(reply)
+
+    # ── Signal Subscriptions ─────────────────────────────────────────
+
+    async def _cmd_signals(self, args: list[str], chat_id: str | None = None) -> str:
+        user_id = str(chat_id) if chat_id else "unknown"
+        subs = get_user_subscriptions(user_id)
+        active = set(subs)
+
+        lines = ["📡 *Signal Types*\n"]
+        for cat in SignalCategory:
+            emoji = CATEGORY_EMOJI.get(cat, "")
+            desc = CATEGORY_DESCRIPTIONS.get(cat, "")
+            status = "✅" if cat in active else "⬜"
+            lines.append(f"{status} {emoji} *{cat.value}* — {desc}")
+        lines.append("\nSubscribe: `/subscribe <type>`")
+        lines.append("Unsubscribe: `/unsubscribe [type]`")
+        return "\n".join(lines)
+
+    async def _cmd_subscribe(self, args: list[str], chat_id: str | None = None) -> str:
+        user_id = str(chat_id) if chat_id else "unknown"
+        if not args:
+            return await self._cmd_signals([], chat_id)
+
+        cat_name = args[0].lower()
+        try:
+            cat = SignalCategory(cat_name)
+        except ValueError:
+            valid = ", ".join(c.value for c in SignalCategory)
+            return f"❌ Unknown category: `{cat_name}`\nValid: {valid}"
+
+        subscribe_user(user_id, cat)
+        emoji = CATEGORY_EMOJI.get(cat, "")
+        desc = CATEGORY_DESCRIPTIONS.get(cat, "")
+        return (
+            f"✅ Subscribed to {emoji} *{cat.value}*\n"
+            f"_{desc}_\n\n"
+            f"View: /signals\n"
+            f"Stop: `/unsubscribe {cat.value}`"
+        )
+
+    async def _cmd_unsubscribe(self, args: list[str], chat_id: str | None = None) -> str:
+        user_id = str(chat_id) if chat_id else "unknown"
+        if args:
+            cat_name = args[0].lower()
+            try:
+                cat = SignalCategory(cat_name)
+            except ValueError:
+                return f"❌ Unknown: `{cat_name}`"
+            unsubscribe_user(user_id, cat.value)
+            return f"✅ Unsubscribed from *{cat.value}*"
+        else:
+            unsubscribe_user(user_id, None)
+            return "✅ Unsubscribed from *all* signals"
+
+    # ── PTB wrappers ────────────────────────────────────────────────
+
+    async def _ptb_cmd_signals(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        reply = await self._cmd_signals([], upd.effective_chat.id)
+        await upd.message.reply_markdown(reply)
+
+    async def _ptb_cmd_subscribe(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        reply = await self._cmd_subscribe(ctx.args or [], upd.effective_chat.id)
+        await upd.message.reply_markdown(reply)
+
+    async def _ptb_cmd_unsubscribe(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        reply = await self._cmd_unsubscribe(ctx.args or [], upd.effective_chat.id)
         await upd.message.reply_markdown(reply)
 
     # ── Run ─────────────────────────────────────────────────────────────

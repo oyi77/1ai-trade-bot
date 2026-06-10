@@ -210,11 +210,11 @@ class StockityExplorer:
         """Monitor majority opinion events (crowd sentiment)."""
         if not self.broker:
             await self.connect()
-            
+
         majority_samples = []
-        
+
         original = self.broker._handle_message
-        
+
         async def capture(msg):
             if msg.get('event') == 'majority_opinion':
                 payload = msg.get('payload', {})
@@ -224,21 +224,21 @@ class StockityExplorer:
                     'asset': payload.get('asset', ''),
                 })
             await original(msg)
-            
+
         self.broker._handle_message = capture
-        
+
         LOG.info(f"Monitoring majority opinion for {duration_s}s...")
         await asyncio.sleep(duration_s)
-        
+
         self.broker._handle_message = original
-        
+
         if not majority_samples:
             return {'error': 'No majority opinion events received'}
-            
+
         # Analyze
         avg_call = sum(s['call'] for s in majority_samples) / len(majority_samples)
         avg_put = sum(s['put'] for s in majority_samples) / len(majority_samples)
-        
+
         return {
             'samples': len(majority_samples),
             'avg_call': avg_call,
@@ -247,7 +247,7 @@ class StockityExplorer:
             'confidence': max(avg_call, avg_put),
             'samples_detail': majority_samples[-5:],  # Last 5
         }
-        
+
     async def analyze_winrate_patterns(
         self,
         deals: list[dict[str, Any]],
