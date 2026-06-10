@@ -2359,6 +2359,7 @@ def handle_command(cmd, text, chat_id, msg):
             "/donate — Isi Bahan Bakar AI ⚡\n",
             "📊 <b>TRADING TOOLS</b>",
             "/mapping — Mapping harian + level S/R",
+            "/levels — SnR + FIBO + Engine Deep Dive 👑",
             "/killzone — Radar sesi market aktif",
             "/winrate — Statistik performa",
             "/history — Riwayat trade terakhir",
