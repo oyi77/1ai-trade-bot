@@ -19,6 +19,18 @@ VILONA_DIR = DATA_DIR / "vilona_tradefx"
 
 WIB = timezone(timedelta(hours=7))
 
+# ═══ LIVE SNAPSHOT CACHE — populated by worker webhook push ═══
+_live_snapshot: dict = {}
+SNAPSHOT_FALLBACK = {
+    "type": "dashboard_snapshot",
+    "status": {"state": "connecting", "pair": "XAUUSD", "detail": "Waiting for worker..."},
+    "performance": {"win_rate": 0.0, "total_pnl": 0.0},
+    "users": {"active": 0, "bot_users": 0},
+    "prices": {"XAUUSD": None},
+    "uptime_seconds": 0,
+    "total_cycles": 0,
+}
+
 TRADE_LOG_PATH = DATA_DIR / "trade_log.json"
 TRADE_HISTORY_PATH = DATA_DIR / "trade_history.json"
 FUEL_REPORTS_PATH = VILONA_DIR / ".fuel_reports.json"
@@ -166,6 +178,12 @@ class Handler(BaseHTTPRequestHandler):
         all_signals = _get_all_signals()
         transformed = [_transform_signal(s) for s in all_signals[-20:]]
         self._json({"signals": transformed})
+
+    # ═══ API: LIVE SNAPSHOT — from autonomous worker ═══
+    def api_live_snapshot(self):
+        """Serve latest dashboard_snapshot cached from worker webhook push."""
+        snap = dict(_live_snapshot) if _live_snapshot else dict(SNAPSHOT_FALLBACK)
+        self._json(snap)
 
     # ═══ API: TRANSPARENCY ═══
     def api_transparency(self):
@@ -354,6 +372,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/feed": self.api_feed,
             "/api/trade_stats": self.api_trade_stats,
             "/api/user_activity": self.api_user_activity,
+            "/api/live-snapshot": self.api_live_snapshot,
             "/api/transparency": self.api_transparency,
             "/api/backtest": self.api_backtest,
             "/api/donors": self.api_donors,
@@ -381,7 +400,22 @@ class Handler(BaseHTTPRequestHandler):
             self._html(DASHBOARD_HTML)
 
     def do_POST(self):
-        if self.path.split("?")[0] == "/api/fuel/create":
+        path = self.path.split("?")[0]
+
+        # 🌐 Webhook: receive dashboard_snapshot from autonomous worker
+        if path == "/api/webhook/snapshot":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(length) if length else b"{}"
+                payload = json.loads(body)
+                global _live_snapshot
+                _live_snapshot = payload
+                self._json({"ok": True})
+            except Exception as e:
+                self._json({"ok": False, "error": str(e)[:200]}, 400)
+            return
+
+        if path == "/api/fuel/create":
             # Proxy to bridge which handles real Tripay payment creation
             try:
                 length = int(self.headers.get("Content-Length", 0))

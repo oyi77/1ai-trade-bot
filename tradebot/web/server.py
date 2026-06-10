@@ -40,7 +40,9 @@ Run: python -m tradebot.web.server --port 9090
 
 from __future__ import annotations
 
+import json
 import logging
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -97,6 +99,21 @@ TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="1ai-trade-bot Admin", version="1.0")
 app.add_middleware(SessionMiddleware, secret_key="tradebot-session-secret-key-change-in-prod", max_age=30*24*60*60)
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+
+# ═══════════════════════════════════════════════════════════
+#  LIVE SNAPSHOT CACHE — populated by worker webhook push
+# ═══════════════════════════════════════════════════════════
+_live_snapshot: dict = {}
+_live_snapshot_lock = threading.Lock()
+SNAPSHOT_FALLBACK = {
+    "type": "dashboard_snapshot",
+    "status": {"state": "connecting", "pair": "XAUUSD", "detail": "Waiting for worker..."},
+    "performance": {"win_rate": 0.0, "total_pnl": 0.0},
+    "users": {"active": 0, "bot_users": 0},
+    "prices": {"XAUUSD": None},
+    "uptime_seconds": 0,
+    "total_cycles": 0,
+}
 
 
 
@@ -261,6 +278,33 @@ async def dashboard_bilingual(request: Request):
         "public_dashboard_bilingual.html",
         {"request": request, "title": "Vilona TradeFX — AI Signal Dashboard"},
     )
+
+
+# ═══════════════════════════════════════════════════════════
+#  Webhook Receiver — Worker pushes dashboard_snapshot here
+# ═══════════════════════════════════════════════════════════
+
+@app.post("/api/webhook/snapshot")
+async def webhook_receive_snapshot(request: Request):
+    """Receive dashboard_snapshot from autonomous worker and cache in memory."""
+    global _live_snapshot
+    try:
+        body = await request.json()
+        with _live_snapshot_lock:
+            _live_snapshot = body
+        LOG.debug("Snapshot received: type=%s cycles=%s", body.get("type"), body.get("total_cycles"))
+        return {"ok": True}
+    except Exception as exc:
+        LOG.warning("webhook_receive_snapshot parse failed: %s", exc)
+        return JSONResponse({"ok": False, "error": str(exc)[:200]}, status_code=400)
+
+
+@app.get("/api/live-snapshot")
+async def api_live_snapshot():
+    """Serve latest dashboard_snapshot to frontend with fallback."""
+    with _live_snapshot_lock:
+        snap = dict(_live_snapshot) if _live_snapshot else dict(SNAPSHOT_FALLBACK)
+    return snap
 
 
 
