@@ -11,7 +11,7 @@ Environment=TRIPAY_API_KEY=kaBCRmNfkqKXHdDgIfsYJhusaTPxBlAdyWCYO3Yc
 Environment=TRIPAY_PRIVATE_KEY=o74UP-6zUg1-4nOA7-8DJ32-4y0Rv
 Environment=TRIPAY_MERCHANT_CODE=T23409
 Environment=TRIPAY_CALLBACK_URL=https://phantomfx.aitradepulse.com/webhook/tripay
-Environment=VILONA_TRADEFX_TELEGRAM_BOT_TOKEN=8657491144:AAHDNmGD5TWBhfcDfqN6wTpIJII2xlsU-ag
+Environment=VILONA_TRADEFX_TELEGRAM_BOT_TOKEN=YOUR_BOT_TOKEN_HERE
 Environment=GROUP_CHAT_ID=-1002928711742
 ExecStart=/usr/bin/python3 /home/openclaw/projects/1ai-trade-bot/scripts/payment_webhook_server.py
 Restart=always

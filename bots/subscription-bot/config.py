@@ -36,7 +36,7 @@ class Config:
     # ── Telegram ──────────────────────────────────────────────────────
     TELEGRAM_BOT_TOKEN: str = os.environ.get(
         "TELEGRAM_BOT_TOKEN",
-        "8343388239:AAFgeAkc9bvjywyCsHqRIa_RiJ6q-rp6uv0",
+        "YOUR_BOT_TOKEN_HERE",
     )
     ADMIN_CHAT_ID: int = int(os.environ.get("ADMIN_CHAT_ID", "5220170786"))
 
