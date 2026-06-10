@@ -7,7 +7,7 @@ Type=simple
 User=openclaw
 WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
 Environment=PYTHONPATH=/home/openclaw/projects/1ai-trade-bot
-ExecStart=/usr/bin/python3 /home/openclaw/projects/1ai-trade-bot/scripts/dashboard_server.py --port 8768 --host 0.0.0.0
+ExecStart=/home/openclaw/.local/bin/python3.11 /home/openclaw/projects/1ai-trade-bot/scripts/dashboard_server.py --port 8768 --host 0.0.0.0
 Restart=always
 RestartSec=10
 StandardOutput=journal

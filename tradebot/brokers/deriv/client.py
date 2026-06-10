@@ -337,7 +337,7 @@ class DerivWSClient:
         while self._running:
             try:
                 msg = await asyncio.wait_for(self._ws.recv(), timeout=WS_TIMEOUT)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if not self._running:
                     break
                 # Ping/pong handles keepalive; long timeout is normal
@@ -590,7 +590,7 @@ class DerivWSClient:
             barrier=str(barrier), amount=stake,
             duration=duration, duration_unit="t",
         )
-        
+
         # Bug 7: Validate proposal response before using
         if not proposal or "error" in proposal:
             LOG.error("Proposal failed for %s(%s): %s",
@@ -607,7 +607,7 @@ class DerivWSClient:
         if "ask_price" not in prop:
             LOG.error("Invalid proposal: missing ask_price field")
             return None
-        
+
         # Bug 5: Binary options bought at ask price directly (not multiplied)
         ask_price = float(prop.get("ask_price"))
         buy_price = ask_price

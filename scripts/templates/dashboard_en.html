@@ -107,6 +107,12 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 }
 </style>
 </head>
+
+<div id="lang-switch" style="position:fixed;top:10px;right:16px;z-index:9999;display:flex;gap:6px">
+  <a href="/id" style="background:#1A1F2E;border:1px solid rgba(255,255,255,0.1);color:#94a3b8;padding:4px 10px;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600">🇮🇩 ID</a>
+  <a href="/en" style="background:#1e90ff;border:1px solid rgba(255,255,255,0.1);color:#fff;padding:4px 10px;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600">🇬🇧 EN</a>
+</div>
+
 <body>
 
 <!-- ═══ SIDEBAR ═══ -->
@@ -127,6 +133,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     <a class="nav-item" data-page="how" href="#"><span class="icon text-base">🧠</span><span>How It Works</span></a>
     <a class="nav-item" data-page="backtest" href="#"><span class="icon text-base">📊</span><span>Backtest</span></a>
     <a class="nav-item" data-page="charts" href="#"><span class="icon text-base">📈</span><span>Charts</span></a>
+    <a class="nav-item" data-page="fuel" href="#"><span class="icon text-base">⛽</span><span>Fuel AI</span><span class="ml-auto bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">DONATE</span></a>
   </div>
   <div class="p-4 border-t border-white/5">
     <a href="https://t.me/berkahkaryaforexbotbot?start=ref_web" target="_blank" class="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-sm font-bold py-2.5 px-4 rounded-lg hover:shadow-lg hover:shadow-blue-500/20 transition-all">
@@ -671,6 +678,17 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     <div class="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold mb-2">
       <span class="w-4 h-4 rounded-full bg-emerald-400 flex items-center justify-center text-[8px] font-black text-black">✓</span> Verified by Vilona AI
     </div>
+    <!-- Donate CTA Buttons -->
+    <div class="flex flex-wrap justify-center gap-3 mb-4">
+      <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
+         class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20">
+        ⚡ FUEL THE AI
+      </a>
+      <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
+         class="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-700 text-white rounded-xl font-semibold text-sm hover:bg-slate-600 transition-all">
+        📥 DOWNLOAD EA MT5
+      </a>
+    </div>
     <div class="text-xs text-slate-600 leading-relaxed">
       Vilona TradeFX © 2026 · AI-Driven Trading Signals ·
       <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 hover:text-blue-300">@berkahkaryaforexbotbot</a><br>
@@ -678,6 +696,151 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     </div>
   </div>
 </div>
+
+<!-- ==================== PAGE: FUEL AI (EN) ==================== -->
+<div class="page" id="page-fuel">
+
+  <h2 class="text-2xl font-extrabold text-white mb-2">⛽ Fuel The AI Engine</h2>
+  <p class="text-sm text-slate-400 mb-6">Power the 24/7 trading server. Every donation, no matter how small, makes a difference.</p>
+
+  <!-- Fuel Meter -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+    <div class="md:col-span-2 kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.1), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.15)">
+      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🚀 AI Fuel Status This Month</h3>
+      <div class="flex items-end gap-2 mb-2">
+        <span class="text-4xl font-mono font-extrabold text-emerald-400" id="fuel-pct">0%</span>
+        <span class="text-sm text-slate-500 pb-1">funded</span>
+      </div>
+      <div class="h-3 bg-white/5 rounded-full mb-4 overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-1000" id="fuel-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+        <div class="text-center bg-white/5 rounded-lg p-3">
+          <div class="font-mono font-bold text-white text-sm" id="fuel-collected">Rp 0</div>
+          <div class="text-slate-500 mt-0.5">Collected</div>
+        </div>
+        <div class="text-center bg-white/5 rounded-lg p-3">
+          <div class="font-mono font-bold text-red-400 text-sm" id="fuel-shortfall">Rp 7.3M</div>
+          <div class="text-slate-500 mt-0.5">Shortfall</div>
+        </div>
+        <div class="text-center bg-white/5 rounded-lg p-3">
+          <div class="font-mono font-bold text-emerald-400 text-sm" id="fuel-donors">0</div>
+          <div class="text-slate-500 mt-0.5">Donors</div>
+        </div>
+        <div class="text-center bg-white/5 rounded-lg p-3">
+          <div class="font-mono font-bold text-white text-sm" id="fuel-target">Rp 7.3M</div>
+          <div class="text-slate-500 mt-0.5">Target</div>
+        </div>
+      </div>
+      <div class="mt-3 text-xs text-slate-600">
+        <span id="fuel-status-text">⚠️ Critical — server needs your help</span>
+      </div>
+    </div>
+
+    <!-- What You Get Card -->
+    <div class="kpi-card" style="background:linear-gradient(135deg, rgba(30,58,138,0.08), rgba(30,58,138,0.02));border-color:rgba(59,130,246,0.15)">
+      <h3 class="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">🎁 Donor Benefits</h3>
+      <div class="space-y-2 text-xs">
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Permanent <b>VIP DONOR</b> status</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Name on the <b>Donor Wall</b> dashboard</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300"><b>/analyze UNLIMITED</b> — no limits</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Priority <b>Auto-Trade EA</b></span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300"><b>GRADE A+</b> signals via Telegram</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Proud <b>AI supporter</b> badge 🏅</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIER COMPARISON — THE GIMMICK -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+    <!-- Free Tier -->
+    <div class="kpi-card border-2 border-white/5 relative overflow-hidden">
+      <div class="absolute top-0 right-0 bg-slate-700 text-slate-300 text-[10px] font-bold px-3 py-1 rounded-bl-lg">FREE</div>
+      <h3 class="text-lg font-bold text-white mb-3">🆓 Free User</h3>
+      <div class="space-y-2 text-xs mb-4">
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">3x /analyze per day</span></div>
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">Public signals (5 min delay)</span></div>
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">No EA Auto-Trade access</span></div>
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">No priority support</span></div>
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">Limited signal grades</span></div>
+      </div>
+      <div class="text-center text-xs text-slate-600 py-2 border-t border-white/5">⚠️ Server runs on developer's personal budget</div>
+    </div>
+
+    <!-- Donor Tier -->
+    <div class="kpi-card border-2 border-emerald-400/30 relative overflow-hidden" style="background:linear-gradient(135deg, rgba(6,78,59,0.12), rgba(6,78,59,0.03))">
+      <div class="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">🔥 PREMIUM</div>
+      <div class="absolute -top-6 -right-6 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl"></div>
+      <h3 class="text-lg font-bold text-emerald-400 mb-3">👑 VIP Donor</h3>
+      <div class="space-y-2 text-xs mb-4">
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>/analyze UNLIMITED</b> — use freely</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>Real-time</b> signals, no delay</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Full <b>EA Auto-Trade</b> access</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Permanent <b>DONOR VIP</b> status</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>Grade A+</b> exclusive signals</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Name on <b>Donor Wall</b> 🏆</span></div>
+      </div>
+      <div class="text-center text-xs text-emerald-300 py-2 border-t border-emerald-400/10">
+        💚 <b>Permanent active status</b> — donate just ONCE
+      </div>
+    </div>
+  </div>
+
+  <!-- DONATION CTA -->
+  <div class="kpi-card mb-6" style="background:linear-gradient(135deg, rgba(6,78,59,0.10), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.2)">
+    <div class="flex flex-col md:flex-row items-center gap-6">
+      <div class="flex-1 text-center md:text-left">
+        <h3 class="text-base font-bold text-emerald-400 mb-2">💚 Fuel the AI</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Transfer to the bank account below, then enter your Telegram ID for manual activation by admin.
+        </p>
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+          <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">🏦 BCA</div>
+            <div class="text-sm font-bold text-white font-mono">8531425531</div>
+            <div class="text-xs text-slate-400">a.n. MOH SUHUD</div>
+          </div>
+          <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">📱 QRIS / E-Wallet</div>
+            <div class="text-sm font-bold text-white">Dana · OVO · GoPay</div>
+            <div class="text-xs text-slate-400">Confirm to @codergaboets</div>
+          </div>
+        </div>
+        <div class="mt-4 bg-emerald-500/5 border border-emerald-400/10 rounded-xl p-4">
+          <label class="text-xs text-slate-400 block mb-2">🆔 Your Telegram User ID (required!):</label>
+          <div class="flex gap-2">
+            <input id="fuel-chat-id" type="text" placeholder="e.g. 5220170786" 
+                   class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
+            <button onclick="reportFuelDonation()" 
+                    class="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-2 rounded-lg text-sm transition-all whitespace-nowrap">
+              ✅ I've Transferred
+            </button>
+          </div>
+          <div id="fuel-report-result" class="mt-2 text-xs hidden"></div>
+          <p class="text-[10px] text-slate-600 mt-2">Admin will activate manually within 1×24 hours. You'll get Telegram notification.</p>
+        </div>
+      </div>
+      <div class="shrink-0 text-center">
+        <div class="text-4xl mb-2">🤖</div>
+        <div class="text-xs text-slate-500">Or via Bot</div>
+        <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
+           class="inline-block mt-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">
+          @berkahkaryaforexbotbot
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- DONOR WALL (full) -->
+  <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.06), rgba(6,78,59,0.01))">
+    <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">🏆 Wall of Fame — VIP Donors</h3>
+    <div id="fuel-donor-wall-full">
+      <div class="text-sm text-slate-500 text-center py-6">Loading donor data...</div>
+    </div>
+    <div class="text-center text-[10px] text-slate-600 mt-3">🙏 Thank you, AI heroes!</div>
+  </div>
+
+</div><!-- /page-fuel -->
 
 </div><!-- /main -->
 
@@ -689,7 +852,8 @@ const pages = {
   'transparency': 'page-transparency',
   'how': 'page-how',
   'backtest': 'page-backtest',
-  'charts': 'page-charts'
+  'charts': 'page-charts',
+  'fuel': 'page-fuel'
 };
 
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -734,7 +898,7 @@ function fmtPip(n) {
 /* ═══ LOAD ALL DATA ═══ */
 async function loadAll() {
   try {
-    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes] = await Promise.all([
+    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes, fuelRes] = await Promise.all([
       fetch('/api/feed').then(r => r.json()),
       fetch('/api/trade_stats').then(r => r.json()),
       fetch('/api/user_activity').then(r => r.json()),
@@ -742,7 +906,8 @@ async function loadAll() {
       fetch('/api/backtest').then(r => r.json()),
       fetch('/api/donors').then(r => r.json()),
       fetch('/api/daily_analyze').then(r => r.json()),
-      fetch('/api/daily_recap').then(r => r.json())
+      fetch('/api/daily_recap').then(r => r.json()),
+      fetch('/api/fuel/stats').then(r => r.json())
     ]);
 
     const signals = feed.signals || [];
@@ -825,6 +990,8 @@ async function loadAll() {
     renderDailyAnalyze(daily, trans);
     renderBacktest(backtest);
     renderDailyRecap(recap);
+    renderFuelStats(fuelRes);
+    renderFuelDonorWall(donors);
 
   } catch(e) {
     console.error('Load error:', e);
@@ -1047,6 +1214,152 @@ function loadTradingViewWidgets() {
     }
   });
   if (allOk) _tvLoaded = true; // Only mark loaded AFTER all scripts created
+}
+
+/* ═══ FUEL AI — TRIPAY INTEGRATION ═══ */
+function renderFuelStats(stats) {
+  const s = stats || {};
+  const pct = s.percent || 0;
+  const collected = s.collected || 0;
+  const shortfall = s.shortfall || 7357500;
+  const donors = s.donors || 0;
+  const target = s.monthly_cost || 7357500;
+  
+  const elPct = document.getElementById('fuel-pct');
+  const elBar = document.getElementById('fuel-bar');
+  const elCollected = document.getElementById('fuel-collected');
+  const elShortfall = document.getElementById('fuel-shortfall');
+  const elDonors = document.getElementById('fuel-donors');
+  const elTarget = document.getElementById('fuel-target');
+  const elStatus = document.getElementById('fuel-status-text');
+  
+  if (elPct) elPct.textContent = pct + '%';
+  if (elBar) elBar.style.width = pct + '%';
+  if (elCollected) elCollected.textContent = fmtRupiah(collected);
+  if (elShortfall) elShortfall.textContent = fmtRupiah(shortfall);
+  if (elDonors) elDonors.textContent = donors;
+  if (elTarget) elTarget.textContent = fmtRupiah(target);
+  
+  if (elStatus) {
+    if (pct >= 75) {
+      elStatus.textContent = '✅ Server funded — thank you donors!';
+      elStatus.className = 'text-xs text-emerald-400';
+    } else if (pct >= 50) {
+      elStatus.textContent = '🟡 Halfway — help us reach the goal';
+      elStatus.className = 'text-xs text-yellow-400';
+    } else if (pct >= 25) {
+      elStatus.textContent = '🟠 Server needs help urgently — donate now';
+      elStatus.className = 'text-xs text-orange-400';
+    } else {
+      elStatus.textContent = '🔴 CRITICAL — server runs on personal funds. Please donate!';
+      elStatus.className = 'text-xs text-red-400';
+    }
+  }
+}
+
+function renderFuelDonorWall(donors) {
+  const el = document.getElementById('fuel-donor-wall-full');
+  if (!el) return;
+  if (!donors || !donors.length) {
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No donors yet. Be the first! 💚</div>';
+    return;
+  }
+  donors.sort((a,b) => (b.amount||0) - (a.amount||0));
+  el.innerHTML = donors.map((d, i) => {
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'💚';
+    const dt = d.paid_at ? new Date(d.paid_at).toLocaleDateString('en-US',{timeZone:'Asia/Jakarta'}) : '-';
+    return `<div class="flex items-center justify-between py-3 border-b border-white/5 last:border-b-0">
+      <div class="flex items-center gap-3">
+        <span class="text-xl">${medal}</span>
+        <div>
+          <div class="text-sm font-semibold text-blue-400">${d.display_name}</div>
+          <div class="text-[10px] text-slate-600">${dt}</div>
+        </div>
+      </div>
+      <span class="font-mono font-bold text-emerald-400 text-sm">${fmtRupiah(d.amount)}</span>
+    </div>`;
+  }).join('');
+}
+
+async function fuelDonate(amount) {
+  const loading = document.getElementById('fuel-loading');
+  const result = document.getElementById('fuel-result');
+  
+  document.querySelectorAll('.fuel-btn').forEach(b => b.disabled = true);
+  loading.classList.remove('hidden');
+  result.classList.add('hidden');
+  
+  try {
+    const resp = await fetch('/api/fuel/create?amount=' + amount + '&chat_id=web&username=Guest');
+    const data = await resp.json();
+    
+    loading.classList.add('hidden');
+    result.classList.remove('hidden');
+    
+    if (data.success && data.payment_url) {
+      result.innerHTML = `
+        <div class="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-5 text-center">
+          <div class="text-3xl mb-3">✅</div>
+          <div class="text-sm font-bold text-emerald-400 mb-2">Payment Ready!</div>
+          <div class="text-xs text-slate-400 mb-4">Rp ${amount.toLocaleString('en-US')} via Tripay</div>
+          <a href="${data.payment_url}" target="_blank" rel="noopener" 
+             class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold py-3 px-8 rounded-lg transition-colors">
+            💳 Pay Now
+          </a>
+          <div class="text-[10px] text-slate-500 mt-3">
+            ⚡ After payment, the bot automatically activates your VIP Donor status.
+          </div>
+          <div class="text-[10px] text-slate-600 mt-1">
+            Ref: ${data.merchant_ref}
+          </div>
+        </div>`;
+    } else {
+      result.innerHTML = `
+        <div class="bg-red-500/10 border border-red-400/30 rounded-lg p-5 text-center">
+          <div class="text-xl mb-2">⚠️</div>
+          <div class="text-sm font-bold text-red-400">Payment creation failed</div>
+          <div class="text-xs text-slate-400 mt-1">${data.error || 'Try again later'}</div>
+          <div class="text-xs text-slate-600 mt-2">Alternative: open Telegram bot <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 underline">@berkahkaryaforexbotbot</a> and type /donate</div>
+        </div>`;
+    }
+  } catch(e) {
+    loading.classList.add('hidden');
+    result.classList.remove('hidden');
+    result.innerHTML = `
+      <div class="bg-red-500/10 border border-red-400/30 rounded-lg p-5 text-center">
+        <div class="text-sm font-bold text-red-400">Connection failed</div>
+        <div class="text-xs text-slate-400 mt-1">${e.message}</div>
+      </div>`;
+  } finally {
+    document.querySelectorAll('.fuel-btn').forEach(b => b.disabled = false);
+  }
+}
+
+/* ═══ FUEL DONATION REPORT (manual transfer) ═══ */
+async function reportFuelDonation() {
+  const chatId = document.getElementById('fuel-chat-id').value.trim();
+  const result = document.getElementById('fuel-report-result');
+  result.classList.remove('hidden');
+
+  if (!chatId || chatId.length < 5) {
+    result.innerHTML = '<div class="text-red-400">❌ Enter a valid Telegram User ID</div>';
+    return;
+  }
+
+  result.innerHTML = '<div class="text-slate-400">⏳ Sending report...</div>';
+
+  try {
+    const resp = await fetch('/api/fuel/report?chat_id=' + encodeURIComponent(chatId));
+    const data = await resp.json();
+    if (data.success) {
+      result.innerHTML = '<div class="text-emerald-400">✅ Report sent! Admin will activate within 1×24 hours. Monitor your Telegram.</div>';
+      document.getElementById('fuel-chat-id').value = '';
+    } else {
+      result.innerHTML = '<div class="text-red-400">❌ Failed: ' + (data.error || 'unknown error') + '</div>';
+    }
+  } catch (e) {
+    result.innerHTML = '<div class="text-red-400">❌ Failed: ' + e.message + '</div>';
+  }
 }
 
 // Init

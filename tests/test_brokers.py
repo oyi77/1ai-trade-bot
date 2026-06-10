@@ -25,7 +25,7 @@ from tradebot.brokers.deriv.patterns import (
 from tradebot.brokers.deriv.strategy import DigitMartingaleStrategy
 from tradebot.brokers.mt5.broker import MT5Broker
 from tradebot.brokers.mt5.executor import EAState, MT5Executor
-from tradebot.models import Balance, Order
+from tradebot.models import Order
 
 # ── base.py ────────────────────────────────────────────────────────────────
 
@@ -39,12 +39,11 @@ class TestBrokerABC:
 
     def test_has_all_abstract_methods(self):
         abstract_methods = {
-            "connect", "disconnect", "get_balance",
-            "place_order", "subscribe_ticks",
+            "connect", "close", "get_balance", "place_trade",
         }
         for method in abstract_methods:
             assert hasattr(Broker, method), f"Missing: {method}"
-        assert hasattr(Broker, "is_connected")
+        assert hasattr(Broker, "platform")
 
 
 class TestBrokerSubclassContract:
@@ -52,51 +51,60 @@ class TestBrokerSubclassContract:
 
     def test_concrete_subclass(self):
         class MockBroker(Broker):
-            async def connect(self) -> bool:
-                return True
-            async def disconnect(self):
-                pass
-            async def get_balance(self):
-                return Balance(balance=100.0)
-            async def place_order(self, symbol, contract_type,
-                                  barrier, stake, **kwargs):
-                return Order(
-                    order_id="1", symbol=symbol,
-                    contract_type=contract_type, stake=stake,
-                    barrier=barrier, direction="BUY",
-                )
-            async def subscribe_ticks(self, symbol):
-                return True
             @property
-            def is_connected(self):
-                return True
+            def platform(self):
+                return "mock"
+            async def connect(self) -> None:
+                pass
+            async def close(self) -> None:
+                pass
+            async def get_balance(self) -> float | None:
+                return 100.0
+            async def place_trade(self, symbol, direction, amount, duration=None):
+                from tradebot.brokers.base import TradeResult, TradeStatus
+                return TradeResult(
+                    platform=self.platform,
+                    order_id="1",
+                    symbol=symbol,
+                    direction=direction,
+                    amount=amount,
+                    status=TradeStatus.OPENED,
+                )
 
         broker = MockBroker()
-        assert broker.is_connected is True
+        assert broker.platform == "mock"
 
     @pytest.mark.asyncio
     async def test_concrete_subclass_async(self):
         class MockBroker(Broker):
-            async def connect(self) -> bool:
-                return True
-            async def disconnect(self):
-                pass
-            async def get_balance(self):
-                return Balance(balance=500.0, currency="USD")
-            async def place_order(self, symbol, contract_type,
-                                  barrier, stake, **kwargs):
-                return None
-            async def subscribe_ticks(self, symbol):
-                return False
             @property
-            def is_connected(self):
-                return False
+            def platform(self):
+                return "mock"
+            async def connect(self) -> None:
+                pass
+            async def close(self) -> None:
+                pass
+            async def get_balance(self) -> float | None:
+                return 500.0
+            async def place_trade(self, symbol, direction, amount, duration=None):
+                from tradebot.brokers.base import (
+                    BrokerPlatform,
+                    TradeResult,
+                    TradeStatus,
+                )
+                return TradeResult(
+                    platform=BrokerPlatform.MOCK if hasattr(BrokerPlatform, "MOCK") else "mock",
+                    order_id="",
+                    symbol=symbol,
+                    direction=direction,
+                    amount=amount,
+                    status=TradeStatus.OPENED,
+                )
 
         broker = MockBroker()
-        assert await broker.connect() is True
+        await broker.connect()
         bal = await broker.get_balance()
-        assert bal.balance == 500.0
-        assert await broker.subscribe_ticks("R_75") is False
+        assert bal == 500.0
 
     def test_incomplete_subclass_fails(self):
         class IncompleteBroker(Broker):
@@ -763,24 +771,6 @@ class TestMT5Broker:
         broker._mt5 = mock_mt5
         assert await broker.place_order("XAUUSD", "LIMIT", 0, 0.1) is None
 
-    @pytest.mark.asyncio
-    async def test_subscribe_ticks_not_connected(self):
-        with patch("tradebot.brokers.mt5.broker.settings") as s:
-            s.MT5_LOGIN = ""
-            broker = MT5Broker(login=1, password="p", server="s")
-        assert await broker.subscribe_ticks("XAUUSD") is False
-
-    @pytest.mark.asyncio
-    async def test_subscribe_ticks_success(self):
-        with patch("tradebot.brokers.mt5.broker.settings") as s:
-            s.MT5_LOGIN = ""
-            broker = MT5Broker(login=1, password="p", server="s")
-        broker._connected = True
-        mock_mt5 = MagicMock()
-        mock_mt5.symbol_select.return_value = True
-        broker._mt5 = mock_mt5
-        assert await broker.subscribe_ticks("XAUUSD") is True
-        mock_mt5.symbol_select.assert_called_once_with("XAUUSD", True)
 
     @pytest.mark.asyncio
     async def test_disconnect_resets_state(self):

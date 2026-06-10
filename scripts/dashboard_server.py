@@ -16,6 +16,7 @@ import json, sys, os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 
 WIB = timezone(timedelta(hours=7))
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -233,6 +234,16 @@ def get_transparency_data():
         donation_count = drow[0]
         donation_total = float(drow[1]) if drow[1] else 0
         
+        # ── Also count manually activated donors (no payment record) ──
+        c.execute("SELECT COUNT(*) FROM members WHERE tier='donor' AND status='paid'")
+        manual_donors = c.fetchone()[0]
+        # If there are donors but no payment records, estimate Rp50K per donor
+        if manual_donors > donation_count:
+            estimated_from_manual = (manual_donors - donation_count) * 50000
+            if donation_total == 0:
+                donation_total = float(estimated_from_manual)
+            donation_count = manual_donors
+        
         # Weekly revenue trend (last 7 days)
         week_ago = (datetime.now(WIB) - timedelta(days=7)).isoformat()
         c.execute("""
@@ -322,6 +333,31 @@ def get_transparency_data():
             "domain_hosting": 20
         }
     }
+
+
+# ═══════════════════════════════════════════
+#  FUEL STATS HELPER
+# ═══════════════════════════════════════════
+
+def get_fuel_stats() -> dict:
+    """Get AI Fuel donation stats for dashboard display."""
+    try:
+        td = get_transparency_data()
+        monthly_cost = td.get("server_cost_idr", 7357500)
+        collected = td.get("donation_total", 0)
+        donors = td.get("total_donors", 0)
+        pct = min(100, round((collected / monthly_cost) * 100)) if monthly_cost > 0 else 0
+        shortfall = max(0, monthly_cost - collected)
+        return {
+            "monthly_cost": monthly_cost,
+            "collected": collected,
+            "donors": donors,
+            "percent": pct,
+            "shortfall": shortfall,
+            "status": "critical" if pct < 25 else ("low" if pct < 50 else ("medium" if pct < 75 else "healthy")),
+        }
+    except:
+        return {"monthly_cost": 7357500, "collected": 0, "donors": 0, "percent": 0, "shortfall": 7357500, "status": "critical"}
 
 
 # ═══════════════════════════════════════════
@@ -441,6 +477,16 @@ body{background:#0a0a0f;color:#e0e0e0;font-family:'Inter',-apple-system,sans-ser
 </div>
 
 <div class="footer">
+    <div style="margin-bottom:16px;display:flex;flex-wrap:wrap;justify-content:center;gap:12px">
+        <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
+           style="display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:linear-gradient(135deg,#10B981,#06B6D4);color:#fff;border-radius:12px;text-decoration:none;font-weight:600;font-size:14px">
+            ⚡ ISI BAHAN BAKAR AI
+        </a>
+        <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
+           style="display:inline-flex;align-items:center;gap:8px;padding:10px 24px;background:#1F2937;color:#fff;border-radius:12px;text-decoration:none;font-weight:600;font-size:14px">
+            📥 DOWNLOAD EA MT5
+        </a>
+    </div>
     Vilona TradeFX © 2026 · AI-Driven Trading Signals · DYOR · Not Financial Advice
 </div>
 
@@ -596,7 +642,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0]
         
         if path == '/' or path == '/index.html':
-            self._serve_html(_get_dashboard_html())
+            # Auto-redirect based on Accept-Language header
+            accept_lang = self.headers.get('Accept-Language', '')
+            if 'id' in accept_lang.lower():
+                self._redirect('/id')
+            else:
+                self._redirect('/en')
+        elif path == '/id' or path == '/en':
+            # Server-side translated Tailwind dashboard
+            template = 'dashboard_id.html' if path == '/id' else 'dashboard_en.html'
+            html_path = Path(__file__).resolve().parent / 'templates' / template
+            try:
+                page = html_path.read_text(encoding='utf-8')
+                self._serve_html(page)
+            except FileNotFoundError:
+                self._serve_json({"error": "page not found"}, 404)
         elif path == '/api/feed':
             self._serve_json({"signals": get_recent_signals(50)})
         elif path == '/api/user_activity':
@@ -626,6 +686,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._serve_json(recap)
             except Exception as e:
                 self._serve_json({"error": str(e), "trades": [], "total_signals": 0})
+        elif path == '/api/fuel/create':
+            self._handle_fuel_create()
+        elif path == '/api/fuel/stats':
+            self._serve_json(get_fuel_stats())
+        elif path == '/api/fuel/report':
+            self._handle_fuel_report()
         elif path == '/health':
             self._serve_json({"status": "ok", "timestamp": datetime.now(WIB).isoformat()})
         else:
@@ -643,9 +709,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header('X-Accel-Expires', '0')
         self.end_headers()
         self.wfile.write(html.encode('utf-8'))
+
+    def _redirect(self, location: str):
+        self.send_response(302)
+        self.send_header('Location', location)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
     
-    def _serve_json(self, data):
-        self.send_response(200)
+    def _serve_json(self, data, status=200):
+        self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Cache-Control', 'no-cache')
@@ -655,10 +727,79 @@ class DashboardHandler(BaseHTTPRequestHandler):
         raw = raw.replace(': Infinity', ': null').replace(': -Infinity', ': null').replace(': NaN', ': null')
         self.wfile.write(raw.encode('utf-8'))
     
+    def _handle_fuel_create(self):
+        """Create Tripay donation payment for AI Fuel."""
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        amount_str = (params.get('amount', [None]) or [None])[0]
+        chat_id = (params.get('chat_id', ['web'] or ['web']))[0]
+        username = (params.get('username', ['Guest'] or ['Guest']))[0]
+
+        if not amount_str:
+            self._serve_json({"success": False, "error": "Parameter 'amount' diperlukan"}, 400)
+            return
+
+        try:
+            amount = int(amount_str)
+        except ValueError:
+            self._serve_json({"success": False, "error": "Amount harus angka"}, 400)
+            return
+
+        try:
+            # Import Tripay module from project root
+            sys.path.insert(0, str(PROJECT_DIR))
+            from members.payment import create_tripay_payment
+            result = create_tripay_payment(
+                chat_id=chat_id,
+                username=username,
+                tier="donor",
+                amount=amount,
+            )
+            if result.get("success"):
+                self._serve_json(result)
+            else:
+                self._serve_json(result, 500)
+        except Exception as e:
+            self._serve_json({"success": False, "error": f"Tripay error: {str(e)[:200]}"}, 500)
+
+    def _handle_fuel_report(self):
+        """Receive manual transfer confirmation from website."""
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        chat_id = (params.get('chat_id', [None]) or [None])[0]
+
+        if not chat_id:
+            self._serve_json({"success": False, "error": "Parameter 'chat_id' diperlukan"}, 400)
+            return
+
+        # Save report to file for bot to pick up
+        reports = []
+        report_path = DATA_DIR / ".fuel_reports.json"
+        if report_path.exists():
+            try:
+                reports = json.loads(report_path.read_text())
+            except:
+                reports = []
+
+        # Check for duplicate
+        existing = [r for r in reports if r.get("chat_id") == chat_id]
+        if existing:
+            self._serve_json({"success": True, "message": "Laporan sudah diterima sebelumnya."})
+            return
+
+        report = {
+            "chat_id": chat_id,
+            "timestamp": datetime.now(WIB).isoformat(),
+            "status": "pending",
+        }
+        reports.append(report)
+        report_path.write_text(json.dumps(reports, indent=2, default=str))
+        self._serve_json({"success": True, "message": "Laporan diterima. Admin akan aktivasi dalam 1x24 jam."})
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', '*')
         self.end_headers()
     

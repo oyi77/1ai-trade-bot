@@ -351,7 +351,11 @@ class StockityBot(BaseBot):
             lines = content.split("\n")
 
             # Remove old STOCKITY_AUTHTOKEN and STOCKITY_USER_ID lines if exist
-            lines = [l for l in lines if not l.startswith("STOCKITY_AUTHTOKEN=") and not l.startswith("STOCKITY_USER_ID=")]  # noqa: E501
+            lines = [
+                line for line in lines
+                if not line.startswith("STOCKITY_AUTHTOKEN=")
+                and not line.startswith("STOCKITY_USER_ID=")
+            ]
             # Add new lines
             lines.append(f"STOCKITY_AUTHTOKEN={authtoken}")
             lines.append(f"STOCKITY_USER_ID={user_id}")

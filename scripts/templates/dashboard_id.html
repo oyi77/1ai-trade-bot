@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vilona TradeFX — AI Battle-Proven Trading Signals</title>
+<title>Vilona TradeFX — Sinyal Trading AI Terbukti</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
@@ -107,6 +107,12 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 }
 </style>
 </head>
+
+<div id="lang-switch" style="position:fixed;top:10px;right:16px;z-index:9999;display:flex;gap:6px">
+  <a href="/id" style="background:#1e90ff;border:1px solid rgba(255,255,255,0.1);color:#fff;padding:4px 10px;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600">🇮🇩 ID</a>
+  <a href="/en" style="background:#1A1F2E;border:1px solid rgba(255,255,255,0.1);color:#94a3b8;padding:4px 10px;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600">🇬🇧 EN</a>
+</div>
+
 <body>
 
 <!-- ═══ SIDEBAR ═══ -->
@@ -122,11 +128,12 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   </div>
   <div class="flex-1 py-3">
     <a class="nav-item active" data-page="home" href="#"><span class="icon text-base">🏠</span><span>Overview</span></a>
-    <a class="nav-item" data-page="signals" href="#"><span class="icon text-base">📡</span><span>Live Signals</span><span class="ml-auto bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full" id="sig-count">0</span></a>
+    <a class="nav-item" data-page="signals" href="#"><span class="icon text-base">📡</span><span>Live Sinyal</span><span class="ml-auto bg-blue-500/10 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full" id="sig-count">0</span></a>
     <a class="nav-item" data-page="transparency" href="#"><span class="icon text-base">🔍</span><span>Transparency</span></a>
     <a class="nav-item" data-page="how" href="#"><span class="icon text-base">🧠</span><span>How It Works</span></a>
     <a class="nav-item" data-page="backtest" href="#"><span class="icon text-base">📊</span><span>Backtest</span></a>
     <a class="nav-item" data-page="charts" href="#"><span class="icon text-base">📈</span><span>Charts</span></a>
+    <a class="nav-item" data-page="fuel" href="#"><span class="icon text-base">⛽</span><span>Isi Bensin AI</span><span class="ml-auto bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">DONASI</span></a>
   </div>
   <div class="p-4 border-t border-white/5">
     <a href="https://t.me/berkahkaryaforexbotbot?start=ref_web" target="_blank" class="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-sm font-bold py-2.5 px-4 rounded-lg hover:shadow-lg hover:shadow-blue-500/20 transition-all">
@@ -182,7 +189,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   <!-- Bento Grid — KPI Cards -->
   <div class="bento-grid">
     <div class="kpi-card bento-wide">
-      <div class="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2">Signals Generated</div>
+      <div class="text-xs text-slate-500 font-medium uppercase tracking-wider mb-2">Sinyal Generated</div>
       <div class="text-3xl font-mono font-bold text-white" id="stat-total">0</div>
       <div class="mt-3 flex items-center gap-2 text-xs text-slate-500">
         <span class="live-dot"></span> Live from AI engines
@@ -203,7 +210,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     <div class="flex items-start gap-4 flex-wrap">
       <div class="flex-1 min-w-[240px]">
         <div class="text-xs font-bold text-red-400 mb-1 tracking-wider">🔥 THE PROBLEM</div>
-        <h3 class="text-lg font-bold text-white mb-2">99% Signal Providers Fail. Here's Why.</h3>
+        <h3 class="text-lg font-bold text-white mb-2">99% Penyedia Sinyal Gagal. Ini Alasannya.</h3>
         <p class="text-sm text-slate-400 leading-relaxed">
           You pay thousands for signal groups that only show screenshots. No transparency. No proof. Just blind trust — then stop losses pile up, capital evaporates.
         </p>
@@ -216,7 +223,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 
   <!-- Daily Trading Report -->
   <div class="kpi-card mb-5">
-    <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">📋 Daily Trading Report</h3>
+    <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">📋 Laporan Trading Harian</h3>
     <div id="daily-recap-content">
       <div class="text-center py-8 text-sm text-slate-500">Loading recap...</div>
     </div>
@@ -233,11 +240,11 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.08), rgba(6,78,59,0.02));border-color:rgba(52,211,153,0.1)">
       <h3 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">💚 Donor Wall</h3>
       <div id="donor-wall">
-        <div class="text-sm text-slate-500 text-center py-6">Be the first donor 💚</div>
+        <div class="text-sm text-slate-500 text-center py-6">Jadi donatur pertama 💚</div>
       </div>
     </div>
     <div class="kpi-card">
-      <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">📈 Daily Analyze</h3>
+      <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">📈 Analisa Harian</h3>
       <div id="daily-analyze">
         <div class="text-sm text-slate-500 text-center py-6">Loading...</div>
       </div>
@@ -250,7 +257,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   <div class="flex items-center justify-between mb-6">
     <div>
       <h2 class="text-2xl font-extrabold text-white">📡 Live Signal Feed</h2>
-      <p class="text-sm text-slate-400 mt-1">All signals — AI auto-scanner + user generated. Transparent, verifiable.</p>
+      <p class="text-sm text-slate-400 mt-1">Semua sinyal — auto-scanner AI + user. Transparan, terverifikasi.</p>
     </div>
     <div class="flex items-center gap-2 text-xs text-slate-500">
       <span class="live-dot"></span> <span class="font-mono" id="live-clock2">--:--</span> WIB
@@ -261,7 +268,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   <div class="grid grid-cols-3 gap-4 mb-6">
     <div class="kpi-card text-center">
       <div class="text-2xl font-mono font-bold text-white" id="sig-total">0</div>
-      <div class="text-xs text-slate-500 mt-1">Total Signals</div>
+      <div class="text-xs text-slate-500 mt-1">Total Sinyal</div>
     </div>
     <div class="kpi-card text-center">
       <div class="text-2xl font-mono font-bold text-emerald-400" id="sig-tp">0</div>
@@ -303,7 +310,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
       <div class="space-y-2 text-sm">
         <div class="flex justify-between"><span class="text-slate-400">Total</span><span class="font-mono font-bold text-red-400" id="cost-total">Rp 0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">DeepSeek API</span><span class="font-mono text-slate-300" id="cost-gpt">$0</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">OpenAI GPT-4o</span><span class="font-mono text-slate-300" id="cost-openai">$0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">BukaAI GPT-4o</span><span class="font-mono text-slate-300" id="cost-openai">$0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Claude API</span><span class="font-mono text-slate-300" id="cost-claude">$0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">GPU Server</span><span class="font-mono text-slate-300" id="cost-gpu">$0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Domain & Hosting</span><span class="font-mono text-slate-300" id="cost-domain">$0</span></div>
@@ -312,12 +319,12 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 
     <!-- Funding -->
     <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.08), rgba(6,78,59,0.02));border-color:rgba(52,211,153,0.1)">
-      <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">💚 AI Fuel Collected</h3>
+      <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">💚 Bahan Bakar AI Terkumpul</h3>
       <div class="h-2 bg-white/5 rounded-full mb-4 overflow-hidden">
         <div class="h-full rounded-full transition-all duration-1000" id="fund-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
       </div>
       <div class="space-y-2 text-sm">
-        <div class="flex justify-between"><span class="text-slate-400">Collected This Month</span><span class="font-mono font-bold text-emerald-400" id="fund-collected">Rp 0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Terkumpul Bulan Ini</span><span class="font-mono font-bold text-emerald-400" id="fund-collected">Rp 0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Monthly Target</span><span class="font-mono text-slate-300" id="fund-target">Rp 7,357,500</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Donation Transactions</span><span class="font-mono text-slate-300" id="fund-transactions">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Total Donors</span><span class="font-mono text-emerald-400" id="fund-donors">0</span></div>
@@ -330,9 +337,9 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     <div class="kpi-card">
       <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">📈 Trade Performance</h3>
       <div class="space-y-2 text-sm">
-        <div class="flex justify-between"><span class="text-slate-400">Total Trades</span><span class="font-mono font-bold text-white" id="perf-total">0</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Wins</span><span class="font-mono font-bold text-emerald-400" id="perf-wins">0</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Losses</span><span class="font-mono font-bold text-red-400" id="perf-losses">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Trade</span><span class="font-mono font-bold text-white" id="perf-total">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Menang</span><span class="font-mono font-bold text-emerald-400" id="perf-wins">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Kalah</span><span class="font-mono font-bold text-red-400" id="perf-losses">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Win Rate</span><span class="font-mono font-bold text-emerald-400" id="perf-wr">0%</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Total Pips</span><span class="font-mono font-bold text-white" id="perf-pips">0</span></div>
       </div>
@@ -340,15 +347,15 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 
     <!-- Community -->
     <div class="kpi-card">
-      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">👥 Community</h3>
+      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">👥 Komunitas</h3>
       <div class="space-y-2 text-sm">
         <div class="flex justify-between"><span class="text-slate-400">Total Members</span><span class="font-mono font-bold text-white" id="comm-members">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">├ Free (Trial)</span><span class="font-mono text-slate-300" id="comm-free">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">├ Pro (Paid)</span><span class="font-mono text-blue-400" id="comm-pro">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">└ Donors</span><span class="font-mono text-emerald-400" id="comm-donors">0</span></div>
         <div class="h-divider"></div>
-        <div class="flex justify-between"><span class="text-slate-400">Active Today</span><span class="font-mono text-blue-400" id="comm-active">0</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Total Signals</span><span class="font-mono text-slate-300" id="comm-signals">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Aktif Hari Ini</span><span class="font-mono text-blue-400" id="comm-active">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Sinyal</span><span class="font-mono text-slate-300" id="comm-signals">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Total Analyses</span><span class="font-mono text-slate-300" id="comm-analyses">0</span></div>
       </div>
       <div class="mt-4 flex items-center gap-2 text-xs text-slate-500"><span class="live-dot"></span> Bot Active</div>
@@ -361,7 +368,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
       <span class="text-lg">🔬</span>
       <div>
         <h3 class="text-sm font-bold text-emerald-400 mb-1">Verified & Proven</h3>
-        <p class="text-sm text-slate-400">Every signal is verifiable on the Live Signals tab. Entry price, SL, TP, outcome — all recorded. We don't hide. We prove. DYOR.</p>
+        <p class="text-sm text-slate-400">Every signal is verifiable on the Live Sinyal tab. Entry price, SL, TP, outcome — all recorded. We don't hide. We prove. DYOR.</p>
       </div>
     </div>
   </div>
@@ -370,7 +377,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 <!-- ==================== PAGE: HOW IT WORKS ==================== -->
 <div class="page" id="page-how">
   <h2 class="text-2xl font-extrabold text-white mb-2">🧠 How It Works</h2>
-  <p class="text-sm text-slate-400 mb-8">11 engines in a multi-layered pipeline. Fully automated 24/7.</p>
+  <p class="text-sm text-slate-400 mb-8">11 engine pipeline multi-layer. Full otomatis 24/7.</p>
 
   <!-- Timeline -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
@@ -378,18 +385,18 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
       <div class="absolute left-4 top-4 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-sm font-bold text-white">1</div>
       <div class="absolute left-[19px] top-[52px] bottom-[-20px] w-0.5 bg-blue-500/20 hidden md:block" style="left:19px;top:52px;bottom:-20px;width:2px;background:rgba(59,130,246,0.2);position:absolute"></div>
       <h4 class="text-sm font-bold text-white mb-2">Market Scanning</h4>
-      <p class="text-xs text-slate-400 leading-relaxed">11 engines (SMC, FVG, Quant, Hermes, Chaos) scan XAUUSD, BTCUSD, USOIL every tick.</p>
+      <p class="text-xs text-slate-400 leading-relaxed">11 engine (SMC, FVG, Quant, Hermes, Chaos) scan XAUUSD, BTCUSD, USOIL setiap tick.</p>
     </div>
     <div class="kpi-card relative pl-14">
       <div class="absolute left-4 top-4 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-sm font-bold text-white">2</div>
       <div class="absolute left-[19px] top-[52px] bottom-[-20px] w-0.5 bg-blue-500/20 hidden md:block"></div>
-      <h4 class="text-sm font-bold text-white mb-2">AI Consensus</h4>
+      <h4 class="text-sm font-bold text-white mb-2">Konsensus AI</h4>
       <p class="text-xs text-slate-400 leading-relaxed">DeepSeek V3 + GPT-4o + Claude verify each signal. Min 2 model agreement = signal sent.</p>
     </div>
     <div class="kpi-card relative pl-14">
       <div class="absolute left-4 top-4 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-sm font-bold text-white">3</div>
       <h4 class="text-sm font-bold text-white mb-2">Quality Gate</h4>
-      <p class="text-xs text-slate-400 leading-relaxed">Confidence ≥ 65%, RR ≥ 1:1.5, SL validation. Trash signals rejected automatically.</p>
+      <p class="text-xs text-slate-400 leading-relaxed">Confidence ≥ 65%, RR ≥ 1:1.5, validasi SL. Sinyal sampah ditolak otomatis.</p>
     </div>
   </div>
 
@@ -399,10 +406,10 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
       <span class="text-lg mt-0.5">😤</span>
       <div>
         <div class="text-xs font-bold text-red-400 mb-1 tracking-wider">FRUSTRATED?</div>
-        <h3 class="text-base font-bold text-white mb-2">Tired of \"Random\" Signals That Keep Losing?</h3>
+        <h3 class="text-base font-bold text-white mb-2">Tired of \"Random\" Sinyal That Keep Losing?</h3>
         <p class="text-sm text-slate-400 mb-3">You join a signal group. Get 10 signals a day. 8 are losses. Admin disappears. Same cycle repeats.</p>
         <div class="pl-3 border-l-2 border-emerald-400/50">
-          <p class="text-sm text-slate-300"><span class="text-emerald-400 font-bold">✓ Solution:</span> 11 quantitative engines + 3 AI models. Publicly verifiable. Not a random group — this is an auditable system. <strong class="text-white">Try free. Prove it yourself.</strong></p>
+          <p class="text-sm text-slate-300"><span class="text-emerald-400 font-bold">✓ Solution:</span> 11 engine kuantitatif + 3 model AI. Terverifikasi publik. Bukan grup acak — ini sistem teraudit. <strong class="text-white">Try free. Prove it yourself.</strong></p>
         </div>
       </div>
     </div>
@@ -411,8 +418,8 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 
 <!-- ==================== PAGE: BACKTEST ==================== -->
 <div class="page" id="page-backtest">
-  <h2 class="text-2xl font-extrabold text-white mb-2">📊 Backtest Results</h2>
-  <p class="text-sm text-slate-400 mb-6">3-month engine backtest — transparent, no cherry-picking.</p>
+  <h2 class="text-2xl font-extrabold text-white mb-2">📊 Hasil Backtest</h2>
+  <p class="text-sm text-slate-400 mb-6">Backtest engine 3 bulan — transparan, tanpa cherry-picking.</p>
 
   <!-- Equity Curve Placeholder -->
   <div class="kpi-card mb-5">
@@ -454,15 +461,15 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   <div class="grid grid-cols-4 gap-4 mb-5">
     <div class="kpi-card text-center">
       <div class="text-2xl font-mono font-bold text-white" id="bt-total">0</div>
-      <div class="text-xs text-slate-500 mt-1">Total Signals</div>
+      <div class="text-xs text-slate-500 mt-1">Total Sinyal</div>
     </div>
     <div class="kpi-card text-center">
       <div class="text-2xl font-mono font-bold text-emerald-400" id="bt-wins">0</div>
-      <div class="text-xs text-slate-500 mt-1">Wins</div>
+      <div class="text-xs text-slate-500 mt-1">Menang</div>
     </div>
     <div class="kpi-card text-center">
       <div class="text-2xl font-mono font-bold text-red-400" id="bt-losses">0</div>
-      <div class="text-xs text-slate-500 mt-1">Losses</div>
+      <div class="text-xs text-slate-500 mt-1">Kalah</div>
     </div>
     <div class="kpi-card text-center">
       <div class="text-2xl font-mono font-bold text-cyan-400" id="bt-pips">0</div>
@@ -473,17 +480,17 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   <!-- Metric Pills -->
   <div class="flex flex-wrap gap-3 mb-6">
     <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
-      <span class="text-xs text-slate-500">Avg Win</span>
+      <span class="text-xs text-slate-500">Rata2 Win</span>
       <span class="text-sm font-mono font-bold text-emerald-400" id="bt-avgwin">0</span>
       <span class="text-xs text-slate-600">pips</span>
     </div>
     <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
-      <span class="text-xs text-slate-500">Avg Loss</span>
+      <span class="text-xs text-slate-500">Rata2 Loss</span>
       <span class="text-sm font-mono font-bold text-red-400" id="bt-avgloss">0</span>
       <span class="text-xs text-slate-600">pips</span>
     </div>
     <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
-      <span class="text-xs text-slate-500">Profit Factor</span>
+      <span class="text-xs text-slate-500">Faktor Profit</span>
       <span class="text-sm font-mono font-bold text-white" id="bt-profitfactor">0</span>
     </div>
     <div class="inline-flex items-center gap-2 bg-white/5 rounded-full px-4 py-2 border border-white/5">
@@ -605,7 +612,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 <div class="page" id="page-charts">
   <div class="flex items-center justify-between mb-6">
     <div>
-      <h2 class="text-2xl font-extrabold text-white">📈 TradingView Charts</h2>
+      <h2 class="text-2xl font-extrabold text-white">📈 TradingView Grafik</h2>
       <p class="text-sm text-slate-400 mt-1">Live chart + heatmap + news + economic calendar</p>
     </div>
   </div>
@@ -636,16 +643,16 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 
   <!-- Trust Badges -->
   <div class="flex flex-wrap justify-center gap-3 mb-6">
-    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🛡️</span><div><div class="font-semibold text-slate-300">SSL Secure</div><div class="text-slate-600">256-bit encrypted</div></div></div>
-    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">✅</span><div><div class="font-semibold text-slate-300">Verified System</div><div class="text-slate-600">Auditable signals</div></div></div>
-    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🔒</span><div><div class="font-semibold text-slate-300">Data Protection</div><div class="text-slate-600">GDPR compliant</div></div></div>
-    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🤖</span><div><div class="font-semibold text-slate-300">AI Powered</div><div class="text-slate-600">DeepSeek + GPT-4o + Claude</div></div></div>
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🛡️</span><div><div class="font-semibold text-slate-300">SSL Secure</div><div class="text-slate-600">Enkripsi 256-bit</div></div></div>
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">✅</span><div><div class="font-semibold text-slate-300">Verified System</div><div class="text-slate-600">Sinyal teraudit</div></div></div>
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🔒</span><div><div class="font-semibold text-slate-300">Proteksi Data</div><div class="text-slate-600">GDPR compliant</div></div></div>
+    <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">🤖</span><div><div class="font-semibold text-slate-300">Didukung AI</div><div class="text-slate-600">DeepSeek + GPT-4o + Claude</div></div></div>
     <div class="flex items-center gap-2 bg-white/5 rounded-lg px-4 py-2.5 border border-white/5 text-xs text-slate-400"><span class="text-base">📊</span><div><div class="font-semibold text-slate-300">Real-Time Data</div><div class="text-slate-600">TradingView integrated</div></div></div>
   </div>
 
   <!-- Broker -->
   <div class="text-center mb-6">
-    <div class="text-xs text-slate-600 mb-2">🔗 Broker Partner</div>
+    <div class="text-xs text-slate-600 mb-2">🔗 Partner Broker</div>
     <a href="https://one.exnessonelink.com/a/xut5pgx9w8" target="_blank" rel="noopener" class="inline-flex items-center gap-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-6 py-3 transition-all">
       <img src="https://media.licdn.com/dms/image/v2/D5612AQFFXphJEMLiMQ/article-cover_image-shrink_600_2000/article-cover_image-shrink_600_2000/0/1713941573098?e=2147483647&v=beta&t=YvSHoCSIAkZ8d3L6egReM3jYpCJ7_wps30IVxQv78oc" alt="Exness" style="height:28px">
     </a>
@@ -671,13 +678,169 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     <div class="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold mb-2">
       <span class="w-4 h-4 rounded-full bg-emerald-400 flex items-center justify-center text-[8px] font-black text-black">✓</span> Verified by Vilona AI
     </div>
+    <!-- Donate CTA Buttons -->
+    <div class="flex flex-wrap justify-center gap-3 mb-4">
+      <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
+         class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20">
+        ⚡ ISI BAHAN BAKAR AI
+      </a>
+      <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
+         class="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-700 text-white rounded-xl font-semibold text-sm hover:bg-slate-600 transition-all">
+        📥 DOWNLOAD EA MT5
+      </a>
+    </div>
     <div class="text-xs text-slate-600 leading-relaxed">
-      Vilona TradeFX © 2026 · AI-Driven Trading Signals ·
+      Vilona TradeFX © 2026 · AI-Driven Trading Sinyal ·
       <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 hover:text-blue-300">@berkahkaryaforexbotbot</a><br>
       DYOR · Not Financial Advice · Past Performance Not Indicative of Future Results
     </div>
   </div>
 </div>
+
+<!-- ==================== PAGE: FUEL AI (ID) ==================== -->
+<div class="page" id="page-fuel">
+
+  <h2 class="text-2xl font-extrabold text-white mb-2">⛽ Isi Bahan Bakar AI</h2>
+  <p class="text-sm text-slate-400 mb-6">Dukung server trading 24/7 agar tetap hidup. Donasi sekecil apapun berarti besar.</p>
+
+  <!-- Fuel Meter -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+    <div class="md:col-span-2 kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.1), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.15)">
+      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🚀 Status Bahan Bakar AI Bulan Ini</h3>
+      <div class="flex items-end gap-2 mb-2">
+        <span class="text-4xl font-mono font-extrabold text-emerald-400" id="fuel-pct">0%</span>
+        <span class="text-sm text-slate-500 pb-1">terkumpul</span>
+      </div>
+      <div class="h-3 bg-white/5 rounded-full mb-4 overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-1000" id="fuel-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+        <div class="text-center bg-white/5 rounded-lg p-3">
+          <div class="font-mono font-bold text-white text-sm" id="fuel-collected">Rp 0</div>
+          <div class="text-slate-500 mt-0.5">Terkumpul</div>
+        </div>
+        <div class="text-center bg-white/5 rounded-lg p-3">
+          <div class="font-mono font-bold text-red-400 text-sm" id="fuel-shortfall">Rp 7.3jt</div>
+          <div class="text-slate-500 mt-0.5">Kekurangan</div>
+        </div>
+        <div class="text-center bg-white/5 rounded-lg p-3">
+          <div class="font-mono font-bold text-emerald-400 text-sm" id="fuel-donors">0</div>
+          <div class="text-slate-500 mt-0.5">Donatur</div>
+        </div>
+        <div class="text-center bg-white/5 rounded-lg p-3">
+          <div class="font-mono font-bold text-white text-sm" id="fuel-target">Rp 7.3jt</div>
+          <div class="text-slate-500 mt-0.5">Target</div>
+        </div>
+      </div>
+      <div class="mt-3 text-xs text-slate-600">
+        <span id="fuel-status-text">⚠️ Kritis — server butuh bantuan Anda</span>
+      </div>
+    </div>
+
+    <!-- What You Get Card -->
+    <div class="kpi-card" style="background:linear-gradient(135deg, rgba(30,58,138,0.08), rgba(30,58,138,0.02));border-color:rgba(59,130,246,0.15)">
+      <h3 class="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">🎁 Yang Didapat Donatur</h3>
+      <div class="space-y-2 text-xs">
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Status <b>DONATUR VIP</b> permanen</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Nama muncul di <b>Donor Wall</b> dashboard</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Akses <b>/analyze UNLIMITED</b> tanpa batas</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Prioritas <b>Auto-Trade EA</b></span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Sinyal <b>GRADE A+</b> via Telegram</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Bangga <b>mendukung AI Indonesia</b> 🇮🇩</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIER COMPARISON — THE GIMMICK -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+    <!-- Free Tier -->
+    <div class="kpi-card border-2 border-white/5 relative overflow-hidden">
+      <div class="absolute top-0 right-0 bg-slate-700 text-slate-300 text-[10px] font-bold px-3 py-1 rounded-bl-lg">GRATIS</div>
+      <h3 class="text-lg font-bold text-white mb-3">🆓 User Gratis</h3>
+      <div class="space-y-2 text-xs mb-4">
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">3x /analyze per hari</span></div>
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">Sinyal publik (delay 5 menit)</span></div>
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">Tanpa akses EA Auto-Trade</span></div>
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">Tanpa dukungan prioritas</span></div>
+        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">Grade sinyal terbatas</span></div>
+      </div>
+      <div class="text-center text-xs text-slate-600 py-2 border-t border-white/5">⚠️ Server berjalan dari kantong pribadi developer</div>
+    </div>
+
+    <!-- Donor Tier -->
+    <div class="kpi-card border-2 border-emerald-400/30 relative overflow-hidden" style="background:linear-gradient(135deg, rgba(6,78,59,0.12), rgba(6,78,59,0.03))">
+      <div class="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">🔥 PREMIUM</div>
+      <div class="absolute -top-6 -right-6 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl"></div>
+      <h3 class="text-lg font-bold text-emerald-400 mb-3">👑 Donatur VIP</h3>
+      <div class="space-y-2 text-xs mb-4">
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>/analyze UNLIMITED</b> — sepuasnya</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Sinyal <b>real-time</b> tanpa delay</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>EA Auto-Trade</b> full akses</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Support <b>prioritas 24/7</b></span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Sinyal <b>GRADE A+</b> eksklusif</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Nama di <b>Donor Wall</b> 🏆</span></div>
+      </div>
+      <div class="text-center text-xs text-emerald-300 py-2 border-t border-emerald-400/10">
+        💚 <b>Status aktif PERMANEN</b> — cukup donasi SEKALI
+      </div>
+    </div>
+  </div>
+
+  <!-- DONATION CTA — DIRECT TO BOT -->
+  <div class="kpi-card mb-6" style="background:linear-gradient(135deg, rgba(6,78,59,0.10), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.2)">
+    <div class="flex flex-col md:flex-row items-center gap-6">
+      <div class="flex-1 text-center md:text-left">
+        <h3 class="text-base font-bold text-emerald-400 mb-2">💚 Isi Bensin AI</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Transfer ke rekening di bawah, lalu isi Telegram ID kamu untuk aktivasi otomatis oleh admin.
+        </p>
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+          <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">🏦 BCA</div>
+            <div class="text-sm font-bold text-white font-mono">8531425531</div>
+            <div class="text-xs text-slate-400">a.n. MOH SUHUD</div>
+          </div>
+          <div class="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+            <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">📱 QRIS / E-Wallet</div>
+            <div class="text-sm font-bold text-white">Dana · OVO · GoPay</div>
+            <div class="text-xs text-slate-400">Konfirmasi ke @codergaboets</div>
+          </div>
+        </div>
+        <div class="mt-4 bg-emerald-500/5 border border-emerald-400/10 rounded-xl p-4">
+          <label class="text-xs text-slate-400 block mb-2">🆔 Telegram User ID kamu (wajib!):</label>
+          <div class="flex gap-2">
+            <input id="fuel-chat-id" type="text" placeholder="Contoh: 5220170786" 
+                   class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-mono outline-none focus:border-emerald-500">
+            <button onclick="reportFuelDonation()" 
+                    class="bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-2 rounded-lg text-sm transition-all whitespace-nowrap">
+              ✅ Saya Sudah Transfer
+            </button>
+          </div>
+          <div id="fuel-report-result" class="mt-2 text-xs hidden"></div>
+          <p class="text-[10px] text-slate-600 mt-2">Admin akan aktivasi manual max 1×24 jam. Kamu akan dapat notifikasi di Telegram.</p>
+        </div>
+      </div>
+      <div class="shrink-0 text-center">
+        <div class="text-4xl mb-2">🤖</div>
+        <div class="text-xs text-slate-500">Atau via Bot</div>
+        <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
+           class="inline-block mt-1 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all">
+          @berkahkaryaforexbotbot
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- DONOR WALL (full) -->
+  <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.06), rgba(6,78,59,0.01))">
+    <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">🏆 Wall of Fame — Donatur VIP</h3>
+    <div id="fuel-donor-wall-full">
+      <div class="text-sm text-slate-500 text-center py-6">Memuat data donatur...</div>
+    </div>
+    <div class="text-center text-[10px] text-slate-600 mt-3">🙏 Terima kasih para pahlawan AI Indonesia!</div>
+  </div>
+
+</div><!-- /page-fuel -->
 
 </div><!-- /main -->
 
@@ -689,7 +852,8 @@ const pages = {
   'transparency': 'page-transparency',
   'how': 'page-how',
   'backtest': 'page-backtest',
-  'charts': 'page-charts'
+  'charts': 'page-charts',
+  'fuel': 'page-fuel'
 };
 
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -734,7 +898,7 @@ function fmtPip(n) {
 /* ═══ LOAD ALL DATA ═══ */
 async function loadAll() {
   try {
-    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes] = await Promise.all([
+    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes, fuelRes] = await Promise.all([
       fetch('/api/feed').then(r => r.json()),
       fetch('/api/trade_stats').then(r => r.json()),
       fetch('/api/user_activity').then(r => r.json()),
@@ -742,7 +906,8 @@ async function loadAll() {
       fetch('/api/backtest').then(r => r.json()),
       fetch('/api/donors').then(r => r.json()),
       fetch('/api/daily_analyze').then(r => r.json()),
-      fetch('/api/daily_recap').then(r => r.json())
+      fetch('/api/daily_recap').then(r => r.json()),
+      fetch('/api/fuel/stats').then(r => r.json())
     ]);
 
     const signals = feed.signals || [];
@@ -782,7 +947,7 @@ async function loadAll() {
     document.getElementById('sig-tp').textContent = sigStats[1];
     document.getElementById('sig-sl').textContent = sigStats[2];
 
-    renderSignals(signals);
+    renderSinyal(signals);
     renderUserActivity(userSigs);
 
     // Transparency
@@ -825,6 +990,8 @@ async function loadAll() {
     renderDailyAnalyze(daily, trans);
     renderBacktest(backtest);
     renderDailyRecap(recap);
+    renderFuelStats(fuelRes);
+    renderFuelDonorWall(donors);
 
   } catch(e) {
     console.error('Load error:', e);
@@ -832,7 +999,7 @@ async function loadAll() {
 }
 
 /* ═══ RENDER SIGNALS ═══ */
-function renderSignals(signals) {
+function renderSinyal(signals) {
   const el = document.getElementById('signal-feed');
   if (!signals.length) {
     el.innerHTML = '<div class="text-center py-12 text-sm text-slate-500">🔍 No signals yet. Auto-scanner active 07:00-23:00 WIB. Try /analyze in bot!</div>';
@@ -910,7 +1077,7 @@ function renderDailyAnalyze(daily, trans) {
   let html = '<div class="space-y-1 text-xs text-center mb-3">';
   html += `<div class="flex justify-between"><span class="text-slate-400">Today</span><span class="font-mono font-bold text-emerald-400">${today}</span></div>`;
   html += `<div class="flex justify-between"><span class="text-slate-400">Yesterday</span><span class="font-mono font-bold text-blue-400">${yesterday}</span></div>`;
-  html += `<div class="flex justify-between pt-1 border-t border-white/5"><span class="text-slate-400">All-Time</span><span class="font-mono font-bold text-white">${total}</span></div>`;
+  html += `<div class="flex justify-between pt-1 border-t border-white/5"><span class="text-slate-400">Sepanjang Waktu</span><span class="font-mono font-bold text-white">${total}</span></div>`;
   html += '</div>';
   if (rows.length) {
     html += '<div class="text-[10px] text-slate-600 space-y-0.5">';
@@ -919,7 +1086,7 @@ function renderDailyAnalyze(daily, trans) {
     });
     html += '</div>';
   } else {
-    html += '<div class="text-xs text-slate-500 text-center">No data yet. Try /analyze!</div>';
+    html += '<div class="text-xs text-slate-500 text-center">Tidak ada data yet. Try /analyze!</div>';
   }
   el.innerHTML = html;
 }
@@ -929,8 +1096,8 @@ function renderDailyRecap(recap) {
   if (!recap || !recap.trades || !recap.trades.length) {
     el.innerHTML = '<div class="grid grid-cols-3 gap-3 mb-3">' +
       '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-slate-400">0</div><div class="text-[10px] text-slate-600">Today</div></div>' +
-      '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-emerald-400">0</div><div class="text-[10px] text-slate-600">Wins</div></div>' +
-      '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-red-400">0</div><div class="text-[10px] text-slate-600">Losses</div></div>' +
+      '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-emerald-400">0</div><div class="text-[10px] text-slate-600">Menang</div></div>' +
+      '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-red-400">0</div><div class="text-[10px] text-slate-600">Kalah</div></div>' +
       '</div><div class="text-xs text-slate-500 text-center">No trading today. Scanner active 07:00-23:00 WIB.</div>';
     return;
   }
@@ -943,9 +1110,9 @@ function renderDailyRecap(recap) {
   const trades = recap.trades || [];
 
   let html = '<div class="grid grid-cols-4 gap-3 mb-3">';
-  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-white">${total}</div><div class="text-[10px] text-slate-600">Signals</div></div>`;
-  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-emerald-400">${wins}</div><div class="text-[10px] text-slate-600">Wins (${wr}%)</div></div>`;
-  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-red-400">${losses}</div><div class="text-[10px] text-slate-600">Losses</div></div>`;
+  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-white">${total}</div><div class="text-[10px] text-slate-600">Sinyal</div></div>`;
+  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-emerald-400">${wins}</div><div class="text-[10px] text-slate-600">Menang (${wr}%)</div></div>`;
+  html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-red-400">${losses}</div><div class="text-[10px] text-slate-600">Kalah</div></div>`;
   html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold ${pips>=0?'text-emerald-400':'text-red-400'}">${fmtPip(pips)}</div><div class="text-[10px] text-slate-600">Pips</div></div>`;
   html += '</div>';
   if (micro > 0) html += `<div class="text-xs text-center text-slate-400 mb-2">💰 Profit: ${fmtRupiah(micro)}</div>`;
@@ -970,7 +1137,7 @@ function renderBacktest(bt) {
   const xauusd = bt.xauusd;
   if (!xauusd) {
     document.getElementById('bt-hero-wr').textContent = 'N/A';
-    document.getElementById('bt-hero-period').textContent = 'No data';
+    document.getElementById('bt-hero-period').textContent = 'Tidak ada data';
     return;
   }
   document.getElementById('bt-hero-period').textContent = xauusd.period || '—';
@@ -1013,7 +1180,7 @@ function renderBacktest(bt) {
           <div class="flex justify-between"><span class="text-slate-500">WR</span><span class="font-mono font-bold ${gwr>=40?'text-emerald-400':'text-red-400'}">${gwr}%</span></div>
           <div class="flex justify-between"><span class="text-slate-500">Pips</span><span class="font-mono font-bold ${gpips>=0?'text-emerald-400':'text-red-400'}">${fmtPip(gpips)}</span></div>
           <div class="flex justify-between"><span class="text-slate-500">W/L</span><span class="font-mono">${g.wins||0}W / ${g.losses||0}L</span></div>
-          <div class="flex justify-between"><span class="text-slate-500">Trades</span><span class="font-mono">${g.signals||g.trades||0}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Trade</span><span class="font-mono">${g.signals||g.trades||0}</span></div>
         </div>
       </div>`;
     }).join('');
@@ -1047,6 +1214,153 @@ function loadTradingViewWidgets() {
     }
   });
   if (allOk) _tvLoaded = true; // Only mark loaded AFTER all scripts created
+}
+
+/* ═══ FUEL AI — TRIPAY INTEGRATION ═══ */
+function renderFuelStats(stats) {
+  const s = stats || {};
+  const pct = s.percent || 0;
+  const collected = s.collected || 0;
+  const shortfall = s.shortfall || 7357500;
+  const donors = s.donors || 0;
+  const target = s.monthly_cost || 7357500;
+  
+  const elPct = document.getElementById('fuel-pct');
+  const elBar = document.getElementById('fuel-bar');
+  const elCollected = document.getElementById('fuel-collected');
+  const elShortfall = document.getElementById('fuel-shortfall');
+  const elDonors = document.getElementById('fuel-donors');
+  const elTarget = document.getElementById('fuel-target');
+  const elStatus = document.getElementById('fuel-status-text');
+  
+  if (elPct) elPct.textContent = pct + '%';
+  if (elBar) elBar.style.width = pct + '%';
+  if (elCollected) elCollected.textContent = fmtRupiah(collected);
+  if (elShortfall) elShortfall.textContent = fmtRupiah(shortfall);
+  if (elDonors) elDonors.textContent = donors;
+  if (elTarget) elTarget.textContent = fmtRupiah(target);
+  
+  if (elStatus) {
+    if (pct >= 75) {
+      elStatus.textContent = '✅ Server aman — terima kasih donatur!';
+      elStatus.className = 'text-xs text-emerald-400';
+    } else if (pct >= 50) {
+      elStatus.textContent = '🟡 Setengah jalan — bantu penuhi sisanya';
+      elStatus.className = 'text-xs text-yellow-400';
+    } else if (pct >= 25) {
+      elStatus.textContent = '🟠 Server butuh bantuan segera — donasi sekarang';
+      elStatus.className = 'text-xs text-orange-400';
+    } else {
+      elStatus.textContent = '🔴 KRITIS — server berjalan dari kantong pribadi. Bantu donasi!';
+      elStatus.className = 'text-xs text-red-400';
+    }
+  }
+}
+
+function renderFuelDonorWall(donors) {
+  const el = document.getElementById('fuel-donor-wall-full');
+  if (!el) return;
+  if (!donors || !donors.length) {
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">Belum ada donatur. Jadilah yang pertama! 💚</div>';
+    return;
+  }
+  donors.sort((a,b) => (b.amount||0) - (a.amount||0));
+  el.innerHTML = donors.map((d, i) => {
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'💚';
+    const dt = d.paid_at ? new Date(d.paid_at).toLocaleDateString('id-ID',{timeZone:'Asia/Jakarta'}) : '-';
+    return `<div class="flex items-center justify-between py-3 border-b border-white/5 last:border-b-0">
+      <div class="flex items-center gap-3">
+        <span class="text-xl">${medal}</span>
+        <div>
+          <div class="text-sm font-semibold text-blue-400">${d.display_name}</div>
+          <div class="text-[10px] text-slate-600">${dt}</div>
+        </div>
+      </div>
+      <span class="font-mono font-bold text-emerald-400 text-sm">${fmtRupiah(d.amount)}</span>
+    </div>`;
+  }).join('');
+}
+
+async function fuelDonate(amount) {
+  const loading = document.getElementById('fuel-loading');
+  const result = document.getElementById('fuel-result');
+  
+  // Disable all fuel buttons
+  document.querySelectorAll('.fuel-btn').forEach(b => b.disabled = true);
+  loading.classList.remove('hidden');
+  result.classList.add('hidden');
+  
+  try {
+    const resp = await fetch('/api/fuel/create?amount=' + amount + '&chat_id=web&username=Guest');
+    const data = await resp.json();
+    
+    loading.classList.add('hidden');
+    result.classList.remove('hidden');
+    
+    if (data.success && data.payment_url) {
+      result.innerHTML = `
+        <div class="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-5 text-center">
+          <div class="text-3xl mb-3">✅</div>
+          <div class="text-sm font-bold text-emerald-400 mb-2">Pembayaran Siap!</div>
+          <div class="text-xs text-slate-400 mb-4">Rp ${amount.toLocaleString('id-ID')} via Tripay</div>
+          <a href="${data.payment_url}" target="_blank" rel="noopener" 
+             class="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-bold py-3 px-8 rounded-lg transition-colors">
+            💳 Bayar Sekarang
+          </a>
+          <div class="text-[10px] text-slate-500 mt-3">
+            ⚡ Setelah bayar, bot otomatis mengaktifkan status Donatur VIP Anda.
+          </div>
+          <div class="text-[10px] text-slate-600 mt-1">
+            Ref: ${data.merchant_ref}
+          </div>
+        </div>`;
+    } else {
+      result.innerHTML = `
+        <div class="bg-red-500/10 border border-red-400/30 rounded-lg p-5 text-center">
+          <div class="text-xl mb-2">⚠️</div>
+          <div class="text-sm font-bold text-red-400">Gagal membuat pembayaran</div>
+          <div class="text-xs text-slate-400 mt-1">${data.error || 'Coba lagi nanti'}</div>
+          <div class="text-xs text-slate-600 mt-2">Alternatif: buka bot Telegram <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 underline">@berkahkaryaforexbotbot</a> dan ketik /donate</div>
+        </div>`;
+    }
+  } catch(e) {
+    loading.classList.add('hidden');
+    result.classList.remove('hidden');
+    result.innerHTML = `
+      <div class="bg-red-500/10 border border-red-400/30 rounded-lg p-5 text-center">
+        <div class="text-sm font-bold text-red-400">Koneksi gagal</div>
+        <div class="text-xs text-slate-400 mt-1">${e.message}</div>
+      </div>`;
+  } finally {
+    document.querySelectorAll('.fuel-btn').forEach(b => b.disabled = false);
+  }
+}
+
+/* ═══ FUEL DONATION REPORT (manual transfer) ═══ */
+async function reportFuelDonation() {
+  const chatId = document.getElementById('fuel-chat-id').value.trim();
+  const result = document.getElementById('fuel-report-result');
+  result.classList.remove('hidden');
+
+  if (!chatId || chatId.length < 5) {
+    result.innerHTML = '<div class="text-red-400">❌ Masukkan Telegram User ID yang valid</div>';
+    return;
+  }
+
+  result.innerHTML = '<div class="text-slate-400">⏳ Mengirim laporan...</div>';
+
+  try {
+    const resp = await fetch('/api/fuel/report?chat_id=' + encodeURIComponent(chatId));
+    const data = await resp.json();
+    if (data.success) {
+      result.innerHTML = '<div class="text-emerald-400">✅ Laporan terkirim! Admin akan aktivasi max 1×24 jam. Pantau Telegram kamu.</div>';
+      document.getElementById('fuel-chat-id').value = '';
+    } else {
+      result.innerHTML = '<div class="text-red-400">❌ Gagal: ' + (data.error || 'unknown error') + '</div>';
+    }
+  } catch (e) {
+    result.innerHTML = '<div class="text-red-400">❌ Gagal: ' + e.message + '</div>';
+  }
 }
 
 // Init

@@ -880,10 +880,14 @@ def handle_payment_callback(callback_query):
 
         if not PAYMENT_ENGINE:
             tg_send(
-                "💳 <b>Payment gateway belum aktif.</b>\n\n"
-                "Untuk saat ini, dukungan bisa via:\n"
-                "📞 DM Admin: @codergaboets\n\n"
-                "Kirim bukti transfer + user ID kamu.",
+                "💳 <b>Payment gateway offline.</b>\n\n"
+                "Tapi tenang, kamu tetap bisa donasi manual:\n\n"
+                "💚 <b>Transfer ke:</b>\n"
+                "🏦 BCA: 8531425531 a.n. MOH SUHUD\n"
+                "📱 Dana/Ovo/GoPay: 08123456789 (konfirm admin)\n\n"
+                "📞 Kirim bukti transfer ke: @codergaboets\n"
+                "Sertakan user ID kamu: <code>" + str(chat_id) + "</code>\n\n"
+                "⏳ Aktivasi manual 1-24 jam (we will notify you!)",
                 chat_id
             )
             return
@@ -893,9 +897,13 @@ def handle_payment_callback(callback_query):
         result = create_tripay_payment(str(chat_id), username, tier="donor", amount=amount)
         if result.get("error"):
             tg_send(
-                f"❌ <b>Gagal membuat pembayaran</b>\n"
+                f"❌ <b>Gagal membuat pembayaran otomatis</b>\n"
                 f"{result['error']}\n\n"
-                f"📞 Silakan hubungi admin: @codergaboets",
+                f"💚 <b>Alternatif transfer manual:</b>\n"
+                f"🏦 BCA: 8531425531 a.n. MOH SUHUD\n"
+                f"📱 Dana/Ovo/GoPay — konfirm ke @codergaboets\n\n"
+                f"📞 Sertakan user ID: <code>{chat_id}</code>\n"
+                f"Admin akan aktivasi manual dalam 1-24 jam.",
                 chat_id
             )
             return
@@ -1316,10 +1324,14 @@ def _call_omniroute(prompt, models=None):
 
 
 def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_data=None, display="XAUUSD", tier="starter"):
-    """Multi-AI consensus — Python screening first, AI verifies.
+    """Multi-AI consensus — tier-based model selection.
     
-    🔬 MODE: VERIFY — AI receives mechanical signal + OHLCV, confirms/rejects/adjusts.
-    ⭐ Uses: DeepSeek V3 + GPT-4o (full models, no mini).
+    🔬 Tier-based model count:
+       - starter:  DeepSeek only (solo, max 55% conf) — free tier
+       - pro:      DeepSeek + GPT-4o (dual, max 85% conf) — donor
+       - elite:    All 3 models (triple, max 95% conf) — premium donor
+       - premium=True: All 3 models (channel/auto — unlimited)
+    ⭐ Models: DeepSeek V3 + GPT-4o + Claude-Sonnet (OmniRoute).
     """
     # Build analysis prompt
     data_section = f"💰 Current Price: ${price:.2f}"
@@ -1348,16 +1360,23 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         f"R:R minimum 1:2. {'⚠️ FRIDAY: SL +10-15 pips extra.' if wib_now().weekday()==4 else ''}"
     )
 
-    # ── PRIMARY: DeepSeek V3 (best reasoning/cost) ──
+    # ── TIER-BASED MODEL SELECTION ──
+    is_free_tier = (tier == "starter" and not premium)
+
+    # DeepSeek V3 — always called (even for free tier)
     deepseek = _call_deepseek(prompt)
 
-    # ── SECONDARY: GPT-4o (full model, not mini) ──
-    gpt4o = _call_openai(prompt, model="gpt-4o")
+    # GPT-4o — only for donors, elite, or channel (premium)
+    gpt4o = None
+    if not is_free_tier:
+        gpt4o = _call_openai(prompt, model="gpt-4o")
 
-    # ── FALLBACK: OmniRoute with good models ──
-    omniroute = _call_omniroute(prompt)
+    # OmniRoute (Claude-Sonnet) — only for elite or channel
+    omniroute = None
+    if tier == "elite" or premium:
+        omniroute = _call_omniroute(prompt)
 
-    # Collect all valid signals — minimum 2 model agreement required
+    # Collect all valid signals
     signals = []
     if deepseek and deepseek.get("action") in ("BUY", "SELL"):
         signals.append({"sig": deepseek, "name": "DeepSeek-V3", "weight": 1.2})
@@ -1369,6 +1388,12 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     model_count = len(signals)
     tier_label = {"starter": "🆓 Free", "pro": "⭐ Pro", "elite": "👑 Elite", "testing": "🧪 Testing"}.get(tier, tier.upper())
 
+    # Confidence caps by tier
+    conf_caps = {"starter": 0.55, "pro": 0.85, "elite": 0.95}
+    conf_cap = conf_caps.get(tier, 0.95)
+    if premium:
+        conf_cap = 0.95  # channel/auto always gets max
+
     # Count votes per direction
     buy_votes = [s for s in signals if s["sig"]["action"] == "BUY"]
     sell_votes = [s for s in signals if s["sig"]["action"] == "SELL"]
@@ -1378,33 +1403,37 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         winner = buy_votes if len(buy_votes) >= 2 else sell_votes
         conf = sum(s["sig"].get("confidence", 0) * s["weight"] for s in winner) / sum(s["weight"] for s in winner)
         sig = winner[0]["sig"].copy()
-        sig["confidence"] = min(conf, 1.0)
+        sig["confidence"] = min(conf, conf_cap)
         sig["ensemble"] = "dual"
         sig["voters"] = len(winner)
         sig["_model"] = "+".join(s["name"] for s in winner)
         sig["_tier"] = tier_label
+        sig["_tier_capped"] = is_free_tier
         sig["_models"] = f"{model_count}/2"
-        logger.info(f"AI CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%}")
+        logger.info(f"AI CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%} tier={tier}")
         return sig
 
     # ⚠️ SOLO: 1 model only — low confidence, still return for manual review
     if signals:
         best = max(signals, key=lambda s: s["sig"].get("confidence", 0) * s["weight"])
         sig = best["sig"].copy()
+        sig["confidence"] = min(sig.get("confidence", 0), conf_cap)
         sig["ensemble"] = "solo"
         sig["voters"] = 1
         sig["_model"] = best["name"]
         sig["_tier"] = tier_label
+        sig["_tier_capped"] = is_free_tier
         sig["_models"] = f"{model_count}/2"
-        logger.info(f"SOLO [{best['name']}]: {sig['action']} conf={sig.get('confidence', 0):.0%} — LOW CONFIDENCE")
+        logger.info(f"SOLO [{best['name']}]: {sig['action']} conf={sig['confidence']:.0%} tier={tier}")
         return sig
 
     # ❌ Nothing: return any model's HOLD or None
-    for s, name in [(deepseek, "DeepSeek-V3"), (gpt4o, "GPT-4o")]:
+    for s, name in [(deepseek, "DeepSeek-V3"), (gpt4o if gpt4o else deepseek, "GPT-4o" if gpt4o else "DeepSeek-V3")]:
         if s:
             s = dict(s)
             s["ensemble"] = "hold"; s["voters"] = 0
             s["_model"] = name; s["_tier"] = tier_label
+            s["_tier_capped"] = is_free_tier
             s["_models"] = f"0/2"
             return s
 
@@ -2161,6 +2190,16 @@ def handle_command(cmd, text, chat_id, msg):
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"{tier_label}\n"
                 f"⚡️ Kuota AI: {quota_line}\n"
+            )
+            if is_donor:
+                welcome += (
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔑 <b>AKSES DONATUR:</b>\n"
+                    f"📥 Download EA MT5: phantomfx.aitradepulse.com/ea/download/\n"
+                    f"🔑 Cek Licensi EA: /mykey\n"
+                    f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com\n"
+                )
+            welcome += (
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🧠 /signal — Signal dari 9 engines\n"
                 f"📊 /dashboard — Live dashboard web\n"
@@ -2173,33 +2212,37 @@ def handle_command(cmd, text, chat_id, msg):
             send_ultimatum_video(chat_id)
 
     elif cmd == "/help":
-        tg_send(
-            "⚙️ <b>VILONA AI — COMMAND CENTER</b>\n"
-            "━━━━━━━━━━━━━━━━\n\n"
-            "🧠 <b>AI SIGNAL SYSTEM 🔥</b>\n"
-            "/signal — Generate sinyal dari MTF + 9 engines\n"
-            "/mtf — Matrix 5TF × 9 engines (top-down)\n"
-            "/engines — Engine readings per strategi\n"
-            "/dashboard — Buka live dashboard web\n\n"
-            "👑 <b>PILAR UTAMA</b>\n"
-            "/start — Reboot Markas Komando\n"
-            "/analyze — Perintahkan AI Scan Market\n"
-            "/price — Cek harga real-time\n"
-            "/data — Market overview\n"
-            "/status — Cek Kuota & Akses VIP\n"
-            "/donate — Isi Bahan Bakar AI ⚡\n\n"
-            "📊 <b>TRADING TOOLS</b>\n"
-            "/mapping — Mapping harian + level S/R\n"
-            "/killzone — Radar sesi market aktif\n"
-            "/winrate — Statistik performa\n"
-            "/history — Riwayat trade terakhir\n"
-            "/recap — Rekap harian\n\n"
-            "🔧 <b>POWER TOOLS</b>\n"
-            "/autosync — Auto-trade ke EA\n"
-            "/bridge_status — Cek koneksi EA\n"
-            "━━━━━━━━━━━━━━━━\n"
+        help_lines = [
+            "⚙️ <b>VILONA AI — COMMAND CENTER</b>",
+            "━━━━━━━━━━━━━━━━\n",
+            "🧠 <b>AI SIGNAL SYSTEM 🔥</b>",
+            "/signal — Generate sinyal dari MTF + 9 engines",
+            "/mtf — Matrix 5TF × 9 engines (top-down)",
+            "/engines — Engine readings per strategi",
+            "/dashboard — Buka live dashboard web\n",
+            "👑 <b>PILAR UTAMA</b>",
+            "/start — Reboot Markas Komando",
+            "/analyze — Perintahkan AI Scan Market",
+            "/price — Cek harga real-time",
+            "/data — Market overview",
+            "/status — Cek Kuota & Akses VIP",
+            "/donate — Isi Bahan Bakar AI ⚡\n",
+            "📊 <b>TRADING TOOLS</b>",
+            "/mapping — Mapping harian + level S/R",
+            "/killzone — Radar sesi market aktif",
+            "/winrate — Statistik performa",
+            "/history — Riwayat trade terakhir",
+            "/recap — Rekap harian\n",
+            "🔧 <b>POWER TOOLS</b>",
+            "/autosync — Auto-trade ke EA (Donatur)",
+            "/bridge_status — Cek koneksi EA",
+            "/mykey — Cek License EA kamu (Donatur)\n",
+            "🔑 <b>EA MT5 DOWNLOAD</b>",
+            "📥 phantomfx.aitradepulse.com/ea/download/",
+            "━━━━━━━━━━━━━━━━",
             "📞 Jalur Privat Investor: @codergaboets",
-            chat_id)
+        ]
+        tg_send("\n".join(help_lines), chat_id)
 
     elif cmd == "/price":
         # Multi-symbol price — use normalized sub
@@ -2264,8 +2307,14 @@ def handle_command(cmd, text, chat_id, msg):
                 f"⚡️ Kuota AI: {quota['remaining']}/{FREE_QUOTA_PER_DAY} (Reset 00:00 WIB)\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"Kamu punya {FREE_QUOTA_PER_DAY}x peluru analisa AI setiap harinya.\n"
-                f"👉 Buka akses Auto-Trade & Unlimited AI?\n"
-                f"Ketik /donate"
+                f"\n"
+                f"🔒 <b>Fitur Donatur Eksklusif:</b>\n"
+                f"📥 Download EA MT5 (Auto-Trade)\n"
+                f"🔑 License Key untuk EA\n"
+                f"🤖 Auto-Trade langsung ke akun MT5\n"
+                f"🧠 Multi-Model AI Consensus (akurasi lebih tinggi)\n"
+                f"\n"
+                f"👉 /donate — Buka akses Donatur sekarang!"
             )
         txt += weekend_note
         tg_send(txt, chat_id)
@@ -2475,12 +2524,13 @@ def handle_command(cmd, text, chat_id, msg):
                                         auto_text += f"{w}\n"
                         except: pass
                     auto_text += "<i>EA auto-eksekusi... 3-5 detik</i>"
-                    # Donation reminder for autosync
+                    # Tier-based upsell for autosync
                     if not _is_donor(str(chat_id)):
                         auto_text += (
                             "\n━━━━━━━━━━━━━━━━\n"
-                            "💡 <b>Kalau EA lo cuan, isi bensin AI ya!</b>\n"
-                            "Jangan diperas terus Bro 😄\n👉 /donate"
+                            "🆓 <b>FREE TIER — Akurasi Terbatas</b>\n"
+                            "Analisa solo 1 model AI. Upgrade untuk multi-model consensus:\n"
+                            "👉 /donate — Isi Bahan Bakar AI"
                         )
                     tg_send(auto_text, chat_id)
                 else:
@@ -2540,21 +2590,30 @@ def handle_command(cmd, text, chat_id, msg):
                                         text += f"\n{w}"
                         except: pass
                     text += "\n<i>⏰ Sinyal valid 5 menit</i>"
-                    # ── DONATION REMINDER ──
+                    # ── TIER-BASED UPSELL ──
                     is_donor = _is_donor(str(chat_id)) if chat_id else False
                     if not is_donor:
+                        user_tier_label = sig.get("_tier", "🆓 Free") if sig else "🆓 Free"
                         text += (
                             "\n━━━━━━━━━━━━━━━━\n"
-                            "💡 <b>Kalau sinyal ini cuan, saatnya isi bensin AI!</b>\n"
-                            "Server analisa 24/7 butuh biaya API & GPU.\n"
-                            "Jangan cuma diperas aja Bro 😄\n"
-                            "👉 /donate — dukung seikhlasnya, AKTIF PERMANEN"
+                            f"{user_tier_label} <b>TIER — Akurasi Terbatas</b>\n"
+                            "━━━━━━━━━━━━━━━━\n"
+                            "📊 <b>FREE TIER:</b> Analisa 1 model AI solo\n"
+                            "⭐ <b>PREMIUM:</b> 3 model AI konsensus + akurasi lebih tinggi\n"
+                            f"Sinyal ini generate dari 1 AI model saja dengan confidence terbatas.\n\n"
+                            "💡 <b>Isi Bahan Bakar AI</b> untuk premium multi-model consensus:\n"
+                            "✅ 3 AI model (DeepSeek + GPT-4o + Claude)\n"
+                            "✅ Consensus voting → akurasi lebih tinggi\n"
+                            "✅ Analisa unlimited 60x/hari\n"
+                            "👉 /donate — dukung server & upgrade tier"
                         )
                     else:
                         text += (
                             "\n━━━━━━━━━━━━━━━━\n"
-                            "🤝 <b>Makasih udah jadi Donatur!</b>\n"
-                            "Server AI ini hidup karena support kamu. 🥂"
+                            "⭐ <b>PREMIUM TIER — Multi-Model Consensus</b>\n"
+                            "3 AI model (DeepSeek + GPT-4o + Claude) konsensus.\n"
+                            "Akurasi maksimal berkat support kamu! 🥂\n"
+                            "👉 /donate — Ajak teman ikut donasi"
                         )
                     keyboard = {
                         "inline_keyboard": [[
@@ -4258,6 +4317,7 @@ def main():
             {"command": "killzone", "description": "🎯 Radar sesi market aktif"},
             {"command": "donate",   "description": "⚡ Isi Bahan Bakar AI"},
             {"command": "status",   "description": "🛡 Cek Kuota & Akses VIP"},
+            {"command": "mykey",    "description": "🔑 Cek License EA Kamu"},
         ]
         payload = json.dumps({"commands": commands}).encode()
         req = urllib.request.Request(

@@ -1,252 +1,141 @@
-#!/usr/bin/env python3
-"""Vilona Trade FX — License Manager.
-Generate, list, revoke API keys via bridge admin endpoint.
-Dipanggil dari vilona_tradefx_handler.py untuk command bot Telegram.
-
-Flow:
-  1. Admin: /genkey pro "Nama Customer" → generate key
-  2. Admin: /listkeys → lihat semua key aktif
-  3. Admin: /revokekey VT-PRO-XXXX → nonaktifkan key
-  4. User:  /mykey → lihat license key & status
-  5. Bridge: GET /signal?api_key=xxx → validate & serve tier
-
-api_keys.json format:
-{
-  "keys": {
-    "VT-xxx": {"tier": "pro", "label": "...", "active": true, ...}
-  },
-  "tiers": {...}
-}
+"""License Manager for Vilona Trade FX EA.
+Simple license key management - generate, list, revoke, and check keys.
+Keys stored in JSON file at DATA_DIR / "ea_licenses.json".
 """
+
 import json
-import os
 import time
+import os
 import secrets
-import string
-import urllib.request
+from pathlib import Path
 
-BRIDGE_URL = "http://localhost:8765"
-KEYS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "api_keys.json")
+DATA_DIR = Path(os.environ.get("VILONA_TRADEFX_DATA_DIR", "/home/openclaw/projects/1ai-trade-bot/data"))
+ADMIN_IDS = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
 
-ADMIN_CHAT_IDS = {
-    "157228659": "Andik",
-    "5220170786": "Paijo",
-}
+LICENSES_FILE = DATA_DIR / "ea_licenses.json"
 
-def is_admin(chat_id):
-    """Check if chat_id is an admin."""
-    return str(chat_id) in ADMIN_CHAT_IDS
-
-
-def _load_keys():
-    if os.path.exists(KEYS_FILE):
-        with open(KEYS_FILE) as f:
-            return json.load(f)
-    return {"keys": {}, "tiers": {}, "default_tier": "starter"}
-
-
-def _save_keys(data):
-    with open(KEYS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def generate_key(tier="pro", label="", rate_limit=None, expires="2026-12-31"):
-    """Generate a new API key."""
-    prefix = {"starter": "VT-FREE", "pro": "VT-PRO", "elite": "VT-ELITE"}.get(tier, "VT-FREE")
-    suffix = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
-    new_key = f"{prefix}-{suffix}"
-
-    config = _load_keys()
-
-    if rate_limit is None:
-        rate_limit = {"starter": 3, "pro": 50, "elite": 200}.get(tier, 3)
-
-    config["keys"][new_key] = {
-        "tier": tier,
-        "label": label or f"Customer {len(config['keys']) + 1}",
-        "rate_limit": rate_limit,
-        "rate_window_seconds": 86400,
-        "expires": expires,
-        "active": True,
-        "features": config.get("tiers", {}).get(tier, {}).get("features", []),
-        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-    }
-
-    _save_keys(config)
-    return new_key, config
-
-
-def list_keys():
-    """List all keys with status."""
-    config = _load_keys()
-    result = []
-    for key, data in config.get("keys", {}).items():
-        result.append({
-            "key": key,
-            "tier": data.get("tier", "?"),
-            "label": data.get("label", ""),
-            "active": data.get("active", True),
-            "expires": data.get("expires", "?"),
-            "rate_limit": data.get("rate_limit", "?"),
-        })
-    return result, config.get("tiers", {})
-
-
-def revoke_key(api_key):
-    """Deactivate a key (soft delete)."""
-    config = _load_keys()
-    if api_key in config["keys"]:
-        config["keys"][api_key]["active"] = False
-        _save_keys(config)
-        return True, config["keys"][api_key].get("label", api_key)
-    return False, None
-
-
-def reactivate_key(api_key):
-    """Reactivate a deactivated key."""
-    config = _load_keys()
-    if api_key in config["keys"]:
-        config["keys"][api_key]["active"] = True
-        _save_keys(config)
-        return True, config["keys"][api_key].get("label", api_key)
-    return False, None
-
-
-def get_key_info(api_key):
-    """Get info about a specific key."""
-    config = _load_keys()
-    if api_key in config["keys"]:
-        return config["keys"][api_key]
-    return None
-
-
-def try_generate_via_bridge(tier, label):
-    """Fallback: generate via bridge admin endpoint."""
+def _load_licenses():
     try:
-        data = json.dumps({"tier": tier, "label": label}).encode()
-        req = urllib.request.Request(f"{BRIDGE_URL}/admin/generate-key", data=data,
-                                     headers={"Content-Type": "application/json"})
-        resp = urllib.request.urlopen(req, timeout=5)
-        return json.loads(resp.read())
-    except Exception as e:
-        return {"error": str(e)}
+        if LICENSES_FILE.exists():
+            return json.loads(LICENSES_FILE.read_text())
+    except: pass
+    return {}
 
+def _save_licenses(licenses):
+    LICENSES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LICENSES_FILE.write_text(json.dumps(licenses, indent=2))
 
-# ── Bot command handlers ──
+def is_admin(chat_id: str) -> bool:
+    return str(chat_id) in ADMIN_IDS
 
-def cmd_genkey(chat_id, args):
-    """Bot command: /genkey <tier> <label>
-    Admin only. Generate new license key.
+def cmd_genkey(chat_id: str, sub: str = "", msg: dict = None) -> str:
+    """Generate a new EA license key for a donor.
+    Usage: /genkey <user_id> [days]
     """
     if not is_admin(chat_id):
         return "⛔ Admin only."
 
-    tier = "pro"
-    label = ""
+    parts = sub.split()
+    target_id = parts[0] if parts else ""
+    if not target_id:
+        return "📋 Usage: /genkey <user_id> [days]"
 
-    if args:
-        parts = args.split(maxsplit=1)
-        if parts[0].lower() in ("starter", "pro", "elite"):
-            tier = parts[0].lower()
-            label = parts[1] if len(parts) > 1 else ""
-        else:
-            label = args
+    days = int(parts[1]) if len(parts) > 1 else 9999
 
-    try:
-        api_key, config = generate_key(tier=tier, label=label)
-        tiers_info = config.get("tiers", {})
-        tier_info = tiers_info.get(tier, {})
-        max_layers = tier_info.get("max_layers", 1)
-        cooldown = tier_info.get("signal_cooldown_minutes", 15)
+    # Generate key
+    key = f"VTFX-{secrets.token_hex(8).upper()}-{int(time.time())}"
+    expires = int(time.time()) + (days * 86400)
 
-        return (
-            f"🔑 <b>License Key Generated</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"<code>{api_key}</code>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📦 Tier: <b>{tier.upper()}</b>\n"
-            f"📊 Layers: {max_layers}\n"
-            f"⚡ Rate: {cooldown}min cooldown\n"
-            f"🏷 Label: {label or 'N/A'}\n\n"
-            f"<i>Copy key ini ke input API_Key di EA</i>"
-        )
-    except Exception as e:
-        # Fallback to bridge
-        result = try_generate_via_bridge(tier, label)
-        if "api_key" in result:
-            return (
-                f"🔑 <b>License Key Generated (via bridge)</b>\n"
-                f"<code>{result['api_key']}</code>\n"
-                f"Tier: {result.get('tier', tier).upper()}"
-            )
-        return f"❌ Gagal generate key: {e}"
+    licenses = _load_licenses()
+    licenses[key] = {
+        "user_id": target_id,
+        "created": int(time.time()),
+        "expires": expires,
+        "active": True,
+        "hardware_id": ""
+    }
+    _save_licenses(licenses)
 
-
-def cmd_listkeys(chat_id):
-    """Bot command: /listkeys — List all license keys."""
-    if not is_admin(chat_id):
-        return "⛔ Admin only."
-
-    keys, tiers = list_keys()
-    if not keys:
-        return "📭 Belum ada license key. Gunakan /genkey untuk membuat."
-
-    lines = ["🔑 <b>License Keys</b>", "━━━━━━━━━━━━━━━━━━━━━"]
-    for k in keys:
-        status = "✅" if k["active"] else "❌"
-        lines.append(f"{status} <code>{k['key']}</code>")
-        lines.append(f"   {k['tier'].upper()} | {k['label']} | exp:{k['expires']}")
-
-    lines.append(f"\n📊 Total: {len(keys)} keys")
-    return "\n".join(lines)
-
-
-def cmd_revokekey(chat_id, args):
-    """Bot command: /revokekey <API_KEY> — Deactivate license."""
-    if not is_admin(chat_id):
-        return "⛔ Admin only."
-
-    if not args:
-        return "Usage: /revokekey VT-PRO-XXXX"
-
-    api_key = args.strip()
-    success, label = revoke_key(api_key)
-    if success:
-        return f"🔒 Key <code>{api_key}</code> ({label}) dinonaktifkan."
-    return f"❌ Key tidak ditemukan: {api_key}"
-
-
-def cmd_mykey(chat_id, user_key=None):
-    """Bot command: /mykey — Show user's license info."""
-    # This would look up the user's key from a user→key mapping
-    # For now, user must provide the key
-    if not user_key:
-        return "Usage: /mykey VT-PRO-XXXX\n\nBelum punya? Upgrade via /subscribe"
-
-    info = get_key_info(user_key)
-    if not info:
-        return f"❌ Key tidak valid: {user_key}"
-
-    status = "✅ Active" if info.get("active") else "🔒 Revoked"
+    expiry_str = "PERMANEN" if days >= 9999 else f"{days} hari"
     return (
-        f"🔑 <b>License Info</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"Key: <code>{user_key}</code>\n"
-        f"Status: {status}\n"
-        f"Tier: {info.get('tier', '?').upper()}\n"
-        f"Expires: {info.get('expires', '?')}\n"
-        f"Rate: {info.get('rate_limit', '?')}/hari\n"
+        f"🔑 <b>License Key Generated</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"👤 User: <code>{target_id}</code>\n"
+        f"🔑 Key: <code>{key}</code>\n"
+        f"⏳ Masa: {expiry_str}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"Kirim key ini ke user via DM."
     )
 
+def cmd_listkeys(chat_id: str) -> str:
+    """List all EA license keys."""
+    if not is_admin(chat_id):
+        return "⛔ Admin only."
 
-# ── Test ──
-if __name__ == "__main__":
-    print("=== Generate Key ===")
-    key, cfg = generate_key("pro", "Test Customer")
-    print(f"  Key: {key}")
-    print(f"  Tier: {cfg['keys'][key]['tier']}")
+    licenses = _load_licenses()
+    if not licenses:
+        return "📭 Belum ada license key."
 
-    print("\n=== List Keys ===")
-    keys, _ = list_keys()
-    for k in keys:
-        print(f"  {k['key']} | {k['tier']} | active={k['active']}")
+    lines = ["🔑 <b>EA License Keys</b>\n━━━━━━━━━━━━━━━━"]
+    for key, info in list(licenses.items())[:20]:
+        status = "✅ Active" if info.get("active") else "⛔ Revoked"
+        hw = info.get("hardware_id", "")
+        hw_str = f" | HW: {hw[:12]}..." if hw else ""
+        expiry = info.get("expires", 0)
+        expiry_str = "PERMANEN" if expiry >= 9999999999 else time.strftime("%Y-%m-%d", time.gmtime(expiry))
+        lines.append(
+            f"👤 {info.get('user_id', '?')}\n"
+            f"   <code>{key[:20]}...</code> | {status} | {expiry_str}{hw_str}"
+        )
+
+    if len(licenses) > 20:
+        lines.append(f"\n... dan {len(licenses) - 20} lainnya")
+
+    return "\n".join(lines)
+
+def cmd_revokekey(chat_id: str, sub: str = "") -> str:
+    """Revoke an EA license key."""
+    if not is_admin(chat_id):
+        return "⛔ Admin only."
+
+    key_id = sub.strip()
+    if not key_id:
+        return "📋 Usage: /revokekey <key_id>"
+
+    licenses = _load_licenses()
+    # Support partial key match
+    matched = [k for k in licenses if k.startswith(key_id) or key_id in k]
+    if not matched:
+        return f"❌ Key <code>{key_id}</code> tidak ditemukan."
+
+    for k in matched:
+        licenses[k]["active"] = False
+    _save_licenses(licenses)
+    return f"✅ {len(matched)} key(s) revoked."
+
+def cmd_mykey(chat_id: str) -> str:
+    """Show user's own EA license key."""
+    licenses = _load_licenses()
+    user_keys = {k: v for k, v in licenses.items() if v.get("user_id") == str(chat_id)}
+
+    if not user_keys:
+        return (
+            "🔑 <b>License EA Kamu</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "Kamu belum memiliki license key EA.\n\n"
+            "💡 Jika kamu sudah Donatur, hubungi admin:\n"
+            "👉 @codergaboets\n\n"
+            "💡 Belum Donatur? /donate"
+        )
+
+    lines = ["🔑 <b>License EA Kamu</b>\n━━━━━━━━━━━━━━━━"]
+    for key, info in user_keys.items():
+        status = "✅ Active" if info.get("active") else "⛔ Revoked"
+        expiry = info.get("expires", 0)
+        expiry_str = "PERMANEN" if expiry >= 9999999999 else time.strftime("%Y-%m-%d", time.gmtime(expiry))
+        hw = info.get("hardware_id", "")
+        hw_str = f" | Hardware: <code>{hw[:20]}...</code>" if hw else " | (Belum diaktivasi)"
+        lines.append(f"🔑 <code>{key}</code>\n   {status} | {expiry_str}{hw_str}")
+
+    lines.append(f"\n📥 Download EA: phantomfx.aitradepulse.com/ea/download/")
+    return "\n".join(lines)

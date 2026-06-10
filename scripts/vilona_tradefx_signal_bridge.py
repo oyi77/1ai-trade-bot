@@ -204,30 +204,41 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "uptime_seconds": int(time.time() - START_TIME),
                 "queue_size": len(PENDING),
             })
-        elif path == "" or path == "/":
-            # Serve new dashboard HTML (proxied from dashboard server on 8768)
+        elif path == "" or path == "/" or path == "/id" or path == "/en":
+            # Proxy ALL landing routes to dashboard server (8768)
+            # Dashboard handles: / → redirect, /id → ID page, /en → EN page
             try:
-                req = urllib.request.Request("http://127.0.0.1:8768/")
+                req = urllib.request.Request(f"http://127.0.0.1:8768{path}")
                 with urllib.request.urlopen(req, timeout=5) as resp:
-                    content = resp.read().decode("utf-8")
+                    page_content = resp.read().decode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(content.encode())))
+                self.send_header("Content-Length", str(len(page_content.encode())))
                 self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
-                self.wfile.write(content.encode())
-            except Exception as e:
-                # Fallback to old landing page
+                self.wfile.write(page_content.encode())
+            except Exception:
+                # Fallback: serve landing_page.html directly
                 html_path = os.path.join(PROJECT_DIR, "scripts", "landing_page.html")
                 try:
                     with open(html_path, "r") as f:
-                        content = f.read()
+                        page_content = f.read()
+                    # Auto-redirect meta tag for root path
+                    if path in ("", "/"):
+                        page_content = page_content.replace('</head>',
+                            '<meta http-equiv="refresh" content="0;url=/id"></head>')
+                    # Force language for /id and /en
+                    if path in ("/id", "/en"):
+                        force_lang = "id" if path == "/id" else "en"
+                        page_content = page_content.replace('<html lang="id">', f'<html lang="{force_lang}">')
+                        force_script = f'<script>setLang("{force_lang}")</script>'
+                        page_content = page_content.replace('</body>', f'{force_script}\n</body>')
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
-                    self.send_header("Content-Length", str(len(content.encode())))
+                    self.send_header("Content-Length", str(len(page_content.encode())))
                     self.send_header("Access-Control-Allow-Origin", "*")
                     self.end_headers()
-                    self.wfile.write(content.encode())
+                    self.wfile.write(page_content.encode())
                 except FileNotFoundError:
                     self._json({"error": "page not found"}, 404)
         elif path == "/dashboard":

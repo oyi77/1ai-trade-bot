@@ -15,9 +15,16 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from tradebot.brokers.base import BaseBroker, BrokerPlatform, TradeDirection, TradeResult, TradeStatus
+from tradebot.brokers.base import (
+    BaseBroker,
+    BrokerPlatform,
+    TradeDirection,
+    TradeResult,
+    TradeStatus,
+)
 from tradebot.config import settings
 from tradebot.models import Balance, Order
+
 LOG = logging.getLogger(__name__)
 class MT5Broker(BaseBroker):
     """MetaTrader 5 broker adapter implementing the async Broker ABC.
@@ -242,7 +249,7 @@ class MT5Broker(BaseBroker):
 
     # ── Tick subscription ──
 
-    
+
     async def place_trade(
         self,
         symbol: str,
@@ -253,13 +260,13 @@ class MT5Broker(BaseBroker):
         """Place a trade (wrapper for place_order)."""
         order_type = 0 if direction == TradeDirection.CALL else 1  # BUY=0, SELL=1
         lots = amount / 100000  # Convert stake to lots (simplified)
-        
+
         result = await self.place_order(
             symbol=symbol,
             order_type=order_type,
             volume=lots,
         )
-        
+
         if not result:
             return TradeResult(
                 platform=self.platform,
@@ -270,7 +277,7 @@ class MT5Broker(BaseBroker):
                 status=TradeStatus.REJECTED,
                 error="Order rejected by MT5",
             )
-        
+
         return TradeResult(
             platform=self.platform,
             order_id=str(result.get("order", "")),

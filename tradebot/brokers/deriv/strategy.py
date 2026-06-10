@@ -150,7 +150,11 @@ class DigitMartingaleStrategy:
             symbol=self.symbol, count=self.analysis_ticks
         )
         if not ticks or len(ticks) < self.analysis_ticks:
-            LOG.warning(f"Insufficient ticks: got {len(ticks) if ticks else 0}, need {self.analysis_ticks}")
+            LOG.warning(
+                "Insufficient ticks: got %d, need %d",
+                len(ticks) if ticks else 0,
+                self.analysis_ticks,
+            )
             self.cycle_count += 1
             self.running = False
             return TradeResult(
