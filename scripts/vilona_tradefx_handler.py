@@ -1701,6 +1701,7 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     
     sl_dist_pts = abs(entry - sl)
     sl_pips = sl_dist_pts / pip_size
+    logger.info(f"_clamp_sltp [{display}]: {action} entry={entry} sl={sl} sl_pips={sl_pips:.0f}")
     
     MIN_SL = 20   # min 20 pip
     MAX_SL = 35   # max 35 pip
@@ -1747,6 +1748,7 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     sig.pop("tp3", None)
     sig.pop("tp4", None)
     sig["rr_ratio"] = f"1:{rr:.1f}"
+    logger.info(f"_clamp_sltp result: sl={sig['sl']} tp1={sig.get('tp1',0)} tp2={sig.get('tp2',0)}")
     
     return sig
 
