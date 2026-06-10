@@ -4829,7 +4829,15 @@ def auto_analyze_loop():
                               price=price, grade=mech_sig.get("grade",""),
                               source_name=mech_sig.get("source","mech"))
                 else:
-                    logger.info(f"⏳ Channel rate limited [{disp}] — signal stored, not posted")
+                    # ⚠️ Trade will be opened — FORCE POST to channel
+                    logger.warning(f"🚨 FORCE POST [{disp}]: rate limited but trade opening — posting anyway")
+                    result = send_to_channel(text)
+                    _mark_channel_post(pair, action, _entry, _sl, _tp)
+                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
+                              confidence=conf, rr_ratio=mech_sig.get("rr_ratio","?"),
+                              engines=mech_sig.get("engines",{}), source="channel-auto",
+                              price=price, grade=mech_sig.get("grade",""),
+                              source_name=mech_sig.get("source","mech"))
                 if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
                     mech_sig = enrich_signal_with_layers(mech_sig)
                 post_signal_to_bridge(mech_sig, price, disp)
@@ -4926,7 +4934,15 @@ def auto_analyze_loop():
                               price=price, grade=sig.get("grade",""),
                               models=sig.get("_models",""), voters=sig.get("voters","?"))
                 else:
-                    logger.info(f"⏳ Channel rate limited [{disp}] — AI signal stored, not posted")
+                    # ⚠️ Trade already opened — FORCE POST so users see the signal
+                    logger.warning(f"🚨 FORCE POST [{disp}]: rate limited but trade opened — posting anyway")
+                    result = send_to_channel(text)
+                    _mark_channel_post(pair, action, _entry, _sl, _tp)
+                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
+                              confidence=conf, rr_ratio=sig.get("rr_ratio","?"),
+                              engines=sig.get("engines",{}), source="channel-auto",
+                              price=price, grade=sig.get("grade",""),
+                              models=sig.get("_models",""), voters=sig.get("voters","?"))
 
                 if LEARNING_ENGINE:
                     try: track_signal(sig, price, disp, session(h), "ai")
