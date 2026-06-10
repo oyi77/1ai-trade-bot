@@ -1717,21 +1717,33 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     header_emoji = emoji if is_actionable else "⚪️"
     header_label = f"SINYAL {action}" if is_actionable else "MARKET PULSE"
 
-    # --- MIN SL GUARD: override if AI sets SL too tight (backtest-proven minimum) ---
+    # --- MIN SL GUARD: override if AI sets SL too tight (3-digit Exness adjusted) ---
     if action in ("BUY","SELL") and entry and sl and price:
         sl_dist = abs(sl - entry)
-        min_sl_map = {"XAUUSD": 32, "GOLD": 32, "BTCUSD": 600, "ETHUSD": 50}
+        min_sl_map = {"XAUUSD": 3.0, "GOLD": 3.0, "USOIL": 0.15, "BTCUSD": 600, "ETHUSD": 50}
         min_sl = min_sl_map.get(display, 0)
         if min_sl > 0 and 0 < sl_dist < min_sl:
-            logger.info(f"    [SL GUARD] {display} SL={sl_dist}pt < min={min_sl}pt — overriding with fallback")
+            # Inline pip calc for logging (3-digit Exness)
+            if display in ("XAUUSD","GOLD"):
+                d1, d2 = sl_dist / 0.10, min_sl / 0.10; u = "pip"
+            elif display == "USOIL":
+                d1, d2 = sl_dist / 0.01, min_sl / 0.01; u = "pip"
+            elif display in ("EURUSD","GBPUSD","USDJPY"):
+                d1, d2 = sl_dist / 0.00010, min_sl / 0.00010; u = "pip"
+            else:
+                d1, d2 = sl_dist, min_sl; u = "pt"
+            logger.info(f"    [SL GUARD] {display} SL={d1:.0f}{u} < min={d2:.0f}{u} — overriding with fallback")
             sl = 0
             tp = 0
 
     # Fallback SL/TP — wider for realistic fills, tighter for consistency
     if (sl == 0 or tp == 0) and price and price > 0:
         if display in ("XAUUSD", "GOLD"):
-            sl = round(price - 32, 2) if action == "BUY" else round(price + 32, 2)
-            tp = round(price + 52, 2) if action == "BUY" else round(price - 52, 2)
+            sl = round(price - 3.0, 2) if action == "BUY" else round(price + 3.0, 2)   # 30 pip 3-digit
+            tp = round(price + 5.0, 2) if action == "BUY" else round(price - 5.0, 2)   # 50 pip 3-digit
+        elif display == "USOIL":
+            sl = round(price - 0.25, 2) if action == "BUY" else round(price + 0.25, 2) # 25 pip 3-digit
+            tp = round(price + 0.50, 2) if action == "BUY" else round(price - 0.50, 2) # 50 pip 3-digit
         elif display in ("EURUSD","GBPUSD","USDJPY"):
             sl = round(price - 0.0015, 5) if action == "BUY" else round(price + 0.0015, 5)
             tp = round(price + 0.0030, 5) if action == "BUY" else round(price - 0.0030, 5)
@@ -1787,12 +1799,20 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         except Exception:
             pass
 
-    # Pip distances
+    # Pip distances — Exness 3-digit broker
     def _pips(dist, asset=display):
-        if asset in ("XAUUSD","GOLD"): return f"{dist:.0f} pt"
-        elif asset in ("EURUSD","GBPUSD","USDJPY"): return f"{dist:.1f} pip"
-        elif asset == "BTCUSD": return f"${dist:.0f}"
-        else: return f"{dist:.0f} pt"
+        if asset in ("XAUUSD","GOLD"):
+            return f"{dist / 0.10:.0f} pip"     # 3-digit: 1 pip = 0.10
+        elif asset == "USOIL":
+            return f"{dist / 0.01:.0f} pip"     # 3-digit: 1 pip = 0.01
+        elif asset in ("EURUSD","GBPUSD","USDJPY"):
+            return f"{dist / 0.00010:.1f} pip"  # 5-digit forex
+        elif asset == "BTCUSD":
+            return f"${dist:.0f}"               # BTC: raw dollars
+        elif asset == "ETHUSD":
+            return f"${dist:.0f}"               # ETH: raw dollars
+        else:
+            return f"{dist:.0f} pt"
 
     def _tp_pips(tp_val):
         if entry and tp_val:
