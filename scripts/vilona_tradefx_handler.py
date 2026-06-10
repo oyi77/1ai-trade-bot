@@ -469,7 +469,7 @@ def tg_send(text, chat_id=None, reply_markup=None):
     # Use unique Unicode placeholder markers (safe across Python 3.11-3.13)
     TAG_OPEN = "\ue000"   # Private Use Area — won't appear in normal text
     TAG_CLOSE = "\ue001"
-    text = re.sub(r'<(/?[abi][^>]*)>', TAG_OPEN + r'\1' + TAG_CLOSE, text)
+    text = re.sub(r'<(/?[abciosu][^>]*)>', TAG_OPEN + r'\1' + TAG_CLOSE, text)
     text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     text = text.replace(TAG_OPEN, '<').replace(TAG_CLOSE, '>')
     
@@ -2655,6 +2655,9 @@ def handle_command(cmd, text, chat_id, msg):
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🧠 /signal — Signal dari 9 engines\n"
                 f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
+                f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
+                f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
+                f"🕐 /session — Killzone + Session Level 🆕\n"
                 f"📰 /news — Grok News X/Twitter intel 👑\n"
                 f"📊 /dashboard — Live dashboard web\n"
                 f"📱 /help — Semua command\n"
@@ -2690,6 +2693,10 @@ def handle_command(cmd, text, chat_id, msg):
             "/data — Market overview",
             "/status — Cek Kuota & Akses VIP",
             "/donate — Isi Bahan Bakar AI ⚡\n",
+            "🔍 <b>TECHNICAL ANALYSIS (SMC)</b> 🆕",
+            "/zones — Order Blocks + FVG + Supply/Demand",
+            "/structure — BOS/CHoCH + Trend + MTF Alignment",
+            "/session — Killzone + Session High/Low + Range\n",
             "📊 <b>TRADING TOOLS</b>",
             "/mapping — Mapping harian + level S/R",
             "/levels — SnR + FIBO + Engine Deep Dive 👑",
@@ -3646,7 +3653,491 @@ def handle_command(cmd, text, chat_id, msg):
             logger.warning(f"/news error: {e}")
             tg_send(f"❌ Gagal fetch Grok News: {e}", chat_id)
 
-    # ── NEW: Signal System Commands ──
+    # ── NEW: Technical Analysis Commands ──
+    elif cmd == "/zones":
+        """Liquidity zones: OB + FVG + Supply/Demand. Free: 1 TF. Donor: multi-TF."""
+        sub_norm = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_z = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_z = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        pair = pair_map_z.get(sub_norm, "gold")
+        disp = disp_map_z.get(pair, "XAUUSD")
+        is_donor = _is_donor(str(chat_id))
+        
+        price = fetch_price(pair)
+        if not price:
+            tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
+            return
+        
+        tg_send(f"🔍 <b>Scanning {disp} zones @ {price}...</b>", chat_id)
+        
+        # Fetch multi-TF OHLCV
+        ohlcv_h1 = _fetch_ohlcv_for_ai(pair)
+        ohlcv_m15 = None
+        if is_donor and MARKET_DATA:
+            try:
+                yahoo_sym = {"gold":"GC=F","btc":"BTC-USD","eth":"ETH-USD","oil":"CL=F"}.get(pair, pair.upper())
+                m15_bars = MARKET_DATA.get_ohlcv(yahoo_sym, "15m", 100)
+                if m15_bars and len(m15_bars) >= 20:
+                    ohlcv_m15 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
+                                  "low": b.low, "close": b.close, "volume": b.volume} for b in m15_bars]
+            except: pass
+        
+        lines = [f"🧲 <b>LIQUIDITY ZONES — {disp} @ {price}</b>",
+                 f"━━━━━━━━━━━━━━━━━━━━━━"]
+        
+        pip_s = 0.10 if disp in ("XAUUSD","GOLD") else (0.01 if disp == "USOIL" else (1.0 if disp in ("BTCUSD","ETHUSD") else 0.0001))
+        
+        # ── FVG Zones ──
+        fvgs_found = False
+        try:
+            if FVG_ENGINE:
+                fvg_result = detect_fvg(ohlcv_h1, price, disp)
+                if fvg_result and fvg_result.get("fvgs"):
+                    fvgs_found = True
+                    lines.append("")
+                    lines.append("📐 <b>FAIR VALUE GAPS (H1)</b>")
+                    for fvg in fvg_result["fvgs"][:5]:
+                        top = fvg.get("top", 0); bot = fvg.get("bottom", 0)
+                        fvg_type = fvg.get("type", "?").upper()
+                        filled = "✅ filled" if fvg.get("filled") else "⏳ open"
+                        dist = abs(price - ((top+bot)/2)) / pip_s
+                        lines.append(f"  {fvg_type}: {bot:.2f} — {top:.2f} ({filled} | {dist:.0f} pip)")
+        except: pass
+        
+        if not fvgs_found:
+            lines.append("")
+            lines.append("📐 <b>FAIR VALUE GAPS</b>")
+            lines.append("  No active FVG detected near price.")
+        
+        # ── Order Blocks ──
+        obs_found = False
+        try:
+            if SMC_ENGINE:
+                smc = analyze_smc_scalper(ohlcv_h1, disp)
+                if smc:
+                    blocks = smc.get("order_blocks", smc.get("blocks", []))
+                    if blocks:
+                        obs_found = True
+                        lines.append("")
+                        lines.append("🏦 <b>ORDER BLOCKS (H1)</b>")
+                        for ob in blocks[:4]:
+                            ob_price = ob.get("price", ob.get("level", 0))
+                            ob_dir = ob.get("direction", ob.get("type", "?"))
+                            ob_strength = ob.get("strength", "?")
+                            if ob_price > 0:
+                                lines.append(f"  {'🟢' if 'BULL' in str(ob_dir).upper() else '🔴'} {ob_dir}: {ob_price:.2f} (str: {ob_strength})")
+        except: pass
+        
+        if not obs_found:
+            lines.append("")
+            lines.append("🏦 <b>ORDER BLOCKS</b>")
+            lines.append("  No significant OB near current price.")
+        
+        # ── Supply/Demand ──
+        try:
+            from liquidity_zones import map_zones, find_tp_targets
+            from session_levels import calculate_all_levels
+            sess_lvls = calculate_all_levels(ohlcv_h1[-60:]) if len(ohlcv_h1) >= 30 else None
+            if sess_lvls:
+                sweep_dir = "BULLISH" if price > (sess_lvls.asia_high or price) else "BEARISH"
+                liq_map = map_zones(ohlcv_h1[-60:], sess_lvls, price, sweep_dir)
+                if liq_map and liq_map.zones:
+                    supply = [z for z in liq_map.zones if z.direction == "SHORT" and z.midpoint > price]
+                    demand = [z for z in liq_map.zones if z.direction == "LONG" and z.midpoint < price]
+                    supply.sort(key=lambda z: z.midpoint)
+                    demand.sort(key=lambda z: z.midpoint, reverse=True)
+                    
+                    if supply or demand:
+                        lines.append("")
+                        lines.append("💧 <b>SUPPLY / DEMAND</b>")
+                        if supply:
+                            lines.append("  🔴 <b>Supply (Resistance):</b>")
+                            for z in supply[:3]:
+                                lines.append(f"    {z.midpoint:.2f} ({z.zone_type} | {z.distance_pips:.0f} pip away)")
+                        if demand:
+                            lines.append("  🟢 <b>Demand (Support):</b>")
+                            for z in demand[:3]:
+                                lines.append(f"    {z.midpoint:.2f} ({z.zone_type} | {z.distance_pips:.0f} pip away)")
+        except Exception as e:
+            logger.debug(f"Supply/Demand calc error: {e}")
+        
+        # ── Donor: M15 granular zones ──
+        if is_donor and ohlcv_m15:
+            try:
+                from liquidity_zones import map_zones
+                from session_levels import calculate_all_levels
+                sess15 = calculate_all_levels(ohlcv_m15)
+                if sess15:
+                    sweep15 = "BULLISH" if price > (sess15.asia_high or price) else "BEARISH"
+                    liq15 = map_zones(ohlcv_m15, sess15, price, sweep15)
+                    if liq15 and liq15.zones:
+                        supply15 = [z for z in liq15.zones if z.direction == "SHORT"]
+                        demand15 = [z for z in liq15.zones if z.direction == "LONG"]
+                        if supply15 or demand15:
+                            lines.append("")
+                            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                            lines.append("👑 <b>DONOR: M15 GRANULAR ZONES</b>")
+                            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                            if supply15:
+                                lines.append("  🔴 Supply (M15):")
+                                for z in supply15[:3]:
+                                    lines.append(f"    {z.midpoint:.2f} ({z.zone_type})")
+                            if demand15:
+                                lines.append("  🟢 Demand (M15):")
+                                for z in demand15[:3]:
+                                    lines.append(f"    {z.midpoint:.2f} ({z.zone_type})")
+            except Exception as e:
+                logger.debug(f"M15 zones error: {e}")
+        
+        # ── Equilibrium ──
+        try:
+            if ohlcv_h1 and len(ohlcv_h1) >= 30:
+                highs_h1 = [float(b.get("high", b.get("h", 0))) for b in ohlcv_h1[-30:]]
+                lows_h1 = [float(b.get("low", b.get("l", 0))) for b in ohlcv_h1[-30:]]
+                if highs_h1 and lows_h1:
+                    h1_range = max(highs_h1) - min(lows_h1)
+                    eq = min(lows_h1) + h1_range * 0.50
+                    lines.append("")
+                    lines.append("⚖️ <b>EQUILIBRIUM (H1 50%)</b>")
+                    lines.append(f"  {eq:.2f} | Price {'above ⬆️' if price > eq else 'below ⬇️'} equilibrium")
+        except: pass
+        
+        if not is_donor:
+            lines.append("")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("🔒 <b>FREE TIER — H1 Zones Only</b>")
+            lines.append("👑 Multi-TF (M15 granular + full zone depth)")
+            lines.append("   → <b>/donate</b> untuk unlock")
+        
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
+        tg_send("\n".join(lines), chat_id)
+    
+    elif cmd == "/structure":
+        """Market structure: BOS/CHoCH + Trend + MTF alignment. Free: basic. Donor: full."""
+        sub_norm = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_s = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_s = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        pair = pair_map_s.get(sub_norm, "gold")
+        disp = disp_map_s.get(pair, "XAUUSD")
+        is_donor = _is_donor(str(chat_id))
+        
+        price = fetch_price(pair)
+        if not price:
+            tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
+            return
+        
+        tg_send(f"🏗 <b>Analyzing {disp} structure @ {price}...</b>", chat_id)
+        
+        ohlcv_h1 = _fetch_ohlcv_for_ai(pair)
+        if not ohlcv_h1 or len(ohlcv_h1) < 30:
+            tg_send(f"❌ Data tidak cukup untuk analisa struktur {disp}.", chat_id)
+            return
+        
+        closes = [float(b.get("c", b.get("close", 0))) for b in ohlcv_h1]
+        highs = [float(b.get("h", b.get("high", 0))) for b in ohlcv_h1]
+        lows = [float(b.get("l", b.get("low", 0))) for b in ohlcv_h1]
+        
+        pip_s = 0.10 if disp in ("XAUUSD","GOLD") else (0.01 if disp == "USOIL" else (1.0 if disp in ("BTCUSD","ETHUSD") else 0.0001))
+        
+        lines = [f"🏗 <b>MARKET STRUCTURE — {disp} @ {price}</b>",
+                 f"━━━━━━━━━━━━━━━━━━━━━━"]
+        
+        # ── Trend Direction (M15 + H1) ──
+        sma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else price
+        sma50 = sum(closes[-50:]) / 50 if len(closes) >= 50 else price
+        trend_h1 = "BULLISH 📈" if price > sma20 > sma50 else ("BEARISH 📉" if price < sma20 < sma50 else "CHOPPY ↔️")
+        trend_strength = min(100, int(abs(price - sma20) / pip_s * 2)) if sma20 else 0
+        
+        lines.append("")
+        lines.append(f"📊 <b>TREND:</b> {trend_h1} | Strength: {trend_strength}%")
+        lines.append(f"  SMA20: {sma20:.2f} | SMA50: {sma50:.2f}")
+        
+        # ── BOS/CHoCH Detection ──
+        bos_bull = []
+        bos_bear = []
+        for i in range(7, len(highs)-2):
+            lookback = highs[i-7:i]
+            if highs[i] > max(lookback) and highs[i] > highs[i+1]:
+                # Previous swing high broken → bullish BOS
+                prev_highs = [h for j, h in enumerate(highs[:i]) if j >= 5 and h > highs[j-1] and h > highs[j+1]]
+                if prev_highs and highs[i] > max(prev_highs[-3:]) if len(prev_highs) >= 3 else (highs[i] > prev_highs[-1]):
+                    bos_bull.append({"price": highs[i], "idx": i, "bar": len(highs)-i, "type": "BOS ▲"})
+        for i in range(7, len(lows)-2):
+            lookback = lows[i-7:i]
+            if lows[i] < min(lookback) and lows[i] < lows[i+1]:
+                prev_lows = [l for j, l in enumerate(lows[:i]) if j >= 5 and l < lows[j-1] and l < lows[j+1]]
+                if prev_lows and lows[i] < min(prev_lows[-3:]) if len(prev_lows) >= 3 else (lows[i] < prev_lows[-1]):
+                    bos_bear.append({"price": lows[i], "idx": i, "bar": len(lows)-i, "type": "BOS ▼"})
+        
+        # CHoCH (Change of Character)
+        choch_bull = []
+        choch_bear = []
+        for i in range(5, len(highs)-3):
+            if highs[i] > max(highs[i-5:i]) and lows[i-3] < min(lows[i-8:i-3]) if i >= 8 else False:
+                if any(l < lows[i-3] for l in lows[i-6:i-2] if i >= 6):
+                    choch_bull.append({"price": highs[i], "bar": len(highs)-i, "type": "CHoCH ▲"})
+        for i in range(5, len(lows)-3):
+            if lows[i] < min(lows[i-5:i]) and highs[i-3] > max(highs[i-8:i-3]) if i >= 8 else False:
+                if any(h > highs[i-3] for h in highs[i-6:i-2] if i >= 6):
+                    choch_bear.append({"price": lows[i], "bar": len(lows)-i, "type": "CHoCH ▼"})
+        
+        all_struct = bos_bull + bos_bear + choch_bull + choch_bear
+        all_struct.sort(key=lambda x: x["bar"])
+        recent_struct = all_struct[:5]
+        
+        lines.append("")
+        lines.append("🔄 <b>STRUCTURE BREAKS (BOS / CHoCH)</b>")
+        if recent_struct:
+            for s in recent_struct:
+                arrow = "🟢" if "▲" in s["type"] else "🔴"
+                lines.append(f"  {arrow} {s['type']}: {s['price']:.2f} ({s['bar']} bars ago)")
+        else:
+            lines.append("  No clear BOS/CHoCH in recent structure.")
+        
+        # ── Swing Points ──
+        swings_high = []
+        swings_low = []
+        for i in range(3, len(highs)-3):
+            if highs[i] > max(highs[i-3], highs[i-2], highs[i-1], highs[i+1], highs[i+2], highs[i+3]):
+                swings_high.append(highs[i])
+            if lows[i] < min(lows[i-3], lows[i-2], lows[i-1], lows[i+1], lows[i+2], lows[i+3]):
+                swings_low.append(lows[i])
+        
+        nearest_res = min([h for h in swings_high if h > price], default=None) if swings_high else None
+        nearest_sup = max([l for l in swings_low if l < price], default=None) if swings_low else None
+        
+        lines.append("")
+        lines.append("📍 <b>KEY SWINGS</b>")
+        if nearest_res:
+            lines.append(f"  🔴 Nearest Resistance: {nearest_res:.2f} (+{abs(nearest_res-price)/pip_s:.0f} pip)")
+        if nearest_sup:
+            lines.append(f"  🟢 Nearest Support: {nearest_sup:.2f} (-{abs(price-nearest_sup)/pip_s:.0f} pip)")
+        
+        # ── Donor: MTF Alignment ──
+        if is_donor:
+            lines.append("")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("👑 <b>DONOR: FULL MTF ALIGNMENT</b>")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            
+            # D1 trend
+            d1_bars = ohlcv_h1[-96:] if len(ohlcv_h1) >= 96 else ohlcv_h1
+            d1_closes = [float(b.get("c", b.get("close", 0))) for b in d1_bars]
+            d1_sma20 = sum(d1_closes[-20:])/20 if len(d1_closes)>=20 else price
+            d1_trend = "BULLISH 📈" if max(d1_closes[-20:]) > d1_sma20 else "BEARISH 📉"
+            
+            lines.append(f"  📅 D1: {d1_trend}")
+            lines.append(f"  ⏱️ H1: {trend_h1}")
+            
+            # M15 via MARKET_DATA if available
+            if MARKET_DATA:
+                try:
+                    yahoo_sym = {"gold":"GC=F","btc":"BTC-USD","eth":"ETH-USD","oil":"CL=F"}.get(pair, pair.upper())
+                    m15_bars = MARKET_DATA.get_ohlcv(yahoo_sym, "15m", 50)
+                    if m15_bars and len(m15_bars) >= 20:
+                        m15c = [b.close for b in m15_bars]
+                        m15_sma = sum(m15c[-20:])/20
+                        m15_trend = "BULLISH" if m15c[-1] > m15_sma else "BEARISH"
+                        lines.append(f"  🔍 M15: {m15_trend}")
+                except: pass
+            
+            # Alignment %
+            trends = []
+            if d1_trend.startswith("BULLISH"): trends.append(1)
+            elif d1_trend.startswith("BEARISH"): trends.append(-1)
+            if trend_h1.startswith("BULLISH"): trends.append(1)
+            elif trend_h1.startswith("BEARISH"): trends.append(-1)
+            align_pct = 100 if len(set(trends)) == 1 else (67 if len(trends)>=2 else 33)
+            
+            lines.append(f"  🎯 <b>MTF Alignment: {align_pct}%</b>")
+            
+            struc_grade = "A" if align_pct >= 90 else ("B" if align_pct >= 67 else "C")
+            lines.append(f"  🏅 <b>Structure Grade: {struc_grade}</b>")
+            
+            # CHoCH count
+            total_choch = len(choch_bull) + len(choch_bear)
+            total_bos = len(bos_bull) + len(bos_bear)
+            lines.append(f"  🔄 CHoCH: {total_choch} | BOS: {total_bos}")
+            
+            # Equilibrium zones
+            if swings_high and swings_low:
+                range_20 = max(highs[-20:]) - min(lows[-20:])
+                eq_h1 = min(lows[-20:]) + range_20 * 0.5
+                lines.append(f"  ⚖️ H1 Equilibrium: {eq_h1:.2f}")
+        
+        if not is_donor:
+            lines.append("")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("🔒 <b>FREE TIER — Basic Structure</b>")
+            lines.append("👑 MTF Alignment + Structure Grade + CHoCH count")
+            lines.append("   → <b>/donate</b> untuk unlock full analysis")
+        
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
+        tg_send("\n".join(lines), chat_id)
+    
+    elif cmd == "/session":
+        """Session levels: Killzone + High/Low + Range. Free: current session. Donor: all 3."""
+        sub_norm = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_ss = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                       "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_ss = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        pair = pair_map_ss.get(sub_norm, "gold")
+        disp = disp_map_ss.get(pair, "XAUUSD")
+        is_donor = _is_donor(str(chat_id))
+        
+        price = fetch_price(pair)
+        if not price:
+            tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
+            return
+        
+        tg_send(f"🕐 <b>Fetching {disp} session levels @ {price}...</b>", chat_id)
+        
+        now = wib_now()
+        h = now.hour
+        lkz, nykz = killzone(h)
+        active_kz = "London 🇬🇧" if lkz else ("New York 🇺🇸" if nykz else "Asian 🌏 (Outside Killzone)")
+        weekday = now.strftime("%A")
+        
+        pip_s = 0.10 if disp in ("XAUUSD","GOLD") else (0.01 if disp == "USOIL" else (1.0 if disp in ("BTCUSD","ETHUSD") else 0.0001))
+        
+        lines = [f"🕐 <b>SESSION LEVELS — {disp} @ {price}</b>",
+                 f"━━━━━━━━━━━━━━━━━━━━━━",
+                 f"📅 {now.strftime('%Y.%m.%d %H:%M')} WIB | {weekday}",
+                 f"🟢 Active: <b>{active_kz}</b>"]
+        
+        try:
+            from session_levels import calculate_all_levels, get_session_levels
+            
+            # Get OHLCV for session calculation
+            ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+            if not ohlcv_bars or len(ohlcv_bars) < 30:
+                # Fallback: try MARKET_DATA
+                if MARKET_DATA:
+                    yahoo_sym = {"gold":"GC=F","btc":"BTC-USD","eth":"ETH-USD","oil":"CL=F"}.get(pair, pair.upper())
+                    raw = MARKET_DATA.get_ohlcv(yahoo_sym, "15m", 100)
+                    if raw:
+                        ohlcv_bars = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
+                                       "low": b.low, "close": b.close, "volume": b.volume} for b in raw]
+            
+            if ohlcv_bars and len(ohlcv_bars) >= 20:
+                sess = calculate_all_levels(ohlcv_bars)
+                
+                if sess:
+                    lines.append("")
+                    lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                    
+                    # Current session high/low
+                    if lkz and sess.london_high:
+                        lines.append(f"🇬🇧 <b>LONDON (Active)</b>")
+                        lines.append(f"  High: {sess.london_high:.2f} | Low: {sess.london_low:.2f}")
+                        if sess.london_range:
+                            lines.append(f"  Range: {sess.london_range:.2f} ({sess.london_range/pip_s:.0f} pip)")
+                    elif nykz and sess.ny_high:
+                        lines.append(f"🇺🇸 <b>NEW YORK (Active)</b>")
+                        lines.append(f"  High: {sess.ny_high:.2f} | Low: {sess.ny_low:.2f}")
+                    elif sess.asia_high:
+                        lines.append(f"🌏 <b>ASIA</b>")
+                        lines.append(f"  High: {sess.asia_high:.2f} | Low: {sess.asia_low:.2f}")
+                        if sess.asia_range:
+                            lines.append(f"  Range: {sess.asia_range:.2f} ({sess.asia_range/pip_s:.0f} pip)")
+                    
+                    # All 3 sessions (always show for context)
+                    if sess.asia_high and not (not nykz and not lkz):
+                        lines.append("")
+                        lines.append(f"🌏 <b>ASIA</b>")
+                        lines.append(f"  High: {sess.asia_high:.2f} | Low: {sess.asia_low:.2f}")
+                        if sess.asia_range:
+                            lines.append(f"  Range: {sess.asia_range:.2f} ({sess.asia_range/pip_s:.0f} pip)")
+                    
+                    if sess.london_high and not lkz:
+                        lines.append("")
+                        lines.append(f"🇬🇧 <b>LONDON</b>")
+                        lines.append(f"  High: {sess.london_high:.2f} | Low: {sess.london_low:.2f}")
+                        if sess.london_range:
+                            lines.append(f"  Range: {sess.london_range:.2f} ({sess.london_range/pip_s:.0f} pip)")
+                    
+                    if sess.ny_high and not nykz:
+                        lines.append("")
+                        lines.append(f"🇺🇸 <b>NEW YORK</b>")
+                        lines.append(f"  High: {sess.ny_high:.2f} | Low: {sess.ny_low:.2f}")
+                    
+                    # Previous day
+                    if sess.prev_day_high:
+                        lines.append("")
+                        lines.append(f"📆 <b>PREVIOUS DAY</b>")
+                        lines.append(f"  High: {sess.prev_day_high:.2f} | Low: {sess.prev_day_low:.2f}")
+                    
+                    # Position relative to sessions
+                    lines.append("")
+                    lines.append("📍 <b>PRICE POSITION</b>")
+                    if sess.asia_high and sess.asia_low:
+                        if price > sess.asia_high:
+                            lines.append(f"  ⬆️ Above Asia High (+{abs(price-sess.asia_high)/pip_s:.0f} pip)")
+                        elif price < sess.asia_low:
+                            lines.append(f"  ⬇️ Below Asia Low (-{abs(sess.asia_low-price)/pip_s:.0f} pip)")
+                        else:
+                            asia_range = sess.asia_high - sess.asia_low
+                            pos_pct = (price - sess.asia_low) / asia_range * 100 if asia_range > 0 else 50
+                            lines.append(f"  ↔️ Inside Asia Range ({pos_pct:.0f}%)")
+                    
+                    # Today's range so far
+                    if sess.today_high and sess.today_low:
+                        today_rng = sess.today_high - sess.today_low
+                        lines.append(f"  📏 Today Range: {today_rng:.2f} ({today_rng/pip_s:.0f} pip)")
+                    
+                    # ── Donor: Range analysis + manipulation detection ──
+                    if is_donor:
+                        lines.append("")
+                        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                        lines.append("👑 <b>DONOR: RANGE ANALYSIS</b>")
+                        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+                        
+                        # Which session typically has wider range
+                        ranges = []
+                        if sess.asia_range: ranges.append(("Asia", sess.asia_range))
+                        if sess.london_range: ranges.append(("London", sess.london_range))
+                        if sess.ny_high and sess.ny_low:
+                            ny_rng = sess.ny_high - sess.ny_low
+                            ranges.append(("NY", ny_rng))
+                        
+                        if ranges:
+                            ranges.sort(key=lambda x: x[1], reverse=True)
+                            lines.append(f"  📊 Widest session: <b>{ranges[0][0]}</b> ({ranges[0][1]/pip_s:.0f} pip)")
+                            for name, rng in ranges[1:]:
+                                lines.append(f"     {name}: {rng/pip_s:.0f} pip")
+                        
+                        # Liquidity grab detection
+                        if sess.asia_high and sess.london_low:
+                            if sess.london_low < sess.asia_low:
+                                lines.append(f"  🎯 <b>Asia Low Swept!</b> — London took Asia lows")
+                            if sess.london_high > sess.asia_high:
+                                lines.append(f"  🎯 <b>Asia High Swept!</b> — London took Asia highs")
+                        
+                        lines.append(f"  📊 Bars scanned: {sess.bars_scanned}")
+                        if sess.is_nfp_friday:
+                            lines.append(f"  ⚠️ <b>NFP FRIDAY!</b> — High volatility expected")
+        
+        except Exception as e:
+            logger.warning(f"Session levels error: {e}")
+            lines.append("")
+            lines.append(f"❌ Session data unavailable: {e}")
+        
+        if not is_donor:
+            lines.append("")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append("🔒 <b>FREE TIER — Basic Session</b>")
+            lines.append("👑 Range analysis + manipulation detection")
+            lines.append("   → <b>/donate</b> untuk unlock")
+        
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
+        tg_send("\n".join(lines), chat_id)
+    
+    # ── Existing Signal Commands ──
     elif cmd == "/levels" or cmd == "/level":
         """Premium: Deep SnR+FIBO + Engine Analysis. Free: upsell gate."""
         # ── PREMIUM GATE ──
@@ -5281,7 +5772,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
