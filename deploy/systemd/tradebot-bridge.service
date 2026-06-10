@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
-ExecStart=/home/openclaw/projects/1ai-trade-bot/.venv/bin/python -m tradebot.bridges.http_bridge
+ExecStart=/home/openclaw/projects/1ai-trade-bot/.venv/bin/python /home/openclaw/projects/1ai-trade-bot/scripts/vilona_tradefx_signal_bridge.py --port 8765 --host 0.0.0.0
 User=openclaw
 Restart=always
 RestartSec=5

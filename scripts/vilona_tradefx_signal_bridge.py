@@ -13,7 +13,7 @@ Usage: python3 vilona_tradefx_signal_bridge.py --port 8765 --host 0.0.0.0
   Gen key:     POST /admin/generate-key (localhost only)
   EA download: GET  /download/ea or /ea/download
 """
-import json, time, threading, argparse, logging, os, sys, urllib.request
+import hashlib, json, time, threading, argparse, logging, os, sys, urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from collections import deque, defaultdict
 from urllib.parse import urlparse, parse_qs
@@ -36,6 +36,8 @@ ID_COUNTER = 0
 ACKED = set()
 ACKED_BY_KEY = defaultdict(set)  # per-account ACK tracking
 START_TIME = time.time()
+SIGNAL_DEDUP_TTL = 60  # seconds
+_signal_dedup_cache = {}  # hash → timestamp
 
 # ── Instance Identity (per account_id per key) ──
 INSTANCES = {}  # "{api_key}:{account_id}" → {last_seen, ip, signals_polled, first_seen, label}
@@ -47,14 +49,23 @@ RATE_COUNTERS = defaultdict(list)  # api_key → [timestamps]
 # ── Connected accounts tracker (multi-MT5 support) ──
 CONNECTED_ACCOUNTS = {}  # api_key → {last_seen, ip, signals_polled, first_seen, label}
 
+_keys_cache = None
+_keys_cache_time = 0
 
 def load_keys():
+    global _keys_cache, _keys_cache_time
+    now = time.time()
+    if _keys_cache is not None and (now - _keys_cache_time) < 60:
+        return _keys_cache
     try:
         with open(KEYS_FILE) as f:
-            return json.load(f)
+            config = json.load(f)
     except Exception as e:
         log.error(f"Failed to load API keys: {e}")
-        return {"keys": {}, "tiers": {}, "default_tier": "starter"}
+        config = {"keys": {}, "tiers": {}, "default_tier": "starter"}
+    _keys_cache = config
+    _keys_cache_time = now
+    return config
 
 
 def gen_id():
@@ -78,34 +89,44 @@ def validate_key(api_key):
 
 def check_rate_limit(api_key):
     """Returns True if request is within rate limit. rate_limit=0 means unlimited."""
-    config = load_keys()
-    key_data = config["keys"].get(api_key, {})
-    limit = key_data.get("rate_limit", 3)
-    if limit == 0:
-        return True  # unlimited
-    window = key_data.get("rate_window_seconds", 86400)
+    with LOCK:
+        config = load_keys()
+        key_data = config["keys"].get(api_key, {})
+        limit = key_data.get("rate_limit", 3)
+        if limit == 0:
+            return True  # unlimited
+        window = key_data.get("rate_window_seconds", 86400)
 
-    now = time.time()
-    timestamps = RATE_COUNTERS[api_key]
-    # Clean old entries
-    timestamps[:] = [t for t in timestamps if now - t < window]
-    if len(timestamps) >= limit:
-        return False
-    timestamps.append(now)
-    return True
+        now = time.time()
+        timestamps = RATE_COUNTERS[api_key]
+        # Clean old entries
+        timestamps[:] = [t for t in timestamps if now - t < window]
+        if len(timestamps) >= limit:
+            return False
+        timestamps.append(now)
+        return True
 
 
 class SignalHandler(BaseHTTPRequestHandler):
 
     def _json(self, data, code=200):
-        body = json.dumps(data).encode()
-        # JSON-safe: prevent Infinity/NaN breaking JavaScript
-        body_str = body.decode()
-        if 'Infinity' in body_str or 'NaN' in body_str:
+        try:
+            body = json.dumps(data, allow_nan=False).encode()
+        except (ValueError, TypeError):
+            body_str = json.dumps(data)
             body_str = body_str.replace(': Infinity', ': null').replace(': -Infinity', ': null').replace(': NaN', ': null')
             body = body_str.encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _text(self, text, code=200):
+        body = text.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "text/plain")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -404,10 +425,6 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
             except FileNotFoundError:
                 self._json({"error": "file not found"}, 404)
-        elif path == "/dashboard":
-            self.send_response(302)
-            self.send_header("Location", "/")
-            self.end_headers()
         elif path == "/api/trade-log":
             log_path = os.path.join(PROJECT_DIR, "data", "trade_log.json")
             try:
@@ -528,6 +545,10 @@ class SignalHandler(BaseHTTPRequestHandler):
                 log.error(f"News fetch error: {e}")
                 self._json({"items": [], "error": str(e)})
         elif path == "/api/config":
+            client_ip = self.client_address[0]
+            if client_ip not in ("127.0.0.1", "::1", "localhost"):
+                self._text("Forbidden", 403)
+                return
             self._json({"api_key": "VT-MASTER-734AD731F5FB"})
         elif path == "/api/donations":
             """Return total donations from payment orders."""
@@ -651,6 +672,17 @@ class SignalHandler(BaseHTTPRequestHandler):
             }
 
             broadcast_count = 0
+
+            # ── Content-based dedup (60s TTL) ──
+            dedup_key = f"{action}|{symbol}|{data.get('entry',0)}|{data.get('sl',0)}|{data.get('tp',0)}"
+            dedup_hash = hashlib.sha256(dedup_key.encode()).hexdigest()
+            now = time.time()
+            with LOCK:
+                last_seen = _signal_dedup_cache.get(dedup_hash)
+                if last_seen is not None and (now - last_seen) < SIGNAL_DEDUP_TTL:
+                    self._json({"error": "duplicate_signal", "signal_id": sig_id, "detail": "Same signal received within 60s"}, 409)
+                    return
+                _signal_dedup_cache[dedup_hash] = now
 
             with LOCK:
                 HISTORY.append(signal)
@@ -913,6 +945,11 @@ if __name__ == "__main__":
                     del CONNECTED_ACCOUNTS[k]
                     if k in PENDING_BY_KEY:
                         del PENDING_BY_KEY[k]
+            # Clean expired dedup cache entries
+            with LOCK:
+                expired = [h for h, ts in _signal_dedup_cache.items() if now - ts > SIGNAL_DEDUP_TTL]
+                for h in expired:
+                    del _signal_dedup_cache[h]
 
     cleanup_thread = threading.Thread(target=cleanup_stale_instances, daemon=True)
     cleanup_thread.start()

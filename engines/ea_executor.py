@@ -12,15 +12,14 @@ FASE 1+2 refactor (2026-06-10):
   - Writes trade_result.json for handler to pick up and broadcast
 
 Usage:
-    python3 ea_executor.py          # paper trading (default)
-    python3 ea_executor.py --live    # live trading
+    python3 ea_executor.py          # paper trading (no broker integration yet)
 """
 
-import json, logging, os, sys, time, urllib.request
+import fcntl, json, logging, os, sys, time, urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-DRY_RUN = "--live" not in sys.argv
+PAPER_MODE = True  # always paper — no MT5/Deriv broker integration yet
 WIB = timezone(timedelta(hours=7))
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_DIR / "data" / "vilona_tradefx"
@@ -81,7 +80,8 @@ def load_state():
     try:
         if STATE_FILE.exists():
             return json.loads(STATE_FILE.read_text())
-    except: pass
+    except Exception as e:
+        logger.warning("load_state failed: %s", e)
     return {"positions": [], "closed": [], "total_pnl": 0.0,
             "signals_processed": 0, "last_signal_id": None}
 
@@ -99,15 +99,30 @@ def fetch_price(symbol="XAUUSD"):
         spot = float(json.loads(r.read()).get("price", 0))
         if 2000 < spot < 6000:
             return round(spot + XAUUSD_OFFSET, 2)
-    except Exception:
-        pass
+        else:
+            logger.warning("fetch_price: spot price %.2f outside valid range (2000-6000)", spot)
+    except Exception as e:
+        logger.warning("fetch_price failed: %s", e)
     return None
 
 def read_signal():
-    if not SIGNAL_FILE.exists(): return None
+    if not SIGNAL_FILE.exists():
+        return None
     try:
-        return json.loads(SIGNAL_FILE.read_text())
-    except: return None
+        raw = SIGNAL_FILE.read_text()
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.warning("read_signal JSON parse failed, retrying after 0.5s: %s", e)
+        time.sleep(0.5)
+        try:
+            raw = SIGNAL_FILE.read_text()
+            return json.loads(raw)
+        except Exception as e2:
+            logger.warning("read_signal retry failed: %s", e2)
+            return None
+    except Exception as e:
+        logger.warning("read_signal failed: %s", e)
+        return None
 
 # ── Position checking (close_price = TP/SL price, NOT market price) ──
 
@@ -139,6 +154,9 @@ def _write_trade_result(pos: dict, reason: str):
     """
     entry = pos.get("entry", 0)
     close_price = pos.get("close_price", 0)
+    if close_price in (0, None):
+        logger.warning("_write_trade_result: close_price is %s for closed trade %s (reason=%s)",
+                       close_price, pos.get("id", "?"), reason)
     symbol = pos.get("symbol", "XAUUSD")
     action = pos.get("action", "?")
     pnl = pos.get("pnl", 0)
@@ -156,17 +174,23 @@ def _write_trade_result(pos: dict, reason: str):
         "pips": round(pips, 1),
         "pnl_usd": round(pnl, 2),
         "outcome": reason,
-        "paper": DRY_RUN,
+        "paper": PAPER_MODE,
     }
 
     try:
-        existing = []
-        if TRADE_RESULT_FILE.exists():
-            existing = json.loads(TRADE_RESULT_FILE.read_text())
-        existing.append(result)
-        if len(existing) > 100:
-            existing = existing[-100:]
-        TRADE_RESULT_FILE.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+        with open(TRADE_RESULT_FILE, 'a+') as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            f.seek(0)
+            try:
+                existing = json.load(f) if os.fstat(f.fileno()).st_size > 0 else []
+            except json.JSONDecodeError:
+                existing = []
+            existing.append(result)
+            if len(existing) > 100:
+                existing = existing[-100:]
+            f.seek(0)
+            f.truncate()
+            f.write(json.dumps(existing, indent=2, ensure_ascii=False))
     except Exception as e:
         logger.error(f"Failed to write trade result: {e}")
 
@@ -176,7 +200,7 @@ def _write_trade_result(pos: dict, reason: str):
 # ══════════════════════════════════════════════════════════════
 
 def main():
-    mode = "PAPER TRADING" if DRY_RUN else "🔴 LIVE TRADING"
+    mode = "EA EXECUTOR — PAPER TRADING"
     logger.info("=" * 60)
     logger.info(f"EA EXECUTOR STARTED | {mode}")
     logger.info(f"Offset: spot + {XAUUSD_OFFSET} (matches handler)")
@@ -246,7 +270,7 @@ def main():
                     last_mtime = mtime
                     sig = read_signal()
                     if sig and sig.get("action") in ("BUY", "SELL"):
-                        sig_fp = f"{sig.get('action','')}_{sig.get('entry',0):.2f}_{sig.get('sl',0):.2f}"
+                        sig_fp = f"{sig.get('action','')}_{sig.get('entry',0):.2f}_{sig.get('sl',0):.2f}_{sig.get('tp',0):.2f}"
                         if state["last_signal_id"] == sig_fp:
                             continue
 
@@ -280,7 +304,7 @@ def main():
                             "status": "OPEN",
                         }
 
-                        if DRY_RUN:
+                        if PAPER_MODE:
                             logger.info(
                                 f"📝 PAPER: {sig['action']} {pos['symbol']} @ ${pos['entry']:.2f} | "
                                 f"SL=${pos['sl']:.2f} TP=${pos['tp']:.2f} | "
