@@ -4184,9 +4184,6 @@ def _no_pin_broadcast(text):
 def send_to_channel(text):
     """Send signal/mapping to broadcast channel. Returns tg_send result.
     Falls back to home only if channel ID is not configured (warns in log)."""
-    # 🛑 EMERGENCY KILL SWITCH — Telegram channel muted
-    logger.warning("send_to_channel: KILL SWITCH ACTIVE — message suppressed")
-    return None
     if SIGNAL_CHANNEL_ID:
         result = tg_send(text, SIGNAL_CHANNEL_ID)
         if result is None:
