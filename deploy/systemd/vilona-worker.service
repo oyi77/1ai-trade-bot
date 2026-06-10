@@ -1,0 +1,28 @@
+[Unit]
+Description=Vilona Autonomous Production Worker (4-Pillar Protocol)
+After=network-online.target vtfx-signal-bridge.service
+Wants=network-online.target vtfx-signal-bridge.service
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
+Environment=PYTHONPATH=/home/openclaw/projects/1ai-trade-bot
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m tradebot.engines.vilona_worker
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vilona-worker
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/openclaw/projects/1ai-trade-bot/data
+ReadWritePaths=/home/openclaw/projects/1ai-trade-bot/tradebot/engines
+
+[Install]
+WantedBy=multi-user.target
