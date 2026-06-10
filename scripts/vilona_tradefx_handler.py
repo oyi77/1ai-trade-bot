@@ -4399,9 +4399,8 @@ def _can_post_tpsl_alert(trade_id: str) -> bool:
 
 AUTO_SCAN_ASSETS = [
     # (internal_pair, display_name, yahoo_symbol, is_forex_metal)
+    # Channel auto-post: XAUUSD ONLY. Other pairs via /analyze di bot.
     ("gold", "XAUUSD", "GC=F", True),
-    ("btc", "BTCUSD", "BTC-USD", False),
-    ("oil", "USOIL", "CL=F", False),
 ]
 
 def auto_analyze_loop():
