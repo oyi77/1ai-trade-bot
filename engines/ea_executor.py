@@ -29,6 +29,9 @@ TG_ENABLED = bool(TELEGRAM_BOT_TOKEN)
 
 def tg_send(text: str) -> bool:
     """Send Telegram message to channel."""
+    # 🛑 EMERGENCY KILL SWITCH — blocked at ea_executor level
+    logger.warning("tg_send: KILL SWITCH ACTIVE — message suppressed")
+    return False
     if not TG_ENABLED:
         return False
     try:
