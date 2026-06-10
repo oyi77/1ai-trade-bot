@@ -271,6 +271,7 @@ class SignalHandler(BaseHTTPRequestHandler):
             if account_id:
                 # ── Instance Identity mode ──
                 instance_id = f"{api_key}:{account_id}"
+                is_new = instance_id not in INSTANCES
                 # Track instance
                 INSTANCES[instance_id] = {
                     "last_seen": time.time(),
@@ -282,6 +283,11 @@ class SignalHandler(BaseHTTPRequestHandler):
                     "account_id": account_id,
                 }
                 MASTER_INSTANCES[api_key][account_id] = instance_id
+                # Seed new instance with latest global signal if available
+                if is_new and PENDING:
+                    sig_copy = dict(PENDING[-1])  # copy latest, don't pop
+                    sig_copy["_for_instance"] = instance_id
+                    PENDING_BY_INSTANCE[instance_id].append(sig_copy)
                 result = self._poll_signal(api_key, tier, instance_id=instance_id)
             else:
                 # ── Legacy mode (no account_id) ──
@@ -657,6 +663,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                         PENDING_BY_INSTANCE[instance_id].append(acct_signal)
                         broadcast_count += 1
                     log.info(f"📡 Instance broadcast ({broadcast_api_key}): {broadcast_count} instance(s)")
+                    # Also queue to global fallback so newly-connecting instances get it
+                    PENDING.append(signal)
                 elif broadcast_api_key:
                     # Key has no registered instances — fall back to global
                     PENDING.append(signal)
