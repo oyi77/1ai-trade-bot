@@ -112,8 +112,6 @@ def main():
     # ── MTF Scan — Multi-Asset + Killzone Routing ──
     assets = [
         {"symbol": "XAUUSD", "class": "forex_metal"},
-        {"symbol": "BTCUSD", "class": "crypto"},
-        {"symbol": "USOIL", "class": "forex_metal"},
     ]
     results = {}
     
