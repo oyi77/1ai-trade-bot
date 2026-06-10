@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Vilona AI · Full AI Trading Terminal</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#070b14;--surface:#0d1225;--card:#131b30;--card-hover:#1a2440;--border:#1e2d4a;--text:#e4e9f2;--text-dim:#5a6e8a;--txt2:#7a8ea8;--blue:#1e90ff;--cyan:#00d4ff;--green:#22c55e;--red:#ef4444;--gold:#f5a623;--violet:#7b5ea7;--rad:12px;--rad-sm:8px;--shadow:0 4px 30px rgba(0,0,0,.5);--w:1120px}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;line-height:1.5;padding-top:48px;padding-bottom:60px}
+@media(min-width:601px){body{padding-bottom:0}}
+a{color:var(--cyan);text-decoration:none}
+
+/* ── UTILITY ── */
+.hidden{display:none!important}
+.wrap{max-width:var(--w);margin:0 auto;padding:0 16px}
+
+/* ── TOP BAR ── */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:100;height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:rgba(7,11,20,.95);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.tb-l{display:flex;align-items:center;gap:10px}
+.tb-lgo{font-size:15px;font-weight:800;color:#fff;letter-spacing:-.3px}
+.tb-lgo span{color:var(--cyan)}
+.tb-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+.tb-st{font-size:10px;color:var(--txt2)}
+.tb-st b{color:var(--text)}
+.tb-r{display:flex;align-items:center;gap:8px}
+.lang-b{background:var(--card);border:1px solid var(--border);color:var(--txt2);padding:3px 8px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;transition:.2s}
+.lang-b.on,.lang-b:hover{border-color:var(--cyan);color:var(--cyan)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── SECTION ── */
+.section{padding:40px 0;border-bottom:1px solid rgba(30,45,74,.4)}
+.section:last-child{border-bottom:none}
+.st{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--txt2);margin-bottom:16px;display:flex;align-items:center;gap:6px}
+.sb{font-size:clamp(20px,3.5vw,30px);font-weight:700;letter-spacing:-.5px;margin-bottom:8px;line-height:1.2}
+.sbp{font-size:13px;color:var(--txt2);max-width:580px;line-height:1.6;margin-bottom:14px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.grid-3,.grid-2{grid-template-columns:1fr}}
+
+/* ── CARDS ── */
+.cd{background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:16px}
+.cd-sm{background:var(--card);border:1px solid var(--border);border-radius:var(--rad-sm);padding:10px 12px}
+.cl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txt2);margin-bottom:6px}
+.cv{font-size:clamp(22px,4vw,32px);font-weight:800;letter-spacing:-.5px;line-height:1.1}
+.cv.gld{color:var(--gold)}
+.cv.gr{color:var(--green)}
+.cv.rd{color:var(--red)}
+.cs{font-size:11px;color:var(--txt2);margin-top:4px}
+
+/* ── HERO ── */
+.hero{padding:48px 0 32px;text-align:center}
+.hero-b{display:inline-flex;align-items:center;gap:5px;background:rgba(30,144,255,.08);border:1px solid rgba(30,144,255,.15);border-radius:20px;padding:4px 14px;font-size:10px;font-weight:600;color:var(--cyan);margin-bottom:16px}
+.hero-h1{font-size:clamp(26px,5.5vw,46px);font-weight:800;line-height:1.1;margin-bottom:10px;letter-spacing:-.7px}
+.hero-h1 .gr{background:linear-gradient(135deg,var(--cyan),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-p{font-size:clamp(13px,2vw,15px);color:var(--txt2);max-width:580px;margin:0 auto;line-height:1.7}
+.hero-st{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin:20px auto;padding:14px;background:var(--card);border:1px solid var(--border);border-radius:var(--rad);max-width:550px}
+.hs-i{text-align:center;min-width:70px}
+.hs-v{font-size:clamp(18px,3vw,24px);font-weight:800;letter-spacing:-.3px}
+.hs-v.gr{color:var(--green)}
+.hs-v.gld{color:var(--gold)}
+.hs-l{font-size:9px;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+.hero-cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:12px 28px;border-radius:var(--rad-sm);font-size:13px;font-weight:600;cursor:pointer;transition:.25s;border:none}
+.btn-p{background:linear-gradient(135deg,var(--cyan),var(--blue));color:#fff;box-shadow:0 4px 20px rgba(30,144,255,.15)}
+.btn-p:hover{transform:translateY(-2px);box-shadow:0 6px 28px rgba(30,144,255,.25)}
+.btn-s{background:var(--card);border:1px solid var(--border);color:var(--text)}
+.btn-s:hover{border-color:var(--cyan)}
+
+/* ── LIVE BAR ── */
+.lb{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+@media(max-width:700px){.lb{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:400px){.lb{grid-template-columns:1fr}}
+
+/* ── ENGINE MTF MATRIX ── */
+.mtf{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:12px}
+@media(max-width:700px){.mtf{grid-template-columns:1fr}}
+.mtf-t{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px}
+.mtf-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.mtf-n{font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase}
+.mtf-v{font-size:11px;font-weight:700}
+.mtf-v.buy{color:var(--green)}
+.mtf-v.sell{color:var(--red)}
+.mtf-v.hold{color:var(--gold)}
+.mtf-w{font-size:8px;color:var(--txt2)}
+.mtf-e{display:flex;gap:2px;flex-wrap:wrap;margin-top:3px}
+.ed{font-size:7px;font-weight:700;padding:1px 3px;border-radius:2px;line-height:1.4}
+.ed.buy{background:rgba(34,197,94,.15);color:var(--green)}
+.ed.sell{background:rgba(239,68,68,.15);color:var(--red)}
+.ed.hold{background:rgba(245,158,11,.12);color:var(--gold)}
+.mtf-d{font-size:8px;color:var(--txt2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mtf-vr{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:11px;flex-wrap:wrap;margin-bottom:10px}
+.mtf-warn{padding:8px 10px;background:rgba(245,158,11,.08);border-radius:6px;font-size:10px;color:var(--gold);margin-top:6px}
+.mtf-ex{font-size:9px;color:var(--txt2);cursor:pointer;margin-top:4px;text-decoration:underline}
+
+/* ── SIGNAL ── */
+.sig-e{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;color:var(--txt2);gap:6px}
+.sig-e .si{font-size:24px;opacity:.5}
+.sig-e p{font-size:12px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.si{background:var(--card);padding:8px 12px;border-radius:6px}
+.si .sl{font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)}
+.si .sv{font-size:15px;font-weight:700;margin-top:1px}
+.si .sv.buy{color:var(--green)}
+.si .sv.sell{color:var(--red)}
+.si.fl{grid-column:1/-1}
+
+/* ── TRADE TABLE ── */
+.tw{overflow-x:auto;margin-bottom:0}
+.tw::-webkit-scrollbar{height:3px}
+.tw::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{text-align:left;padding:8px 10px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--txt2);background:var(--card);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid rgba(30,45,74,.3);white-space:nowrap;font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--card-hover)}
+td.ab{color:var(--green);font-weight:600}
+td.as{color:var(--red);font-weight:600}
+td.rw{color:var(--green);font-weight:700}
+td.rl{color:var(--red);font-weight:700}
+td.pp{color:var(--green)}
+td.pn{color:var(--red)}
+
+/* ── EA STEPS ── */
+.ea-st{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+@media(max-width:600px){.ea-st{grid-template-columns:1fr}}
+.ea-s{background:var(--card);border:1px solid var(--border);border-radius:var(--rad-sm);padding:14px;text-align:center}
+.ea-s .n{width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-bottom:8px}
+.ea-s h4{font-size:12px;font-weight:600;margin-bottom:4px}
+.ea-s p{font-size:11px;color:var(--txt2);line-height:1.4}
+
+/* ── DONATION ── */
+.dn-g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+@media(max-width:600px){.dn-g{grid-template-columns:1fr}}
+.dn-c{background:var(--card);border:1px solid var(--border);border-radius:var(--rad);padding:16px;text-align:center;transition:.2s;position:relative;overflow:hidden}
+.dn-c.feat{border-color:var(--gold)}
+.dn-c.feat::before{content:'Most Popular';position:absolute;top:8px;right:-24px;background:var(--gold);color:#000;font-size:8px;font-weight:700;padding:2px 28px;transform:rotate(45deg)}
+.dn-c:hover{border-color:var(--cyan)}
+.dn-c .dn-p{font-size:clamp(20px,3vw,28px);font-weight:800;margin:6px 0;letter-spacing:-.5px}
+.dn-c .dn-p.gld{color:var(--gold)}
+.dn-c .dn-l{font-size:10px;color:var(--txt2)}
+.dn-c ul{text-align:left;font-size:11px;list-style:none;padding:0;margin:10px 0;line-height:1.7}
+.dn-c ul li::before{content:'✓ ';color:var(--green);font-weight:600}
+.dn-c .btn{margin-top:8px;width:100%;justify-content:center}
+
+/* ── PROGRESS BAR ── */
+.prg{background:var(--card);border:1px solid var(--border);border-radius:var(--rad);padding:16px;margin-bottom:12px}
+.prg-h{display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px;color:var(--txt2)}
+.prg-h b{color:var(--text)}
+.prg-bar{height:6px;background:var(--border);border-radius:6px;overflow:hidden}
+.prg-f{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--blue),var(--cyan));transition:width .5s}
+.prg-l{display:flex;justify-content:space-between;font-size:9px;color:var(--txt2);margin-top:3px}
+
+/* ── DONOR WALL ── */
+.dw{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+.dw-item{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:9px;color:var(--txt2)}
+
+/* ── TRADINGVIEW ── */
+.tvw{height:380px;width:100%;border-radius:8px;overflow:hidden;background:#1a1a2e;margin-bottom:12px}
+@media(max-width:600px){.tvw{height:260px}}
+
+/* ── KEY VALUE PROPS ── */
+.kvp{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}
+@media(max-width:600px){.kvp{grid-template-columns:repeat(2,1fr)}}
+.kvp-i{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center}
+.kvp-i .k{font-size:9px;color:var(--txt2);margin-top:3px}
+
+/* ── AI ANALYSIS ── */
+.ai-l{font-size:12px;padding:5px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
+.ai-l:last-child{border-bottom:none}
+.ai-l .l{color:var(--txt2)}
+.ai-l .r{font-weight:600}
+.ai-v{background:var(--card);border-radius:6px;padding:8px 10px;margin-top:8px;font-size:11px;line-height:1.4}
+
+/* ── FOOTER ── */
+.ft{text-align:center;padding:20px 0;font-size:10px;color:var(--txt2);border-top:1px solid rgba(30,45,74,.3);margin-top:16px}
+.ft .ref{font-size:9px;color:var(--text-dim);margin-top:6px}
+
+/* ── RINGKASAN DONASI ── */
+.rd{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+@media(max-width:500px){.rd{grid-template-columns:1fr}}
+
+/* ── LANGUAGE ALIGN ── */
+.lang-b{background:var(--card);border:1px solid var(--border);color:var(--txt2);padding:3px 8px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;transition:.2s}
+.lang-b.on,.lang-b:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(30,144,255,.08)}
+</style>
+</head>
+<body lang="id">
+
+<!-- ═══ TOPBAR ═══ -->
+<header class="topbar">
+  <div class="tb-l">
+    <div class="tb-lgo">Vilona <span>AI</span></div>
+    <span class="tb-dot"></span>
+    <span class="tb-st" id="tb-status"><b>Online</b> · <span id="tb-clock"></span></span>
+  </div>
+  <div class="tb-r">
+    <span class="tb-st" id="tb-price" style="font-weight:600">XAU: --</span>
+    <button class="lang-b en" onclick="setLang('en')">EN</button>
+    <button class="lang-b id" onclick="setLang('id')">ID</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <div class="hero-b" data-lang="id">⚡ Full AI · Zero Bullshit</div>
+  <div class="hero-b hidden" data-lang="en">⚡ Full AI · Zero Noise</div>
+  <h1 class="hero-h1" data-lang="id">
+    Trading <span class="gr">Bukan Judi.</span><br>Ini Sains. Ini AI. Ini <span class="gr">Transparan.</span>
+  </h1>
+  <h1 class="hero-h1 hidden" data-lang="en">
+    Trading <span class="gr">Isn't Gambling.</span><br>It's Science. It's AI. It's <span class="gr">Transparent.</span>
+  </h1>
+  <p class="hero-p" data-lang="id">
+    Kelompok VIP abal-abal jualan edukasi basi udah cukup. Vilona AI mengeksekusi <strong>8 engine AI secara real-time</strong>, verifikasi publik, dan hasilnya bisa lo audit langsung di halaman ini. <strong>Gratis. Transparan. Tanpa omong kosong.</strong>
+  </p>
+  <p class="hero-p hidden" data-lang="en">
+    Tired of fake VIP groups selling recycled education? Vilona AI executes <strong>8 AI engines in real-time</strong>, publicly verified results you can audit right here. <strong>Free. Transparent. No bullshit.</strong>
+  </p>
+
+  <!-- Backtest Hero Stats (proven, not live session) -->
+  <div class="hero-st">
+    <div class="hs-i"><div class="hs-v gr">199</div><div class="hs-l" data-lang="id">Total Sinyal (3 bln)</div><div class="hs-l hidden" data-lang="en">Total Signals (3mo)</div></div>
+    <div class="hs-i"><div class="hs-v gr">43.7%</div><div class="hs-l" data-lang="id">Win Rate</div><div class="hs-l hidden" data-lang="en">Win Rate</div></div>
+    <div class="hs-i"><div class="hs-v gld">+585</div><div class="hs-l">Pips</div></div>
+    <div class="hs-i"><div class="hs-v" style="color:var(--cyan)">1.50</div><div class="hs-l" data-lang="id">Profit Faktor</div><div class="hs-l hidden" data-lang="en">Profit Factor</div></div>
+  </div>
+  <!-- Live session dot (updates from API) -->
+  <div style="font-size:10px;color:var(--txt2);margin-top:-6px;margin-bottom:4px">
+    <span data-lang="id">📡 Live session:</span>
+    <span class="hidden" data-lang="en">📡 Live session:</span>
+    <span id="hs-live" style="font-weight:600">loading...</span>
+  </div>
+
+  <div class="hero-cta">
+    <a href="#ea" class="btn btn-p" data-lang="id">🤖 Download EA Gratis</a>
+    <a href="#ea" class="btn btn-p hidden" data-lang="en">🤖 Download Free EA</a>
+    <a href="#donate" class="btn btn-s" data-lang="id">💚 Gotong Royong</a>
+    <a href="#donate" class="btn btn-s hidden" data-lang="en">💚 Contribute</a>
+  </div>
+</section>
+
+<!-- ═══ KEY VALUE PROPS ═══ -->
+<div class="kvp">
+  <div class="kvp-i"><div class="cv" style="font-size:18px;color:var(--cyan)">8</div><div class="k" data-lang="id">AI Engine</div><div class="k hidden" data-lang="en">AI Engines</div></div>
+  <div class="kvp-i"><div class="cv" style="font-size:18px;color:var(--green)">5 TF</div><div class="k" data-lang="id">Multi Timeframe</div><div class="k hidden" data-lang="en">Multi Timeframe</div></div>
+  <div class="kvp-i"><div class="cv" style="font-size:18px;color:var(--gold)">100%</div><div class="k" data-lang="id">Transparan</div><div class="k hidden" data-lang="en">Transparent</div></div>
+  <div class="kvp-i"><div class="cv" style="font-size:18px;color:var(--violet)">Gratis</div><div class="k" data-lang="id">EA + Signal</div><div class="k hidden" data-lang="en">EA + Signals</div></div>
+</div>
+
+<!-- ═══ STRATEGY LAB — BACKTEST COMPARISON ═══ -->
+<section class="section">
+  <div class="st" data-lang="id">🧪 STRATEGY LAB — 8 KONFIGURASI TERUJI</div>
+  <div class="st hidden" data-lang="en">🧪 STRATEGY LAB — 8 PROVEN CONFIGS</div>
+  <p class="sbp" data-lang="id">
+    Gak cuma 1 strategi. 8 varian SL/TP udah dites. Yang <strong>paling balance</strong> dan <strong>live sekarang</strong> adalah Config A:
+  </p>
+  <p class="sbp hidden" data-lang="en">
+    Not just 1 strategy. 8 SL/TP variants tested. The <strong>most balanced</strong> and <strong>currently live</strong> is Config A:
+  </p>
+
+  <!-- Config A — Compact Leaderboard Style -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--rad);padding:14px 16px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;font-weight:700;color:var(--cyan)">CONFIG A</span>
+        <span style="font-size:10px;color:var(--txt2)">SL30 TP45 · 2 Engines · RR 1:1.5</span>
+        <span style="background:rgba(34,197,94,.12);padding:2px 8px;border-radius:4px;font-size:9px;color:var(--green);font-weight:600">⚡ LIVE</span>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <div style="text-align:center"><div style="font-size:16px;font-weight:800;color:var(--green)">43.7%</div><div style="font-size:8px;color:var(--txt2);text-transform:uppercase">WR</div></div>
+        <div style="text-align:center"><div style="font-size:16px;font-weight:800;color:var(--gold)">+585</div><div style="font-size:8px;color:var(--txt2);text-transform:uppercase">Pips</div></div>
+        <div style="text-align:center"><div style="font-size:16px;font-weight:800;color:var(--cyan)">1.50</div><div style="font-size:8px;color:var(--txt2);text-transform:uppercase">PF</div></div>
+        <div style="text-align:center"><div style="font-size:16px;font-weight:800">199</div><div style="font-size:8px;color:var(--txt2);text-transform:uppercase">Trade</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 Config Cards Compact -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:10px;font-weight:700">A · SL30 TP45</span>
+        <span style="background:rgba(34,197,94,.1);padding:1px 6px;border-radius:3px;font-size:8px;color:var(--green);font-weight:600">LIVE</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;font-size:10px">
+        <span style="color:var(--txt2)">WR</span><span style="text-align:right;font-weight:600;color:var(--green)">43.7%</span>
+        <span style="color:var(--txt2)">Pips</span><span style="text-align:right;font-weight:600;color:var(--gold)">+585</span>
+        <span style="color:var(--txt2)">PF</span><span style="text-align:right;font-weight:700;color:var(--cyan)">1.50</span>
+        <span style="color:var(--txt2)">Trade</span><span style="text-align:right;font-weight:600">199</span>
+      </div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="font-size:10px;font-weight:700;margin-bottom:6px">C · SL25 TP50</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;font-size:10px">
+        <span style="color:var(--txt2)">RR</span><span style="text-align:right;font-weight:600">1:2</span>
+        <span style="color:var(--txt2)">Pips</span><span style="text-align:right;font-weight:600;color:var(--green)">+300</span>
+        <span style="color:var(--txt2)">PF</span><span style="text-align:right;font-weight:700;color:var(--cyan)">2.00</span>
+        <span style="color:var(--txt2)">Trade</span><span style="text-align:right;font-weight:600">190</span>
+      </div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px">
+      <div style="font-size:10px;font-weight:700;margin-bottom:6px">E · SL35 TP35</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;font-size:10px">
+        <span style="color:var(--txt2)">RR</span><span style="text-align:right;font-weight:600">1:1</span>
+        <span style="color:var(--txt2)">Pips</span><span style="text-align:right;font-weight:600;color:var(--green)">+455</span>
+        <span style="color:var(--txt2)">WR</span><span style="text-align:right;font-weight:700;color:var(--green)">52.8%</span>
+        <span style="color:var(--txt2)">Trade</span><span style="text-align:right;font-weight:600">212</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Collapsible remaining configs -->
+  <details style="font-size:10px;color:var(--txt2)">
+    <summary style="cursor:pointer;padding:6px 0;font-weight:500" data-lang="id">🔽 Lihat 5 konfigurasi lainnya (B, D, F, G, H)</summary>
+    <summary style="cursor:pointer;padding:6px 0;font-weight:500" class="hidden" data-lang="en">🔽 See 5 other configs (B, D, F, G, H)</summary>
+    <div style="margin-top:6px;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:10px">
+        <thead><tr style="background:var(--card)">
+          <th style="padding:5px 8px;text-align:left;font-size:8px;text-transform:uppercase;color:var(--txt2)">Config</th>
+          <th style="padding:5px 8px;text-align:center;font-size:8px;text-transform:uppercase;color:var(--txt2)">SL/TP</th>
+          <th style="padding:5px 8px;text-align:center;font-size:8px;text-transform:uppercase;color:var(--txt2)">RR</th>
+          <th style="padding:5px 8px;text-align:center;font-size:8px;text-transform:uppercase;color:var(--txt2)">Eng</th>
+          <th style="padding:5px 8px;text-align:center;font-size:8px;text-transform:uppercase;color:var(--txt2)">WR</th>
+          <th style="padding:5px 8px;text-align:center;font-size:8px;text-transform:uppercase;color:var(--txt2)">Pips</th>
+          <th style="padding:5px 8px;text-align:center;font-size:8px;text-transform:uppercase;color:var(--txt2)">PF</th>
+        </tr></thead>
+        <tbody>
+          <tr><td style="padding:4px 8px">B · SL30 TP45</td><td style="padding:4px 8px;text-align:center">30/45</td><td style="padding:4px 8px;text-align:center">1:1.5</td><td style="padding:4px 8px;text-align:center">3</td><td style="padding:4px 8px;text-align:center">39.8%</td><td style="padding:4px 8px;text-align:center;color:var(--red)">-15</td><td style="padding:4px 8px;text-align:center">1.50</td></tr>
+          <tr><td style="padding:4px 8px">D · SL25 TP50</td><td style="padding:4px 8px;text-align:center">25/50</td><td style="padding:4px 8px;text-align:center">1:2</td><td style="padding:4px 8px;text-align:center">3</td><td style="padding:4px 8px;text-align:center">32.4%</td><td style="padding:4px 8px;text-align:center;color:var(--red)">-50</td><td style="padding:4px 8px;text-align:center">2.00</td></tr>
+          <tr><td style="padding:4px 8px">F · SL35 TP35</td><td style="padding:4px 8px;text-align:center">35/35</td><td style="padding:4px 8px;text-align:center">1:1</td><td style="padding:4px 8px;text-align:center">3</td><td style="padding:4px 8px;text-align:center">51.4%</td><td style="padding:4px 8px;text-align:center">+105</td><td style="padding:4px 8px;text-align:center">1.00</td></tr>
+          <tr style="opacity:.5"><td style="padding:4px 8px">G · SL20 TP40</td><td style="padding:4px 8px;text-align:center">20/40</td><td style="padding:4px 8px;text-align:center">1:2</td><td style="padding:4px 8px;text-align:center">2</td><td style="padding:4px 8px;text-align:center">35.5%</td><td style="padding:4px 8px;text-align:center;color:var(--red)">-180</td><td style="padding:4px 8px;text-align:center">2.00</td></tr>
+          <tr style="opacity:.5"><td style="padding:4px 8px">H · SL20 TP40</td><td style="padding:4px 8px;text-align:center">20/40</td><td style="padding:4px 8px;text-align:center">1:2</td><td style="padding:4px 8px;text-align:center">3</td><td style="padding:4px 8px;text-align:center">30.2%</td><td style="padding:4px 8px;text-align:center;color:var(--red)">-120</td><td style="padding:4px 8px;text-align:center">2.00</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:4px;font-size:8px;color:var(--text-dim)" data-lang="id">G-H di-gray karena minus. Periode: Mar-Jun 2026 · XAUUSD</div>
+    <div style="margin-top:4px;font-size:8px;color:var(--text-dim)" class="hidden" data-lang="en">G-H grayed out (negative). Period: Mar-Jun 2026 · XAUUSD</div>
+  </details>
+</section>
+
+<!-- ═══ SECTION 1: LIVE MARKET ═══ -->
+<section class="section">
+  <div class="st" data-lang="id">📡 LIVE MARKET — DATA REAL-TIME</div>
+  <div class="st hidden" data-lang="en">📡 LIVE MARKET — REAL-TIME DATA</div>
+
+  <!-- Price Ticker -->
+  <div class="lb">
+    <div class="cd"><div class="cl">XAUUSD — Spot</div><div class="cv gld" id="p-xau">--</div><div class="cs" id="p-xau-ch"></div></div>
+    <div class="cd"><div class="cl">BTC/USD</div><div class="cv" id="p-btc" style="color:#f7931a">--</div><div class="cs" id="p-btc-ch"></div></div>
+    <div class="cd"><div class="cl">ETH/USD</div><div class="cv" id="p-eth" style="color:#8b8cf7">--</div><div class="cs" id="p-eth-ch"></div></div>
+    <div class="cd"><div class="cl" data-lang="id">Sesi Pasar</div><div class="cl hidden" data-lang="en">Market Session</div><div class="cv" id="p-session" style="color:var(--cyan);font-size:18px">--</div><div class="cs" id="p-session-detail"></div></div>
+  </div>
+
+  <!-- TradingView Chart -->
+  <div class="tvw" id="tv-container"></div>
+
+  <!-- Engine Matrix (MTF) -->
+  <div class="cd" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="cl" data-lang="id">🔬 ENGINE MTF MATRIX — 5 TIMEFRAME</div>
+      <div class="cl hidden" data-lang="en">🔬 ENGINE MTF MATRIX — 5 TIMEFRAMES</div>
+      <span style="font-size:9px;color:var(--txt2)" id="mtf-ts"></span>
+    </div>
+    <div id="mtf-verdict" class="mtf-vr"><span style="color:var(--txt2)">Loading engine data...</span></div>
+    <div class="mtf" id="mtf-grid"><div class="mtf-t"><div style="color:var(--txt2);font-size:10px">Initializing engines...</div></div></div>
+    <div class="mtf-warn hidden" id="mtf-disclaimer">
+      <b data-lang="id">⚠️ BUKAN SINYAL EKSEKUSI!</b><span data-lang="id"> Raw engine readings. Entry + TP/SL hanya muncul jika quality gate lolos.</span>
+      <b class="hidden" data-lang="en">⚠️ NOT EXECUTION SIGNALS!</b><span class="hidden" data-lang="en"> Raw engine readings. Entry + TP/SL only after quality gate passes.</span>
+    </div>
+  </div>
+
+  <!-- AI Fundamental Analysis -->
+  <div class="grid-2" style="margin-bottom:12px">
+    <div class="cd">
+      <div class="cl" data-lang="id">🧠 AI Fundamental Analysis</div>
+      <div class="cl hidden" data-lang="en">🧠 AI Fundamental Analysis</div>
+      <div class="sub" style="font-size:9px;color:var(--txt2);margin-bottom:8px" data-lang="id">Dari data XAUUSD live</div>
+      <div class="sub hidden" style="font-size:9px;color:var(--txt2);margin-bottom:8px" data-lang="en">From live XAUUSD data</div>
+      <div id="ai-content">
+        <div class="ai-l"><span class="l" data-lang="id">Trend</span><span class="l hidden" data-lang="en">Trend</span><span class="r" id="ai-trend">--</span></div>
+        <div class="ai-l"><span class="l">RSI (14)</span><span class="r" id="ai-rsi">--</span></div>
+        <div class="ai-l"><span class="l">ATR (14)</span><span class="r" id="ai-atr">--</span></div>
+        <div class="ai-l"><span class="l">Support</span><span class="r" id="ai-s1">--</span></div>
+        <div class="ai-l"><span class="l">Resistance</span><span class="r" id="ai-r1">--</span></div>
+        <div class="ai-l"><span class="l">EMA 200</span><span class="r" id="ai-ema200">--</span></div>
+        <div class="ai-v" id="ai-verdict" style="font-size:11px;color:var(--txt2)">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Live Signal -->
+    <div class="cd">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="cl" data-lang="id">🔴 LIVE SIGNAL</div>
+        <div class="cl hidden" data-lang="en">🔴 LIVE SIGNAL</div>
+        <span style="font-size:9px;color:var(--txt2)" id="sig-time"></span>
+      </div>
+      <div id="sig-content">
+        <div class="sig-e">
+          <div class="si">📡</div>
+          <p data-lang="id">🔍 AI sedang menganalisis — sinyal muncul saat setup terkonfirmasi</p>
+          <p class="hidden" data-lang="en">🔍 AI analyzing market — signal appears when setup confirms</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats Grid + Trade History Wrapper -->
+  <div class="cd" style="margin-bottom:12px">
+    <div class="cl" data-lang="id">📊 PERFORMANCE — REAL TRADING STATS</div>
+    <div class="cl hidden" data-lang="en">📊 PERFORMANCE — REAL TRADING STATS</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div data-lang="id" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">🏆 Menang</div><div class="hidden" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)" data-lang="en">🏆 Wins</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)" id="stat-wins">0</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div data-lang="id" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">💀 Kalah</div><div class="hidden" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)" data-lang="en">💀 Losses</div>
+        <div style="font-size:18px;font-weight:800;color:var(--red)" id="stat-losses">0</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">📈 Best</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)" id="stat-best">--</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">📉 Worst</div>
+        <div style="font-size:18px;font-weight:800;color:var(--red)" id="stat-worst">--</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div data-lang="id" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">🔥 Win Streak</div><div class="hidden" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)" data-lang="en">🔥 Win Streak</div>
+        <div style="font-size:18px;font-weight:800;color:var(--green)" id="stat-cwin">0</div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;text-align:center">
+        <div data-lang="id" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)">💀 Lose Streak</div><div class="hidden" style="font-size:8px;text-transform:uppercase;letter-spacing:.4px;color:var(--txt2)" data-lang="en">💀 Lose Streak</div>
+        <div style="font-size:18px;font-weight:800;color:var(--red)" id="stat-closs">0</div>
+      </div>
+    </div>
+
+    <div class="cl" data-lang="id" style="margin-bottom:8px">📜 SIGNAL TIMELINE</div>
+    <div class="cl hidden" data-lang="en" style="margin-bottom:8px">📜 SIGNAL TIMELINE</div>
+    <div id="signal-timeline-container">
+      <div style="color:var(--txt2);font-size:12px;text-align:center;padding:24px">
+        <div style="font-size:28px;margin-bottom:6px;opacity:.4">📜</div>
+        <p data-lang="id">Belum ada sinyal. Sinyal muncul saat quality gate lolos.</p>
+        <p class="hidden" data-lang="en">No signals yet. Signals appear when quality gate passes.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trade Table -->
+  <div class="cd">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="cl" data-lang="id">📊 RIWAYAT TRADING</div>
+      <div class="cl hidden" data-lang="en">📊 TRADE HISTORY</div>
+      <span class="cl" id="th-count" style="font-size:9px">0</span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th data-lang="id">Waktu</th><th class="hidden" data-lang="en">Time</th>
+          <th data-lang="id">Aksi</th><th class="hidden" data-lang="en">Action</th>
+          <th>Entry</th><th>Close</th><th>Pips</th><th>P&L</th>
+          <th data-lang="id">Hasil</th><th class="hidden" data-lang="en">Result</th>
+        </tr></thead>
+        <tbody id="th-body"><tr><td colspan="8" style="text-align:center;color:var(--txt2);padding:20px;font-size:12px" data-lang="id">Belum ada trading</td><td colspan="8" class="hidden" style="text-align:center;color:var(--txt2);padding:20px;font-size:12px" data-lang="en">No trades yet</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ NEWS SECTION ═══ -->
+<section class="section">
+  <div class="st" data-lang="id">📰 MARKET NEWS — LANGSUNG DARI YAHOO FINANCE</div>
+  <div class="st hidden" data-lang="en">📰 MARKET NEWS — FROM YAHOO FINANCE</div>
+  <div class="cd" id="news-container">
+    <div style="color:var(--txt2);font-size:12px;padding:10px" data-lang="id">Memuat berita terbaru...</div>
+    <div style="color:var(--txt2);font-size:12px;padding:10px" class="hidden" data-lang="en">Loading latest news...</div>
+  </div>
+</section>
+
+<!-- ═══ SECTION 2: EA BRIDGE ═══ -->
+<section class="section" id="ea">
+  <div class="st" data-lang="id">🤖 EA BRIDGE — PASANG DI MT5 LO</div>
+  <div class="st hidden" data-lang="en">🤖 EA BRIDGE — INSTALL ON MT5</div>
+  <p class="sbp" data-lang="id">
+    3 langkah. 5 menit. EA lo terkoneksi langsung ke 8 AI engine Vilona. Eksekusi otomatis, tanpa lo jaga 24/7.
+  </p>
+  <p class="sbp hidden" data-lang="en">
+    3 steps. 5 minutes. Your EA connects directly to 8 Vilona AI engines. Auto-execute, no need to watch charts 24/7.
+  </p>
+
+  <div class="ea-st">
+    <div class="ea-s">
+      <div class="n">1</div>
+      <h4 data-lang="id">Download EA</h4>
+      <h4 class="hidden" data-lang="en">Download EA</h4>
+      <p data-lang="id">Download file .ex5, taruh di folder <code style="font-size:9px;background:var(--surface);padding:1px 4px;border-radius:3px">MQL5/Experts/</code></p>
+      <p class="hidden" data-lang="en">Download .ex5 file, place in <code style="font-size:9px;background:var(--surface);padding:1px 4px;border-radius:3px">MQL5/Experts/</code> folder</p>
+      <div style="margin-top:6px"><a href="/download/ea" class="btn btn-p" style="padding:8px 16px;font-size:11px" data-lang="id">⬇️ Download EA</a><a href="/download/ea" class="btn btn-p hidden" style="padding:8px 16px;font-size:11px" data-lang="en">⬇️ Download EA</a></div>
+    </div>
+    <div class="ea-s">
+      <div class="n">2</div>
+      <h4 data-lang="id">Dapatkan Token</h4>
+      <h4 class="hidden" data-lang="en">Get Token</h4>
+      <p data-lang="id">Hubungi bot Telegram untuk API key gratis</p>
+      <p class="hidden" data-lang="en">Contact the Telegram bot for your free API key</p>
+      <div style="margin-top:6px"><a href="https://t.me/berkahkaryaforexbotbot" class="btn btn-s" style="padding:8px 16px;font-size:11px" target="_blank">📩 Bot Telegram</a></div>
+    </div>
+    <div class="ea-s">
+      <div class="n">3</div>
+      <h4 data-lang="id">Pasang & Nikmati</h4>
+      <h4 class="hidden" data-lang="en">Install & Enjoy</h4>
+      <p data-lang="id">Attach EA ke chart XAUUSD M15. Signal dikirim otomatis dari engine ke EA lo tiap 5 detik.</p>
+      <p class="hidden" data-lang="en">Attach EA to XAUUSD M15 chart. Signals sent automatically every 5 seconds.</p>
+    </div>
+  </div>
+
+  <div class="cd-sm" style="text-align:center;font-size:11px;color:var(--txt2)">
+    <span data-lang="id">📊 <b>Bridge status:</b></span>
+    <span class="hidden" data-lang="en">📊 <b>Bridge status:</b></span>
+    <span id="bridge-info">Online · 0 EA connected · 0h uptime</span>
+  </div>
+</section>
+
+<!-- ═══ SECTION 3: GOTONG ROYONG ═══ -->
+<section class="section" id="donate">
+  <div class="st" data-lang="id">💚 GOTONG ROYONG — PARTNER, BUKAN KORBAN</div>
+  <div class="st hidden" data-lang="en">💚 CONTRIBUTE — PARTNER, NOT VICTIM</div>
+
+  <p class="sbp" data-lang="id">
+    Kami kasih EA <strong>gratis</strong>. Signal <strong>gratis</strong>. Semua transparan. Kenapa? Karena lo bukan pelanggan — lo <strong>partner</strong>.
+  </p>
+  <p class="sbp hidden" data-lang="en">
+    We give you the EA for <strong>free</strong>. Signals <strong>free</strong>. Everything transparent. Why? Because you're not a customer — you're a <strong>partner</strong>.
+  </p>
+
+  <!-- Server Cost Progress -->
+  <div class="prg">
+    <div class="prg-h">
+      <span data-lang="id">💰 Biaya Server Bulan Ini</span>
+      <span class="hidden" data-lang="en">💰 Server Cost This Month</span>
+      <span><b id="sc-raised">Rp0</b> / <span id="sc-target">Rp2.500.000</span></span>
+    </div>
+    <div class="prg-bar"><div class="prg-f" id="sc-bar" style="width:0%"></div></div>
+    <div class="prg-l">
+      <span data-lang="id">Terkumpul</span>
+      <span class="hidden" data-lang="en">Raised</span>
+      <span id="sc-pct">0%</span>
+    </div>
+  </div>
+
+  <!-- Why Free? -->
+  <div class="grid-2" style="margin-bottom:14px">
+    <div class="cd-sm">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px" data-lang="id">❓ Kenapa Gratis?</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;display:none" data-lang="en">❓ Why Free?</div>
+      <p style="font-size:11px;color:var(--txt2);line-height:1.6" data-lang="id">
+        Karena model <strong>"jual grup VIP + edukasi"</strong> itu bobrok. Lo bayar mahal, dapet sinyal copas. 
+        Kami balik: <strong>AI kerja, lo cuan, server bayar dari partisipasi sukarela.</strong> 
+        Kalo AI profit, lo sisihkan sedikit. Kalo loss, lo gak rugi sepeserpun buat langganan.
+      </p>
+      <p style="font-size:11px;color:var(--txt2);line-height:1.6;display:none" data-lang="en">
+        Because the <strong>"paid VIP group + education"</strong> model is broken. You pay premium, get copy-paste signals. 
+        We flipped it: <strong>AI works, you profit, servers paid by voluntary participation.</strong>
+        If AI prints money, you share a little. If it loses, you pay nothing for access.
+      </p>
+    </div>
+    <div class="cd-sm">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px" data-lang="id">💧 Analogi Bensin</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;display:none" data-lang="en">💧 The Fuel Analogy</div>
+      <p style="font-size:11px;color:var(--txt2);line-height:1.6" data-lang="id">
+        Lo naik mobil gratisan. Bensin gratis. Tiap sampe tujuan, lo isi bensin lagi biar besok jalan lagi. 
+        <strong>Itu gotong royong.</strong> Bukan iuran. Bukan langganan. Lo isi karena lo lihat sendiri mobil ini beneran jalan.
+      </p>
+      <p style="font-size:11px;color:var(--txt2);line-height:1.6;display:none" data-lang="en">
+        You get a free car. Free fuel. Every time you reach your destination, you refill so tomorrow you can ride again. 
+        <strong>That's gotong royong.</strong> Not subscription. Not fee. You refill because you saw the car actually runs.
+      </p>
+    </div>
+  </div>
+
+  <!-- Donation Tiers -->
+  <div class="sb" style="font-size:16px;margin-bottom:8px" data-lang="id">Pilih kontribusi lo:</div>
+  <div class="sb" style="font-size:16px;margin-bottom:8px;display:none" data-lang="en">Choose your contribution:</div>
+  <div class="dn-g">
+    <div class="dn-c">
+      <div class="dn-l" data-lang="id">Penyiram Bensin</div>
+      <div class="dn-l hidden" data-lang="en">Fuel Filler</div>
+      <div class="dn-p" style="color:var(--txt2)">Rp50K</div>
+      <ul data-lang="id">
+        <li>Akses signal Telegram</li>
+        <li>EA Bridge gratis</li>
+        <li>Nama di donor wall</li>
+      </ul>
+      <ul class="hidden" data-lang="en">
+        <li>Telegram signal access</li>
+        <li>Free EA Bridge</li>
+        <li>Name on donor wall</li>
+      </ul>
+      <button onclick="directPay(50000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp50K</button>
+      <button onclick="directPay(50000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp50K</button>
+    </div>
+    <div class="dn-c feat">
+      <div class="dn-l" data-lang="id">Montir Kepercayaan</div>
+      <div class="dn-l hidden" data-lang="en">Trusted Mechanic</div>
+      <div class="dn-p gld">Rp150K</div>
+      <ul data-lang="id">
+        <li>Semua akses Fuel Filler</li>
+        <li>Token EA Priority</li>
+        <li>Sinyal early access</li>
+        <li>Grup VIP Telegram</li>
+        <li>Laporan performa harian</li>
+      </ul>
+      <ul class="hidden" data-lang="en">
+        <li>All Fuel Filler perks</li>
+        <li>Priority EA Token</li>
+        <li>Early signal access</li>
+        <li>VIP Telegram group</li>
+        <li>Daily performance report</li>
+      </ul>
+      <button onclick="directPay(150000)" class="btn btn-p" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp150K</button>
+      <button onclick="directPay(150000)" class="btn btn-p hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp150K</button>
+    </div>
+    <div class="dn-c">
+      <div class="dn-l" data-lang="id">Sultan Server</div>
+      <div class="dn-l hidden" data-lang="en">Server Sultan</div>
+      <div class="dn-p" style="color:var(--gold)">Rp500K</div>
+      <ul data-lang="id">
+        <li>Semua akses Montir</li>
+        <li>Nama di dashboard homepage</li>
+        <li>API key Elite</li>
+        <li>Early feature access</li>
+        <li>1-on-1 setup support</li>
+        <li>+ Lencana Sultan 👑</li>
+      </ul>
+      <ul class="hidden" data-lang="en">
+        <li>All Mechanic perks</li>
+        <li>Name on homepage</li>
+        <li>Elite API key</li>
+        <li>Early feature access</li>
+        <li>1-on-1 setup support</li>
+        <li>Sultan badge 👑</li>
+      </ul>
+      <button onclick="directPay(500000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp500K</button>
+      <button onclick="directPay(500000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp500K</button>
+    </div>
+  </div>
+
+  <!-- Direct Payment Row -->
+  <div style="margin-bottom:12px">
+    <div class="cd-sm" style="text-align:center">
+      <div style="font-size:10px;color:var(--txt2);margin-bottom:4px" data-lang="id">Atau via Telegram: <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" style="color:var(--cyan)">@berkahkaryaforexbotbot</a> · <button onclick="directPayCustom()" style="background:none;border:none;color:var(--cyan);cursor:pointer;font-size:10px;text-decoration:underline;padding:0">💰 Nominal custom</button></div>
+      <div style="font-size:10px;color:var(--txt2);margin-bottom:4px;display:none" data-lang="en">Or via Telegram: <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" style="color:var(--cyan)">@berkahkaryaforexbotbot</a> · <button onclick="directPayCustom()" style="background:none;border:none;color:var(--cyan);cursor:pointer;font-size:10px;text-decoration:underline;padding:0">💰 Custom amount</button></div>
+      <div id="pay-status" style="font-size:10px;color:var(--txt2);margin-top:4px"></div>
+    </div>
+  </div>
+
+  <!-- Donor Wall -->
+  <div class="cd-sm">
+    <div class="cl" style="margin-bottom:4px" data-lang="id">🙏 Donatur Terbaru</div>
+    <div class="cl hidden" style="margin-bottom:4px" data-lang="en">🙏 Recent Donors</div>
+    <div class="dw" id="donor-wall">
+      <span style="font-size:10px;color:var(--txt2)" data-lang="id">Jadilah yang pertama!</span>
+      <span class="hidden" style="font-size:10px;color:var(--txt2)" data-lang="en">Be the first!</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ SECTION 4: ENGINE LAB ═══ -->
+<section class="section" id="engines">
+  <div class="st" data-lang="id">🧠 ENGINE LAB — 8 AI YANG KERJA DI BALIK LAYAR</div>
+  <div class="st hidden" data-lang="en">🧠 ENGINE LAB — 8 AI WORKING BEHIND THE SCENES</div>
+  <p class="sbp" data-lang="id">
+    Gak ada "sinyal jitu" dari 1 indikator. Setiap keputusan adalah hasil voting 8 engine + 5 timeframe. 
+    Transparan. Terverifikasi. Langsung dari terminal.
+  </p>
+  <p class="sbp hidden" data-lang="en">
+    No "secret signals" from 1 indicator. Every decision is a vote of 8 engines across 5 timeframes.
+    Transparent. Verified. Straight from the terminal.
+  </p>
+  <div class="grid-3">
+    <div class="cd-sm"><div style="font-size:12px;font-weight:700">📐 Quant</div><div style="font-size:10px;color:var(--txt2);line-height:1.5" data-lang="id">Regression + statistical arbitrage. Deteksi mean reversion & momentum.</div><div style="font-size:10px;color:var(--txt2);line-height:1.5;display:none" data-lang="en">Regression + statistical arbitrage. Mean reversion & momentum detection.</div></div>
+    <div class="cd-sm"><div style="font-size:12px;font-weight:700">📊 FVG</div><div style="font-size:10px;color:var(--txt2);line-height:1.5" data-lang="id">Fair Value Gap. Institutional orderflow — cari celah harga yang belum terisi.</div><div style="font-size:10px;color:var(--txt2);line-height:1.5;display:none" data-lang="en">Fair Value Gap. Institutional orderflow — finds unfilled price gaps.</div></div>
+    <div class="cd-sm"><div style="font-size:12px;font-weight:700">🔮 CRT/TBS</div><div style="font-size:10px;color:var(--txt2);line-height:1.5" data-lang="id">ChoCH + RTO + TBS. Smart money reversal detection.</div><div style="font-size:10px;color:var(--txt2);line-height:1.5;display:none" data-lang="en">ChoCH + RTO + TBS. Smart money reversal detection.</div></div>
+    <div class="cd-sm"><div style="font-size:12px;font-weight:700">⚙️ SMC</div><div style="font-size:10px;color:var(--txt2);line-height:1.5" data-lang="id">Smart Money Concepts. Liquidity sweep + orderblock + breaker.</div><div style="font-size:10px;color:var(--txt2);line-height:1.5;display:none" data-lang="en">Smart Money Concepts. Liquidity sweep + orderblock + breaker.</div></div>
+    <div class="cd-sm"><div style="font-size:12px;font-weight:700">🧘 Hermes</div><div style="font-size:10px;color:var(--txt2);line-height:1.5" data-lang="id">Multi-agent consensus. Hermes aggregator — syntesis dari semua engine.</div><div style="font-size:10px;color:var(--txt2);line-height:1.5;display:none" data-lang="en">Multi-agent consensus. Hermes aggregator — synthesis of all engines.</div></div>
+    <div class="cd-sm"><div style="font-size:12px;font-weight:700">📈 Trend</div><div style="font-size:10px;color:var(--txt2);line-height:1.5" data-lang="id">ADX + Supertrend + MA cross. Trend direction filter.</div><div style="font-size:10px;color:var(--txt2);line-height:1.5;display:none" data-lang="en">ADX + Supertrend + MA cross. Trend direction filter.</div></div>
+    <div class="cd-sm"><div style="font-size:12px;font-weight:700">🎯 Ultimate</div><div style="font-size:10px;color:var(--txt2);line-height:1.5" data-lang="id">Ultimate Oscillator + ATR. Momentum & volatility weighting.</div><div style="font-size:10px;color:var(--txt2);line-height:1.5;display:none" data-lang="en">Ultimate Oscillator + ATR. Momentum & volatility weighting.</div></div>
+    <div class="cd-sm"><div style="font-size:12px;font-weight:700">🌲 Sequoia</div><div style="font-size:10px;color:var(--txt2);line-height:1.5" data-lang="id">Pattern recognition + structural analysis. Support/resistance mapping.</div><div style="font-size:10px;color:var(--txt2);line-height:1.5;display:none" data-lang="en">Pattern recognition + structural analysis. S/R mapping.</div></div>
+  </div>
+</section>
+
+<!-- ═══ SECTION 5: CTA FINAL ═══ -->
+<section class="section" style="text-align:center;padding:32px 0">
+  <div class="sb" data-lang="id">Siap CUAN bareng AI?</div>
+  <div class="sb hidden" data-lang="en">Ready to profit with AI?</div>
+  <p class="sbp" style="margin:0 auto 16px" data-lang="id">
+    Download EA gratis. Lihat sendiri hasilnya. Kalo AI cuan, isi bensin server. Kalo loss, lo gak rugi apa-apa.
+    <br><strong>Fair buat kedua belah pihak.</strong>
+  </p>
+  <p class="sbp hidden" style="margin:0 auto 16px" data-lang="en">
+    Download free EA. See the results yourself. If AI profits, fuel the server. If it loses, you lose nothing.
+    <br><strong>Fair for both sides.</strong>
+  </p>
+  <div class="hero-cta">
+    <a href="#ea" class="btn btn-p" style="padding:14px 36px;font-size:15px" data-lang="id">⬇️ Download EA Gratis Sekarang</a>
+    <a href="#ea" class="btn btn-p hidden" style="padding:14px 36px;font-size:15px" data-lang="en">⬇️ Download Free EA Now</a>
+    <a href="#donate" class="btn btn-s" style="padding:14px 36px;font-size:15px" data-lang="id">💚 Isi Bensin Server</a>
+    <a href="#donate" class="btn btn-s hidden" style="padding:14px 36px;font-size:15px" data-lang="en">💚 Fuel the Server</a>
+  </div>
+</section>
+
+<!-- ═══ STICKY BOTTOM CTA (mobile only) ═══ -->
+<div id="sticky-cta" style="position:fixed;bottom:0;left:0;right:0;z-index:99;display:flex;gap:6px;padding:8px 12px;background:rgba(7,11,20,.95);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--border)">
+  <a href="#ea" class="btn btn-p" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="id">🤖 Download EA Gratis</a>
+  <a href="#ea" class="btn btn-p hidden" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="en">🤖 Download Free EA</a>
+  <a href="#donate" class="btn btn-s" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="id">💚 Isi Bensin</a>
+  <a href="#donate" class="btn btn-s hidden" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="en">💚 Fuel Up</a>
+</div>
+<style>@media(min-width:601px){#sticky-cta{display:none!important}}</style>
+
+<footer class="ft">
+  <div>Vilona AI Trading System · <span id="refresh-msg" data-lang="id">Update tiap 5 detik</span><span id="refresh-msg" class="hidden" data-lang="en">Updates every 5s</span></div>
+  <div class="ref" data-lang="id">Data real-time dari bridge engine · Performa masa lalu tidak menjamin hasil masa depan. Trading beresiko.</div>
+  <div class="ref hidden" data-lang="en">Real-time data from engine bridge · Past performance does not guarantee future results. Trading carries risk.</div>
+</footer>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- JAVASCRIPT -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<script>
+// ── TradingView Widget ──
+(function(){
+  var c = document.getElementById('tv-container');
+  var s = document.createElement('script');
+  s.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  s.type = 'text/javascript'; s.async = true;
+  s.innerHTML = JSON.stringify({
+    "interval": "15","symbol": "FX:XAUUSD","theme": "dark",
+    "style": "1","locale": "en","timezone": "Asia/Jakarta",
+    "allow_symbol_change": true,"autosize": true,
+    "studies": ["RSI@tv-basicstudies","MASimple@tv-basicstudies"],
+    "withdateranges": true,
+    "backgroundColor": "#0a0e17","gridColor": "rgba(42, 58, 92, 0.3)"
+  });
+  c.appendChild(s);
+})();
+
+// ─── CONFIG ───
+const API_KEY = 'VT-MASTER-734AD731F5FB';
+const BRIDGE = '';
+const TF_WEIGHTS = {'D1':0.35,'H4':0.25,'H1':0.20,'M15':0.12,'M5':0.08};
+const ENGINE_NAMES = {quant:'Quant',fvg:'FVG',crt:'CRT',smc:'SMC',trend:'Trend',ultimate:'Ultimate',hermes:'Hermes',sequoia:'Sequoia',tv:'TV'};
+const ENGINE_SHORT = {quant:'Q',fvg:'FV',crt:'CR',smc:'SM',trend:'Tr',ultimate:'Ul',hermes:'He',sequoia:'Se',tv:'TV'};
+
+// ─── HELPERS ───
+let xauPrev=0, firstRun=true;
+
+function $(id){return document.getElementById(id)}
+function ts(){return new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Jakarta'})+' WIB'}
+(function tick(){$('tb-clock').textContent=ts();setTimeout(tick,1000)})();
+
+function fmtPnL(v){
+  if(v==null||v=='--')return'--';
+  const n=parseFloat(v);
+  return '<span style="color:'+(n>=0?'var(--green)':'var(--red)')+'">'+(n>=0?'+':'')+n.toFixed(2)+'</span>';
+}
+function fmtPips(v){if(v==null)return'--';const n=parseFloat(v);return(n>=0?'+':'')+n.toFixed(1)}
+function fmtPrice(v){if(v==null||!v)return'--';return'$'+parseFloat(v).toFixed(2)}
+
+// ─── LANGUAGE ───
+function setLang(l){
+  document.body.lang = l;
+  document.querySelectorAll('[data-lang]').forEach(function(el){
+    if(el.dataset.lang===l) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  });
+  // Show/hide lang buttons
+  document.querySelectorAll('.lang-b').forEach(function(b){
+    b.classList.toggle('on', b.classList.contains(l));
+  });
+}
+
+// ─── INIT LANGUAGE ───
+setLang('id');
+
+// ─── GLOBAL ───
+var lastTradeLog = [];
+
+// ─── ENGINE MTF MATRIX ───
+async function fetchEngine(){
+  try{
+    var r=await fetch(BRIDGE+'/api/engine-readings',{signal:AbortSignal.timeout(8000)});
+    var d=await r.json();
+    var tfs=d.timeframes||{}, grid=$('mtf-grid'), verdict=$('mtf-verdict');
+    var hier=d.hierarchical||{};
+    var macroEmoji=d.macro_trend==='BULLISH'?'🟢':d.macro_trend==='BEARISH'?'🔴':'⚪️';
+    var alignEmoji=d.mtf_alignment==='ALIGNED'?'✅':d.mtf_alignment==='CONFLICT'?'🔴':'⚠️';
+    var vCls=hier.verdict==='BUY'?'buy':hier.verdict==='SELL'?'sell':'hold';
+    verdict.innerHTML='<span style="color:var(--txt2)">'+macroEmoji+' '+d.macro_trend+' | '+alignEmoji+' '+d.mtf_alignment+' | </span><span class="'+vCls+'" style="font-weight:700">'+(hier.verdict||'HOLD')+' ('+((hier.consensus_score||0)*100).toFixed(0)+'%)</span>';
+
+    var tfKeys=Object.keys(tfs);
+    if(tfKeys.length){
+      grid.innerHTML=tfKeys.map(function(tf){
+        var tfData=tfs[tf];
+        var verdict=tfData.verdict||'HOLD';
+        var vCls2=verdict==='BUY'?'buy':verdict==='SELL'?'sell':'hold';
+        var conf=((tfData.consensus_pct||0)*100).toFixed(0);
+        var w=((TF_WEIGHTS[tf]||0)*100).toFixed(0)+'%';
+        var engs=tfData.engines||{};
+        var engList=Object.keys(engs).map(function(k){
+          var e=engs[k];
+          var eDir=e.direction||'HOLD';
+          var eCls=eDir==='BUY'?'buy':eDir==='SELL'?'sell':'hold';
+          var eConf=e.confidence?((e.confidence>1?e.confidence/100:e.confidence)*100).toFixed(0):'--';
+          var lbl=ENGINE_SHORT[k.toLowerCase()]||k.charAt(0).toUpperCase();
+          return '<span class="ed '+eCls+'" title="'+k+': '+eDir+' '+eConf+'%">'+lbl+'</span>';
+        }).join('');
+
+        var details='';
+        if(tfData.macro){
+          var m=tfData.macro;
+          details='EMA:'+(m.ema200_dist>0?'+':'')+m.ema200_dist+'% RSI:'+m.rsi+' '+m.sma_cross;
+        }else if(tfData.structure){
+          var s=tfData.structure;
+          details='S:'+s.s1+' R:'+s.r1+' ('+s.structure_type+')';
+        }else if(tfData.entry){
+          var en=tfData.entry;
+          details='M:'+en.micro_trend+' mom:'+en.momentum.toFixed(2);
+        }
+
+        return '<div class="mtf-t"><div class="mtf-h"><span class="mtf-n">'+tf+'</span><span class="mtf-v '+vCls2+'">'+verdict+' '+conf+'%</span><span class="mtf-w">'+w+'</span></div><div class="mtf-e">'+engList+'</div>'+(details?'<div class="mtf-d">'+details+'</div>':'')+'</div>';
+      }).join('');
+      $('mtf-disclaimer').classList.remove('hidden');
+    }
+    $('mtf-ts').textContent=ts();
+  }catch(e){
+    $('mtf-grid').innerHTML='<div class="mtf-t"><div style="color:var(--txt2);font-size:10px;padding:4px">Engine offline</div></div>';
+  }
+}
+
+// ─── AI FUNDAMENTAL ───
+function calcFundamental(price, trades){
+  if(!price||price<=0)return;
+  // Normalize trade fields
+  var closes=trades.filter(function(t){return t.close_price||t.close||t.closePrice}).map(function(t){return parseFloat(t.close_price||t.close||t.closePrice)}).filter(function(c){return c>0});
+  var trend='Neutral', rsi=50, atr=0, s1=0, r1=0, ema200=price;
+  if(closes.length>=3){
+    var avgClose=closes.reduce(function(a,b){return a+b},0)/closes.length;
+    trend=price>avgClose*1.002?'Bullish ↗️':price<avgClose*0.998?'Bearish ↘️':'Neutral ↔️';
+    var gains=0,losses=0,count=0;
+    for(var i=1;i<closes.length;i++){var d=closes[i]-closes[i-1];if(d>0)gains+=d;else losses-=d;count++}
+    if(count>0){
+      var avgGain=gains/count,avgLoss=losses/count;
+      if(avgLoss===0)rsi=100;
+      else{var rs=avgGain/avgLoss;rsi=Math.round(100-100/(1+rs))}
+    }
+    var diffs=[];
+    for(var i=1;i<closes.length;i++)diffs.push(Math.abs(closes[i]-closes[i-1]));
+    atr=diffs.length?(diffs.reduce(function(a,b){return a+b},0)/diffs.length).toFixed(1):0;
+    var maxH=Math.max.apply(null,closes), minL=Math.min.apply(null,closes);
+    var range=maxH-minL;
+    s1=(price-range*0.382).toFixed(1);
+    r1=(price+range*0.382).toFixed(1);
+    ema200=closes.length?(closes.reduce(function(a,b){return a+b},0)/closes.length).toFixed(1):price.toFixed(1);
+  }
+  $('ai-trend').textContent=trend;
+  $('ai-rsi').textContent=rsi+(rsi>70?' (Overbought 🔴)':rsi<30?' (Oversold 🟢)':' (Neutral)');
+  $('ai-rsi').style.color=rsi>70?'var(--red)':rsi<30?'var(--green)':'var(--gold)';
+  $('ai-atr').textContent='$'+atr;
+  $('ai-s1').textContent='$'+s1;
+  $('ai-r1').textContent='$'+r1;
+  $('ai-ema200').textContent='$'+ema200;
+  var verdict='HOLD', reason='Loading...';
+  var aboveEma=price>parseFloat(ema200);
+  var bullish=trend.includes('Bullish'), bearish=trend.includes('Bearish');
+  if(bullish&&rsi<65&&aboveEma){verdict='BUY ✅';reason='Bullish trend + RSI room + above EMA200.'}
+  else if(bearish&&rsi>35&&!aboveEma){verdict='SELL ✅';reason='Bearish trend + oversold + below EMA200.'}
+  else if(bullish&&rsi>70){verdict='WATCH ⚠️';reason='Overbought — possible reversal.'}
+  else if(bearish&&rsi<30){verdict='WATCH ⚠️';reason='Oversold — bounce possible.'}
+  else{verdict='NEUTRAL ↔️';reason='Mixed signals. Wait for setup.'}
+  $('ai-verdict').innerHTML='<span style="color:'+(verdict.includes('BUY')?'var(--green)':verdict.includes('SELL')?'var(--red)':'var(--gold)')+';font-weight:700">'+verdict+'</span> — '+reason;
+}
+
+// ─── SIGNAL TIMELINE ───
+function renderTimeline(log){
+  var container=$('signal-timeline-container');
+  if(!log||!log.length){
+    container.innerHTML='<div style="color:var(--txt2);font-size:12px;text-align:center;padding:24px"><div style="font-size:28px;margin-bottom:6px;opacity:.4">📜</div><p>Belum ada sinyal. Sinyal muncul saat quality gate lolos.</p></div>';
+    return;
+  }
+  var sorted=[].concat(log).reverse().slice(0,20);
+  container.innerHTML='<div style="display:grid;gap:8px;max-height:400px;overflow-y:auto;padding-right:4px">'+
+    sorted.map(function(sig,i){
+      var action=(sig.action||'').toUpperCase();
+      var isBuy=action==='BUY';
+      var isSell=action==='SELL';
+      var dirClass=isBuy?'buy':isSell?'sell':'hold';
+      var icon=isBuy?'🟢':isSell?'🔴':'⚪️';
+      var grade=sig.grade||'C';
+      var conf=sig.confidence?(sig.confidence>1?sig.confidence.toFixed(0):(sig.confidence*100).toFixed(0))+'%':'--';
+      var rr=sig.rr?'1:'+parseFloat(sig.rr).toFixed(1):'--';
+      var entryVal=fmtPrice(sig.entry);
+      var slVal=fmtPrice(sig.sl);
+      var tp1Val=fmtPrice(sig.tp1);
+      var id=i;
+      return '<div style="background:var(--card);border-radius:6px;padding:10px 12px;border-left:3px solid '+(isBuy?'var(--green)':isSell?'var(--red)':'var(--gold)')+';display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:start">'+
+        '<div style="font-size:18px;line-height:1;text-align:center;width:24px">'+icon+'</div>'+
+        '<div style="min-width:0">'+
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+            '<span style="font-size:13px;font-weight:700;color:'+(isBuy?'var(--green)':isSell?'var(--red)':'var(--gold)')+'">'+action+'</span>'+
+            '<span style="font-size:11px;color:var(--txt2)">'+(sig.symbol||'XAUUSD')+'</span>'+
+            '<span style="background:rgba(245,158,11,.12);padding:1px 6px;border-radius:3px;font-size:9px;color:var(--gold);font-weight:600">'+grade+'</span>'+
+            '<span style="font-size:10px;color:var(--txt2)">'+conf+' · RR '+rr+'</span>'+
+          '</div>'+
+          '<div style="font-size:11px;margin-top:2px">Entry '+entryVal+' · SL '+slVal+(tp1Val?' · TP '+tp1Val:'')+'</div>'+
+          '<div style="font-size:10px;color:var(--txt2);margin-top:1px">'+(sig.timestamp?new Date(sig.timestamp).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short',timeZone:'Asia/Jakarta'}):'')+'</div>'+
+        '</div>'+
+      '</div>';
+    }).join('')+'</div>';
+}
+
+// ─── PRICE TICKERS ───
+async function fetchCrypto(){
+  try{
+    var r=await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd&include_24hr_change=true',{signal:AbortSignal.timeout(5000)});
+    var d=await r.json();
+    if(d.bitcoin){
+      $('p-btc').textContent='$'+d.bitcoin.usd.toLocaleString();
+      var bc=d.bitcoin.usd_24h_change;
+      $('p-btc-ch').innerHTML='<span style="color:'+(bc>=0?'var(--green)':'var(--red)')+'">'+(bc>=0?'+':'')+bc.toFixed(2)+'%</span>';
+    }
+    if(d.ethereum){
+      $('p-eth').textContent='$'+d.ethereum.usd.toLocaleString();
+      var ec=d.ethereum.usd_24h_change;
+      $('p-eth-ch').innerHTML='<span style="color:'+(ec>=0?'var(--green)':'var(--red)')+'">'+(ec>=0?'+':'')+ec.toFixed(2)+'%</span>';
+    }
+  }catch(e){/* no crypto */};
+}
+
+// ─── MAIN FETCH ───
+async function fetchAll(){
+  try{
+    // 1. Fetch trade-log for signals (primary)
+    var slog=[], signals=[];
+    try{
+      var slr=await fetch(BRIDGE+'/api/trade-log',{signal:AbortSignal.timeout(5000)});
+      slog=await slr.json();
+      signals=Array.isArray(slog)?slog:[];
+      lastTradeLog=signals;
+    }catch(e){}
+    
+    // Priority: XAUUSD > BTCUSD > USOIL
+    var xauSig=signals.filter(function(s){return (s.symbol||'').includes('XAU')});
+    var btcSig=signals.filter(function(s){return (s.symbol||'').includes('BTC')});
+    var oilSig=signals.filter(function(s){return (s.symbol||'').includes('OIL')});
+    var latestSig= xauSig.length?xauSig[xauSig.length-1] : btcSig.length?btcSig[btcSig.length-1] : oilSig.length?oilSig[oilSig.length-1] : signals.length?signals[signals.length-1] : null;
+    
+    // 2. Fetch dash-stats for prices + execution stats
+    var sd={}, trades=[], total=0, wins=0, losses=0;
+    try{
+      var sr=await fetch(BRIDGE+'/api/dash-stats',{signal:AbortSignal.timeout(5000)});
+      sd=await sr.json();
+      trades=sd.trades||[];
+      total=sd.total||0;
+      wins=sd.wins||0;
+      losses=sd.losses||0;
+    }catch(e){}
+
+    // Price
+    var xauPrice=sd.xau_price||0;
+    if(xauPrice){
+      $('p-xau').textContent='$'+parseFloat(xauPrice).toFixed(1);
+      $('tb-price').textContent='XAU: $'+parseFloat(xauPrice).toFixed(1);
+      if(xauPrev&&xauPrev!==xauPrice){
+        var diff=xauPrice-xauPrev;
+        var icon=diff>=0?'▲':'▼';
+        $('p-xau-ch').innerHTML='<span style="color:'+(diff>=0?'var(--green)':'var(--red)')+'">'+icon+' '+Math.abs(diff).toFixed(2)+' ('+(diff/xauPrev*100).toFixed(2)+'%)</span>';
+      }else if(firstRun){$('p-xau-ch').textContent='$0.00 (0.00%)'}
+      xauPrev=xauPrice;
+    }
+
+    // Session
+    var hh=(new Date().getHours()+7)%24;
+    var session=hh>=8&&hh<16?'Asian':hh>=16&&hh<21?'London':hh>=21||hh<2?'New York':'Pacific';
+    $('p-session').textContent=session;
+    $('p-session-detail').textContent=new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'})+' local';
+
+    // Hero stats
+    var livePips=trades.length?trades.reduce(function(s,t){return s+(parseFloat(t.pips)||0)},0):0;
+    var liveWr=total>0?(wins/total*100).toFixed(1):'0.0';
+    var sigCount=signals.length;
+    $('hs-live').textContent=sigCount+' signals generated · '+total+' executed · WR '+liveWr+'% · '+fmtPips(livePips)+' pips · XAU $'+parseFloat(xauPrice||0).toFixed(1);
+    $('hs-live').style.color=livePips>=0?'var(--green)':'var(--txt2)';
+
+    // Bridge info
+    var uptimeSec=sd.uptime_seconds||0;
+    var h=Math.floor(uptimeSec/3600),m=Math.floor((uptimeSec%3600)/60);
+    var eaCount=sd.ea_count||0;
+    $('bridge-info').textContent='Online · '+eaCount+' EA'+(eaCount===1?'':'s')+' connected · '+h+'h '+m+'m uptime';
+
+    // LIVE SIGNAL — priority XAUUSD
+    var sigEl=$('sig-content');
+    if(latestSig&&latestSig.action){
+      var isBuy=latestSig.action==='BUY';
+      var grade=latestSig.grade||'B';
+      var entry=latestSig.entry||0;
+      var sl=latestSig.sl||0;
+      var tp1=latestSig.tp1||0;
+      var rr=latestSig.rr||1.5;
+      var price=latestSig.price||entry;
+      var orderType='';
+      var dd=entry-price;
+      if(Math.abs(dd)>0.5){
+        if(latestSig.action==='SELL') orderType=dd>0?' SELL LIMIT':' SELL STOP';
+        else orderType=dd<0?' BUY LIMIT':' BUY STOP';
+      }
+      $('sig-time').textContent=ts();
+      sigEl.innerHTML='<div style="font-size:11px;color:var(--txt2);margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between"><span style="font-weight:700;font-size:14px;color:'+(isBuy?'var(--green)':'var(--red)')+'">'+(isBuy?'🟢':'🔴')+' '+(latestSig.symbol||'XAUUSD')+orderType+'</span><span style="background:rgba(245,158,11,.12);padding:2px 8px;border-radius:4px;font-weight:600;font-size:10px;color:var(--gold)">Grade '+grade+'</span></div><div class="sg"><div class="si"><div class="sl">Entry</div><div class="sv '+(isBuy?'buy':'sell')+'">'+fmtPrice(entry)+'</div></div><div class="si"><div class="sl">Stop Loss</div><div class="sv sell">'+fmtPrice(sl)+'</div></div><div class="si"><div class="sl">Take Profit</div><div class="sv buy">'+fmtPrice(tp1)+'</div></div><div class="si fl"><div class="sl">Risk/Reward</div><div class="sv" style="color:var(--gold)">1:'+rr.toFixed(1)+'</div></div></div>';
+    }else{
+      sigEl.innerHTML='<div class="sig-e"><div class="si" style="font-size:16px">🔍</div><p style="font-size:11px">AI menganalisis market — sinyal berikutnya dalam beberapa menit</p></div>';
+    }
+
+    // TRADE HISTORY — from dash-stats (real execution with results)
+    var tbody=$('th-body');
+    $('th-count').textContent=(total||signals.length)+' total'+(signals.length?' ('+signals.length+' signal)':'');
+    if(trades.length){
+      var winCnt=trades.filter(function(t){var o=(t.outcome||t.result||'').toUpperCase();return o.includes('TP')||o==='WIN'}).length;
+      var lossCnt=trades.filter(function(t){var o=(t.outcome||t.result||'').toUpperCase();return o.includes('SL')||o==='LOSS'}).length;
+      var pendCnt=total-winCnt-lossCnt;
+      var totalPips=trades.reduce(function(s,t){return s+(parseFloat(t.pips)||0)},0);
+      var wrDisplay=total>0?(winCnt/total*100).toFixed(1):'--';
+      var summaryHtml='<div style="display:flex;gap:12px;padding:8px 10px;background:var(--surface);border-radius:6px;margin-bottom:6px;flex-wrap:wrap">'+
+        '<div><span style="font-size:9px;color:var(--txt2)">Total</span><div style="font-size:14px;font-weight:700">'+total+'</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">Win</span><div style="font-size:14px;font-weight:700;color:var(--green)">'+winCnt+'</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">Loss</span><div style="font-size:14px;font-weight:700;color:var(--red)">'+lossCnt+'</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">WR</span><div style="font-size:14px;font-weight:700;color:'+(parseFloat(wrDisplay)>40?'var(--green)':'var(--gold)')+'">'+wrDisplay+'%</div></div>'+
+        '<div><span style="font-size:9px;color:var(--txt2)">Pips</span><div style="font-size:14px;font-weight:700;color:'+(totalPips>=0?'var(--green)':'var(--red)')+'">'+(totalPips>=0?'+':'')+totalPips.toFixed(1)+'</div></div>'+
+        (pendCnt>0?'<div><span style="font-size:9px;color:var(--txt2)">Pending</span><div style="font-size:14px;font-weight:700;color:var(--gold)">'+pendCnt+'</div></div>':'')+
+        '</div>'+
+        '<div style="font-size:8px;color:var(--text-dim);margin-bottom:6px;padding:4px 10px">Early stage — small sample. WR improves with volume.</div>';
+      var rowsHtml=trades.slice(0,8).map(function(t){
+        var isBuy=(t.action||'').toUpperCase()==='BUY';
+        var pipStr=t.pips?fmtPips(t.pips):'--';
+        var pnlVal=t.pnl||t.profit_usd||0;
+        var result=(t.outcome||t.result||'').toUpperCase();
+        var rCls=result.includes('TP')||result==='WIN'?'rw':'rl';
+        var rIcon=result.includes('TP')?'✅':result.includes('SL')?'❌':'⏳';
+        return '<tr><td style="color:var(--txt2)">'+(t.open_time?new Date(t.open_time).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}):'--')+'</td><td class="'+(isBuy?'ab':'as')+'">'+(isBuy?'BUY':'SELL')+'</td><td>'+fmtPrice(t.entry)+'</td><td>'+fmtPrice(t.close_price||t.close||t.closePrice)+'</td><td style="font-weight:600">'+pipStr+'</td><td>'+fmtPnL(pnlVal)+'</td><td class="'+rCls+'">'+rIcon+' '+(result||'PENDING')+'</td></tr>';
+      }).join('');
+      tbody.innerHTML=summaryHtml+rowsHtml;
+    }else if(signals.length){
+      var rowsHtml=signals.slice(0).reverse().slice(0,8).map(function(s){
+        var isBuy=(s.action||'').toUpperCase()==='BUY';
+        var entry=s.entry||0;
+        var grade=s.grade||'';
+        return '<tr><td style="color:var(--txt2)">'+(s.timestamp?new Date(s.timestamp).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'}):'--')+'</td><td class="'+(isBuy?'ab':'as')+'">'+(isBuy?'BUY':'SELL')+'</td><td>'+fmtPrice(entry)+'</td><td>--</td><td>--</td><td>--</td><td class="pp">⏳ Grade '+grade+'</td></tr>';
+      }).join('');
+      var summary='<div style="font-size:9px;color:var(--text-dim);padding:8px 10px">📡 '+signals.length+' signals generated (pending execution)</div>';
+      tbody.innerHTML=summary+rowsHtml;
+    }
+
+    // Stats grid — from dash-stats aggregate
+    if(typeof wins!=='undefined'&&typeof losses!=='undefined'){
+      $('stat-wins').textContent=wins;
+      $('stat-losses').textContent=losses;
+    }
+    if(trades.length){
+      var pipsArr=trades.map(function(t){return parseFloat(t.pips)||0}).filter(function(p){return p!==0});
+      if(pipsArr.length){
+        $('stat-best').textContent=fmtPips(Math.max.apply(null,pipsArr))+' pips';
+        $('stat-worst').textContent=fmtPips(Math.min.apply(null,pipsArr))+' pips';
+      }
+      var cw=0,cl=0;
+      for(var i=0;i<trades.length;i++){
+        var r=(trades[i].outcome||trades[i].result||'').toUpperCase();
+        if(r.includes('TP')||r==='WIN'){cw++;cl=0;}
+        else if(r.includes('SL')||r==='LOSS'){cl++;cw=0;}
+      }
+      $('stat-cwin').textContent=cw;
+      $('stat-closs').textContent=cl;
+    }
+
+    // Signal Timeline
+    renderTimeline(lastTradeLog||[]);
+
+    // AI Fundamental Analysis
+    calcFundamental(xauPrice, trades);
+
+    // Server Cost Progress
+    var target=2500000, raised=0, pct=0;
+    try{
+      var pr=await fetch(BRIDGE+'/api/donations',{signal:AbortSignal.timeout(3000)});
+      var pd=await pr.json();
+      if(pd&&pd.total_raised){raised=Math.min(parseInt(pd.total_raised)||0,target);pct=Math.round(raised/target*100);}
+    }catch(e){}
+    if(raised>0){
+      $('sc-raised').textContent='Rp'+raised.toLocaleString('id-ID');
+      $('sc-pct').textContent=pct+'%';
+      $('sc-bar').style.width=pct+'%';
+    }else{
+      $('sc-raised').innerHTML='<span style="color:var(--txt2);font-size:10px" data-lang="id">AI masih tanggung sendiri</span><span class="hidden" style="color:var(--txt2);font-size:10px" data-lang="en">Self-funded by AI</span>';
+      $('sc-pct').textContent='0%';$('sc-bar').style.width='2%';$('sc-bar').style.background='var(--border)';
+    }
+  }catch(e){console.error('Fetch error:',e)}
+  firstRun=false;
+}// ─── NEWS FETCH ───
+async function fetchNews(){
+  try{
+    var r=await fetch(BRIDGE+'/api/news',{signal:AbortSignal.timeout(8000)});
+    var d=await r.json();
+    var items=d.items||[];
+    var nc=$('news-container');
+    if(items.length){
+      nc.innerHTML='<div style="display:flex;flex-direction:column;gap:6px">'+items.slice(0,8).map(function(n){
+        var dateStr='';
+        if(n.date) try{dateStr=new Date(n.date).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Jakarta'})}catch(e){}
+        return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;line-height:1.4">'+
+          '<a href="'+n.link+'" target="_blank" style="color:var(--text);text-decoration:none;font-weight:500">'+n.title+'</a>'+
+          (dateStr?'<span style="color:var(--txt2);font-size:9px;margin-left:6px">'+dateStr+'</span>':'')+
+          '</div>';
+      }).join('')+'</div>';
+    }else{
+      nc.innerHTML='<div style="color:var(--txt2);font-size:11px;padding:8px" data-lang="id">Belum ada berita</div><div style="color:var(--txt2);font-size:11px;padding:8px" class="hidden" data-lang="en">No news yet</div>';
+    }
+  }catch(e){
+    $('news-container').innerHTML='<div style="color:var(--txt2);font-size:11px;padding:8px">News unavailable</div>';
+  }
+}
+
+// ─── DIRECT PAYMENT ───
+function directPay(amount){
+  var ps=$('pay-status');
+  ps.innerHTML='⏳ Membuat invoice...';
+  fetch(BRIDGE+'/api/create-payment?amount='+amount+'&method=QRIS2',{signal:AbortSignal.timeout(10000)})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.error){ps.innerHTML='❌ '+d.error;return}
+      if(d.payment_url){
+        ps.innerHTML='✅ Invoice siap! <a href="'+d.payment_url+'" target="_blank" style="color:var(--cyan);font-weight:600">Klik bayar via QRIS/VA</a>';
+        window.open(d.payment_url,'_blank');
+      }else if(d.qr_url){
+        ps.innerHTML='✅ Scan QRIS: <br><img src="'+d.qr_url+'" style="width:140px;border-radius:8px;margin-top:6px">';
+      }
+    })
+    .catch(function(e){ps.innerHTML='❌ Gagal: '+e.message});
+}
+function directPayCustom(){
+  var amount=prompt(document.body.lang==='id'?'Masukkan nominal donasi (min Rp10.000):':'Enter donation amount (min Rp10,000):','50000');
+  if(!amount)return;
+  var n=parseInt(amount.replace(/[^0-9]/g,''));
+  if(!n||n<10000){alert('Minimal Rp10.000');return}
+  directPay(n);
+}
+
+// ─── REFRESH LOOP ───
+var countdown=5;
+function refreshLoop(){
+  Promise.all([fetchAll(), fetchEngine(), fetchCrypto(), fetchNews()]).finally(function(){
+    countdown=5;
+    var iv=setInterval(function(){
+      countdown--;
+      $('refresh-msg').textContent='Updates every '+(5-countdown)+'s';
+      if(countdown<=0){clearInterval(iv);refreshLoop()}
+    },1000);
+  });
+}
+refreshLoop();
+</script>
+</body>
+</html>
