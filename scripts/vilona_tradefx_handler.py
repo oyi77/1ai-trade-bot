@@ -1152,16 +1152,8 @@ def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlc
                     sl_invalid = False
                     reject_reason = ""
 
-                    # Check SL direction
-                    if action == "BUY" and sl >= entry:
-                        sl_invalid = True
-                        reject_reason = f"SL ({sl}) >= Entry ({entry}) → SL di atas entry untuk BUY!"
-                    elif action == "SELL" and sl <= entry:
-                        sl_invalid = True
-                        reject_reason = f"SL ({sl}) <= Entry ({entry}) → SL di bawah entry untuk SELL!"
-
                     # Check SL distance
-                    elif sl_dist < MIN_SL_DIST:
+                    if sl_dist < MIN_SL_DIST:
                         sl_invalid = True
                         reject_reason = f"SL distance ${sl_dist:.2f} < minimum ${MIN_SL_DIST:.2f}"
 
@@ -1190,6 +1182,8 @@ def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlc
                         "grade": "A" if rr >= 2.0 else "B",
                         "source": "hermes_liquidity_sweep",
                     }
+                    # Fix SL direction + clamp TP via quality gate
+                    sig = _clamp_sltp(sig, display)
                     return sig, hermes_signal.reason
         except Exception as e:
             logger.debug(f"Hermes liquidity check skipped: {e}")
@@ -1717,12 +1711,16 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
         sl_dist_pts = MAX_SL * pip_size
         clamped = True
     
-    if clamped:
+    # ── ALWAYS fix SL direction (not just when clamping distance) ──
+    direction_wrong = (action == "BUY" and sig["sl"] > entry) or (action == "SELL" and sig["sl"] < entry)
+    if clamped or direction_wrong:
         if action == "BUY":
             sig["sl"] = round(entry - sl_dist_pts, 2)
         else:
             sig["sl"] = round(entry + sl_dist_pts, 2)
         sl_pips = sl_dist_pts / pip_size
+        if direction_wrong:
+            logger.info(f"_clamp_sltp [{display}]: FIXED wrong SL direction — {action} SL now {'below' if action=='BUY' else 'above'} entry")
     
     # Recalculate TP based on clamped SL and RR
     rr = sig.get("rr_ratio", 0)
@@ -4624,6 +4622,7 @@ def auto_analyze_loop():
 
                 if mech_sig and mech_sig["action"] in ("BUY", "SELL"):
                     action = mech_sig["action"]
+                    mech_sig = _clamp_sltp(mech_sig, disp)  # enforce SL direction + bounds
                     conf = mech_sig["confidence"]
                     log_key = f"auto_{pair}"
                     log = asset_logs.get(log_key, load_signal_log(pair))
@@ -4787,6 +4786,7 @@ def auto_analyze_loop():
 
             if mech_sig and mech_sig["action"] in ("BUY", "SELL"):
                 action = mech_sig["action"]
+                mech_sig = _clamp_sltp(mech_sig, disp)  # enforce SL direction + bounds
                 conf = mech_sig["confidence"]
                 
                 # Direction stability guard — block opposite direction within 10 min
