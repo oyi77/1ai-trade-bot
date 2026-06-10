@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     DERIV_MIN_CONFIDENCE: float = 0.3
 
     # ═══════════════════════════════════════════════════════════════
+    #  ADMIN — Bot Administration
+    # ═══════════════════════════════════════════════════════════════
+
+    # Comma-separated Telegram user IDs with admin access
+    # Gets /set_share, /set_rate, /set_plan, /admin commands
+    ADMIN_USER_IDS: str = ""
+
+    # ═══════════════════════════════════════════════════════════════
     #  BROKER — Generic Broker Configuration
     # ═══════════════════════════════════════════════════════════════
 
@@ -55,7 +63,6 @@ class Settings(BaseSettings):
     BROKER_DEFAULT_STAKE: float = 0.35   # Default stake per trade
     BROKER_RECONNECT_DELAY: int = 5      # Seconds between reconnection attempts
     BROKER_RECONNECT_MAX_RETRIES: int = 10  # Max reconnection retries before giving up
-
     # ═══════════════════════════════════════════════════════════════
     #  MT5 — MetaTrader 5 Specific Settings
     # ═══════════════════════════════════════════════════════════════

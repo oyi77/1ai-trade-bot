@@ -63,8 +63,9 @@ AdminCheck = Callable[[str], bool]
 
 
 def _default_admin_check(user_id: str) -> bool:
-    admin_ids = getattr(settings, "ADMIN_USER_IDS", []) or []
-    return user_id in admin_ids
+    raw = getattr(settings, "ADMIN_USER_IDS", "") or ""
+    admin_ids = [uid.strip() for uid in raw.split(",") if uid.strip()]
+    return user_id in admin_ids or "ALL" in (uid.upper() for uid in admin_ids)
 
 
 # ── Plan Commands ─────────────────────────────────────────────────────
