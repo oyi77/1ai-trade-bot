@@ -15478,3 +15478,13 @@
 2026-06-10 10:00:25,226 [INFO] 💼 SELL @ $61255.09 | Current=$4248.80 | Est.PnL=$57006.29 | SL=$61315.09 TP=$61165.09
 2026-06-10 10:00:28,897 [INFO] 🟢 CLOSED: SELL | TP_HIT | PnL=$57006.29 | Entry=$61255.09 → Close=$4248.80
 2026-06-10 10:00:28,899 [INFO] 🎉🎉🎉 TP HIT! CUAN! 🎉🎉🎉 Server ini GRATIS — bantu dukung biaya AI: /donate | @berkahkaryaforexbotbot
+2026-06-10 12:24:21,822 [INFO] ==================================================
+2026-06-10 12:24:21,823 [INFO] EA EXECUTOR STARTED | PAPER TRADING
+2026-06-10 12:24:21,823 [INFO] Signal file: /home/openclaw/projects/1ai-trade-bot/data/vilona_tradefx/ea_signal.json
+2026-06-10 12:24:21,823 [INFO] ==================================================
+2026-06-10 12:24:21,823 [INFO] State: 0 open, 18 processed, PnL=$58623.40
+2026-06-10 12:24:50,066 [INFO] ==================================================
+2026-06-10 12:24:50,067 [INFO] EA EXECUTOR STARTED | PAPER TRADING
+2026-06-10 12:24:50,067 [INFO] Signal file: /home/openclaw/projects/1ai-trade-bot/data/vilona_tradefx/ea_signal.json
+2026-06-10 12:24:50,067 [INFO] ==================================================
+2026-06-10 12:24:50,067 [INFO] State: 0 open, 18 processed, PnL=$58623.40

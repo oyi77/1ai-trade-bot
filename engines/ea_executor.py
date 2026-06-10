@@ -22,6 +22,34 @@ LOG_DIR = PROJECT_DIR / "logs"
 SIGNAL_FILE = DATA_DIR / "ea_signal.json"
 STATE_FILE = DATA_DIR / "ea_state.json"
 
+# ── Telegram notification ──
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "@vilonaaichanel")
+TG_ENABLED = bool(TELEGRAM_BOT_TOKEN)
+
+def tg_send(text: str) -> bool:
+    """Send Telegram message to channel."""
+    if not TG_ENABLED:
+        return False
+    try:
+        payload = json.dumps({
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            return data.get("ok", False)
+    except Exception as e:
+        logger.error(f"tg_send failed: {e}")
+        return False
+
 # Same offset as bot handler — gold-api.com spot → broker price
 XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
 
@@ -86,6 +114,63 @@ def check_position(pos, price):
     return None
 
 
+def _send_trade_result(pos: dict, reason: str):
+    """Send trade result notification to Telegram channel."""
+    if not TG_ENABLED:
+        return
+    
+    action = pos.get("action", "?")
+    symbol = pos.get("symbol", "?")
+    entry = pos.get("entry", 0)
+    close_price = pos.get("close_price", 0)
+    pnl = pos.get("pnl", 0)
+    sl = pos.get("sl", 0)
+    tp = pos.get("tp", 0)
+
+    is_tp = reason == "TP_HIT"
+    emoji = "✅" if is_tp else "❌"
+    outcome_text = "TAKE PROFIT 🎯" if is_tp else "STOP LOSS 🛑"
+    pnl_sign = "+" if pnl >= 0 else ""
+    dir_emoji = "🟢" if action == "BUY" else "🔴"
+
+    # Calculate pips (XAUUSD: 0.10/pip, BTC: 1/pt, others: pip)
+    if "XAU" in symbol.upper():
+        pips = abs(entry - close_price) * 10
+    elif "BTC" in symbol.upper():
+        pips = abs(entry - close_price)
+    else:
+        pips = abs(entry - close_price) * 10000
+    
+    pips_text = f"{pips:.1f} pip" if pips < 100 else f"{pips:.0f} pip"
+
+    msg = (
+        f"{emoji} <b>TRADE CLOSED</b> — {outcome_text}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{dir_emoji} <b>{action} {symbol}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎯 Entry: <code>${entry:.2f}</code>\n"
+        f"🛑 SL: <code>${sl:.2f}</code>\n"
+        f"✅ TP: <code>${tp:.2f}</code>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💵 PnL: <b>{pnl_sign}${pnl:.2f}</b> ({pips_text})\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+
+    if is_tp:
+        msg += (
+            f"🎉 <b>CUAN! Profit secured!</b>\n"
+            f"💰 Server GRATIS — dukung biaya AI:\n"
+            f"/donate | @berkahkaryaforexbotbot\n"
+        )
+    else:
+        msg += (
+            f"🛑 SL terkena. Disiplin risk management.\n"
+            f"Next setup tunggu konfirmasi ulang.\n"
+            f"💚 Tetap semangat — /analyze untuk sinyal baru\n"
+        )
+
+    tg_send(msg)
+
 def main():
     mode = "PAPER TRADING" if DRY_RUN else "🔴 LIVE TRADING"
     logger.info("=" * 50)
@@ -131,6 +216,9 @@ def main():
                             )
                         state["closed"].append(pos)
                         state["total_pnl"] += pos["pnl"]
+                        
+                        # ── Telegram notification ──
+                        _send_trade_result(pos, reason)
                     else:
                         new_positions.append(pos)
                 state["positions"] = new_positions

@@ -28,6 +28,7 @@ from websockets.protocol import State
 
 from tradebot.config import settings
 from tradebot.models import Trade
+from tradebot.brokers.base import TradeResult, TradeStatus as BaseTradeStatus
 
 LOG = logging.getLogger("tradebot.brokers.stockity")
 
@@ -217,23 +218,25 @@ class StockityBroker:
                 "Trade placed: ref=%s %s %s $%.2f %ds",
                 ref, symbol, direction, amount, duration,
             )
-            return Trade(
+            return TradeResult(
+                platform="stockity",
                 order_id=ref,
                 symbol=symbol,
-                direction=direction.upper(),
+                direction=direction,
                 amount=amount,
                 duration=duration,
-                status=TradeStatus.PENDING.value,
+                status=BaseTradeStatus.PENDING,
             )
         except Exception as e:
             LOG.error("Trade failed: %s", e)
-            return Trade(
+            return TradeResult(
+                platform="stockity",
                 order_id="",
                 symbol=symbol,
-                direction=direction.upper(),
+                direction=direction,
                 amount=amount,
                 duration=duration,
-                status=TradeStatus.REJECTED.value,
+                status=BaseTradeStatus.REJECTED,
                 error=str(e),
             )
 

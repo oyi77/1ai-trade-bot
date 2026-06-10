@@ -1,0 +1,15 @@
+[Unit]
+Description=Vilona EA Executor — Signal Queue Paper/Live Trading
+After=network.target vilona-tradefx-bot.service
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
+EnvironmentFile=/home/openclaw/.env
+ExecStart=/usr/bin/python3 /home/openclaw/projects/1ai-trade-bot/engines/ea_executor.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
