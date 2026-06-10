@@ -124,7 +124,7 @@ class StockityBroker:
 
         self._connected = True
         LOG.info("✓ StockityBroker ready")
-        
+
     async def subscribe_ticks(self, ric: str) -> bool:
         """Subscribe to real-time price ticks (HAR format: action=subscribe)."""
         if not self._ws:
@@ -134,7 +134,7 @@ class StockityBroker:
         self._subscribed_rics.add(ric)
         LOG.info("Subscribed: %s", ric)
         return True
-    
+
     async def subscribe_asset(self, asset: str) -> None:
         """Subscribe to asset topic for majority_opinion + social_trading."""
         if not self._ws:
@@ -142,18 +142,18 @@ class StockityBroker:
         topic = f"asset:{asset}"
         await self._send_phoenix_join(topic)
         LOG.info("Subscribed to asset: %s", topic)
-    
+
     def on_tick(self, callback) -> None:
         """Register callback for real-time tick data."""
         self._tick_callbacks.append(callback)
-    
+
     def on_event(self, topic: str, event: str, callback) -> None:
         """Register handler for specific topic/event."""
         key = f"{topic}:{event}"
         if key not in self._event_handlers:
             self._event_handlers[key] = []
         self._event_handlers[key].append(callback)
-    
+
     @property
     def balance(self) -> float:
         """Current account balance in native units."""
