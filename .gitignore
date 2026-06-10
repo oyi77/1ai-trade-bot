@@ -17,7 +17,7 @@ build/
 logs/*
 !logs/.gitkeep
 
-# Data and databases
+# Runtime data (live system state — never commit)
 data/
 *.db
 *.db-shm
@@ -25,11 +25,31 @@ data/
 *.sqlite
 *.sqlite3
 
+# Bridges runtime state
+bridges/signal_bridge/engine_status.json
+bridges/signal_bridge/dashboard.html.bak
+
+# Legacy restored files (deleted in d99df1f unification)
+scripts/dashboard_server.py
+
+# AI agent scratch space
+.omo/
+.aider*
+.opencode/
+.claude/
+
+# Package manager artifacts
+uv.lock
+poetry.lock
+Pipfile.lock
+
 # Coverage and test artifacts
 .coverage
+.coverage.*
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 
 # IDE
 .vscode/
