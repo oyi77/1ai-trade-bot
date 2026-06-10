@@ -71,10 +71,17 @@ class StockityBroker:
         self._ref_counter: int = 0
         self._listener_task: asyncio.Task[None] | None = None
         self._connected: bool = False
-        # Balance tracking
-        self._balance: float = 0.0
-        self._balance_currency: str = "USD"
+        # Balance tracking (native currency, no conversion)
+        self._balance_raw: int = 0  # Raw server units
+        self._balance_currency: str = ""  # Detected dynamically
         self._balance_version: int = 0
+        self._account_type: str = ""
+        # Position tracking
+        self._open_positions: dict[str, dict] = {}  # uuid → position
+        self._closed_positions: list[dict] = []  # completed trades
+        self._total_pnl: int = 0  # Running P&L
+        self._total_wins: int = 0
+        self._total_losses: int = 0
         # Subscriptions
         self._subscribed_rics: set[str] = set()
         self._tick_callbacks: list = []
@@ -148,12 +155,43 @@ class StockityBroker:
     
     @property
     def balance(self) -> float:
-        """Current account balance."""
-        return self._balance
-    
+        """Current account balance in native units."""
+        return self._balance_raw
     @property
     def balance_currency(self) -> str:
-        """Balance currency."""
+        """Account currency (detected dynamically from balance_changed events)."""
+        return self._balance_currency
+
+    @property
+    def balance_usd(self) -> float:
+        """Estimated balance in USD (1 USD ≈ 100,000,000 units)."""
+        return self._balance_raw / 100_000_000 if self._balance_raw > 0 else 0.0
+
+    @property
+    def open_positions(self) -> list[dict]:
+        """Currently open positions."""
+        return list(self._open_positions.values())
+
+    @property
+    def closed_positions(self) -> list[dict]:
+        """Completed trades."""
+        return self._closed_positions
+
+    @property
+    def stats(self) -> dict:
+        """Trading statistics."""
+        return {
+            "balance": self._balance_raw,
+            "currency": self._balance_currency,
+            "balance_usd": self.balance_usd,
+            "open_positions": len(self._open_positions),
+            "total_trades": self._total_wins + self._total_losses,
+            "wins": self._total_wins,
+            "losses": self._total_losses,
+            "winrate": (self._total_wins / (self._total_wins + self._total_losses) * 100)
+            if (self._total_wins + self._total_losses) > 0 else 0,
+            "total_pnl_raw": self._total_pnl,
+        }
         return self._balance_currency
 
     async def _join_topic(self, topic: str) -> None:
@@ -234,46 +272,80 @@ class StockityBroker:
         event = msg.get("event", "")
         payload = msg.get("payload", {})
 
-        # Balance updates
+        # Balance updates (native currency, no conversion)
         if topic == "account" and event == "balance_changed":
-            self._balance = payload.get("balance", 0) / 100_000_000
-            self._balance_currency = payload.get("currency", "USD")
+            self._balance_raw = payload.get("balance", 0)
+            self._balance_currency = payload.get("currency", "")
             self._balance_version = payload.get("balance_version", 0)
-            LOG.info("Balance: %.2f %s", self._balance, self._balance_currency)
+            self._account_type = payload.get("account_type", "")
+            LOG.info("Balance: %.0f %s (v%d)", self._balance_raw, self._balance_currency, self._balance_version)
 
-        # Real-time tick data (untagged messages with "data" field)
+        # Real-time tick data
         if not topic and "data" in msg:
-            data = msg.get("data", [])
-            for item in data:
+            for item in msg.get("data", []):
                 if "assets" in item:
                     for asset in item["assets"]:
                         tick = {
-                            "rate": asset.get("rate"),
-                            "ask": asset.get("ask"),
-                            "bid": asset.get("bid"),
-                            "time": asset.get("sent_at"),
+                            "rate": asset.get("rate"), "ask": asset.get("ask"),
+                            "bid": asset.get("bid"), "time": asset.get("sent_at"),
                         }
                         for cb in self._tick_callbacks:
-                            try:
-                                cb(tick)
-                            except Exception:
-                                pass
+                            try: cb(tick)
+                            except Exception: pass
             return
 
-        # Event handlers
+        # Event handlers (user-registered)
         key = f"{topic}:{event}"
         for handler in self._event_handlers.get(key, []):
-            try:
-                handler(msg)
-            except Exception:
-                pass
+            try: handler(msg)
+            except Exception: pass
 
-        # Trade events
+        # Position tracking
         if topic == "bo":
             if event == "opened":
-                LOG.info("Trade opened: %s", payload)
+                uuid = payload.get("uuid", "")
+                self._open_positions[uuid] = {
+                    "id": payload.get("id"), "uuid": uuid,
+                    "option_type": payload.get("option_type"),
+                    "trend": payload.get("trend"),
+                    "amount": payload.get("amount"),
+                    "open_rate": payload.get("open_rate"),
+                    "payment_rate": payload.get("payment_rate"),
+                    "potential_payout": payload.get("payment"),
+                    "open_time": payload.get("created_at"),
+                    "close_time": payload.get("close_quote_created_at"),
+                }
+                LOG.info("Opened: #%s %s %s", payload.get("id"), payload.get("option_type"), payload.get("trend"))
+
             elif event == "closed":
-                LOG.info("Trade closed: %s", payload)
+                uuid = payload.get("uuid", "")
+                pos = self._open_positions.pop(uuid, {})
+                result = {
+                    "uuid": uuid, "option_type": payload.get("option_type"),
+                    "trend": payload.get("trend"),
+                    "amount": payload.get("amount"),
+                    "status": payload.get("status"),
+                    "win": payload.get("win", 0),
+                    "end_rate": payload.get("end_rate"),
+                    "open_time": payload.get("created_at"),
+                    "close_time": payload.get("finished_at"),
+                    **pos,
+                }
+                self._closed_positions.append(result)
+                if payload.get("status") == "won":
+                    self._total_wins += 1
+                    self._total_pnl += payload.get("win", 0)
+                else:
+                    self._total_losses += 1
+                    self._total_pnl -= payload.get("amount", 0)
+                LOG.info("Closed: %s win=%s P&L=%d", payload.get("status"), payload.get("win"), self._total_pnl)
+
+            elif event == "close_deal_batch":
+                for deal in payload.get("deals", []):
+                    uuid = deal.get("uuid", "")
+                    self._open_positions.pop(uuid, None)
+
+        # Error handling
         elif event == "phx_reply":
             if payload.get("status") == "error":
                 LOG.error("Phoenix error on %s: %s", topic, payload.get("response"))
