@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import logging
 from contextlib import suppress
 from enum import StrEnum
@@ -205,16 +205,28 @@ class StockityBroker:
         if not self._connected:
             await self.connect()
 
+        # HAR format: expire_at is the next 30-minute boundary (Unix timestamp in seconds)
+        now = datetime.now(timezone.utc)
+        now_ms = int(now.timestamp() * 1000)
+        # Round up to next 30-minute boundary
+        minute = now.minute
+        next_30 = ((minute // 30) + 1) * 30
+        if next_30 >= 60:
+            expire_dt = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        else:
+            expire_dt = now.replace(minute=next_30, second=0, microsecond=0)
+        expire_ts = int(expire_dt.timestamp())
+        
         payload = {
             "ric": _symbol_to_ric(symbol),
-            "direction": direction.lower(),
-            "amount": int(amount * 100),  # Convert to cents (integer)
-            "duration": duration,
-            "type": "binary",
-            "trend": direction.lower(),  # Required by Phoenix
-            "deal_type": "buy",  # Required
-            "option_type": "binary",  # Required
-            "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "amount": int(amount * 100000000),  # HAR shows 7400000000 for $74
+            "created_at": now_ms,
+            "deal_type": "demo",
+            "expire_at": expire_ts,  # Unix timestamp (seconds)
+            "option_type": "binary",
+            "trend": direction.lower(),
+            "tournament_id": None,
+            "is_state": False,
         }
 
         try:
