@@ -1844,6 +1844,10 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             entry = round(entry + offset, 2)
             if sl: sl = round(sl + offset, 2)
             if tp: tp = round(tp + offset, 2)
+            if tp1: tp1 = round(tp1 + offset, 2)
+            if tp2: tp2 = round(tp2 + offset, 2)
+            if tp3: tp3 = round(tp3 + offset, 2)
+            if tp4: tp4 = round(tp4 + offset, 2)
 
     # Generate TP levels if only single TP provided
     if not tp1 and tp > 0 and entry > 0:
