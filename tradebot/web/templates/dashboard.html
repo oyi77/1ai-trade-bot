@@ -19,8 +19,13 @@
                 <a href="/plans" class="text-gray-300 hover:text-white transition">Plans</a>
                 <a href="/whitelabels" class="text-gray-300 hover:text-white transition">Whitelabels</a>
             </div>
-            <div class="text-sm text-gray-500">
-                {% if admin_ids %}Admin: {{ admin_ids }}{% else %}No admin configured{% endif %}
+            <div class="flex items-center gap-4">
+                <div class="text-sm text-gray-400">
+                    <span class="text-gray-500">Admin:</span> <span class="font-mono text-gray-300">{{ admin_ids }}</span>
+                </div>
+                <a href="/logout" class="text-sm text-red-400 hover:text-red-300 transition font-semibold">
+                    Logout
+                </a>
             </div>
         </div>
     </nav>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - 1ai-trade-bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .login-container {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        }
+        .login-card {
+            @apply bg-gray-800 rounded-2xl shadow-2xl border border-gray-700;
+        }
+        .input-field {
+            @apply bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition;
+        }
+        .btn-login {
+            @apply w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-lg transition duration-200 transform hover:scale-105;
+        }
+        .error-msg {
+            @apply text-red-400 text-sm mt-2 text-center;
+        }
+        .success-fade {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="login-container min-h-screen flex items-center justify-center p-4">
+    <div class="login-card w-full max-w-md p-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-emerald-400 mb-2">📡 1ai-trade-bot</h1>
+            <p class="text-gray-400">Admin Dashboard Login</p>
+        </div>
+
+        <!-- Login Form -->
+        <form method="POST" action="/login" class="space-y-6">
+            <!-- User ID Input -->
+            <div>
+                <label class="block text-gray-300 text-sm font-semibold mb-2">
+                    Telegram User ID
+                </label>
+                <input
+                    type="text"
+                    name="user_id"
+                    class="input-field"
+                    placeholder="Enter your Telegram user ID"
+                    required
+                    autofocus
+                />
+                <p class="text-gray-500 text-xs mt-2">
+                    Get your ID from <a href="https://t.me/userinfobot" target="_blank" class="text-emerald-400 hover:underline">@userinfobot</a>
+                </p>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn-login">
+                Sign In
+            </button>
+        </form>
+
+        <!-- Error Message (if any) -->
+        {% if error %}
+        <div class="error-msg">
+            ❌ {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Info -->
+        <div class="mt-8 pt-8 border-t border-gray-700">
+            <p class="text-gray-500 text-xs text-center">
+                Only users with admin privileges can access this dashboard.
+            </p>
+            <p class="text-gray-600 text-xs text-center mt-2">
+                Session expires after 30 days of inactivity.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
