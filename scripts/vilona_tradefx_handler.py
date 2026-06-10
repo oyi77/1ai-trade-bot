@@ -4994,7 +4994,8 @@ def _compute_daily_recap() -> str | None:
         hist_file = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
         if hist_file.exists():
             all_trades = json.loads(hist_file.read_text()).get("trades", [])
-            today_trades = [t for t in all_trades if str(t.get("date","") or t.get("timestamp",""))[:8] == today_str]
+            today_trades = [t for t in all_trades 
+                          if str(t.get("open_time", t.get("close_time", "")))[:10] == today.strftime("%Y-%m-%d")]
     except Exception:
         pass
     
@@ -5008,11 +5009,11 @@ def _compute_daily_recap() -> str | None:
         wins = 0; losses = 0; pips = 0.0
         for t in today_trades:
             if t.get("symbol", "").upper() == disp:
-                result = t.get("result", "").upper()
-                if result == "TP":
+                outcome = t.get("outcome", "").upper()
+                if outcome == "TP_HIT":
                     wins += 1
                     pips += abs(float(t.get("pips", 0) or 0))
-                elif result == "SL":
+                elif outcome == "SL_HIT":
                     losses += 1
                     pips -= abs(float(t.get("pips", 0) or 0))
         
@@ -5052,8 +5053,8 @@ def _compute_weekly_report() -> str | None:
     lines.append(f"📅 {now.strftime('%d %b %Y')}")
     lines.append("")
     
-    today_str = now.strftime("%Y%m%d")
-    week_start = (now - __import__("datetime").timedelta(days=now.weekday())).strftime("%Y%m%d")
+    today_iso = now.strftime("%Y-%m-%d")
+    week_start = (now - __import__("datetime").timedelta(days=now.weekday())).strftime("%Y-%m-%d")
     
     # Load this week's trades
     week_trades = []
@@ -5062,7 +5063,7 @@ def _compute_weekly_report() -> str | None:
         if hist_file.exists():
             all_trades = json.loads(hist_file.read_text()).get("trades", [])
             week_trades = [t for t in all_trades 
-                          if week_start <= str(t.get("date","") or t.get("timestamp",""))[:8] <= today_str]
+                          if week_start <= str(t.get("open_time", t.get("close_time", "")))[:10] <= today_iso]
     except Exception:
         pass
     
@@ -5078,11 +5079,11 @@ def _compute_weekly_report() -> str | None:
         wins = 0; losses = 0; pips = 0.0
         for t in week_trades:
             if t.get("symbol", "").upper() == disp:
-                result = t.get("result", "").upper()
-                if result == "TP":
+                outcome = t.get("outcome", "").upper()
+                if outcome == "TP_HIT":
                     wins += 1
                     pips += abs(float(t.get("pips", 0) or 0))
-                elif result == "SL":
+                elif outcome == "SL_HIT":
                     losses += 1
                     pips -= abs(float(t.get("pips", 0) or 0))
         
