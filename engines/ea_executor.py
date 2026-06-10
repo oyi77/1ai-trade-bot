@@ -142,7 +142,6 @@ def _send_trade_result(pos: dict, reason: str):
         pips = abs(entry - close_price) * 10000
     
     pips_text = f"{pips:.1f} pip" if pips < 100 else f"{pips:.0f} pip"
-
     msg = (
         f"{emoji} <b>TRADE CLOSED</b> — {outcome_text}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -152,7 +151,7 @@ def _send_trade_result(pos: dict, reason: str):
         f"🛑 SL: <code>${sl:.2f}</code>\n"
         f"✅ TP: <code>${tp:.2f}</code>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💵 PnL: <b>{pnl_sign}${pnl:.2f}</b> ({pips_text})\n"
+        f"📉 {pips_text} (SL {abs(entry-sl):.2f})\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
     )
 
