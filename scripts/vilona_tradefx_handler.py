@@ -4423,6 +4423,35 @@ def auto_analyze_loop():
         return prev["action"] == action
     # ── Persistent mapping tracker (survives restarts) ──
     MAPPING_TRACKER = DATA_DIR / ".last_mapping_date"
+    # ── Daily Loss Counter (global, survives restarts) ──
+    DAILY_LOSS_FILE = DATA_DIR / ".daily_loss_count"
+    DAILY_LOSS_DATE = DATA_DIR / ".daily_loss_date"
+
+    def _get_daily_loss_count():
+        today = wib_now().strftime("%Y-%m-%d")
+        try:
+            saved_date = DAILY_LOSS_DATE.read_text().strip()
+            if saved_date != today:
+                DAILY_LOSS_FILE.write_text("0")
+                DAILY_LOSS_DATE.write_text(today)
+                return 0
+            return int(DAILY_LOSS_FILE.read_text().strip() or "0")
+        except:
+            return 0
+
+    def _increment_daily_loss():
+        today = wib_now().strftime("%Y-%m-%d")
+        try:
+            saved_date = DAILY_LOSS_DATE.read_text().strip()
+            if saved_date != today:
+                DAILY_LOSS_FILE.write_text("1")
+                DAILY_LOSS_DATE.write_text(today)
+                return 1
+            current = int(DAILY_LOSS_FILE.read_text().strip() or "0") + 1
+            DAILY_LOSS_FILE.write_text(str(current))
+            return current
+        except:
+            return 1
     def _get_last_mapping():
         try:
             return MAPPING_TRACKER.read_text().strip()
@@ -4437,6 +4466,13 @@ def auto_analyze_loop():
             h = now.hour
             weekday = now.weekday()
             today_str = now.strftime("%Y%m%d")
+
+            # ── DAILY MAX LOSS CIRCUIT BREAKER (3 losses = STOP all signals) ──
+            daily_losses = _get_daily_loss_count()
+            if daily_losses >= 3:
+                logger.warning(f"⛔ CIRCUIT BREAKER: {daily_losses}/3 losses today — STOPPED")
+                time.sleep(600)
+                continue
 
             # ── WEEKEND GATE ──
             if is_weekend():
@@ -4642,6 +4678,10 @@ def auto_analyze_loop():
                             trade_id = ct.get("id", ct.get("trade_id", ""))
                             if trade_id and not _can_post_tpsl_alert(str(trade_id)):
                                 continue
+                            # Increment daily loss counter on SL
+                            if ct.get("outcome") == "SL_HIT":
+                                new_count = _increment_daily_loss()
+                                logger.warning(f"⛔ SL HIT — daily losses: {new_count}/3")
                             # Send to channel (text only — buttons gak work di channel)
                             alert_text = format_trade_close_alert(ct)
                             send_to_channel(alert_text)
