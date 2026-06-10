@@ -1,5 +1,20 @@
 {
-  "positions": [],
+  "positions": [
+    {
+      "id": "ea_1781082061447",
+      "action": "SELL",
+      "symbol": "USOIL",
+      "entry": 87.67,
+      "sl": 87.82,
+      "tp": 87.44,
+      "tp1": 87.44,
+      "tp2": 87.22,
+      "confidence": 0.8,
+      "source": "vtfx",
+      "open_time": "2026-06-10T16:01:01.447620+07:00",
+      "status": "OPEN"
+    }
+  ],
   "closed": [
     {
       "id": "ea_1780670587739",
@@ -320,6 +335,6 @@
     }
   ],
   "total_pnl": 54436.270000000004,
-  "signals_processed": 19,
-  "last_signal_id": "SELL_88.17"
+  "signals_processed": 20,
+  "last_signal_id": "SELL_87.67"
 }

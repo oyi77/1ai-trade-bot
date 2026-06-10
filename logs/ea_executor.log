@@ -15493,3 +15493,6 @@
 2026-06-10 14:15:10,176 [INFO] 💼 SELL @ $88.17 | Current=$4273.60 | Est.PnL=$-4185.43 | SL=$88.32 TP=$87.94
 2026-06-10 14:15:13,919 [INFO] 🔴 CLOSED: SELL | SL_HIT | PnL=$-4187.13 | Entry=$88.17 → Close=$4275.30
 2026-06-10 15:26:29,043 [ERROR] Error: '>' not supported between instances of 'str' and 'int'
+2026-06-10 16:01:01,447 [INFO] 📝 PAPER: SELL USOIL @ $87.67 | SL=$87.82 TP=$87.44 | conf=80% RR=1:0.0 | vtfx
+2026-06-10 16:01:01,448 [INFO] ✅ POSITION OPEN: SELL @ $87.67
+2026-06-10 16:01:01,448 [INFO] 💼 SELL @ $87.67 | Current=$4244.10 | Est.PnL=$-4156.43 | SL=$87.82 TP=$87.44

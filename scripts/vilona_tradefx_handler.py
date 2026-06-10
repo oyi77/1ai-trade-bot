@@ -4685,6 +4685,7 @@ def main():
             {"command": "analyze",  "description": "🧠 Perintahkan AI Scan Market"},
             {"command": "price",    "description": "💰 Cek harga real-time"},
             {"command": "mapping",  "description": "📐 Mapping harian + level S/R"},
+            {"command": "levels",   "description": "🏛 SnR + FIBO + Engine (Donor)"},
             {"command": "killzone", "description": "🎯 Radar sesi market aktif"},
             {"command": "donate",   "description": "⚡ Isi Bahan Bakar AI"},
             {"command": "status",   "description": "🛡 Cek Kuota & Akses VIP"},
