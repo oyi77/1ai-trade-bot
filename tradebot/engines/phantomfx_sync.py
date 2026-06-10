@@ -41,7 +41,7 @@ MEMBERS_DB = DATA_DIR / "members.db"
 import os  # noqa: E402
 DEFAULT_WEBHOOK_URL = os.environ.get(
     "PHANTOMFX_WEBHOOK_URL",
-    "https://phantomfx.aitradepulse.com/api/webhook/snapshot"
+    "http://127.0.0.1:8768/api/webhook/snapshot"
 )
 
 
