@@ -49,6 +49,17 @@ RATE_COUNTERS = defaultdict(list)  # api_key → [timestamps]
 # ── Connected accounts tracker (multi-MT5 support) ──
 CONNECTED_ACCOUNTS = {}  # api_key → {last_seen, ip, signals_polled, first_seen, label}
 
+# ── Smart Trailing State ──
+TRAIL_CONFIG = defaultdict(lambda: {  # instance_id → trailing config
+    "enabled": False,
+    "mode": "basic",        # "basic" | "smc-swing" | "off"
+    "trail_pips": 15,       # distance behind price
+    "breakeven_pips": 10,   # trigger to move SL to entry
+    "step_pips": 5,         # min improvement before updating SL
+})
+TRAILED_POSITIONS = {}  # instance_id → {signal_id, entry, current_sl, direction, tp, timestamp}
+TRAIL_CONFIG_FILE = os.path.join(PROJECT_DIR, "data", "vilona_tradefx", "trailing_config.json")
+
 _keys_cache = None
 _keys_cache_time = 0
 
@@ -218,6 +229,7 @@ class SignalHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path, params = self._get_params()
         api_key = params.get("api_key", [""])[0]
+        account_id = params.get("account_id", [None])[0]
 
         if path == "/health":
             self._json({
@@ -564,6 +576,48 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self._text("Forbidden", 403)
                 return
             self._json({"api_key": "VT-MASTER-734AD731F5FB"})
+        elif path == "/trailing":
+            # GET: view trailing config | POST: update trailing config
+            instance_id = f"{api_key}:{account_id}" if (api_key and account_id) else None
+            if not instance_id:
+                self._json({"error": "api_key and account_id required"}, 400)
+                return
+            is_valid, _ = validate_key(api_key)
+            if not is_valid:
+                self._json({"error": "invalid_api_key"}, 401)
+                return
+
+            if self.command == "GET":
+                cfg = dict(TRAIL_CONFIG[instance_id])
+                pos = TRAILED_POSITIONS.get(instance_id)
+                cfg["active_position"] = pos is not None
+                if pos:
+                    cfg["position_preview"] = {
+                        "entry": pos["entry"], "sl": pos["current_sl"],
+                        "direction": pos["direction"], "age_sec": int(time.time() - pos["timestamp"])
+                    }
+                self._json(cfg)
+            elif self.command == "POST":
+                length = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(length) if length else b"{}"
+                try:
+                    body = json.loads(raw)
+                except json.JSONDecodeError:
+                    self._json({"error": "invalid json"}, 400)
+                    return
+                with LOCK:
+                    if "enabled" in body:
+                        TRAIL_CONFIG[instance_id]["enabled"] = bool(body["enabled"])
+                    if "mode" in body:
+                        TRAIL_CONFIG[instance_id]["mode"] = body["mode"]
+                    if "trail_pips" in body:
+                        TRAIL_CONFIG[instance_id]["trail_pips"] = int(body["trail_pips"])
+                    if "breakeven_pips" in body:
+                        TRAIL_CONFIG[instance_id]["breakeven_pips"] = int(body["breakeven_pips"])
+                    if "step_pips" in body:
+                        TRAIL_CONFIG[instance_id]["step_pips"] = int(body["step_pips"])
+                _save_trail_config()
+                self._json({"status": "ok", "config": dict(TRAIL_CONFIG[instance_id])})
         elif path == "/api/donations":
             """Return total donations from payment orders."""
             try:
@@ -650,6 +704,7 @@ class SignalHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         path, params = self._get_params()
         api_key = params.get("api_key", [""])[0]
+        account_id = params.get("account_id", [None])[0]
 
         if path == "/signal":
             length = int(self.headers.get("Content-Length", 0))
@@ -686,6 +741,9 @@ class SignalHandler(BaseHTTPRequestHandler):
             }
 
             broadcast_count = 0
+            _entry = data.get("entry", 0)
+            _sl = data.get("sl", 0)
+            _tp = data.get("tp", 0)
 
             # ── Content-based dedup (60s TTL) ──
             dedup_key = f"{action}|{symbol}|{data.get('entry',0)}|{data.get('sl',0)}|{data.get('tp',0)}"
@@ -726,6 +784,13 @@ class SignalHandler(BaseHTTPRequestHandler):
                         acct_signal["_for_instance"] = instance_id
                         PENDING_BY_INSTANCE[instance_id].append(acct_signal)
                         broadcast_count += 1
+                        # ── Track for smart trailing ──
+                        if action in ("BUY", "SELL") and TRAIL_CONFIG[instance_id]["enabled"]:
+                            TRAILED_POSITIONS[instance_id] = {
+                                "signal_id": sig_id, "entry": _entry,
+                                "current_sl": _sl, "direction": action,
+                                "tp": _tp, "timestamp": time.time()
+                            }
                     log.info(f"📡 Instance broadcast ({broadcast_api_key}): {broadcast_count} instance(s)")
                     # Also queue to global fallback so newly-connecting instances get it
                     PENDING.append(signal)
@@ -761,6 +826,37 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "broadcast_count": broadcast_count,
                 "mode": "broadcast" if broadcast_count > 0 else "queued",
             })
+
+        elif path == "/trailing":
+            # POST trailing config (bridge-side handler)
+            instance_id = f"{api_key}:{account_id}" if (api_key and account_id) else None
+            if not instance_id:
+                self._json({"error": "api_key and account_id required"}, 400)
+                return
+            is_valid, _ = validate_key(api_key)
+            if not is_valid:
+                self._json({"error": "invalid_api_key"}, 401)
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                body = json.loads(raw)
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+            with LOCK:
+                if "enabled" in body:
+                    TRAIL_CONFIG[instance_id]["enabled"] = bool(body["enabled"])
+                if "mode" in body:
+                    TRAIL_CONFIG[instance_id]["mode"] = body["mode"]
+                if "trail_pips" in body:
+                    TRAIL_CONFIG[instance_id]["trail_pips"] = int(body["trail_pips"])
+                if "breakeven_pips" in body:
+                    TRAIL_CONFIG[instance_id]["breakeven_pips"] = int(body["breakeven_pips"])
+                if "step_pips" in body:
+                    TRAIL_CONFIG[instance_id]["step_pips"] = int(body["step_pips"])
+            _save_trail_config()
+            self._json({"status": "ok", "config": dict(TRAIL_CONFIG[instance_id])})
 
         elif path.startswith("/ack/"):
             signal_id = path.split("/ack/", 1)[1]
@@ -931,6 +1027,126 @@ if __name__ == "__main__":
     log.info(f"  Gen key:     POST /admin/generate-key (localhost only)")
     log.info(f"  EA download: GET  /download/ea or /ea/download")
     log.info(f"  Accounts:    GET  /accounts (instance-level detail)")
+    log.info(f"  Trailing:    GET/POST /trailing?api_key=VT-xxx&account_id=MT5-12345")
+
+    # ── Trailing config persistence ──
+    def _save_trail_config():
+        try:
+            os.makedirs(os.path.dirname(TRAIL_CONFIG_FILE), exist_ok=True)
+            serializable = {k: dict(v) for k, v in TRAIL_CONFIG.items()}
+            with open(TRAIL_CONFIG_FILE, 'w') as f:
+                json.dump(serializable, f, indent=2)
+        except Exception as e:
+            log.error(f"Failed to save trail config: {e}")
+
+    def _load_trail_config():
+        try:
+            if os.path.exists(TRAIL_CONFIG_FILE):
+                with open(TRAIL_CONFIG_FILE) as f:
+                    data = json.load(f)
+                    for k, v in data.items():
+                        for key, val in v.items():
+                            TRAIL_CONFIG[k][key] = val
+                log.info(f"📂 Loaded trailing config: {len(data)} instance(s)")
+        except Exception as e:
+            log.error(f"Failed to load trail config: {e}")
+
+    _load_trail_config()
+
+    def trailing_engine():
+        """Background thread: monitor XAUUSD price and trail SL for active positions."""
+        log.info("🎯 Trailing engine started (10s cycle)")
+        while True:
+            time.sleep(10)
+            try:
+                # Fetch live XAUUSD price
+                req = urllib.request.Request(
+                    "https://api.gold-api.com/price/XAU",
+                    headers={"User-Agent": "VilonaTrailing/1.0"}
+                )
+                resp = urllib.request.urlopen(req, timeout=8)
+                price_data = json.loads(resp.read())
+                bid = price_data.get("price", 0)
+                if not bid or bid < 1000:
+                    continue
+
+                with LOCK:
+                    for instance_id, pos in list(TRAILED_POSITIONS.items()):
+                        cfg = TRAIL_CONFIG[instance_id]
+                        if not cfg["enabled"]:
+                            continue
+
+                        entry = pos["entry"]
+                        current_sl = pos["current_sl"]
+                        direction = pos["direction"]
+                        tp = pos["tp"]
+
+                        if direction == "BUY":
+                            profit_pips = (bid - entry) / 0.10
+                            new_sl = bid - cfg["trail_pips"] * 0.10
+                            breakeven_hit = profit_pips >= cfg["breakeven_pips"]
+                        else:  # SELL
+                            profit_pips = (entry - bid) / 0.10
+                            new_sl = bid + cfg["trail_pips"] * 0.10
+                            breakeven_hit = profit_pips >= cfg["breakeven_pips"]
+
+                        sl_improvement = 0
+                        if direction == "BUY" and new_sl > current_sl:
+                            sl_improvement = (new_sl - current_sl) / 0.10
+                        elif direction == "SELL" and new_sl < current_sl:
+                            sl_improvement = (current_sl - new_sl) / 0.10
+
+                        # Only update if breakeven hit AND SL improved by step_pips
+                        if breakeven_hit and sl_improvement >= cfg["step_pips"]:
+                            # Don't trail past TP
+                            if (direction == "BUY" and new_sl >= tp) or (direction == "SELL" and new_sl <= tp):
+                                continue
+
+                            # Move SL to breakeven on first hit
+                            if current_sl < entry if direction == "BUY" else current_sl > entry:
+                                # Not yet at breakeven — move SL to entry
+                                target_sl = entry
+                            else:
+                                target_sl = round(new_sl, 2)
+
+                            pos["current_sl"] = target_sl
+                            log.info(f"🎯 TRAIL: {instance_id} | {direction} | "
+                                    f"SL {current_sl:.2f}→{target_sl:.2f} | "
+                                    f"profit={profit_pips:.1f}pip")
+
+                            # Push trailing update signal to instance queue
+                            trail_sig = {
+                                "signal_id": pos["signal_id"],
+                                "symbol": "XAUUSD",
+                                "action": direction,  # BUY/SELL for SL update
+                                "entry": entry,
+                                "sl": target_sl,
+                                "tp": tp,
+                                "tp1": tp, "tp2": 0,
+                                "risk_percent": 0,
+                                "confidence": 100,
+                                "rr_ratio": 0,
+                                "comment": f"TRAIL|breakeven={profit_pips:.0f}pip",
+                                "source": "trailing_engine",
+                                "timestamp": time.time(),
+                                "status": "trailing",
+                                "layers": [],
+                                "_for_instance": instance_id,
+                            }
+                            PENDING_BY_INSTANCE[instance_id].append(trail_sig)
+
+                # Cleanup orphaned positions (instance gone > 5 min)
+                now = time.time()
+                orphaned = [iid for iid in TRAILED_POSITIONS
+                           if now - TRAILED_POSITIONS[iid]["timestamp"] > 3600]
+                for iid in orphaned:
+                    del TRAILED_POSITIONS[iid]
+
+            except Exception as e:
+                log.error(f"Trailing engine error: {e}")
+
+    trail_thread = threading.Thread(target=trailing_engine, daemon=True)
+    trail_thread.start()
     log.info(f"  Instances:   {len(INSTANCES)} active | Master keys: {len(MASTER_INSTANCES)}")
 
     def cleanup_stale_instances():

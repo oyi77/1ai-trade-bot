@@ -1034,6 +1034,31 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
         logger.warning("Failed to post signal to any bridge URL")
 
 
+# ── SMART TRAILING HELPERS ──
+def _get_trailing_status(chat_id):
+    """Query bridge for trailing config via GET /trailing?api_key=VT-xxx&account_id=MT5-xxx"""
+    try:
+        import urllib.request as ureq
+        # Use the first bridge URL and the master key for query
+        url = f"http://localhost:8765/trailing?api_key={MASTER_API_KEY}&account_id=MT5-{chat_id}"
+        resp = ureq.urlopen(url, timeout=5)
+        return json.loads(resp.read())
+    except Exception:
+        return None
+
+def _set_trailing(chat_id, enabled=True):
+    """POST trailing config to bridge."""
+    try:
+        import urllib.request as ureq
+        url = f"http://localhost:8765/trailing?api_key={MASTER_API_KEY}&account_id=MT5-{chat_id}"
+        payload = json.dumps({"enabled": enabled}).encode()
+        req = ureq.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        ureq.urlopen(req, timeout=5)
+        logger.info(f"Trailing {'ON' if enabled else 'OFF'} for chat_id={chat_id}")
+    except Exception as e:
+        logger.error(f"Failed to set trailing: {e}")
+
+
 # ── MECHANICAL SIGNAL DETECTION ──
 def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=None):
     """Mechanical signal: Quant + FVG + Hermes → fire without AI consensus."""
@@ -2879,6 +2904,59 @@ def handle_command(cmd, text, chat_id, msg):
             except Exception as e:
                 logger.error(f"/testbridge error: {e}")
                 tg_send(f"❌ /testbridge gagal: {e}", chat_id)
+
+    elif cmd == "/trailing":
+        # ── Smart Trailing config (per user/account) ──
+        args_raw = text.strip()
+        parts = args_raw.split()
+        sub = parts[1] if len(parts) > 1 else ""
+
+        if sub == "on":
+            _set_trailing(chat_id, True)
+            tg_send("🎯 <b>Smart Trailing: ON</b>\n"
+                    "Bridge akan auto-trail SL setiap +10 pip profit.\n"
+                    "Breakeven: SL → entry setelah +10 pip.\n"
+                    "Trail distance: 15 pip di belakang harga.", chat_id)
+        elif sub == "off":
+            _set_trailing(chat_id, False)
+            tg_send("⏸ <b>Smart Trailing: OFF</b>", chat_id)
+        elif sub == "status":
+            cfg = _get_trailing_status(chat_id)
+            if not cfg:
+                tg_send("⚠️ Akun belum terhubung ke bridge.\nGunakan /trailing on untuk mengaktifkan.", chat_id)
+            else:
+                pos_text = ""
+                if cfg.get("active_position"):
+                    p = cfg["position_preview"]
+                    pos_text = (f"\n━━━━━━━━━━━━━━━━\n"
+                              f"📊 <b>Posisi Aktif:</b> {p['direction']} @ {p['entry']}\n"
+                              f"SL saat ini: {p['sl']} | Umur: {p['age_sec']}s")
+                tg_send(
+                    f"🎯 <b>Trailing Status</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"Status: {'✅ ON' if cfg.get('enabled') else '❌ OFF'}\n"
+                    f"Mode: {cfg.get('mode', 'basic')}\n"
+                    f"Breakeven setelah: +{cfg.get('breakeven_pips', 10)} pip\n"
+                    f"Trail distance: {cfg.get('trail_pips', 15)} pip\n"
+                    f"Step minimum: {cfg.get('step_pips', 5)} pip\n"
+                    f"Posisi: {'Ada' if cfg.get('active_position') else 'Tidak ada'}"
+                    f"{pos_text}\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"<i>Gunakan /trailing on|off|status</i>",
+                    chat_id
+                )
+        else:
+            tg_send(
+                "🎯 <b>Smart Trailing Menu</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "/trailing on — Aktifkan auto-trailing\n"
+                "/trailing off — Matikan trailing\n"
+                "/trailing status — Lihat status & posisi\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "<i>Trailing SL otomatis setelah profit > breakeven.\n"
+                "Bridge update SL setiap 10 detik ke EA kamu.</i>",
+                chat_id
+            )
 
     elif cmd == "/status":
         # Weekend indicator
