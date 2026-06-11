@@ -2170,7 +2170,7 @@ def fmt_pulse(pulse_data: dict) -> str:
 
 # ── Quant Consensus UI helper ──
 def append_quant_consensus_ui(sig, quant_result, disp="XAUUSD"):
-    """Injects Quant Consensus block + guardrail into formatted signal text.
+    """Injects Quant Consensus block + guardrail — human-readable, no G/R/D jargon.
     Returns (quant_block: str, guardrail_warnings: list[str])."""
     if not quant_result or quant_result.get("error"):
         return "", []
@@ -2185,38 +2185,50 @@ def append_quant_consensus_ui(sig, quant_result, disp="XAUUSD"):
     series_len = quant_result.get("series_length", 0)
     pattern_size = quant_result.get("pattern_size", 5)
 
-    # Build quant consensus block
-    verdict_emoji = {
-        "BUY_BIAS_HISTORICAL": "🟢", "SELL_BIAS_HISTORICAL": "🔴",
-        "NEUTRAL_HISTORICAL": "⚪️", "NO_HISTORICAL_MATCH": "⚠️",
-        "INSUFFICIENT_DATA": "⏳"
-    }.get(verdict, "⚪️")
+    # ── Visual bar: proportional █ blocks (max 20 blocks) ──
+    def _bar(pct):
+        n = min(20, round(pct / 5))
+        return "█" * n + "░" * (20 - n)
+
+    # ── Simple verdict in plain Indonesian ──
+    verdict_text = {
+        "BUY_BIAS_HISTORICAL": f"📈 <b>Historis cenderung NAIK</b> — {green_pct:.0f}% kejadian serupa lanjut bullish",
+        "SELL_BIAS_HISTORICAL": f"📉 <b>Historis cenderung TURUN</b> — {red_pct:.0f}% kejadian serupa lanjut bearish",
+        "NEUTRAL_HISTORICAL": "➖ <b>Historis gak jelas arah</b> — terlalu banyak sideways",
+        "NO_HISTORICAL_MATCH": "⚠️ <b>Pola ini baru pertama kali</b> — belum ada data pembanding",
+        "INSUFFICIENT_DATA": "⏳ <b>Data belum cukup</b> — butuh minimal 15 candle",
+    }.get(verdict, "⚪ Data tidak tersedia")
 
     block = (
         f"\n━━━━━━━━━━━━━━━━\n"
-        f"📐 <b>Quant Consensus</b> [{series_len} bars, {pattern_size}-candle pattern]\n"
-        f"{verdict_emoji} {verdict.replace('_',' ')} | {match_count} matches found\n"
-        f"🟢 G: {green_pct:.0f}%  🔴 R: {red_pct:.0f}%  ⚪ D: {doji_pct:.0f}%\n"
-        f"Confidence: {confidence:.0%} | Dominant: {dominant if dominant else '—'}"
+        f"📜 <b>Statistik Historis — Pola {pattern_size} Candle</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🔍 Ketemu <b>{match_count}x</b> kejadian serupa dari {series_len} bar terakhir\n"
+        f"\n"
+        f"📈 NAIK   {green_pct:5.0f}%  {_bar(green_pct)}\n"
+        f"📉 TURUN  {red_pct:5.0f}%  {_bar(red_pct)}\n"
+        f"➖ Datar  {doji_pct:5.0f}%  {_bar(doji_pct)}\n"
+        f"\n"
+        f"🧠 <b>Kesimpulan:</b> {verdict_text}\n"
+        f"   Keyakinan: {confidence:.0%}"
     )
 
     # Guardrail logic
     warnings = []
     ai_action = sig.get("action", "HOLD")
-    GUARD_THRESHOLD = 40  # %
+    GUARD_THRESHOLD = 40
 
     if match_count == 0:
-        warnings.append(f"⚠️ <b>No historical pattern match</b> — sinyal AI tidak dikonfirmasi data historis")
+        warnings.append("⚠️ <b>Belum ada data pembanding</b> — sinyal AI murni dari analisa teknikal, bukan statistik")
     elif ai_action == "BUY" and green_pct < GUARD_THRESHOLD:
-        warnings.append(f"⚠️ <b>Guardrail:</b> AI bilang BUY tapi Quant cuma {green_pct:.0f}% Green — risiko tinggi!")
+        warnings.append(f"⚠️ <b>Hati-hati:</b> AI bilang BUY tapi statistik cuma {green_pct:.0f}% kejadian yang lanjut naik — riskan!")
     elif ai_action == "SELL" and red_pct < GUARD_THRESHOLD:
-        warnings.append(f"⚠️ <b>Guardrail:</b> AI bilang SELL tapi Quant cuma {red_pct:.0f}% Red — risiko tinggi!")
+        warnings.append(f"⚠️ <b>Hati-hati:</b> AI bilang SELL tapi statistik cuma {red_pct:.0f}% kejadian yang lanjut turun — riskan!")
 
-    # Opposite direction warning
     if ai_action == "BUY" and dominant == "R" and red_pct >= GUARD_THRESHOLD:
-        warnings.append(f"🚨 <b>KONFLIK:</b> AI BUY vs Quant SELL ({red_pct:.0f}% Red) — TUNGGU konfirmasi!")
+        warnings.append(f"🚨 <b>KONFLIK:</b> AI BUY vs Data Historis SELL ({red_pct:.0f}% kejadian malah turun!) 🚨")
     elif ai_action == "SELL" and dominant == "G" and green_pct >= GUARD_THRESHOLD:
-        warnings.append(f"🚨 <b>KONFLIK:</b> AI SELL vs Quant BUY ({green_pct:.0f}% Green) — TUNGGU konfirmasi!")
+        warnings.append(f"🚨 <b>KONFLIK:</b> AI SELL vs Data Historis BUY ({green_pct:.0f}% kejadian malah naik!) 🚨")
 
     return block, warnings
 
