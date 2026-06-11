@@ -1,10 +1,9 @@
 """tradebot.bots — UNIFIED Telegram bot with all platform support.
 
-ONE bot class: UnifiedBot
-Supports: Stockity, Deriv, MT5, CCXT, Vilona
-All commands in handlers.py
+Single bot class: VilonaBot (platforms/vilona.py)
+All commands registered in _register_commands() with 24+ handlers.
 """
 
-from tradebot.bots.telegram import UnifiedBot
+from tradebot.bots.platforms.vilona import VilonaBot
 
-__all__ = ["UnifiedBot"]
+__all__ = ["VilonaBot"]
