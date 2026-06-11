@@ -449,7 +449,7 @@ def fetch_dxy():
 
 
 # ── Telegram helpers ──
-def tg_send(text, chat_id=None, reply_markup=None):
+def tg_send(text, chat_id=None, reply_markup=None, reply_to=None):
     if not BOT_TOKEN: return None
     target = chat_id or CHAT_ID
     if not target: return None
@@ -472,6 +472,8 @@ def tg_send(text, chat_id=None, reply_markup=None):
         payload = {"chat_id": target, "text": text, "parse_mode": "HTML"}
         if reply_markup:
             payload["reply_markup"] = reply_markup
+        if reply_to:
+            payload["reply_to_message_id"] = int(reply_to)
         req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
             data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -485,6 +487,8 @@ def tg_send(text, chat_id=None, reply_markup=None):
                 payload = {"chat_id": target, "text": plain[:MAX_LEN]}
                 if reply_markup:
                     payload["reply_markup"] = reply_markup
+                if reply_to:
+                    payload["reply_to_message_id"] = int(reply_to)
                 req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
                     data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=15) as r:
@@ -990,6 +994,7 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
         "source": sig.get("source", "vilona-tradefx"),
         "layers": sig.get("layers", []),
         "target_user": sig.get("target_user", ""),
+        "telegram_message_id": sig.get("telegram_message_id"),  # reply chain
         "timestamp": wib_now().isoformat(),
         "rr_ratio": rr,
     }
@@ -5271,8 +5276,13 @@ def auto_analyze_loop():
                                     time.sleep(600)
                                     continue
                             # Send to channel (text only — buttons gak work di channel)
+                            # ── Reply chain: attach result to original signal message ──
                             alert_text = format_trade_close_alert(ct)
-                            send_to_channel(alert_text)
+                            tg_msg_id = ct.get("telegram_message_id")
+                            if tg_msg_id:
+                                tg_send(alert_text, SIGNAL_CHANNEL_ID, reply_to=tg_msg_id)
+                            else:
+                                send_to_channel(alert_text)  # graceful fallback
                         except Exception: pass
                 except Exception: pass
 
@@ -5338,6 +5348,8 @@ def auto_analyze_loop():
                     result = send_to_channel(text)
                     if result:
                         logger.info(f"CHANNEL POST OK [mechanical]: message_id={result.get('result',{}).get('message_id')}")
+                        # ── Capture message_id for reply chain ──
+                        mech_sig['telegram_message_id'] = result.get('result', {}).get('message_id')
                     else:
                         logger.warning(f"CHANNEL POST FAILED [mechanical]: tg_send returned None")
                     _mark_channel_post(pair, action, _entry, _sl, _tp)
@@ -5355,6 +5367,8 @@ def auto_analyze_loop():
                     else:
                         logger.warning(f"🚨 FORCE POST [{disp}]: rate limited but trade opening — posting anyway")
                         result = send_to_channel(text)
+                        if result:
+                            mech_sig['telegram_message_id'] = result.get('result', {}).get('message_id')
                         _mark_channel_post(pair, action, _entry, _sl, _tp)
                     _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
                               confidence=conf, rr_ratio=mech_sig.get("rr_ratio","?"),

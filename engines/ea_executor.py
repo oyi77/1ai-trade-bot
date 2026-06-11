@@ -175,6 +175,7 @@ def _write_trade_result(pos: dict, reason: str):
         "pnl_usd": round(pnl, 2),
         "outcome": reason,
         "paper": PAPER_MODE,
+        "telegram_message_id": pos.get("telegram_message_id"),  # reply chain
     }
 
     try:
@@ -313,6 +314,7 @@ def main():
                             "tp2": sig.get("tp2", 0),
                             "confidence": conf,
                             "source": sig.get("source", "unknown"),
+                            "telegram_message_id": sig.get("telegram_message_id"),  # reply chain
                             "open_time": wib_now().isoformat(),
                             "status": "OPEN",
                         }
