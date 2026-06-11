@@ -4398,16 +4398,23 @@ def handle_command(cmd, text, chat_id, msg):
         for i in range(7, len(highs)-2):
             lookback = highs[i-7:i]
             if highs[i] > max(lookback) and highs[i] > highs[i+1]:
-                # Previous swing high broken → bullish BOS
                 prev_highs = [h for j, h in enumerate(highs[:i]) if j >= 5 and h > highs[j-1] and h > highs[j+1]]
-                if prev_highs and highs[i] > max(prev_highs[-3:]) if len(prev_highs) >= 3 else (highs[i] > prev_highs[-1]):
-                    bos_bull.append({"price": highs[i], "idx": i, "bar": len(highs)-i, "type": "BOS ▲"})
+                if prev_highs:
+                    if len(prev_highs) >= 3:
+                        if highs[i] > max(prev_highs[-3:]):
+                            bos_bull.append({"price": highs[i], "idx": i, "bar": len(highs)-i, "type": "BOS ▲"})
+                    elif highs[i] > prev_highs[-1]:
+                        bos_bull.append({"price": highs[i], "idx": i, "bar": len(highs)-i, "type": "BOS ▲"})
         for i in range(7, len(lows)-2):
             lookback = lows[i-7:i]
             if lows[i] < min(lookback) and lows[i] < lows[i+1]:
                 prev_lows = [l for j, l in enumerate(lows[:i]) if j >= 5 and l < lows[j-1] and l < lows[j+1]]
-                if prev_lows and lows[i] < min(prev_lows[-3:]) if len(prev_lows) >= 3 else (lows[i] < prev_lows[-1]):
-                    bos_bear.append({"price": lows[i], "idx": i, "bar": len(lows)-i, "type": "BOS ▼"})
+                if prev_lows:
+                    if len(prev_lows) >= 3:
+                        if lows[i] < min(prev_lows[-3:]):
+                            bos_bear.append({"price": lows[i], "idx": i, "bar": len(lows)-i, "type": "BOS ▼"})
+                    elif lows[i] < prev_lows[-1]:
+                        bos_bear.append({"price": lows[i], "idx": i, "bar": len(lows)-i, "type": "BOS ▼"})
         
         # CHoCH (Change of Character)
         choch_bull = []
