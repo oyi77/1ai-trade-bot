@@ -690,6 +690,11 @@ class MTFConsensus:
         else:
             mtf_alignment = "CONFLICT"
 
+        # ── CONFLICT override: force HOLD regardless of weighted score ──
+        if mtf_alignment == "CONFLICT":
+            verdict = "HOLD"
+            consensus_score = 0.0
+
         return {
             "verdict": verdict,
             "consensus_score": round(consensus_score, 4),
