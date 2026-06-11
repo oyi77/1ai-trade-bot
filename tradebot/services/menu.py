@@ -49,8 +49,15 @@ HISTORY_MENU: list[list[tuple[str, str]]] = [
 
 ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("cmd:status", "📊 Status"), ("cmd:subscribe", "⭐ Subscribe")],
-    [("cmd:donate", "💚 Donate"), ("cmd:mykey", "🔑 My Key")],
+    [("menu:donate", "💚 Donate"), ("cmd:mykey", "🔑 My Key")],
     [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
+    [("menu:main", "🔙 Back")],
+]
+
+DONATE_MENU: list[list[tuple[str, str]]] = [
+    [("donate:coffee", "☕️ Kopi (Rp 15K)")],
+    [("donate:fuel", "🚀 Bensin Full (Rp 50K)")],
+    [("donate:custom", "💰 Nominal Bebas")],
     [("menu:main", "🔙 Back")],
 ]
 
@@ -104,6 +111,7 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
         "market": MARKET_MENU,
         "history": HISTORY_MENU,
         "account": ACCOUNT_MENU,
+        "donate": DONATE_MENU,
         "stockity": STOCKITY_MENU,
         "admin_panel": ADMIN_PANEL_MENU,
         "help": HELP_MENU,
@@ -139,6 +147,12 @@ def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> st
             "👤 <b>ACCOUNT</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "Status, subscribe, donate, dan pengaturan."
+        ),
+        "donate": (
+            "💚 <b>DONASI — VILONA AI</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Dukung server AI tetap hidup!\n"
+            "Pilih nominal di bawah:"
         ),
         "stockity": (
             "💰 <b>STOCKITY INSIDER</b>\n"

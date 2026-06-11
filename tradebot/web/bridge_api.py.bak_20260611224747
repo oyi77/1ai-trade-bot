@@ -100,8 +100,7 @@ MASTER_INSTANCES: dict[str, dict[str, str]] = defaultdict(dict)
 
 
 @router.get("/health")
-async def bridge_health(request: Request):
-    _require_bridge_admin(request)
+async def bridge_health():
     return {
         "status": "ok",
         "uptime_seconds": int(time.time() - START_TIME),
@@ -110,8 +109,7 @@ async def bridge_health(request: Request):
 
 
 @router.get("/status")
-async def bridge_status(request: Request):
-    _require_bridge_admin(request)
+async def bridge_status():
     with LOCK:
         return {
             "pending": len(PENDING) > 0,
@@ -123,11 +121,9 @@ async def bridge_status(request: Request):
 
 @router.get("/signal")
 async def bridge_poll_signal(
-    request: Request,
     api_key: str = Query(""),
     account_id: str = Query(None),
 ):
-    _require_bridge_admin(request)
     is_valid, tier = _validate_key(api_key)
     if not is_valid:
         return JSONResponse({"error": "invalid_api_key", "action": "HOLD", "pending": False}, status_code=401)
@@ -152,7 +148,6 @@ async def bridge_poll_signal(
 
 @router.post("/signal")
 async def bridge_post_signal(request: Request):
-    _require_bridge_admin(request)
     data = await request.json()
     api_key = request.query_params.get("api_key", "")
 
@@ -190,7 +185,7 @@ async def bridge_post_signal(request: Request):
 
 @router.get("/ack/{signal_id}")
 async def bridge_ack(request: Request, signal_id: str, api_key: str = Query("")):
-    _check_bridge_admin(request)
+    _check_auth(request)
     with LOCK:
         ACKED.add(signal_id)
         if api_key:
@@ -200,14 +195,14 @@ async def bridge_ack(request: Request, signal_id: str, api_key: str = Query(""))
 
 @router.get("/history")
 async def bridge_history(request: Request):
-    _check_bridge_admin(request)
+    _check_auth(request)
     with LOCK:
         return {"count": len(HISTORY), "signals": list(HISTORY)}
 
 
 @router.get("/accounts")
 async def bridge_accounts(request: Request):
-    _check_bridge_admin(request)
+    _check_auth(request)
     with LOCK:
         now = time.time()
         active = {k: v for k, v in INSTANCES.items() if now - v.get("last_seen", 0) < 3600}
@@ -222,8 +217,7 @@ async def bridge_accounts(request: Request):
 
 
 @router.get("/keys")
-async def bridge_keys(request: Request):
-    _require_bridge_admin(request)
+async def bridge_keys():
     config = _load_keys()
     keys_safe = {
         k: {

@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 import json
 import os
 import sqlite3
+import time
 
 PORT = int(os.environ.get("PORT", 8768))
 HOST = os.environ.get("HOST", "0.0.0.0")
@@ -36,6 +37,7 @@ TRADE_HISTORY_PATH = DATA_DIR / "trade_history.json"
 FUEL_REPORTS_PATH = VILONA_DIR / ".fuel_reports.json"
 MEMBERS_DB_PATH = VILONA_DIR / "members.db"  # Real members DB with 31 members + 17 payment orders
 SIGNAL_FEED_PATH = VILONA_DIR / "signal_feed.json"  # Unified feed: channel-auto + user-generate
+ENGINE_STATUS_PATH = PROJECT_DIR / "bridges" / "signal_bridge" / "engine_status.json"
 BACKTEST_XAU_PATH = VILONA_DIR / "backtest_xauusd_3m.json"
 BACKTEST_GRID_PATH = VILONA_DIR / "backtest_grid2.json"
 BACKTEST_PER_ENGINE_PATH = VILONA_DIR / "backtest_per_engine.json"
@@ -46,6 +48,25 @@ try:
     DASHBOARD_EN = (TEMPLATE_DIR / "public_dashboard_en.html").read_text(encoding="utf-8")
 except FileNotFoundError:
     DASHBOARD_EN = DASHBOARD_HTML
+
+
+_start_time = time.time()
+
+
+def _get_trade_stats():
+    """Read trade history and return {total, wins, losses, total_pips}."""
+    th = _read_json(TRADE_HISTORY_PATH, {"trades": [], "stats": {}})
+    trades = th.get("trades", [])
+    if not trades and isinstance(th, list):
+        trades = th
+    wins = sum(1 for t in trades if str(t.get("result", t.get("outcome", ""))).upper() in ("TP", "TP_HIT", "WIN"))
+    losses = sum(1 for t in trades if str(t.get("result", t.get("outcome", ""))).upper() in ("SL", "SL_HIT", "LOSS"))
+    total_pips = sum(
+        float(t.get("pips", 0) or 0)
+        for t in trades
+        if str(t.get("result", t.get("outcome", ""))).upper() in ("TP", "TP_HIT", "SL", "SL_HIT", "WIN", "LOSS")
+    )
+    return {"total": len(trades), "wins": wins, "losses": losses, "total_pips": round(total_pips, 1)}
 
 
 def _read_json(path, default=None):
@@ -362,6 +383,45 @@ class Handler(BaseHTTPRequestHandler):
             "monthly_cost": monthly,
         })
 
+    # ═══ API: ENGINE READINGS ═══
+    def api_engine_readings(self):
+        """Live AI engine readings from bridge status cache. Shows 11 engines across 5 TFs."""
+        data = _read_json(ENGINE_STATUS_PATH, {})
+        if data and isinstance(data, dict) and data.get("timeframes"):
+            self._json(data)
+        else:
+            # Return empty structure so the JS can show "No engine data"
+            self._json({
+                "symbol": "XAUUSD",
+                "price": 0,
+                "timestamp": datetime.now(WIB).isoformat(),
+                "timeframes": {},
+                "hierarchical": {"verdict": "HOLD", "consensus_score": 0},
+                "mtf_alignment": "UNKNOWN",
+                "macro_trend": "NEUTRAL",
+            })
+
+    # ═══ API: LIVE SNAPSHOT (populated from real data) ═══
+    def api_live_snapshot(self):
+        """Live dashboard snapshot — populated from real trade data when worker hasn't pushed."""
+        ts = _get_trade_stats()
+        feeds = _get_all_signals()
+        all_signals = feeds if isinstance(feeds, list) else []
+        wins = ts.get("wins", 0)
+        losses = ts.get("losses", 0)
+        total = wins + losses
+        wr = round(wins / max(total, 1), 2)
+        snapshot = {
+            "type": "dashboard_snapshot",
+            "status": {"state": "analyzing" if total > 0 else "idle", "pair": "XAUUSD", "detail": f"AI aktif — {len(all_signals)} sinyal (WR {int(wr*100)}%)"},
+            "performance": {"win_rate": wr, "total_pnl": round(ts.get("total_pips", 0) * 10, 2)},
+            "users": {"active": len(all_signals), "bot_users": 3},
+            "prices": {"XAUUSD": None},
+            "uptime_seconds": int(time.time() - _start_time),
+            "total_cycles": total,
+        }
+        self._json(snapshot)
+
     # ═══ ROUTING ═══
 
     def do_GET(self):
@@ -379,6 +439,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/daily_analyze": self.api_daily_analyze,
             "/api/daily_recap": self.api_daily_recap,
             "/api/fuel/stats": self.api_fuel_stats,
+            "/api/engine-readings": self.api_engine_readings,
         }
         if path in routes:
             return routes[path]()

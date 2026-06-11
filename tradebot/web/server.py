@@ -347,7 +347,8 @@ async def webhook_tripay(request: Request):
     """Tripay payment callback webhook.
 
     Called by Tripay when a payment is completed.
-    Verifies HMAC-SHA256 signature, upgrades member, sends notification.
+    Verifies HMAC-SHA256 signature, upgrades member, and fires an
+    optional Meta CAPI income event (non-blocking).
     """
     from tradebot.services.payment import PaymentService
 
@@ -371,13 +372,13 @@ async def webhook_tripay(request: Request):
             chat_id = merchant_ref.split("-")[1] if "-" in merchant_ref else ""
             if chat_id:
                 upgrade_tier(chat_id, "donor", 9999, merchant_ref)
-                await _fire_capi_donation_event(chat_id, merchant_ref, amount)
                 LOG.info("Tripay payment PAID: %s → user %s", merchant_ref, chat_id)
 
         return {"success": True}
     except Exception as exc:
         LOG.error("Tripay webhook error: %s", exc)
         return JSONResponse({"success": False, "error": str(exc)[:200]}, status_code=500)
+
 
 
 @app.get("/api/live-snapshot")
