@@ -5376,10 +5376,14 @@ def auto_analyze_loop():
                               price=price, grade=sig.get("grade",""),
                               models=sig.get("_models",""), voters=sig.get("voters","?"))
                 else:
-                    # ⚠️ Trade already opened — FORCE POST so users see the signal
-                    logger.warning(f"🚨 FORCE POST [{disp}]: rate limited but trade opened — posting anyway")
-                    result = send_to_channel(text)
-                    _mark_channel_post(pair, action, _entry, _sl, _tp)
+                    # Rate limited — respect global cooldown
+                    state_force2 = _cs()
+                    if time.time() - state_force2.get("global_last", 0) < _GLOBAL_CHANNEL_COOLDOWN:
+                        logger.info(f"⏱️ SKIP force post [AI-{disp}]: global cooldown active ({int(time.time()-state_force2['global_last'])}s ago)")
+                    else:
+                        logger.warning(f"🚨 FORCE POST [AI-{disp}]: rate limited but trade opened — posting anyway")
+                        result = send_to_channel(text)
+                        _mark_channel_post(pair, action, _entry, _sl, _tp)
                     _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
                               confidence=conf, rr_ratio=sig.get("rr_ratio","?"),
                               engines=sig.get("engines",{}), source="channel-auto",
