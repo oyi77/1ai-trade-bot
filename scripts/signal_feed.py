@@ -30,7 +30,12 @@ MAX_FEED_ENTRIES = 500  # Keep last 500 signals in memory (older → archive)
 def _load_feed() -> dict:
     try:
         if FEED_FILE.exists():
-            return json.loads(FEED_FILE.read_text())
+            raw = json.loads(FEED_FILE.read_text())
+            if isinstance(raw, list):
+                # legacy format: upgrade bare list → dict with "signals" key
+                return {"signals": raw, "stats": {"total": len(raw), "tp": 0, "sl": 0, "pending": 0}}
+            if isinstance(raw, dict):
+                return raw
     except Exception:
         pass
     return {"signals": [], "stats": {"total": 0, "tp": 0, "sl": 0, "pending": 0}}
