@@ -1,12 +1,13 @@
 """
-Main entry point — wires Telethon + Core + Background loops.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Main entry point — wires Telegram Layer + Core Logic + Background Loops + Web Dashboard.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 import asyncio
 import logging
 import os
 import sys
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -25,7 +26,14 @@ logging.basicConfig(
 
 LOG = logging.getLogger("agent.main")
 
-from agent.menu import get_menu_kb, get_menu_text
+
+def _run_web(port: int):
+    from agent.web.server import app
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+
+
+from agent.database import init_db
 from agent.core import (
     cmd_start, cmd_signal, cmd_price, cmd_status, cmd_myid, cmd_donate,
     cmd_levels, cmd_news, cmd_zones, cmd_structure, cmd_session,
@@ -37,9 +45,11 @@ from agent.telegram_layer import TelegramLayer
 
 
 async def main():
+    init_db()
+    LOG.info("Database initialized")
+
     tl = TelegramLayer()
 
-    # Register all command handlers — callbacks handled automatically by TelegramLayer
     for cmd, handler in [
         ("start", cmd_start), ("help", cmd_help),
         ("signal", cmd_signal), ("price", cmd_price),
@@ -55,7 +65,6 @@ async def main():
     ]:
         tl.register_command(cmd, handler)
 
-    # Start background tasks
     async def bg_wrapper():
         try:
             await auto_analysis_loop(tl)
@@ -68,14 +77,12 @@ async def main():
         except Exception as e:
             LOG.warning("Daily recap loop stopped: %s", e)
 
-    # Start Telethon client (blocks until disconnected)
     tg_task = asyncio.create_task(tl.start())
     bg_task = asyncio.create_task(bg_wrapper())
     recap_task = asyncio.create_task(recap_wrapper())
 
-    LOG.info("Agent Bot fully initialized — 34 commands, 9 menus, 2 background loops")
+    LOG.info("Agent Bot fully initialized — 34 commands, 9 menus, 2 background loops, web dashboard on port 9091")
 
-    # Wait for Telethon to finish (or fail)
     try:
         await tg_task
     except KeyboardInterrupt:
@@ -87,6 +94,11 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Start web dashboard in background thread
+    web_port = int(os.environ.get("AGENT_WEB_PORT", "9091"))
+    web_thread = threading.Thread(target=_run_web, args=(web_port,), daemon=True)
+    web_thread.start()
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
