@@ -598,6 +598,32 @@ def _cleanup_expired_pending_signals():
 
 # ── Manual-mode guard: anti-spam + anti-opposite-flip per user ──
 USER_LAST_ANALYZE = {}  # chat_id -> timestamp
+def _check_free_quota(chat_id):
+    """Check & deduct FREE tier daily quota. Returns (ok, remaining, message)."""
+    today = wib_now().strftime("%Y-%m-%d")
+    record = USER_DAILY_ANALYZE.get(chat_id, {})
+    if record.get("date") != today:
+        record = {"date": today, "count": 0}
+    
+    record["count"] += 1
+    USER_DAILY_ANALYZE[chat_id] = record
+    
+    limit = FREE_DAILY_LIMIT
+    if record["count"] > limit:
+        remaining = max(0, limit - record["count"])
+        return False, remaining, (
+            f"🛑 <b>Kuota Free Harian Penuh!</b>\\n"
+            f"━━━━━━━━━━━━━━━━\\n"
+            f"📊 {limit}x analisa/hari — sudah terpakai semua.\\n"
+            f"💡 Upgrade ke PRO buat 20x/hari: /subscribe\\n"
+            f"⏰ Reset: besok jam 00:00 WIB\\n\\n"
+            f"🔍 Cek sinyal auto di channel: @vilonaaichanel"
+        )
+    
+    remaining = max(0, limit - record["count"])
+    return True, remaining, None
+
+
 USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
 USER_LAST_PAIR = {}  # chat_id -> {"pair": str, "at": timestamp} — same-pair cooldown
 USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — subscriber quota
@@ -3288,14 +3314,20 @@ def handle_command(cmd, text, chat_id, msg):
             disp = display_map.get(sub_norm, sub_norm.upper())
             pair = pair_map[sub_norm]
 
-            # ── DONOR DAILY QUOTA (anti-abuse) ──
+            # ── QUOTA CHECK (anti-abuse) ──
             if _is_donor(str(chat_id)):
                 ok, remaining, warn = _check_donor_quota(str(chat_id))
                 if not ok:
                     tg_send(warn, chat_id)
                     return
-                if remaining <= 5:
+                if remaining >= 0 and remaining <= 5:
                     tg_send(f"⚠️ <b>Sisa {remaining}x analisa hari ini</b> — gunakan bijak!\n⏰ Reset jam 00:00 WIB", chat_id)
+            else:
+                # Free tier: enforce FREE_DAILY_LIMIT via _check_free_quota
+                ok, remaining, warn = _check_free_quota(str(chat_id))
+                if not ok:
+                    tg_send(warn, chat_id)
+                    return
 
             # ── Manual anti-flip + rate-limit guard ──
             blocked, reason = _is_manual_blocked(str(chat_id), pair=pair)
