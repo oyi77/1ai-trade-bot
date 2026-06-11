@@ -30,14 +30,16 @@ SIGNAL_MENU: list[list[tuple[str, str]]] = [
     [("cmd:signal", "🎯 Signal MTF+9 Engines")],
     [("cmd:mtf", "🧬 Matrix 5TF")],
     [("cmd:engines", "🔧 Engine Consensus")],
-    [("cmd:readings", "📡 Engine Readings")],
+    [("cmd:structure", "🏗 Market Structure")],
     [("menu:main", "🔙 Back")],
 ]
 
 MARKET_MENU: list[list[tuple[str, str]]] = [
     [("cmd:data", "📊 Market Data"), ("cmd:price gold", "🥇 Gold")],
     [("cmd:price btc", "₿ BTC"), ("cmd:price eth", "⟠ ETH")],
-    [("cmd:killzone", "🎯 Killzone")],
+    [("cmd:killzone", "🎯 Killzone"), ("cmd:zones", "🧲 Liquidity Zones")],
+    [("cmd:levels", "🏛 S&R Levels"), ("cmd:news", "📰 Market News")],
+    [("cmd:session", "🕐 Session Levels")],
     [("menu:main", "🔙 Back")],
 ]
 

@@ -137,6 +137,11 @@ class VilonaBot(
             "engines": self._cmd_engines,
             "readings": self._cmd_engine_readings,
             "dashboard": self._cmd_dashboard,
+            "levels": self._cmd_levels,
+            "news": self._cmd_news,
+            "zones": self._cmd_zones,
+            "structure": self._cmd_structure,
+            "session": self._cmd_session,
             "restart_bot": self._cmd_restart_bot,
             "activate": self._cmd_activate,
         }
