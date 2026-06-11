@@ -2119,9 +2119,6 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             # ── FREE TIER: Dynamic battery + kelaparan + Grok tease preview ──
             lines.append(f"🔋 <b>AI Power: {bars} {battery_pct}%</b> — {model_count}/3 AI yang kerja buat lu")
             lines.append(f"")
-            lines.append(f"🧠 {token_k} token dipakai (Rp {cost_rp})")
-            lines.append(f"   Prompt: {token_prompt} | Respon: {token_comp}")
-            lines.append(f"")
             lines.append(f"🤖 Cuma <b>{model_names}</b> doang yang mikir.")
             lines.append(f"   AI lu kelaparan bro... cuma dikasih 1 model 😤")
             lines.append(f"   Bayangin kalo 3 AI + Grok News analisa bareng:")
@@ -2140,9 +2137,6 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         else:
             # ── DONOR TIER: Full power flex + AI Partner narrative ──
             lines.append(f"🔋 <b>AI Power: {bars} {battery_pct}%</b> — full throttle")
-            lines.append(f"")
-            lines.append(f"🧠 {token_k} token dipakai (Rp {cost_rp})")
-            lines.append(f"   Prompt: {token_prompt} | Respon: {token_comp}")
             lines.append(f"")
             lines.append(f"🤖 <b>{model_count} AI Partner</b> kerja bareng: {model_names}")
 
