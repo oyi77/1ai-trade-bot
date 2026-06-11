@@ -7,6 +7,7 @@ Provides structured health reports (ok / degraded / down) covering:
 - Market data freshness (recent ticks?)
 - Storage / disk health
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,9 +44,7 @@ class HealthReport:
     """Aggregated health report from all checks."""
 
     status: HealthStatus = HealthStatus.OK
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     checks: list[HealthCheckResult] = field(default_factory=list)
     summary: str = ""
 
@@ -367,9 +366,30 @@ class HealthService:
         return f"Health: {'/'.join(parts)}. Overall: {report.status.value}"
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  Convenience — standalone health check (FastAPI /health endpoint)
+# ═══════════════════════════════════════════════════════════════════
+
+
+async def check_all() -> dict:
+    """Run every health check and return the report as a dict.
+
+    Creates a ``HealthService`` with no pre-configured dependencies;
+    checks that require a broker or pipeline will report *degraded*
+    with a descriptive message.
+
+    Returns:
+        ``HealthReport.to_dict()`` — always a dict, never raises.
+    """
+    service = HealthService()
+    report = await service.run_all()
+    return report.to_dict()
+
+
 __all__ = [
     "HealthService",
     "HealthReport",
     "HealthCheckResult",
     "HealthStatus",
+    "check_all",
 ]

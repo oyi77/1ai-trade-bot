@@ -300,3 +300,28 @@ class PaymentService:
                 json.dump(data, f, indent=2)
             return True, data["payments"][merchant_ref]
         return False, None
+
+
+async def create_tripay_payment(
+    chat_id: str,
+    username: str,
+    tier: str = "donor",
+    method: str = "QRIS",
+    amount: int | None = None,
+) -> dict:
+    """Convenience wrapper — create a Tripay donation payment.
+
+    Mirrors the legacy members.payment.create_tripay_payment signature
+    but uses the unified PaymentService backend.
+    """
+    if amount is None:
+        amount = 50000
+    if amount < 10000:
+        return {"error": "Minimum donasi Rp10.000"}
+    svc = PaymentService()
+    return await svc.create_tripay_transaction(
+        user_id=chat_id,
+        username=username,
+        amount=amount,
+        method=method,
+    )
