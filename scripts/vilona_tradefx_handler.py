@@ -3044,10 +3044,50 @@ def handle_command(cmd, text, chat_id, msg):
             record = USER_DAILY_ANALYZE.get(chat_id, {})
             used = record.get("count", 0) if record.get("date") == today else 0
             remaining = max(0, DONOR_DAILY_QUOTA - used)
+            
+            # ── Fuel Gauge ──
+            fuel_lines = []
+            try:
+                from members import get_monthly_fuel_stats, get_user_last_donation
+                fuel = get_monthly_fuel_stats()
+                monthly_total = fuel.get("total", 0)
+                donor_count = fuel.get("donor_count", 0)
+                TARGET = 500000  # Rp 500rb / bulan
+                pct = min(100, int(monthly_total / TARGET * 100))
+                bars = "█" * (pct // 10) + "░" * (10 - pct // 10)
+                
+                last = get_user_last_donation(chat_id)
+                
+                fuel_lines = [
+                    f"",
+                    f"⛽ <b>SERVER FUEL: {bars} {pct}%</b>",
+                    f"   Rp{monthly_total:,} terkumpul / Rp{TARGET:,} bulan ini",
+                ]
+                if pct < 30:
+                    fuel_lines.append(f"   🔴 <b>KRITIS!</b> Server bisa down minggu ini...")
+                elif pct < 60:
+                    fuel_lines.append(f"   🟡 Bensin mulai menipis — butuh isi ulang")
+                else:
+                    fuel_lines.append(f"   🟢 Aman — terima kasih para donatur!")
+                
+                fuel_lines.append(f"")
+                fuel_lines.append(f"💚 <b>{donor_count}</b> donatur udah isi bensin bulan ini.")
+                if last:
+                    if last["days_ago"] > 30:
+                        fuel_lines.append(f"   Kamu terakhir isi: <b>{last['days_ago']} hari</b> lalu — Saatnya isi ulang?")
+                    else:
+                        fuel_lines.append(f"   Kamu terakhir isi: {last['days_ago']} hari lalu — Makasih Bro!")
+                fuel_lines.append(f"   ⚡ <b>/donate</b> — Isi bensin (Rp 50k aja udah ngebantu)")
+            except Exception as e:
+                logger.warning(f"Fuel gauge failed: {e}")
+            
+            fuel_text = "\n".join(fuel_lines) if fuel_lines else ""
+
             txt = (
                 f"👑 <b>STATUS: DONATUR SULTAN (VIP)</b>\n"
                 f"⚡️ Kuota AI: {remaining}/{DONOR_DAILY_QUOTA}x hari ini (Reset 00:00 WIB)\n"
                 f"⏱️ Cooldown: {MANUAL_THROTTLE_DONOR}s antar analisa\n"
+                f"{fuel_text}\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"Terima kasih telah menghidupi mesin AI ini! 🥂\n"
                 f"Seluruh fitur VIP, Auto-Trade, dan Bridge\n"

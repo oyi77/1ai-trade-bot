@@ -284,4 +284,33 @@ def get_user_last_donation(chat_id: str) -> dict | None:
         return {"days_ago": days_ago, "amount": row["amount"]}
 
 
+def get_stale_donors(min_days: int = 30) -> list[dict]:
+    """Find all donor members whose last donation was > min_days ago.
+    Returns lista of {chat_id, days_since_last, last_amount, username}"""
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(WIB)
+    cutoff = now - timedelta(days=min_days)
+    cutoff_str = cutoff.isoformat()
+    stale = []
+    with _conn() as db:
+        rows = db.execute(
+            "SELECT chat_id, username, nama FROM members WHERE tier='donor'"
+        ).fetchall()
+        for r in rows:
+            last = db.execute(
+                "SELECT amount, paid_at FROM payment_orders WHERE chat_id=? AND status='paid' ORDER BY paid_at DESC LIMIT 1",
+                (r["chat_id"],)
+            ).fetchone()
+            if last and last["paid_at"] < cutoff_str:
+                paid_dt = datetime.fromisoformat(last["paid_at"])
+                days_since = (now - paid_dt).days
+                stale.append({
+                    "chat_id": r["chat_id"],
+                    "username": r["username"] or r["nama"] or r["chat_id"],
+                    "days_since": days_since,
+                    "last_amount": last["amount"],
+                })
+    return stale
+
+
 init_db()
