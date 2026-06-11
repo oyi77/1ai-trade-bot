@@ -164,7 +164,7 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "pro",
     if amount < MIN_DONATION:
         return {"error": f"Minimum pembayaran Rp{MIN_DONATION:,}"}
 
-    merchant_ref = f"VTFX-{chat_id}-{int(time.time())}"
+    merchant_ref = f"VTFX-{tier}-{chat_id}-{int(time.time())}"
 
     # Build payload with tier metadata
     payload = {

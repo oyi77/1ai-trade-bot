@@ -77,14 +77,18 @@ def _verify_tripay_signature(data: dict) -> bool:
     return hmac.compare_digest(expected, callback_signature)
 
 
-def _upgrade_member(chat_id: str, merchant_ref: str) -> bool:
-    """Upgrade member to donor for 9999 days."""
+def _upgrade_member(chat_id: str, merchant_ref: str, tier: str = "donor") -> bool:
+    """Upgrade member to specified tier with appropriate expiry."""
     try:
         from tradebot.services.members_service import activate_premium, mark_payment_paid
 
         mark_payment_paid(merchant_ref)
-        activate_premium(str(chat_id), "donor", 9999)
-        LOG.info("Upgraded user %s (ref: %s) to DONOR 9999 days", chat_id, merchant_ref)
+        # Map tier → days: pro=30, elite=30, lifetime=9999, donor (legacy)=9999
+        tier_days = {"pro": 30, "elite": 30, "lifetime": 9999, "donor": 9999}
+        days = tier_days.get(tier, 9999)
+        activate_premium(str(chat_id), tier, days)
+        LOG.info("Upgraded user %s (ref: %s) to %s tier (%d days)",
+                 chat_id, merchant_ref, tier.upper(), days)
         return True
     except Exception as e:
         LOG.error("Failed to upgrade member %s: %s", chat_id, e)
@@ -147,42 +151,52 @@ def _fire_meta_capi(chat_id: str, amount: int, brand: str) -> None:
         LOG.warning("Meta CAPI failed: %s", e)
 
 
-def _send_telegram_notification(chat_id: str, brand: str) -> None:
-    """Send payment confirmation and EA links via Telegram."""
+def _send_telegram_notification(chat_id: str, brand: str, tier: str = "donor") -> None:
+    """Send payment confirmation with tier-specific messaging via Telegram."""
     if not TELEGRAM_BOT_TOKEN:
         LOG.warning("TELEGRAM_BOT_TOKEN not set — cannot send notification")
         return
 
     import urllib.request as ureq
 
-    if brand == "vilona":
-        text = (
-            "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
-            "♾️ /analyze — UNLIMITED\n"
-            "🤖 EA Auto-Trade — AKTIF PERMANEN\n\n"
-            "Download EA: https://bit.ly/vilona-ea\n"
-            "Channel: @vilonaaichanel\n"
-            "Group: @vilona_tradefx_group\n\n"
-            "Mari cetak profit! 🔥"
-        )
-    elif brand == "1ai":
-        text = (
-            "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "👑 Status: <b>PREMIUM AKTIF</b>\n"
-            "♾️ Akses semua fitur — UNLIMITED\n\n"
-            "Selamat menikmati layanan premium! 🚀"
-        )
-    else:
-        text = (
-            "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
-            "♾️ /analyze — UNLIMITED\n\n"
-            "Mari cetak profit! 🔥"
-        )
+    tier_config = {
+        "pro": {
+            "label": "⭐ PRO",
+            "analyze": "20x/hari",
+            "perks": "SL/TP Unlock • /mtf • /engines",
+            "cta": "/analyze xauusd — mulai sekarang!",
+        },
+        "elite": {
+            "label": "👑 ELITE",
+            "analyze": "UNLIMITED ♾️",
+            "perks": "GPT-4o AI • Grok News • EA Auto-Trade • Bridge Sinyal",
+            "cta": "Download EA: https://bit.ly/vilona-ea",
+        },
+        "lifetime": {
+            "label": "💎 LIFETIME",
+            "analyze": "UNLIMITED ♾️ — PERMANEN",
+            "perks": "Full Elite • Gak perlu bayar lagi • Akses selamanya",
+            "cta": "Channel: @vilonaaichanel | Group: @vilona_tradefx_group",
+        },
+        "donor": {
+            "label": "💚 DONATUR",
+            "analyze": "UNLIMITED ♾️",
+            "perks": "EA Auto-Trade • Bridge • Full Akses",
+            "cta": "Download EA: https://bit.ly/vilona-ea",
+        },
+    }
+    tc = tier_config.get(tier, tier_config["donor"])
+
+    text = (
+        f"✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🎉 Status: <b>{tc['label']}</b> — AKTIF!\n"
+        f"⚡ /analyze: <b>{tc['analyze']}</b>\n"
+        f"🔧 {tc['perks']}\n\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🔥 {tc['cta']}\n\n"
+        f"<i>Mari cetak profit bersama Vilona AI! 🚀</i>"
+    )
 
     payload = json.dumps({
         "chat_id": chat_id,
@@ -265,11 +279,21 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"success": True, "status": "not_paid"})
             return
 
-        # Parse merchant_ref to extract brand and chat_id
-        # Format: VTFX-<chat_id>-<timestamp> or 1AI-<chat_id>-<timestamp>
+        # Parse merchant_ref to extract brand, tier, and chat_id
+        # NEW format: VTFX-{tier}-{chat_id}-{timestamp}
+        # OLD format: VTFX-{chat_id}-{timestamp}
         parts = merchant_ref.split("-")
-        brand = "vilona" if parts[0] == "VTFX" else ("1ai" if parts[0] == "1AI" else "vilona")
-        chat_id = parts[1] if len(parts) > 1 else ""
+        brand = "vilona" if parts[0] in ("VTFX", "VTFX") else "vilona"
+        tier = "donor"
+        chat_id = ""
+        if len(parts) >= 4:
+            # New format: VTFX-pro-12345678-1718123456
+            tier = parts[1]
+            chat_id = parts[2]
+        elif len(parts) >= 2:
+            # Old format: VTFX-12345678-1718123456
+            chat_id = parts[1]
+        LOG.info("Parsed ref: tier=%s chat_id=%s", tier, chat_id)
 
         amount = int(data.get("amount", 0))
         LOG.info(
@@ -282,7 +306,7 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
 
         # Upgrade member
         if chat_id:
-            upgrade_ok = _upgrade_member(chat_id, merchant_ref)
+            upgrade_ok = _upgrade_member(chat_id, merchant_ref, tier)
         else:
             upgrade_ok = False
             LOG.warning("Cannot upgrade: no chat_id in merchant_ref=%s", merchant_ref)
@@ -291,7 +315,7 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
             _mark_processed(merchant_ref)
             _fire_bemob_conversion(merchant_ref, amount, brand)
             _fire_meta_capi(chat_id, amount, brand)
-            _send_telegram_notification(chat_id, brand)
+            _send_telegram_notification(chat_id, brand, tier)
 
         self._send_json(200, {
             "success": upgrade_ok,

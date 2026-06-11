@@ -2842,34 +2842,15 @@ def _is_donor(chat_id):
 
 # ── Reusable donate menu ──
 def _send_donate_menu(chat_id, username=""):
-    """Reusable donate menu — used by cancel_input and redirects."""
-    txt = (
-        "💚 <b>SIRAM BAHAN BAKAR MESIN AI 🚀</b>\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "Server AI ini mengolah jutaan data market\n"
-        "secara real-time dan membutuhkan biaya API\n"
-        "& GPU yang masif setiap detiknya.\n"
-        "\n"
-        "Jika sinyal AI ini telah mengubah portofolio\n"
-        "Anda menjadi hijau, mari bergotong royong\n"
-        "menjaga mesin ini tetap hidup dan semakin buas!\n"
-        "\n"
-        "Pilih dukunganmu hari ini:\n"
-        "\n"
-        "💼 <b>EKSKLUSIF: PROGRAM INVESTOR AI</b>\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "Apakah Anda big player/investor yang ingin\n"
-        "ikut andil dalam pengembangan ekosistem\n"
-        "kuantitatif ini secara makro? Kami membuka\n"
-        "jalur pendanaan privat. Hubungi Chief\n"
-        "Architect kami di bawah."
-    )
+    """Tiered subscription menu — Pro/Elite/Lifetime."""
+    from members.payment import get_pricing_table
+    txt = get_pricing_table()
     markup = {"inline_keyboard": [
-        [{"text": "☕️ Traktir Kopi (Rp 15K)", "callback_data": "donate:coffee"},
-         {"text": "🍱 Makan Siang Server (Rp 25K)", "callback_data": "donate:learn"}],
-        [{"text": "🚀 Isi Bensin Full (Rp 50K)", "callback_data": "donate:fuel"}],
-        [{"text": "💰 Input Nominal Bebas", "callback_data": "donate:custom"}],
-        [{"text": "🤝 HUBUNGI CHIEF ARCHITECT", "url": "https://t.me/codergaboets"}],
+        [{"text": "⭐ PRO — Rp50K/bulan", "callback_data": "sub:pro"}],
+        [{"text": "👑 ELITE — Rp150K/bulan", "callback_data": "sub:elite"}],
+        [{"text": "💎 LIFETIME — Rp500K (sekali)", "callback_data": "sub:lifetime"}],
+        [{"text": "💳 Bayar via QRIS/VA", "callback_data": "sub:pay"}],
+        [{"text": "🤝 Hubungi Chief Architect", "url": "https://t.me/codergaboets"}],
     ]}
     tg_send(txt, chat_id, reply_markup=markup)
 
