@@ -1943,6 +1943,17 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         q_reason = "Quality Gate PASS" if q_passed else "Low confidence — info only"
     
     is_actionable = q_passed and action in ("BUY", "SELL")
+
+    # ── Killzone gate: forex/metals outside London/NY → NO TRADE ZONE ──
+    forex_metal = display in ("XAUUSD", "GOLD", "USOIL", "EURUSD", "GBPUSD", "USDJPY")
+    in_kz = True
+    if forex_metal:
+        lkz, nykz = killzone(h)
+        in_kz = lkz or nykz
+        if not in_kz:
+            is_actionable = False
+            q_reason = f"🔴 NO TRADE ZONE — {display} only during London (14:00-17:00 WIB) & NY (19:00-22:00 WIB)"
+
     header_emoji = emoji if is_actionable else "⚪️"
     header_label = f"SINYAL {action}" if is_actionable else "MARKET PULSE"
 
@@ -2159,25 +2170,33 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         f"{header_emoji} <b>{header_label} — {display}</b>",
         f"━━━━━━━━━━━━━━━━━━━━━━",
         f"🕐 {now_wib.strftime('%Y.%m.%d %H:%M')} WIB | Session: {session(h)}",
-        f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}",
     ]
 
-    if is_free and is_actionable:
-        # ── FREE TIER: lock SL/TP — teaser only ──
-        lines.append(f"🔴 SL: 🔒 <b>[DONOR ONLY]</b>")
-        for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
-            if tp_val and tp_val > 0:
-                lines.append(f"🟢 {tp_label}: 🔒 <b>[DONOR ONLY]</b>")
+    if forex_metal and not in_kz:
+        # ── OUTSIDE KILLZONE: no entry/SL/TP — NO TRADE ZONE ──
         lines.append(f"")
-        lines.append(f"💡 <b>Free tier cuma bisa liat Entry Zone.</b>")
-        lines.append(f"   SL/TP dikunci — gak bisa eksekusi dengan aman.")
-        lines.append(f"   👑 <b>/subscribe</b> — Unlock SL/TP + 2 AI + Grok News")
+        lines.append(f"🔴 <b>NO TRADE ZONE</b>")
+        lines.append(f"💡 {display} hanya trading saat London (14:00-17:00 WIB) & NY (19:00-22:00 WIB)")
+        lines.append(f"   Sabar bro... sinyal muncul pas killzone aktif.")
     else:
-        lines.append(f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}")
-        # TP levels
-        for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
-            if tp_val and tp_val > 0:
-                lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
+        lines.append(f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}")
+
+        if is_free and is_actionable:
+            # ── FREE TIER: lock SL/TP — teaser only ──
+            lines.append(f"🔴 SL: 🔒 <b>[DONOR ONLY]</b>")
+            for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+                if tp_val and tp_val > 0:
+                    lines.append(f"🟢 {tp_label}: 🔒 <b>[DONOR ONLY]</b>")
+            lines.append(f"")
+            lines.append(f"💡 <b>Free tier cuma bisa liat Entry Zone.</b>")
+            lines.append(f"   SL/TP dikunci — gak bisa eksekusi dengan aman.")
+            lines.append(f"   👑 <b>/subscribe</b> — Unlock SL/TP + 2 AI + Grok News")
+        else:
+            lines.append(f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}")
+            # TP levels
+            for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+                if tp_val and tp_val > 0:
+                    lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
 
     # SnR + FIBO context (only for actionable signals)
     if levels and is_actionable:
@@ -2219,7 +2238,14 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     tier_label = sig.get("_tier", "🆓 Free")
 
     lines.append(f"")
-    if token_total > 0:
+
+    if not is_actionable:
+        # ── NON-ACTIONABLE (Market Pulse / No Trade Zone): minimal CTA ──
+        lines.append(f"━━━━━━━━━━━━━━━━")
+        if forex_metal and not in_kz:
+            lines.append(f"⏰ Next: London buka 14:00 WIB | NY buka 19:00 WIB")
+        lines.append(f"⚡ /subscribe — Unlock full AI signal + SL/TP + Multi-AI")
+    elif token_total > 0:
         token_k = f"{token_total/1000:.1f}k" if token_total >= 1000 else str(token_total)
         cost_rp = int(token_total * 1.5 / 1000)
         cost_rp = max(cost_rp, 1)
@@ -2271,7 +2297,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             else:
                 lines.append(f"   💎 <b>Elite Intelligence Active</b> — your edge is real")
     else:
-        # Fallback
+        # Fallback — no token data
         lines.append(f"⚡ Upgrade Tier → /subscribe")
         lines.append(f"   Makin banyak AI = makin akurat sinyal = makin cuan")
 
