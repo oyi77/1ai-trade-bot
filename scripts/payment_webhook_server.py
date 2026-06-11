@@ -77,20 +77,6 @@ def upgrade_member(chat_id: str, tier: str, days: int, merchant_ref: str = "") -
         except Exception as e:
             log.error(f"mark_payment_paid failed for ref {merchant_ref}: {e}")
             # Upgrade succeeded but payment marker failed — log and continue
-        # ── Meta Conversions API: Fire Purchase event ──
-        try:
-            from scripts.meta_conversion import send_purchase
-            # Extract amount from merchant_ref if available (format: VTFX-chatid-amount)
-            amount = 50000  # default
-            if merchant_ref:
-                parts = merchant_ref.split("-")
-                if len(parts) >= 3:
-                    try:
-                        amount = int(parts[2]) if parts[2].isdigit() else 50000
-                    except: pass
-            send_purchase(amount, chat_id)
-        except Exception as e:
-            log.warning(f"Meta CAPI Purchase failed (non-critical): {e}")
         return True
     except Exception as e:
         log.error(f"members.db upgrade failed for {chat_id}: {e}")
