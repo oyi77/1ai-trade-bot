@@ -289,17 +289,17 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
 
   <!-- AI Engine Performance — Live Visualization -->
   <div class="kpi-card mb-5">
-    <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🧠 AI Engine Consensus <span class="text-[10px] text-slate-500 font-normal">· Updated live every 30s</span></h3>
+    <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🧠 AI Engine Consensus <span class="text-[10px] text-slate-500 font-normal">· Update setiap 30 detik</span></h3>
     <div id="engine-consensus-bar" class="mb-3"></div>
     <div id="tf-tabs" class="flex flex-wrap gap-1 mb-3 border-b border-white/5 pb-2">
-      <span class="tf-tab" data-tf="D1">Daily</span>
-      <span class="tf-tab" data-tf="H4">4H</span>
-      <span class="tf-tab active" data-tf="H1">1H</span>
+      <span class="tf-tab" data-tf="D1">Harian</span>
+      <span class="tf-tab" data-tf="H4">4J</span>
+      <span class="tf-tab active" data-tf="H1">1J</span>
       <span class="tf-tab" data-tf="M15">15M</span>
       <span class="tf-tab" data-tf="M5">5M</span>
     </div>
     <div id="live-engines">
-      <div class="text-center py-8 text-sm text-slate-500">⏳ Loading AI engine data...</div>
+      <div class="text-center py-8 text-sm text-slate-500">⏳ Memuat data AI engine...</div>
     </div>
   </div>
 
@@ -1227,7 +1227,7 @@ function _renderEnginesForTf(tfKey) {
 
   // Verdict badge
   cbHtml += `<div class="flex items-center gap-2">
-    <span class="text-[10px] text-slate-500 font-semibold uppercase">Verdict</span>
+    <span class="text-[10px] text-slate-500 font-semibold uppercase">Keputusan</span>
     <span class="px-2.5 py-1 rounded-md text-xs font-bold" style="background:${vBg}20;color:${vBg};border:1px solid ${vBg}30">${verdict} ${score > 0 ? '· '+score+'%' : ''}</span>
   </div>`;
 
@@ -1480,7 +1480,7 @@ function renderLiveSnapshot(snap) {
     // ── AI Status Bar ──
     const status = snap.status || {};
     const state = status.state || 'connecting';
-    const detail = status.detail || (_engineHasData(_currentEngineData) ? 'Engine data loaded' : 'Waiting for worker...');
+    const detail = status.detail || (_engineHasData(_currentEngineData) ? 'Data engine tersedia' : 'Menunggu worker...');
     const pair = status.pair || (_currentEngineData.symbol || '---');
     const uptime = snap.uptime_seconds || 0;
     const cycles = snap.total_cycles || (_engineHasData(_currentEngineData) ? Object.keys((_currentEngineData.timeframes || {})).length * (Object.keys((_currentEngineData.timeframes || {})[_activeTf]?.engines || {})).length : 0);
@@ -1512,7 +1512,7 @@ function renderLiveSnapshot(snap) {
     if (pulseRing) pulseRing.style.background = mapped.color;
     if (pairEl) pairEl.textContent = pair;
     if (uptimeEl) uptimeEl.textContent = formatUptime(uptime);
-    if (cyclesEl) cyclesEl.textContent = cycles + ' cycles';
+    if (cyclesEl) cyclesEl.textContent = cycles + ' siklus';
 
   } catch (e) {
     console.warn('renderLiveSnapshot: parse error, using fallback —', e.message);
