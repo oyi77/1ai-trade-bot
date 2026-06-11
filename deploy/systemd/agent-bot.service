@@ -1,5 +1,5 @@
 [Unit]
-Description=1AI Agent Bot — Unified VilonaBot (test/deploy)
+Description=1AI Agent Bot — Production Telethon Layer
 After=network-online.target
 Wants=network-online.target
 
@@ -8,9 +8,11 @@ Type=simple
 User=openclaw
 WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
 Environment=TELEGRAM_BOT_TOKEN=8343388239:AAFgeAkc9bvjywyCsHqRIa_RiJ6q-rp6uv0
+Environment=TELEGRAM_API_ID=23647272
+Environment=TELEGRAM_API_HASH=1f69a4e0f03e5f51ddfa5b67ac7b5c49
+Environment=ADMIN_USER_IDS=157228659,5220170786
 Environment=PYTHONUNBUFFERED=1
-Environment=DATA_DIR=/home/openclaw/projects/1ai-trade-bot/data/agent
-ExecStart=/usr/bin/python3 /home/openclaw/projects/1ai-trade-bot/launch_bot.py
+ExecStart=/usr/bin/python3 -m agent.main
 Restart=always
 RestartSec=10
 StandardOutput=journal
