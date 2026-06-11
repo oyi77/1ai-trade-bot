@@ -5011,7 +5011,8 @@ def save_signal_log(log, asset="default"):
     (DATA_DIR / f"signal_log_{asset}.json").write_text(json.dumps(log))
 
 def is_trading_session(h):
-    return 7 <= h < 23
+    """Trading allowed 24h — killzone gate handles actual execution windows."""
+    return True
 
 def is_weekend():
     """True if Sat/Sun, OR Monday before 05:00 WIB (crypto mode extended)."""
@@ -5464,7 +5465,7 @@ def auto_analyze_loop():
         try:
             (DATA_DIR / '.scan_state').write_text(json.dumps(state))
         except Exception as e:
-            logger.debug(f"Failed to save scan state: {e}")
+            logger.warning(f"Failed to save scan state: {e}")
     def _load_scan_state():
         """Load scan state dict from disk, or empty dict."""
         try:
@@ -5523,10 +5524,6 @@ def auto_analyze_loop():
                 last_mapping_day = ""
                 _set_last_mapping("")  # clear persistent tracker
 
-            if not is_weekend() and not is_trading_session(h):
-                time.sleep(180)
-                continue
-
             # Rotate through assets
             pair, disp, _, is_forex = AUTO_SCAN_ASSETS[asset_idx % len(AUTO_SCAN_ASSETS)]
             asset_idx += 1
@@ -5555,6 +5552,11 @@ def auto_analyze_loop():
             _missed, _gap_pips = _check_missed_move(price, _ss)
             if _missed:
                 logger.warning(f"⚠️ MISSED MOVE [{disp}]: price moved {_gap_pips} pips since last scan")
+            # Seed state immediately so any crash before save still has datum
+            if not _ss:
+                _safekz = kz if 'kz' in dir() else "Outside"
+                _save_scan_state({"last_price": price, "last_action": "", "last_signal_time": "", "last_kz": _safekz})
+                _ss = _load_scan_state()
 
             # Check trade outcomes (TP/SL hits) — with donation CTA
             if TRADE_TRACKER:
