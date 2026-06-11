@@ -572,9 +572,9 @@ async def cmd_analytics() -> int:
 
 
 _KNOWN_BOTS = {
-    "vilona": "tradebot.bots.vilona",
+    "vilona": "tradebot.bots.platforms.vilona",
     "subscription": "tradebot.bots.subscription",
-    "stockity": "tradebot.bots.stockity",
+    "stockity": "tradebot.bots.stockity.bot",
 }
 
 

@@ -324,7 +324,7 @@ def get_transparency_data() -> dict:
 
     # Feed stats
     try:
-        from scripts.signal_feed import _load_feed  # type: ignore[import-not-found]
+        from tradebot.services.signal_service import _load_feed
 
         feed = _load_feed()
         feed_stats = feed.get("stats", {})

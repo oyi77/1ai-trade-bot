@@ -40,7 +40,6 @@ Run: python -m tradebot.web.server --port 9090
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
 from pathlib import Path
@@ -64,6 +63,7 @@ from tradebot.services.plans import (
     get_total_revenue,
     set_plan_price,
 )
+from tradebot.web.monitoring_api import router as monitoring_router
 from tradebot.web.public_dashboard import (
     get_backtest_data as _get_backtest_data,
 )
@@ -97,7 +97,14 @@ LOG = logging.getLogger("tradebot.web")
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(title="1ai-trade-bot Admin", version="1.0")
-app.add_middleware(SessionMiddleware, secret_key="tradebot-session-secret-key-change-in-prod", max_age=30*24*60*60)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="tradebot-session-secret-key-change-in-prod",
+    max_age=30 * 24 * 60 * 60,
+)
+
+# Wire monitoring API router (no auth — internal/loopback only by default)
+app.include_router(monitoring_router)
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 # ═══════════════════════════════════════════════════════════
@@ -114,7 +121,6 @@ SNAPSHOT_FALLBACK = {
     "uptime_seconds": 0,
     "total_cycles": 0,
 }
-
 
 
 def _is_admin(user_id: str) -> bool:
@@ -150,6 +156,7 @@ def _check_auth(request: Request) -> str:
 
 # ── Auth Routes ──────────────────────────────────────────────────────
 
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, error: str | None = None):
     """Render login page."""
@@ -163,10 +170,14 @@ async def login_submit(request: Request, user_id: str = Form(...)):
     """Handle login form submission."""
     user_id = user_id.strip()
     if not user_id.isdigit():
-        return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid user ID format"})
+        return templates.TemplateResponse(
+            "login.html", {"request": request, "error": "Invalid user ID format"}
+        )
 
     if not _is_admin(user_id):
-        return templates.TemplateResponse("login.html", {"request": request, "error": "Access denied. Not an admin user."})
+        return templates.TemplateResponse(
+            "login.html", {"request": request, "error": "Access denied. Not an admin user."}
+        )
 
     request.session["admin_user_id"] = user_id
     return RedirectResponse(url="/", status_code=302)
@@ -178,6 +189,7 @@ async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/login", status_code=302)
 
+
 # ── Admin Pages ────────────────────────────────────────────────────────
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
@@ -187,37 +199,59 @@ async def admin_dashboard(request: Request):
     prices = get_all_plan_prices()
     whitelabels = get_all_active_whitelabels()
 
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "title": "1ai-trade-bot Admin Dashboard",
-        "stats": stats,
-        "revenue": revenue,
-        "prices": prices,
-        "plans": PLAN_DETAILS,
-        "whitelabels": whitelabels,
-        "admin_ids": settings.ADMIN_USER_IDS,
-    })
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "title": "1ai-trade-bot Admin Dashboard",
+            "stats": stats,
+            "revenue": revenue,
+            "prices": prices,
+            "plans": PLAN_DETAILS,
+            "whitelabels": whitelabels,
+            "admin_ids": settings.ADMIN_USER_IDS,
+        },
+    )
 
 
 @app.get("/admin/plans", response_class=HTMLResponse)
 async def admin_plans_page(request: Request):
     _check_auth(request)
-    return templates.TemplateResponse("plans.html", {
-        "request": request,
-        "title": "Plan Management",
-        "plans": {p.value: PLAN_DETAILS[p] for p in Plan},
-        "prices": get_all_plan_prices(),
-    })
+    return templates.TemplateResponse(
+        "plans.html",
+        {
+            "request": request,
+            "title": "Plan Management",
+            "plans": {p.value: PLAN_DETAILS[p] for p in Plan},
+            "prices": get_all_plan_prices(),
+        },
+    )
 
 
 @app.get("/admin/whitelabels", response_class=HTMLResponse)
 async def admin_whitelabels_page(request: Request):
     _check_auth(request)
-    return templates.TemplateResponse("whitelabels.html", {
-        "request": request,
-        "title": "Whitelabel Management",
-        "whitelabels": get_all_active_whitelabels(),
-    })
+    return templates.TemplateResponse(
+        "whitelabels.html",
+        {
+            "request": request,
+            "title": "Whitelabel Management",
+            "whitelabels": get_all_active_whitelabels(),
+        },
+    )
+
+
+@app.get("/admin/monitoring", response_class=HTMLResponse)
+async def admin_monitoring_page(request: Request):
+    """Real-time system monitoring dashboard (admin only)."""
+    _check_auth(request)
+    return templates.TemplateResponse(
+        "admin_monitoring.html",
+        {
+            "request": request,
+            "title": "System Monitoring",
+        },
+    )
 
 
 # ── Public Pages (no auth) ─────────────────────────────────────────────
@@ -239,10 +273,13 @@ async def landing_page():
 @app.get("/signals", response_class=HTMLResponse)
 async def signals_page(request: Request):
     """Public signals feed (alias for /dashboard)."""
-    return templates.TemplateResponse("public_dashboard.html", {
-        "request": request,
-        "title": "Vilona TradeFX — AI Signal Dashboard",
-    })
+    return templates.TemplateResponse(
+        "public_dashboard.html",
+        {
+            "request": request,
+            "title": "Vilona TradeFX — AI Signal Dashboard",
+        },
+    )
 
 
 @app.get("/dashboard", response_class=RedirectResponse)
@@ -284,6 +321,7 @@ async def dashboard_bilingual(request: Request):
 #  Webhook Receiver — Worker pushes dashboard_snapshot here
 # ═══════════════════════════════════════════════════════════
 
+
 @app.post("/api/webhook/snapshot")
 async def webhook_receive_snapshot(request: Request):
     """Receive dashboard_snapshot from autonomous worker and cache in memory."""
@@ -292,7 +330,9 @@ async def webhook_receive_snapshot(request: Request):
         body = await request.json()
         with _live_snapshot_lock:
             _live_snapshot = body
-        LOG.debug("Snapshot received: type=%s cycles=%s", body.get("type"), body.get("total_cycles"))
+        LOG.debug(
+            "Snapshot received: type=%s cycles=%s", body.get("type"), body.get("total_cycles")
+        )
         return {"ok": True}
     except Exception as exc:
         LOG.warning("webhook_receive_snapshot parse failed: %s", exc)
@@ -307,12 +347,11 @@ async def api_live_snapshot():
     return snap
 
 
-
 # ── Public APIs (no auth) ──────────────────────────────────────────────
 @app.get("/api/feed")
 async def api_feed():
     """Recent signals (channel + user)."""
-    from scripts.signal_feed import get_recent_signals  # type: ignore[import-not-found]
+    from tradebot.services.signal_service import get_recent_signals
 
     return {"signals": get_recent_signals(50)}
 
@@ -320,7 +359,7 @@ async def api_feed():
 @app.get("/api/user_activity")
 async def api_user_activity():
     """User-generated signals."""
-    from scripts.signal_feed import get_user_signals  # type: ignore[import-not-found]
+    from tradebot.services.signal_service import get_user_signals
 
     return {"signals": get_user_signals(50)}
 
@@ -328,7 +367,7 @@ async def api_user_activity():
 @app.get("/api/feed/stats")
 async def api_feed_stats():
     """Public feed stats (renamed from old /api/stats to avoid admin API collision)."""
-    from scripts.signal_feed import get_stats  # type: ignore[import-not-found]
+    from tradebot.services.signal_service import get_stats
 
     return get_stats()
 
@@ -379,7 +418,7 @@ async def api_daily_analyze():
 async def api_daily_recap():
     """Daily trade recap from trade_tracker."""
     try:
-        from scripts.trade_tracker import get_daily_trades  # type: ignore[import-not-found]
+        from tradebot.services.trade_tracker_service import get_daily_trades
 
         return get_daily_trades()
     except Exception as exc:
@@ -401,13 +440,11 @@ async def api_fuel_create(
 ):
     """Create a Tripay donation payment for AI Fuel."""
     if amount < 10000:
-        return JSONResponse(
-            {"success": False, "error": "Minimum donasi Rp10.000"}, status_code=400
-        )
+        return JSONResponse({"success": False, "error": "Minimum donasi Rp10.000"}, status_code=400)
     try:
-        from members.payment import create_tripay_payment  # type: ignore[import-not-found]
+        from tradebot.services.payment import create_tripay_payment
 
-        result = create_tripay_payment(
+        result = await create_tripay_payment(
             chat_id=chat_id, username=username, tier="donor", amount=amount
         )
         if result.get("success"):
@@ -428,8 +465,8 @@ async def api_fuel_report(chat_id: str):
     return JSONResponse(body, status_code=status)
 
 
-
 # ── API ───────────────────────────────────────────────────────────────
+
 
 @app.get("/api/stats")
 async def api_stats(request: Request):
@@ -444,16 +481,18 @@ async def api_stats(request: Request):
 @app.get("/api/whitelabels")
 async def api_whitelabels(request: Request):
     _check_auth(request)
-    return {"whitelabels": [
-        {
-            "owner": wl.owner_user_id,
-            "username": wl.bot_username,
-            "name": wl.custom_name,
-            "share": wl.revenue_share,
-            "active": wl.active,
-        }
-        for wl in get_all_active_whitelabels()
-    ]}
+    return {
+        "whitelabels": [
+            {
+                "owner": wl.owner_user_id,
+                "username": wl.bot_username,
+                "name": wl.custom_name,
+                "share": wl.revenue_share,
+                "active": wl.active,
+            }
+            for wl in get_all_active_whitelabels()
+        ]
+    }
 
 
 @app.post("/api/plan/set")
@@ -498,6 +537,7 @@ async def api_set_affiliate_rate(
     set_affiliate_rate(user_id, rate)
     return JSONResponse({"ok": True, "user_id": user_id, "rate": rate})
 
+
 # ── Bridge API (merged from tradebot/services/bridge_server.py) ──────
 
 _bridge_state: dict = {}
@@ -529,7 +569,10 @@ async def bridge_balance():
 
 # ── Health ─────────────────────────────────────────────────────────
 
+
 @app.get("/health")
 async def health_check():
     from tradebot.services.health import check_all
-    return check_all()
+
+    report = await check_all()
+    return report

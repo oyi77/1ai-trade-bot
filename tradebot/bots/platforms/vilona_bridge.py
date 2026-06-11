@@ -300,7 +300,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                 _scripts = str(Path(settings.DATA_DIR).parent / "scripts")
                 if _scripts not in sys.path:
                     sys.path.insert(0, _scripts)
-                from trade_tracker import (  # type: ignore[import-untyped]
+                from tradebot.services.trade_tracker_service import (
                     get_recent_trades,
                     get_stats,
                 )
@@ -342,7 +342,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                 _scripts = str(Path(settings.DATA_DIR).parent / "scripts")
                 if _scripts not in sys.path:
                     sys.path.insert(0, _scripts)
-                from engine_consensus import run_engine_consensus  # type: ignore[import-untyped]
+                from tradebot.services.consensus_service import run_engine_consensus
                 result = run_engine_consensus(symbol="XAUUSD")
                 dashboard_output: dict[str, Any] = {
                     "symbol": result.get("symbol", "XAUUSD"),
@@ -354,9 +354,10 @@ class SignalHandler(BaseHTTPRequestHandler):
                     "macro_trend": result.get("macro_trend", "NEUTRAL"),
                     "counter_trend_flags": result.get("counter_trend_flags", []),
                 }
-                from engine_consensus import TF_WEIGHTS as _TFW
-                from engine_consensus import TIMEFRAMES as _TFS  # type: ignore[import-untyped]
-                for tf in _TFS:
+                from tradebot.services.consensus_service import get_tf_weights, get_timeframes
+                _tf_weights = get_tf_weights()
+                _timeframes = get_timeframes()
+                for tf in _timeframes:
                     tr = result.get("timeframes", {}).get(tf, {})
                     if tr:
                         dashboard_output["timeframes"][tf] = {
@@ -366,7 +367,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                             "sell_count": tr["sell_count"],
                             "total": tr["total"],
                             "engines": tr.get("engines", {}),
-                            "weight": _TFW.get(tf, 0),
+                            "weight": _tf_weights.get(tf, 0),
                         }
                         for _k in ("macro", "structure", "entry"):
                             if _k in tr:
@@ -413,7 +414,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                 _root = str(Path(settings.DATA_DIR).parent)
                 if _root not in sys.path:
                     sys.path.insert(0, _root)
-                from members import get_total_donations  # type: ignore[import-untyped]
+                from tradebot.services.members_service import get_total_donations
                 self._json({"total_raised": get_total_donations(), "currency": "IDR"})
             except Exception as e:
                 LOG.error("/api/donations error: %s", e)
