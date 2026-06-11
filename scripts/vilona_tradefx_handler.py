@@ -634,7 +634,7 @@ def _is_manual_blocked(chat_id, pair=""):
     ts = USER_LAST_ANALYZE.get(chat_id)
     if ts and (now - ts) < throttle:
         wait = int(throttle - (now - ts))
-        label = "Donatur" if is_donor else "Free"
+        label = "Subscriber" if is_donor else "Free"
         return True, f"⏳ [{label}] Tunggu {wait} detik sebelum analisa berikutnya."
 
     # Layer 3: same-pair cooldown (all users: 90s)
@@ -669,7 +669,7 @@ def _check_donor_quota(chat_id):
     
     # Check quota AFTER increment — user gets exactly QUOTA x per day
     if record["count"] > DONOR_DAILY_QUOTA:
-        return False, max(0, DONOR_DAILY_QUOTA - record["count"]), f"🛑 <b>Kuota Donatur Harian Penuh!</b>\\n━━━━━━━━━━━━━━━━\\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\\n⏰ Reset: besok jam 00:00 WIB\\n\\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
+        return False, max(0, DONOR_DAILY_QUOTA - record["count"]), f"🛑 <b>Kuota Subscriber Harian Penuh!</b>\\n━━━━━━━━━━━━━━━━\\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\\n⏰ Reset: besok jam 00:00 WIB\\n\\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
     
     remaining = max(0, DONOR_DAILY_QUOTA - record["count"])
     if remaining <= 5:
@@ -755,7 +755,7 @@ def handle_payment_callback(callback_query):
         return
 
     if data == "cancel_input":
-        # ── Cancel custom amount input, return to /donate ──
+        # ── Cancel custom amount input, return to /subscribe ──
         DONATION_INPUT_STATE.pop(str(chat_id), None)
         tg_send("❌ Input dibatalkan.", chat_id)
         # Re-send donate menu
@@ -945,12 +945,12 @@ def handle_payment_callback(callback_query):
         else:
             # Generic — show options
             tg_send(
-                "⚡ <b>Isi Bahan Bakar AI</b>\n"
+                "⚡ <b>Upgrade Tier</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
                 "Pilih nominal dukungan:\n\n"
                 "☕️ Rp15K — Traktir kopi\n"
                 "📚 Rp25K — Dukung AI belajar\n"
-                "🚀 Nominal bebas — Isi bensin\n\n"
+                "🚀 Nominal bebas — Upgrade tier\n\n"
                 "Semua dukungan = DONATUR VIP AKTIF PERMANEN.",
                 chat_id
             )
@@ -2149,7 +2149,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         lines.append(f"")
         lines.append(f"💡 <b>Free tier cuma bisa liat Entry Zone.</b>")
         lines.append(f"   SL/TP dikunci — gak bisa eksekusi dengan aman.")
-        lines.append(f"   👑 <b>/donate</b> — Unlock SL/TP + 2 AI + Grok News")
+        lines.append(f"   👑 <b>/subscribe</b> — Unlock SL/TP + 2 AI + Grok News")
     else:
         lines.append(f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}")
         # TP levels
@@ -2184,7 +2184,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         lines.append(f"")
         lines.append(f"💡 Mau validasi SnR + FIBO + SL placement?")
         lines.append(f"   👉 DM <b>@berkahkaryaforexbotbot</b> — ketik /levels {display.lower()}")
-        lines.append(f"   🔒 Premium feature — <b>/donate</b> dulu kalo belum unlock")
+        lines.append(f"   🔒 Premium feature — <b>/subscribe</b> dulu kalo belum unlock")
 
     # Token counter gimmick + CTA
     token_total = sig.get("_token_total", 0)
@@ -2220,11 +2220,11 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
             lines.append(f"   🔍 <i>Preview: Market-moving headlines dari X/Twitter...</i>")
             lines.append(f"   🗞️  Breaking news, FOMC, NFP, CPI, geopolitics — all real-time")
-            lines.append(f"   🔓 <b>Unlock → /news {display.lower()}</b> atau /donate")
+            lines.append(f"   🔓 <b>Unlock → /news {display.lower()}</b> atau /subscribe")
             lines.append(f"")
-            lines.append(f"⚡ <b>Rp 50k/bulan</b> — lebih murah dari 1x loss SL")
+            lines.append(f"⚡ <b>Rp 50K/bln (PRO)</b> — lebih murah dari 1x loss SL")
             lines.append(f"   Dapet 2 AI + Grok News + /levels + /news")
-            lines.append(f"   <b>/donate</b> sekarang — jangan biarin AI lu kerja sendirian")
+            lines.append(f"   <b>/subscribe</b> sekarang — jangan biarin AI lu kerja sendirian")
 
         else:
             # ── DONOR TIER: Full power flex + AI Partner narrative ──
@@ -2245,12 +2245,12 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             lines.append(f"   Makin banyak AI = makin akurat sinyal = makin cuan.")
             lines.append(f"   Jangan stop disini — upgrade ke tier tertinggi:")
             if tier_label in ("⭐ Pro",):
-                lines.append(f"   👑 <b>/donate</b> → Elite Tier: 3 AI + Grok News real-time")
+                lines.append(f"   👑 <b>/subscribe</b> → Elite Tier: 3 AI + Grok News real-time")
             else:
                 lines.append(f"   💎 <b>Elite Intelligence Active</b> — your edge is real")
     else:
         # Fallback
-        lines.append(f"⚡ Isi Bahan Bakar AI → /donate")
+        lines.append(f"⚡ Upgrade Tier → /subscribe")
         lines.append(f"   Makin banyak AI = makin akurat sinyal = makin cuan")
 
     return "\n".join(lines)
@@ -2361,7 +2361,7 @@ def fmt_pulse(pulse_data: dict) -> str:
     lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
     lines.append(f"   <i>Real-time X/Twitter market context...</i>")
     lines.append(f"")
-    lines.append(f"⚡ <b>/donate</b> — Rp 50k/bulan")
+    lines.append(f"⚡ <b>/subscribe</b> — Rp 50K/bln (PRO)")
     lines.append(f"   Unlock AI Signal + Grok News + /levels + SnR/FIBO")
     lines.append(f"   Jangan cuma liat engine doang — kasih AI lu kerjaan beneran")
 
@@ -2725,7 +2725,7 @@ def handle_ultimatum_callback(cb):
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📱 /help — Semua command\n"
             "📊 /analyze xauusd — Mulai analisa\n"
-            "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
+            "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📞 Admin: @codergaboets"
         )
@@ -2900,7 +2900,7 @@ def handle_command(cmd, text, chat_id, msg):
                 f"📰 /news — Grok News X/Twitter intel 👑\n"
                 f"📊 /dashboard — Live dashboard web\n"
                 f"📱 /help — Semua command\n"
-                f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot"
+                f"⚡ Upgrade Tier → @berkahkaryaforexbotbot"
             )
             tg_send(welcome, chat_id)
         else:
@@ -2931,7 +2931,7 @@ def handle_command(cmd, text, chat_id, msg):
             "/price — Cek harga real-time",
             "/data — Market overview",
             "/status — Cek Kuota & Akses VIP",
-            "/donate — Isi Bahan Bakar AI ⚡\n",
+            "/subscribe — Upgrade Tier ⚡\n",
             "🔍 <b>TECHNICAL ANALYSIS (SMC)</b> 🆕",
             "/zones — Order Blocks + FVG + Supply/Demand",
             "/structure — BOS/CHoCH + Trend + MTF Alignment",
@@ -2945,9 +2945,9 @@ def handle_command(cmd, text, chat_id, msg):
             "/history — Riwayat trade terakhir",
             "/recap — Rekap harian\n",
             "🔧 <b>POWER TOOLS</b>",
-            "/autosync — Auto-trade ke EA (Donatur)",
+            "/autosync — Auto-trade ke EA (Subscriber)",
             "/bridge_status — Cek koneksi EA",
-            "/mykey — Cek License EA kamu (Donatur)\n",
+            "/mykey — Cek License EA kamu (Subscriber)\n",
             "🔑 <b>EA MT5 DOWNLOAD</b>",
             "📥 phantomfx.aitradepulse.com/ea/download/",
             "━━━━━━━━━━━━━━━━",
@@ -3042,8 +3042,8 @@ def handle_command(cmd, text, chat_id, msg):
                 "Auto-trailing SL saat profit jalan.\n"
                 "Bridge update SL ke EA kamu real-time.\n"
                 "\n"
-                "👑 Khusus Donatur.\n"
-                "⚡ /donate — Rp 50k/bulan",
+                "👑 Khusus Subscriber.\n"
+                "⚡ /subscribe — Rp 50K/bln (PRO)",
                 chat_id
             )
             return
@@ -3155,16 +3155,16 @@ def handle_command(cmd, text, chat_id, msg):
                 elif pct < 60:
                     fuel_lines.append(f"   🟡 Bensin mulai menipis — butuh isi ulang")
                 else:
-                    fuel_lines.append(f"   🟢 Aman — terima kasih para donatur!")
+                    fuel_lines.append(f"   🟢 Aman — terima kasih para subscriber!")
                 
                 fuel_lines.append(f"")
-                fuel_lines.append(f"💚 <b>{donor_count}</b> donatur udah isi bensin bulan ini.")
+                fuel_lines.append(f"💚 <b>{donor_count}</b> subscriber udah upgrade tier bulan ini.")
                 if last:
                     if last["days_ago"] > 30:
                         fuel_lines.append(f"   Kamu terakhir isi: <b>{last['days_ago']} hari</b> lalu — Saatnya isi ulang?")
                     else:
                         fuel_lines.append(f"   Kamu terakhir isi: {last['days_ago']} hari lalu — Makasih Bro!")
-                fuel_lines.append(f"   ⚡ <b>/donate</b> — Isi bensin (Rp 50k aja udah ngebantu)")
+                fuel_lines.append(f"   ⚡ <b>/subscribe</b> — Upgrade tier (Rp 50k aja udah ngebantu)")
             except Exception as e:
                 logger.warning(f"Fuel gauge failed: {e}")
             
@@ -3193,13 +3193,13 @@ def handle_command(cmd, text, chat_id, msg):
                 f"━━━━━━━━━━━━━━━━\n"
                 f"Kamu punya {FREE_QUOTA_PER_DAY}x peluru analisa AI setiap harinya.\n"
                 f"\n"
-                f"🔒 <b>Fitur Donatur Eksklusif:</b>\n"
+                f"🔒 <b>Fitur Subscriber Eksklusif:</b>\n"
                 f"📥 Download EA MT5 (Auto-Trade)\n"
                 f"🔑 License Key untuk EA\n"
                 f"🤖 Auto-Trade langsung ke akun MT5\n"
                 f"🧠 Multi-Model AI Consensus (akurasi lebih tinggi)\n"
                 f"\n"
-                f"👉 /donate — Buka akses Donatur sekarang!"
+                f"👉 /subscribe — Buka akses Subscriber sekarang!"
             )
         txt += weekend_note
         tg_send(txt, chat_id)
@@ -3221,9 +3221,9 @@ def handle_command(cmd, text, chat_id, msg):
                     "━━━━━━━━━━━━━━━━\n"
                     f"📊 Free Member: {FREE_QUOTA_PER_DAY}x analisa/hari\n"
                     f"📉 Sisa: 0/{FREE_QUOTA_PER_DAY}\n\n"
-                    "⚡ <b>Isi Bahan Bakar AI!</b>\n"
+                    "⚡ <b>Upgrade Tier!</b>\n"
                     "Donasi sukarela untuk akses unlimited:\n"
-                    "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n\n"
+                    "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n\n"
                     "⏰ Reset: besok jam 00:00 WIB",
                     chat_id
                 )
@@ -3254,10 +3254,10 @@ def handle_command(cmd, text, chat_id, msg):
                 is_elite = _is_donor(str(chat_id)) if chat_id else False
                 if not is_elite:
                     tg_send(
-                        "👑 <b>Custom Parameter khusus Donatur!</b>\n"
+                        "👑 <b>Custom Parameter khusus Subscriber!</b>\n"
                         "━━━━━━━━━━━━━━━━\n"
-                        "Fitur risk= dan tf= hanya untuk Donatur.\n\n"
-                        "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
+                        "Fitur risk= dan tf= hanya untuk Subscriber.\n\n"
+                        "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n"
                         "👉 /bill — Lihat info",
                         chat_id
                     )
@@ -3417,7 +3417,7 @@ def handle_command(cmd, text, chat_id, msg):
                             "\n━━━━━━━━━━━━━━━━\n"
                             "🆓 <b>FREE TIER — Akurasi Terbatas</b>\n"
                             "Analisa solo 1 model AI. Upgrade untuk multi-model consensus:\n"
-                            "👉 /donate — Isi Bahan Bakar AI"
+                            "👉 /subscribe — Upgrade Tier"
                         )
                     tg_send(auto_text, chat_id)
                 else:
@@ -3493,11 +3493,11 @@ def handle_command(cmd, text, chat_id, msg):
                             "📊 <b>FREE TIER:</b> Analisa 1 model AI solo\n"
                             "⭐ <b>PREMIUM:</b> 3 model AI konsensus + akurasi lebih tinggi\n"
                             f"Sinyal ini generate dari 1 AI model saja dengan confidence terbatas.\n\n"
-                            "💡 <b>Isi Bahan Bakar AI</b> untuk premium multi-model consensus:\n"
+                            "💡 <b>Upgrade Tier</b> untuk premium multi-model consensus:\n"
                             "✅ 3 AI model (DeepSeek + GPT-4o + Claude)\n"
                             "✅ Consensus voting → akurasi lebih tinggi\n"
                             "✅ Analisa unlimited 60x/hari\n"
-                            "👉 /donate — dukung server & upgrade tier"
+                            "👉 /subscribe — upgrade ke PRO/ELITE"
                         )
                     else:
                         text += (
@@ -3505,7 +3505,7 @@ def handle_command(cmd, text, chat_id, msg):
                             "⭐ <b>PREMIUM TIER — Multi-Model Consensus</b>\n"
                             "3 AI model (DeepSeek + GPT-4o + Claude) konsensus.\n"
                             "Akurasi maksimal berkat support kamu! 🥂\n"
-                            "👉 /donate — Ajak teman ikut donasi"
+                            "👉 /subscribe — Ajak teman ikut donasi"
                         )
                     # ── Fuel Gauge Reminder (every 3rd analyze for donors) ──
                     if is_donor:
@@ -3516,7 +3516,7 @@ def handle_command(cmd, text, chat_id, msg):
                                 fuel = get_monthly_fuel_stats()
                                 fuel_pct = int((fuel['total'] / 500000) * 100)
                                 fuel_bar = '█' * min(10, int(fuel['total'] / 50000)) + '░' * (10 - min(10, int(fuel['total'] / 50000)))
-                                text += f'\n━━━━━━━━━━━━━━━━━━━━━━\n⛽ Server Fuel: {fuel_bar} {fuel_pct}%\nRp{fuel["total"]:,} / Rp500,000 | {fuel["donor_count"]} donatur\n⚡ /donate — Isi bensin'
+                                text += f'\n━━━━━━━━━━━━━━━━━━━━━━\n⛽ Server Fuel: {fuel_bar} {fuel_pct}%\nRp{fuel["total"]:,} / Rp500,000 | {fuel["donor_count"]} subscriber\n⚡ /subscribe — Upgrade tier'
                             except Exception:
                                 pass
                     keyboard = {
@@ -3720,15 +3720,15 @@ def handle_command(cmd, text, chat_id, msg):
                             if not is_donor:
                                 text += (
                                     "\n━━━━━━━━━━━━━━━━\n"
-                                    "💡 <b>Kalau sinyal ini cuan, saatnya isi bensin AI!</b>\n"
+                                    "💡 <b>Kalau sinyal ini cuan, saatnya upgrade tier!</b>\n"
                                     "Server analisa 24/7 butuh biaya API & GPU.\n"
                                     "Jangan cuma diperas aja Bro 😄\n"
-                                    "👉 /donate — dukung seikhlasnya, AKTIF PERMANEN"
+                                    "👉 /subscribe — pilih tier subscription"
                                 )
                             else:
                                 text += (
                                     "\n━━━━━━━━━━━━━━━━\n"
-                                    "🤝 <b>Makasih udah jadi Donatur!</b>\n"
+                                    "🤝 <b>Makasih udah jadi Subscriber!</b>\n"
                                     "Server AI ini hidup karena support kamu. 🥂"
                                 )
                             keyboard = {
@@ -3832,44 +3832,13 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send(txt, chat_id, reply_markup=markup)
 
     elif cmd == "/donate":
-        # ── /donate — Siram Bahan Bakar Mesin AI ──
+        # ── /donate — legacy redirect ke tiered subscription ──
         if not chat_id:
             return
-        # Clear any stale donation input state
-        DONATION_INPUT_STATE.pop(str(chat_id), None)
         username = ""
         if msg:
             username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
-
-        txt = (
-            "💚 <b>SIRAM BAHAN BAKAR MESIN AI 🚀</b>\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "Server AI ini mengolah jutaan data market\n"
-            "secara real-time dan membutuhkan biaya API\n"
-            "& GPU yang masif setiap detiknya.\n"
-            "\n"
-            "Jika sinyal AI ini telah mengubah portofolio\n"
-            "Anda menjadi hijau, mari bergotong royong\n"
-            "menjaga mesin ini tetap hidup dan semakin buas!\n"
-            "\n"
-            "Pilih dukunganmu hari ini:\n"
-            "\n"
-            "💼 <b>EKSKLUSIF: PROGRAM INVESTOR AI</b>\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "Apakah Anda big player/investor yang ingin\n"
-            "ikut andil dalam pengembangan ekosistem\n"
-            "kuantitatif ini secara makro? Kami membuka\n"
-            "jalur pendanaan privat. Hubungi Chief\n"
-            "Architect kami di bawah."
-        )
-        markup = {"inline_keyboard": [
-            [{"text": "☕️ Traktir Kopi (Rp 15K)", "callback_data": "donate:coffee"},
-             {"text": "🍱 Makan Siang Server (Rp 25K)", "callback_data": "donate:learn"}],
-            [{"text": "🚀 Isi Bensin Full (Rp 50K)", "callback_data": "donate:fuel"}],
-            [{"text": "💰 Input Nominal Bebas", "callback_data": "donate:custom"}],
-            [{"text": "🤝 HUBUNGI CHIEF ARCHITECT", "url": "https://t.me/codergaboets"}],
-        ]}
-        tg_send(txt, chat_id, reply_markup=markup)
+        _send_donate_menu(chat_id, username)
 
     elif cmd == "/testpay":
         """🧪 Test payment: donasi minimal — verifikasi webhook Tripay."""
@@ -3883,7 +3852,7 @@ def handle_command(cmd, text, chat_id, msg):
         if msg:
             username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
 
-        tg_send("🧪 <b>Test Isi Bahan Bakar AI — Rp10,000</b>\nMembuat invoice...", chat_id)
+        tg_send("🧪 <b>Test Upgrade Tier — Rp10,000</b>\nMembuat invoice...", chat_id)
 
         result = create_tripay_payment(str(chat_id), username, tier="donor", amount=10000)
         if result.get("error"):
@@ -3894,7 +3863,7 @@ def handle_command(cmd, text, chat_id, msg):
         ref = result.get("reference", "") or result.get("merchant_ref", "")
 
         txt = (
-            "🧪 <b>Test Isi Bahan Bakar AI — Rp10,000</b>\n"
+            "🧪 <b>Test Upgrade Tier — Rp10,000</b>\n"
             "━━━━━━━━━━━━━━━━\n"
             "💰 Total: <b>Rp10,000</b>\n"
             "👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
@@ -3989,11 +3958,11 @@ def handle_command(cmd, text, chat_id, msg):
         # ── DONOR GATE: Only donors can auto-trade ──
         if not _is_donor(str(chat_id)):
             tg_send(
-                "🔒 <b>Auto-Trade khusus Donatur!</b>\n"
+                "🔒 <b>Auto-Trade khusus Subscriber!</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
                 "Fitur auto-trade ke EA hanya tersedia untuk\n"
-                "👑 <b>Donatur</b> — yang sudah dukung server AI.\n\n"
-                "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
+                "👑 <b>Subscriber</b> — yang sudah dukung server AI.\n\n"
+                "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n"
                 "📞 @codergaboets — Tanya admin",
                 chat_id
             )
@@ -4058,7 +4027,7 @@ def handle_command(cmd, text, chat_id, msg):
                 f"   Bayangin kalo bisa baca X/Twitter juga 😤\n"
                 f"\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"⚡ <b>/donate</b> — Rp 50k/bulan\n"
+                f"⚡ <b>/subscribe</b> — Rp 50K/bln (PRO)\n"
                 f"   Unlock Grok News + 2 AI + /levels\n"
                 f"   Kasih AI lu mata buat liat berita 🗞️",
                 chat_id
@@ -4288,7 +4257,7 @@ def handle_command(cmd, text, chat_id, msg):
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
             lines.append("🔒 <b>FREE TIER — H1 Zones Only</b>")
             lines.append("👑 Multi-TF (M15 granular + full zone depth)")
-            lines.append("   → <b>/donate</b> untuk unlock")
+            lines.append("   → <b>/subscribe</b> untuk unlock")
         
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
@@ -4452,7 +4421,7 @@ def handle_command(cmd, text, chat_id, msg):
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
             lines.append("🔒 <b>FREE TIER — Basic Structure</b>")
             lines.append("👑 MTF Alignment + Structure Grade + CHoCH count")
-            lines.append("   → <b>/donate</b> untuk unlock full analysis")
+            lines.append("   → <b>/subscribe</b> untuk unlock full analysis")
         
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
@@ -4609,7 +4578,7 @@ def handle_command(cmd, text, chat_id, msg):
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
             lines.append("🔒 <b>FREE TIER — Basic Session</b>")
             lines.append("👑 Range analysis + manipulation detection")
-            lines.append("   → <b>/donate</b> untuk unlock")
+            lines.append("   → <b>/subscribe</b> untuk unlock")
         
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
@@ -4621,7 +4590,7 @@ def handle_command(cmd, text, chat_id, msg):
         # ── PREMIUM GATE ──
         if not _is_donor(str(chat_id)):
             tg_send(
-                "👑 <b>FITUR PREMIUM — Khusus Donatur</b>\n"
+                "👑 <b>FITUR PREMIUM — Khusus Subscriber</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "/levels adalah fitur analisa level profesional:\n"
                 "📐 SnR + FIBO Retracement\n"
@@ -4630,11 +4599,11 @@ def handle_command(cmd, text, chat_id, msg):
                 "💧 Liquidity Zones\n"
                 "🕐 Session Levels\n"
                 "\n"
-                "🔒 Fitur ini eksklusif untuk Donatur.\n"
+                "🔒 Fitur ini eksklusif untuk Subscriber.\n"
                 "\n"
                 "💚 <b>ISI BAHAN BAKAR AI</b>\n"
                 "Donasi sekali — akses permanen!\n"
-                "👉 /donate — Lihat opsi donasi\n"
+                "👉 /subscribe — Lihat opsi donasi\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Server AI ini memproses jutaan data\n"
                 "tiap hari. Butuh biaya API & GPU\n"
@@ -4848,7 +4817,7 @@ def handle_command(cmd, text, chat_id, msg):
         lines.append("")
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("🔍 /analyze — Dapatkan sinyal entry dari level ini")
-        lines.append("⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
+        lines.append("⚡ Upgrade Tier → @berkahkaryaforexbotbot")
         
         tg_send("\n".join(lines), chat_id)
 
@@ -5090,9 +5059,9 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(
                 "🔑 <b>Generate License Key</b> [🔒 LOCKED]\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Fitur generate key EA hanya untuk Donatur.\n"
+                "Fitur generate key EA hanya untuk Subscriber.\n"
                 "Support project dulu ya Bro!\n\n"
-                "⚡ /donate — Isi Bahan Bakar AI",
+                "⚡ /subscribe — Upgrade Tier",
                 chat_id
             )
             return
@@ -6038,7 +6007,7 @@ def _compute_daily_recap() -> str | None:
     else:
         lines.append("⚪ <b>BREAKEVEN.</b> Tidak ada sinyal yang tersentuh TP/SL.")
     lines.append("")
-    lines.append("💚 Jangan lupa isi bensin AI → /donate")
+    lines.append("💚 Jangan lupa upgrade tier → /subscribe")
     return "\n".join(lines)
 
 
@@ -6103,7 +6072,7 @@ def _compute_weekly_report() -> str | None:
     else:
         lines.append("🔴 <b>LOSING WEEK.</b> Evaluasi engine untuk minggu depan.")
     lines.append("")
-    lines.append("💚 Dukung server AI → /donate")
+    lines.append("💚 Upgrade tier → /subscribe")
     return "\n".join(lines)
 
 
@@ -6211,11 +6180,11 @@ def main():
             {"command": "analyze",  "description": "🧠 Perintahkan AI Scan Market"},
             {"command": "price",    "description": "💰 Cek harga real-time"},
             {"command": "mapping",  "description": "📐 Mapping harian + level S/R"},
-            {"command": "levels",   "description": "🏛 SnR + FIBO + Engine (Donor)"},
-            {"command": "news",     "description": "📰 Grok News — X/Twitter intel (Donor)"},
+            {"command": "levels",   "description": "🏛 SnR + FIBO + Engine (Subscriber)"},
+            {"command": "news",     "description": "📰 Grok News — X/Twitter intel (Subscriber)"},
             {"command": "killzone", "description": "🎯 Radar sesi market aktif"},
-            {"command": "donate",   "description": "⚡ Isi Bahan Bakar AI"},
-            {"command": "status",   "description": "🛡 Cek Kuota & Akses VIP"},
+            {"command": "subscribe","description": "⭐ Upgrade ke PRO/ELITE/LIFETIME"},
+            {"command": "status",   "description": "🛡 Cek Kuota & Status"},
             {"command": "mykey",    "description": "🔑 Cek License EA Kamu"},
         ]
         payload = json.dumps({"commands": commands}).encode()
@@ -6272,7 +6241,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
@@ -6308,7 +6277,7 @@ def main():
                                         pay_code = result.get("pay_code", "")
                                         ref = result.get("reference", "") or result.get("merchant_ref", "")
                                         txt = (
-                                            f"⚡ <b>Isi Bahan Bakar AI Rp{amount:,}</b>\n"
+                                            f"⚡ <b>Upgrade Tier Rp{amount:,}</b>\n"
                                             f"━━━━━━━━━━━━━━━━\n"
                                             f"👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
                                         )
