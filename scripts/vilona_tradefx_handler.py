@@ -329,44 +329,35 @@ def set_autosync(chat_id, enabled=True):
 
 
 def _fetch_ohlcv_for_ai(pair="gold"):
-    """Fetch OHLCV bars for AI analysis prompt."""
+    """Fetch OHLCV bars for AI analysis via UnifiedMarketData (single source of truth).
+    Falls back to FCS API if market data is unavailable."""
     pair = pair.lower().strip()
-    sym_map = {"gold":"GC=F","xauusd":"GC=F","btc":"BTC-USD","btcusd":"BTC-USD",
-               "eth":"ETH-USD","ethusd":"ETH-USD",
-               "oil":"CL=F","eurusd":"EURUSD=X","gbpusd":"GBPUSD=X",
-               "usdjpy":"JPY=X","jpyusd":"JPY=X",
-               "aapl":"AAPL","tsla":"TSLA","msft":"MSFT","nvda":"NVDA",
-               "bbca":"BBCA.JK","bbri":"BBRI.JK","tlkm":"TLKM.JK","asii":"ASII.JK",
-               "unvr":"UNVR.JK","bmri":"BMRI.JK","adro":"ADRO.JK","ihsg":"^JKSE"}
-    # Internal name for FCS fallback
+    
+    # ── Primary: UnifiedMarketData (uses SYMBOL_MAP: gold→XAUUSD_SPOT, btc→BTC-USD, etc.) ──
+    try:
+        if MARKET_DATA is not None:
+            interval = "15m"
+            bars = MARKET_DATA.get_bars_dicts(pair, interval, 80)
+            if bars:
+                result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
+                         for b in bars[-20:]]
+                logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {pair} via MARKET_DATA ({MARKET_DATA._resolve(pair)})")
+                return result
+            logger.warning(f"_fetch_ohlcv_for_ai: empty bars for {pair} via MARKET_DATA")
+        else:
+            logger.error("_fetch_ohlcv_for_ai: MARKET_DATA is None")
+    except Exception as e:
+        logger.warning(f"_fetch_ohlcv_for_ai (MARKET_DATA) error: {e}")
+    
+    # ── Fallback: FCS API ──
     _fcs_name_map = {"gold":"XAUUSD","xauusd":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
                      "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL",
                      "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY","jpyusd":"USDJPY"}
-    sym = sym_map.get(pair, "GC=F")
-    # Stocks use daily; forex/crypto/commodities use 15m
-    is_stock = sym.replace(".JK","").isalpha() and "." not in sym.replace(".JK","")
-    interval = "1d" if (".JK" in sym or sym in ("AAPL","TSLA","MSFT","NVDA")) else "15m"
-    try:
-        if MARKET_DATA is None:
-            logger.error(f"_fetch_ohlcv_for_ai: MARKET_DATA is None!")
-            raise Exception("MARKET_DATA not initialized")
-        bars = MARKET_DATA.get_bars_dicts(sym, interval, 80)
-        if not bars:
-            logger.warning(f"_fetch_ohlcv_for_ai: got empty bars for {sym} ({interval})")
-            raise Exception("Empty bars from MARKET_DATA")
-        result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
-                for b in bars[-20:]]
-        logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {sym}")
-        return result
-    except Exception as e:
-        logger.warning(f"_fetch_ohlcv_for_ai (primary) error: {e}")
-    
-    # ── Fallback: FCS API ──
     try:
         fcs_name = _fcs_name_map.get(pair)
         if fcs_name:
             from data_sources import fcs_ohlcv
-            bars_data = fcs_ohlcv(fcs_name, period=interval, bars=20)
+            bars_data = fcs_ohlcv(fcs_name, period="15m", bars=20)
             if bars_data:
                 result = [{"t": b.get("timestamp", int(time.time())),
                           "o": b["Open"], "h": b["High"], "l": b["Low"], "c": b["Close"]}
@@ -1127,7 +1118,7 @@ def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlc
             ohlcv_m15 = None
             if MARKET_DATA:
                 try:
-                    m15_bars = MARKET_DATA.get_ohlcv("GC=F", "15m", 80)
+                    m15_bars = MARKET_DATA.get_ohlcv("gold", "15m", 80)
                     if m15_bars and len(m15_bars) >= 30:
                         ohlcv_m15 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
                                       "low": b.low, "close": b.close, "volume": b.volume} for b in m15_bars]
@@ -3699,8 +3690,7 @@ def handle_command(cmd, text, chat_id, msg):
         ohlcv_m15 = None
         if is_donor and MARKET_DATA:
             try:
-                yahoo_sym = {"gold":"GC=F","btc":"BTC-USD","eth":"ETH-USD","oil":"CL=F"}.get(pair, pair.upper())
-                m15_bars = MARKET_DATA.get_ohlcv(yahoo_sym, "15m", 100)
+                m15_bars = MARKET_DATA.get_ohlcv(pair, "15m", 100)
                 if m15_bars and len(m15_bars) >= 20:
                     ohlcv_m15 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
                                   "low": b.low, "close": b.close, "volume": b.volume} for b in m15_bars]
@@ -3958,8 +3948,7 @@ def handle_command(cmd, text, chat_id, msg):
             # M15 via MARKET_DATA if available
             if MARKET_DATA:
                 try:
-                    yahoo_sym = {"gold":"GC=F","btc":"BTC-USD","eth":"ETH-USD","oil":"CL=F"}.get(pair, pair.upper())
-                    m15_bars = MARKET_DATA.get_ohlcv(yahoo_sym, "15m", 50)
+                    m15_bars = MARKET_DATA.get_ohlcv(pair, "15m", 50)
                     if m15_bars and len(m15_bars) >= 20:
                         m15c = [b.close for b in m15_bars]
                         m15_sma = sum(m15c[-20:])/20
@@ -4040,8 +4029,7 @@ def handle_command(cmd, text, chat_id, msg):
             if not ohlcv_bars or len(ohlcv_bars) < 30:
                 # Fallback: try MARKET_DATA
                 if MARKET_DATA:
-                    yahoo_sym = {"gold":"GC=F","btc":"BTC-USD","eth":"ETH-USD","oil":"CL=F"}.get(pair, pair.upper())
-                    raw = MARKET_DATA.get_ohlcv(yahoo_sym, "15m", 100)
+                    raw = MARKET_DATA.get_ohlcv(pair, "15m", 100)
                     if raw:
                         ohlcv_bars = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
                                        "low": b.low, "close": b.close, "volume": b.volume} for b in raw]
@@ -4851,9 +4839,9 @@ def format_daily_mapping():
     
     # Try to get key levels for each asset
     if MARKET_DATA:
-        for pair, disp, yahoo_sym, is_forex in AUTO_SCAN_ASSETS:
+        for pair, disp, _, is_forex in AUTO_SCAN_ASSETS:
             try:
-                bars = MARKET_DATA.get_ohlcv(yahoo_sym, "1h", 50)
+                bars = MARKET_DATA.get_ohlcv(pair, "1h", 50)
                 if not bars or len(bars) < 5:
                     continue
                 high_24h = max(b.high for b in bars[-24:]) if len(bars) >= 24 else max(b.high for b in bars)
@@ -5045,9 +5033,9 @@ def _can_post_tpsl_alert(trade_id: str) -> bool:
     return True
 
 AUTO_SCAN_ASSETS = [
-    # (internal_pair, display_name, yahoo_symbol, is_forex_metal)
+    # (internal_pair, display_name, _, is_forex_metal)  — yahoo_sym removed; MARKET_DATA resolves via SYMBOL_MAP
     # Channel auto-post: XAUUSD ONLY. Other pairs via /analyze di bot.
-    ("gold", "XAUUSD", "GC=F", True),
+    ("gold", "XAUUSD", None, True),
 ]
 
 def auto_analyze_loop():
@@ -5151,7 +5139,7 @@ def auto_analyze_loop():
                 continue
 
             # Rotate through assets
-            pair, disp, yahoo_sym, is_forex = AUTO_SCAN_ASSETS[asset_idx % len(AUTO_SCAN_ASSETS)]
+            pair, disp, _, is_forex = AUTO_SCAN_ASSETS[asset_idx % len(AUTO_SCAN_ASSETS)]
             asset_idx += 1
 
             # News blackout check (applies to all)
@@ -5205,7 +5193,7 @@ def auto_analyze_loop():
             mech_sig = None
             if MARKET_DATA and is_forex:
                 try:
-                    m1_bars = MARKET_DATA.get_ohlcv(yahoo_sym, "1m", 200)
+                    m1_bars = MARKET_DATA.get_ohlcv(pair, "1m", 200)
                     if m1_bars and len(m1_bars) >= 30:
                         ohlcv_m1 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
                                       "low": b.low, "close": b.close, "volume": b.volume} for b in m1_bars]

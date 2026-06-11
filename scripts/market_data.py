@@ -56,9 +56,9 @@ class UnifiedMarketData:
 
     SYMBOL_MAP = {
         # Forex
-        "gold": "XAUUSD_SPOT",       # ← use spot XAUUSD, not GC=F futures
-        "xauusd": "XAUUSD_SPOT",
-        "gld": "XAUUSD_SPOT",
+        "gold": "GC=F",                # ← Gold Futures (valid Yahoo ticker; spot offset handled in get_xauusd_spot_offset)
+        "xauusd": "GC=F",
+        "gld": "GC=F",
         "eurusd": "EURUSD=X",
         "gbpusd": "GBPUSD=X",
         "usdjpy": "JPY=X",
