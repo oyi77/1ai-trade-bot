@@ -160,15 +160,37 @@ class AutonomousWorker:
     # ── Price Fetch (resilient) ──
 
     def _fetch_price(self, pair: str) -> Optional[float]:
-        """Fetch current price with exponential backoff."""
+        """Fetch current price with exponential backoff.
+        XAUUSD/gold: gold-api.com spot + XAUUSD_OFFSET ONLY — no yfinance fallback.
+        Other pairs: yfinance primary, gold-api secondary."""
+        pair_lower = pair.lower().strip()
+
+        # ── XAUUSD: EXACT SPOT ONLY, no yfinance GC=F (differs by ~$75) ──
+        if pair_lower in ("gold", "xauusd"):
+            def _get_spot():
+                try:
+                    import urllib.request
+                    resp = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=5)
+                    data = json.loads(resp.read())
+                    if data.get("price"):
+                        spot = float(data["price"])
+                        if 2000 < spot < 6000:
+                            offset = float(os.environ.get("XAUUSD_PRICE_OFFSET", "0"))
+                            return round(spot + offset, 2)
+                except Exception:
+                    pass
+                return None  # HALT — no GC=F fallback
+            return _get_resilience().resilient_call(_get_spot, max_retries=3, base_delay=2.0)
+
+        # ── Other pairs: yfinance ──
         def _get():
             try:
                 import yfinance as yf
                 yahoo_map = {
-                    "gold": "GC=F", "btc": "BTC-USD", "oil": "CL=F",
-                    "XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "USOIL": "CL=F",
+                    "btc": "BTC-USD", "oil": "CL=F",
+                    "BTCUSD": "BTC-USD", "USOIL": "CL=F",
                 }
-                sym = yahoo_map.get(pair, yahoo_map.get(pair.lower(), pair))
+                sym = yahoo_map.get(pair, yahoo_map.get(pair_lower, pair))
                 ticker = yf.Ticker(sym)
                 data = ticker.history(period="5m")
                 if not data.empty:
@@ -196,12 +218,15 @@ class AutonomousWorker:
                      count: int = 100) -> list:
         """Fetch OHLCV bars with exponential backoff. Returns [] on failure."""
 
+        pair_lower = pair.lower().strip()
+
         def _get():
+            # ── XAUUSD: use spot symbol, not GC=F futures ──
             try:
                 import yfinance as yf
                 yahoo_map = {
-                    "gold": "GC=F", "btc": "BTC-USD", "oil": "CL=F",
-                    "XAUUSD": "GC=F", "BTCUSD": "BTC-USD", "USOIL": "CL=F",
+                    "gold": "XAUUSD=X", "btc": "BTC-USD", "oil": "CL=F",
+                    "XAUUSD": "XAUUSD=X", "BTCUSD": "BTC-USD", "USOIL": "CL=F",
                 }
                 sym = yahoo_map.get(pair, yahoo_map.get(pair.lower(), pair))
                 ticker = yf.Ticker(sym)

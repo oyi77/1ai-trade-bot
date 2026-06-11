@@ -5126,6 +5126,30 @@ def auto_analyze_loop():
         if prev is None:
             return False  # First signal ever → wait for confirmation
         return prev["action"] == action
+
+    def _slippage_guard(display, signal_entry, signal_action):
+        """Re-fetch live price and check if price moved >15 pip during AI thinking.
+        Returns (ok: bool, live_price: float, drift_pips: float)."""
+        pip_s = 0.10 if display in ("XAUUSD","GOLD") else 0.01
+        max_drift = 1.5  # 15 pip — hard limit for late-execution kill switch
+        live = None
+        try:
+            if display in ("XAUUSD","GOLD"):
+                spot = fetch_xauusd_spot()
+                if spot:
+                    live = round(spot + XAUUSD_OFFSET, 2)
+            else:
+                live = fetch_price(display.lower())
+        except Exception:
+            pass
+        if not live or not signal_entry:
+            return True, live, 0  # can't verify — allow through
+        drift_pips = abs(live - signal_entry) / pip_s
+        if drift_pips > max_drift:
+            logger.warning(
+                f"⛔ SLIPPAGE GUARD [{display}]: |live={live:.2f} - signal={signal_entry:.2f}| = {drift_pips:.0f} pip > {max_drift:.0f} pip — ABORT")
+            return False, live, drift_pips
+        return True, live, drift_pips
     # ── Persistent mapping tracker (survives restarts) ──
     MAPPING_TRACKER = DATA_DIR / ".last_mapping_date"
     # ── Daily Loss Counter (global, survives restarts) ──
@@ -5303,6 +5327,12 @@ def auto_analyze_loop():
                 _entry = mech_sig.get("entry", price) or 0
                 _sl = mech_sig.get("sl", 0) or 0
                 _tp = mech_sig.get("tp", 0) or 0
+                # ── SLIPPAGE GUARD: re-fetch live price before posting ──
+                slip_ok, live_now, drift = _slippage_guard(disp, _entry, action)
+                if not slip_ok:
+                    logger.warning(f"⛔ SLIPPAGE ABORT [{disp}]: drift={drift:.0f} pip — signal cancelled")
+                    time.sleep(30)
+                    continue
                 if _can_post_to_channel(pair, action, _entry, _sl, _tp):
                     logger.info(f"CHANNEL POST [mechanical]: {pair} {action}")
                     result = send_to_channel(text)

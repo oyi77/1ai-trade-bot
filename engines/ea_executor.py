@@ -289,6 +289,19 @@ def main():
                             logger.info(f"⛔ Signal rejected: RR 1:{rr:.1f} < 1:1.5")
                             continue
 
+                        # ── SLIPPAGE GUARD: re-fetch live price before execution ──
+                        sig_entry = sig.get("entry", 0) or 0
+                        live_check = fetch_price()
+                        if live_check and sig_entry:
+                            pip_s = 0.10  # XAUUSD
+                            drift_pips = abs(live_check - sig_entry) / pip_s
+                            if drift_pips > 15:
+                                logger.warning(
+                                    f"⛔ SLIPPAGE ABORT: |live={live_check:.2f} - signal={sig_entry:.2f}| = "
+                                    f"{drift_pips:.0f} pip > 15 pip — CANCELLED DUE TO SLIPPAGE")
+                                continue
+                            logger.info(f"✅ SLIPPAGE OK: drift={drift_pips:.1f} pip (max 15)")
+
                         pos = {
                             "id": f"ea_{int(time.time()*1000)}",
                             "action": sig["action"],

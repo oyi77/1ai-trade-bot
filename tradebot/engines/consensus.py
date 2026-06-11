@@ -49,7 +49,7 @@ TF_ENGINE_MIN: dict[str, int] = {
 }
 
 SYMBOL_MAP: dict[str, str] = {
-    "XAUUSD": "GC=F",
+    "XAUUSD": "XAUUSD=X",   # spot, not GC=F futures (~$75 diff)
     "BTCUSD": "BTC-USD",
     "ETHUSD": "ETH-USD",
     "USOIL": "CL=F",
