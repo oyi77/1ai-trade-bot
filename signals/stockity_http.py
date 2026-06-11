@@ -2,18 +2,18 @@
 Stockity HTTP connector — fetches candle data via REST API instead of WebSocket.
 Much simpler and more reliable than the Phoenix WS approach.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from pathlib import Path
 
-from core import Candle, Signal
-from core.indicators import score_trend, classify_signal
+from core import Candle, Signal, _compute_expire_at
+from core.indicators import classify_signal, score_trend
 
 LOG = logging.getLogger("signals.stockity_http")
 
@@ -32,12 +32,21 @@ PLATFORM_ASSETS: set[str] = {"CRYPTO_IDX"}
 def _load_auth() -> tuple[str, str]:
     """Load auth from .env — returns (authtoken, full_cookie)."""
     import os
+
     auth = os.environ.get("STOCKITY_AUTHTOKEN", "")
     cookie = os.environ.get("STOCKITY_FULL_COOKIE", "")
     if not auth or not cookie:
         env_paths = [
-            Path(__file__).resolve().parent.parent / "archive" / "old-bots" / "subscription-bot" / ".env",
-            Path(__file__).resolve().parent.parent / "archive" / "old-bots" / "stockity-bot" / ".env",
+            Path(__file__).resolve().parent.parent
+            / "archive"
+            / "old-bots"
+            / "subscription-bot"
+            / ".env",
+            Path(__file__).resolve().parent.parent
+            / "archive"
+            / "old-bots"
+            / "stockity-bot"
+            / ".env",
         ]
         for p in env_paths:
             if p.exists():
@@ -45,10 +54,10 @@ def _load_auth() -> tuple[str, str]:
                     line = line.strip()
                     if line.startswith("STOCKITY_AUTHTOKEN="):
                         auth = line.split("=", 1)[1].strip()
-                    elif line.startswith("STOCKITY_FULL_COOKIE="):
-                        if not cookie:
-                            cookie = line.split("=", 1)[1].strip()
+                    elif line.startswith("STOCKITY_FULL_COOKIE=") and not cookie:
+                        cookie = line.split("=", 1)[1].strip()
     return auth, cookie
+
 
 async def get_candles(
     ric: str,
@@ -66,7 +75,7 @@ async def get_candles(
         LOG.warning("No STOCKITY_AUTHTOKEN or STOCKITY_FULL_COOKIE available")
         return []
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # Round to nearest 15-minute boundary and go back for more data
     # API only serves data at 15-min boundaries (**:00, :15, :30, :45)
     bucket_15 = (now.minute // 15) * 15
@@ -121,10 +130,7 @@ async def get_candles(
             ts_str = item.get("created_at", "")
             if ts_str:
                 # Parse ISO time like "2026-06-08T11:30:00.000000Z"
-                ts = int(
-                    datetime.fromisoformat(ts_str.replace("Z", "+00:00")).timestamp()
-                    * 1000
-                )
+                ts = int(datetime.fromisoformat(ts_str.replace("Z", "+00:00")).timestamp() * 1000)
             else:
                 ts = int(now.timestamp() * 1000)
 
@@ -144,9 +150,7 @@ async def get_candles(
     return sorted(out, key=lambda c: c.timestamp)
 
 
-def aggregate_candles(
-    raw: list[Candle], period_s: int = 60
-) -> list[Candle]:
+def aggregate_candles(raw: list[Candle], period_s: int = 60) -> list[Candle]:
     """
     Aggregate 1-second candles into larger timeframes.
     period_s=60 → 1-minute candles
@@ -182,11 +186,12 @@ async def generate(
     symbol: str,
     cookie: str = "",
     authtoken: str = "",
-) -> Optional[Signal]:
+    mode: str = "turbo",
+) -> Signal | None:
     """
     Generate a CALL/PUT signal for a Stockity platform asset.
     Uses HTTP candle API instead of WebSocket.
-    
+
     Auth: either 'cookie' (full cookie string), 'authtoken' (Bearer token),
     or let it load from .env automatically.
     """
@@ -202,14 +207,17 @@ async def generate(
         authtoken, cookie = _load_auth()
     if not cookie and not authtoken:
         LOG.warning("No auth available for Stockity HTTP")
+        expire_at = _compute_expire_at(mode)
         return Signal(
             symbol=symbol,
             action="WAIT",
             confidence=0,
             price=0.0,
             reason="No auth (authtoken or cookie) — run stockity_login.py first",
-            timestamp_utc=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            timestamp_utc=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
             source="stockity",
+            expire_at=expire_at,
+            mode=mode,
         )
 
     # Fetch 1-second candles for last 15 minutes
@@ -237,15 +245,21 @@ async def generate(
     lows = [c.low for c in candles]
     price = closes[-1]
 
+    expire_at = _compute_expire_at(mode)
+
     # Use binary mode (optimized for short-term)
     score, reasons = score_trend(closes, highs, lows, mode="binary")
-    sig = classify_signal(score, price, reasons, symbol, source="stockity")
-    
+    sig = classify_signal(
+        score, price, reasons, symbol, source="stockity", expire_at=expire_at, mode=mode
+    )
+
     LOG.info(
-        "Signal for %s: %s %d%% (score=%d, %s)",
+        "Signal for %s: %s %d%% (mode=%s expire_at=%s, score=%d, %s)",
         symbol,
         sig.action,
         sig.confidence,
+        mode,
+        expire_at,
         score,
         "; ".join(reasons[:3]),
     )

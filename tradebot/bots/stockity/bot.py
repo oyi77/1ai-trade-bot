@@ -92,6 +92,7 @@ class StockityBot(BaseBot):
         self._settings = StockitySettings.from_settings()
         self._home_chat_id: int | None = None
         self._last_seen: dict[str, int] = {}
+        self._mode_map: dict[str, str] = {}  # symbol → mode (blitz/turbo/binary)
         self._app: Application | None = None
         self._signal_history: list[dict[str, Any]] = []
         self._load_history()
@@ -112,12 +113,12 @@ class StockityBot(BaseBot):
             self._signal_history = self._signal_history[-200:]
 
     def _save_signal(self, sym: str, action: str, conf: int, price: float,
-                     expiry: str, source: str, reason: str) -> None:
+                     expiry: str, source: str, reason: str, mode: str = "turbo") -> None:
         self._signal_history.append({
             "ts": datetime.now(UTC).strftime("%H:%M UTC"),
             "sym": sym, "action": action, "conf": conf,
             "price": round(price, 6), "expiry": expiry,
-            "source": source, "reason": reason[:60],
+            "mode": mode, "source": source, "reason": reason[:60],
         })
         if len(self._signal_history) > 200:
             self._signal_history = self._signal_history[-200:]
@@ -137,6 +138,7 @@ class StockityBot(BaseBot):
             "cookies": self._cmd_cookies,
             "balance": self._cmd_balance,
             "deposit": self._cmd_deposit,
+            "mode": self._cmd_mode,
         }
     async def start(self) -> None:
         await super().start()
@@ -144,10 +146,15 @@ class StockityBot(BaseBot):
 
     # ── Signal generation ───────────────────────────────────────────────
 
+    def _get_mode(self, symbol: str) -> str:
+        """Return the mode for a symbol, defaulting to turbo."""
+        return self._mode_map.get(symbol.upper(), "turbo")
+
     async def _gen_signal(self, symbol: str) -> Any | None:
-        """Generate signal for a single symbol."""
+        """Generate signal for a single symbol with current mode."""
         try:
             from tradebot.signals import resolve  # type: ignore
+            mode = self._get_mode(symbol)
             sig = await resolve(
                 symbol,
                 self._settings.interval,
@@ -155,6 +162,7 @@ class StockityBot(BaseBot):
                 self._settings.authtoken,
                 self._settings.user_id,
                 self._settings.full_cookie,
+                mode=mode,
             )
             return sig
         except Exception as exc:
@@ -190,6 +198,18 @@ class StockityBot(BaseBot):
         filled = round(conf / 100 * width)
         return "█" * filled + "░" * (width - filled)
 
+    def _format_countdown(self, sig: Any) -> str:
+        expire_at = getattr(sig, "expire_at", None)
+        if expire_at is not None:
+            remaining = expire_at - int(datetime.now(UTC).timestamp())
+            if remaining > 0:
+                mins, secs = divmod(remaining, 60)
+                if mins > 0:
+                    return f"⏳ `{mins}m {secs}s`"
+                return f"⏳ `{secs}s`"
+            return "⏳ `EXPIRED`"
+        return f"⏳ `{self._settings.expiry}`"
+
     def _format_signal(self, sig: Any, show_reason: bool = True) -> str:
         emoji = SYMBOL_EMOJI.get(getattr(sig, "symbol", ""), "📡")
         action = getattr(sig, "action", "WAIT")
@@ -197,6 +217,7 @@ class StockityBot(BaseBot):
         price = getattr(sig, "price", 0)
         source = getattr(sig, "source_badge", "")
         reason = getattr(sig, "reason", "")
+        mode_label = getattr(sig, "mode_label", "🚀 Turbo 1m") if hasattr(sig, "mode_label") else ""
 
         if action == "CALL":
             dir_icon = "🟢"
@@ -209,6 +230,7 @@ class StockityBot(BaseBot):
             dir_text = "WAIT"
 
         conf_bar = self._bar(confidence)
+        countdown = self._format_countdown(sig)
         reason_text = f"\n💡 *Why:* `{reason}`" if show_reason and reason else ""
 
         return (
@@ -217,7 +239,8 @@ class StockityBot(BaseBot):
             f"│ Direction : *{action}*\n"
             f"│ Confidence: `{conf_bar} {confidence}%`\n"
             f"│ Current   : `{price:.6g}`\n"
-            f"│ Expiry    : `{self._settings.expiry}`\n"
+            f"│ Expiry    : {countdown}\n"
+            f"│ Mode      : `{mode_label or self._settings.expiry}`\n"
             f"│ Source    : {source}\n"
             f"└─────────────────────\n"
             f"{reason_text}"
@@ -244,6 +267,15 @@ class StockityBot(BaseBot):
                 for sig in signals:
                     sym = getattr(sig, "symbol", "")
                     conf = getattr(sig, "confidence", 0)
+                    mode = getattr(sig, "mode", "turbo")
+                    expire_at = getattr(sig, "expire_at", None)
+
+                    if expire_at is not None:
+                        remaining = expire_at - int(datetime.now(UTC).timestamp())
+                        if remaining <= 0:
+                            LOG.info("⏰ %s signal expired — skipped", sym)
+                            continue
+
                     prev = self._last_seen.get(sym, 0)
                     if conf > prev + 4:
                         self._last_seen[sym] = conf
@@ -251,14 +283,14 @@ class StockityBot(BaseBot):
                             sym, getattr(sig, "action", ""), conf,
                             getattr(sig, "price", 0), self._settings.expiry,
                             getattr(sig, "source", ""), getattr(sig, "reason", ""),
+                            mode=mode,
                         )
                         msg = self._format_signal(sig)
                         if self._home_chat_id:
-                            # Send via BaseBot's telegram service
                             await self._telegram.send_message(msg)
-                        LOG.info("🚀 %s %s %d%% (src=%s)",
+                        LOG.info("🚀 %s %s %d%% (mode=%s src=%s)",
                                  sym, getattr(sig, "action", ""), conf,
-                                 getattr(sig, "source", ""))
+                                 mode, getattr(sig, "source", ""))
             except Exception as exc:
                 LOG.error("proactive_cycle: %s", exc)
             await asyncio.sleep(self._settings.scan_s)
@@ -266,6 +298,13 @@ class StockityBot(BaseBot):
     # ── Command handlers ────────────────────────────────────────────────
 
     async def _cmd_start(self, args: list[str], chat_id: str | None = None) -> str:
+        modes_str = ""
+        if self._mode_map:
+            mode_lines = "\n".join(
+                f"  • `{s}` → {m}"
+                for s, m in sorted(self._mode_map.items())
+            )
+            modes_str = f"\n*Custom Modes:*\n{mode_lines}\n"
         reply = (
             "🤖 *Stockity Binary Bot* — *AKTIF PERMANEN*\n"
             "Binary options: *CALL* = BUY (UP)  •  *PUT* = SELL (DOWN)\n\n"
@@ -273,9 +312,11 @@ class StockityBot(BaseBot):
             "`/scan` — full market scan\n"
             "`/signal SYMBOL` — check one symbol\n"
             "`/symbols` — list tracked\n"
+            "`/mode SYMBOL blitz|turbo|binary` — set option mode\n"
             "`/stats` — signal history\n\n"
             f"*Tracked:* `{', '.join(self._settings.symbols[:14])}`\n"
-            f"*Expiry:* `{self._settings.expiry}`  *Min Conf:* `{self._settings.min_conf}%`\n\n"
+            f"*Default Mode:* `turbo (1m)`  *Min Conf:* `{self._settings.min_conf}%`\n"
+            f"{modes_str}"
             f"*Credentials:* authtoken={'SET' if self._settings.authtoken else 'NOT SET'}"
         )
         return reply
@@ -313,7 +354,12 @@ class StockityBot(BaseBot):
             lines = ["📊 *Scan Results:*"]
             for sig in found[:10]:
                 lines.append(self._format_signal_compact(sig))
-            lines.append(f"\n_Expiry: `{self._settings.expiry}` | Generated {len(found)} tradeable signals_")  # noqa: E501
+            modes_used = set()
+            for sig in found[:10]:
+                m = getattr(sig, "mode", "turbo")
+                modes_used.add(m)
+            mode_str = ", ".join(sorted(modes_used))
+            lines.append(f"\n_Expiry: `{self._settings.expiry}` Modes: `{mode_str}` | {len(found)} tradeable_")  # noqa: E501
             return "\n".join(lines)
         return "⚪ No tradeable signals right now. Market is neutral."
 
@@ -395,6 +441,7 @@ class StockityBot(BaseBot):
         app.add_handler(CommandHandler("scan", self._ptb_cmd_scan))
         app.add_handler(CommandHandler("stats", self._ptb_cmd_stats))
         app.add_handler(CommandHandler("cookies", self._ptb_cmd_cookies))
+        app.add_handler(CommandHandler("mode", self._ptb_cmd_mode))
 
         app.add_handler(CommandHandler("balance", self._ptb_cmd_balance))
         app.add_handler(CommandHandler("deposit", self._ptb_cmd_deposit))
@@ -438,63 +485,30 @@ class StockityBot(BaseBot):
         LOG.info("📨 /cookies from chat_id=%s", upd.effective_chat.id)
         await upd.message.reply_markdown(await self._cmd_cookies(ctx.args or []))
 
+    async def _ptb_cmd_mode(self, upd: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        LOG.info("📨 /mode from chat_id=%s", upd.effective_chat.id)
+        reply = await self._cmd_mode(ctx.args or [])
+        await upd.message.reply_markdown(reply)
 
-
-        """Show account balance, positions, winrate."""
-        broker = StockityBroker()
-        try:
-            await broker.connect()
-            await asyncio.sleep(3)
-            s = broker.stats
-            lines = [
-                "💰 *Stockity Account*",
-                f"Balance: `{s['balance']:,}` {s['currency']} (~${s['balance_usd']:.2f})",
-                f"Open: {s['open_positions']} | Closed: {s['total_trades']}",
-                f"Wins: {s['wins']} | Losses: {s['losses']} | WR: {s['winrate']:.1f}%",
-                f"P&L: `{s['total_pnl_raw']:,}` {s['currency']}",
-            ]
-            if broker.open_positions:
-                lines.append("\n*Open Positions:*")
-                for p in broker.open_positions[:5]:
-                    lines.append(
-                        f"  {p.get('trend','?').upper():4s} {p.get('option_type','?'):6s} "
-                        f"@ {p.get('open_rate',0)} | {p.get('close_time','?')[:16]}"
-                    )
-            return "\n".join(lines)
-        except Exception as e:
-            return f"❌ Balance: {e}"
-        finally:
-            await broker.close()
-
-    async def _cmd_deposit(self, args: list[str], chat_id: str | None = None) -> str:
-        """Generate QRIS deposit payment link."""
-        if not args:
-            return (
-                "💳 *Deposit Stockity*\n\n"
-                "`/deposit <amount>`\n"
-                "Contoh: `/deposit 150000`\n\n"
-                "Min: Rp 50,000 | via QRIS."
-            )
-        try:
-            amount = int(args[0])
-        except ValueError:
-            return f"❌ Invalid: `{args[0]}`"
-        if amount < 50000:
-            return "❌ Min Rp 50,000"
-
-        api = StockityREST()
-        try:
-            r = await api.deposit(amount=amount, handler="qris")
-            if r and r.get("success"):
-                url = r.get("redirect_url", "")
-                return (
-                    f"💳 *Deposit Rp {amount:,}*\n\n"
-                    f"[🔗 Bayar via QRIS]({url})\n\n"
-                    f"`{url}`"
-                )
-            return "❌ Deposit gagal"
-        finally:
-            await api.close()
+    async def _cmd_mode(self, args: list[str], chat_id: str | None = None) -> str:
+        if not args or len(args) < 2:
+            parts = ["*Modes:*\n"]
+            for s in self._settings.symbols:
+                m = self._get_mode(s)
+                parts.append(f"  `{s}` → {m}")
+            return "\n".join(parts)
+        symbol = args[0].strip().upper()
+        mode = args[1].strip().lower()
+        if mode not in ("blitz", "turbo", "binary"):
+            return "❌ Mode must be `blitz`, `turbo`, or `binary`."
+        if symbol not in self._settings.symbols:
+            return f"❌ Symbol `{symbol}` not tracked."
+        if mode == "turbo":
+            self._mode_map.pop(symbol, None)
+        else:
+            self._mode_map[symbol] = mode
+        LOG.info("Mode set: %s → %s", symbol, mode)
+        return f"✅ `{symbol}` mode → `{mode}`"
 
     # ── PTB wrappers: balance + deposit ─────────────────────────────────
 
@@ -562,6 +576,8 @@ class StockityBot(BaseBot):
         LOG.info("   📈 Forex: %s", [s for s in self._settings.symbols if "=X" in s or "=F" in s])
         LOG.info("   ₿ Crypto: %s", [s for s in self._settings.symbols if "-USD" in s and "=F" not in s])  # noqa: E501
         LOG.info("   ⚡ Stockity: %s", [s for s in self._settings.symbols if "IDX" in s])
+        if self._mode_map:
+            LOG.info("   🎛️  Custom modes: %s", dict(self._mode_map))
 
         loop = asyncio.get_event_loop()
         loop.create_task(self._proactive_cycle())

@@ -186,6 +186,8 @@ def classify_signal(
     reasons: list[str],
     symbol: str = "",
     source: str = "yahoo",
+    expire_at: int | None = None,
+    mode: str = "turbo",
 ) -> dict:
     """Convert a raw score to CALL / PUT / WAIT with confidence."""
     from datetime import datetime, timezone
@@ -206,5 +208,7 @@ def classify_signal(
         reason="; ".join(reasons[:5]),
         timestamp_utc=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
         source=source,
+        expire_at=expire_at,
+        mode=mode,
     )
     return sig
