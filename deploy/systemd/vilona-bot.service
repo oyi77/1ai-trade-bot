@@ -1,0 +1,18 @@
+[Unit]
+Description=1ai-trade-bot — Unified VilonaBot (replaces legacy handler)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/openclaw/projects/1ai-trade-bot/launch_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
