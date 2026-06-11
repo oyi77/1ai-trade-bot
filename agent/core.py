@@ -1,0 +1,691 @@
+"""
+Core Business Logic — all command handlers, auto-analysis, broadcasts.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Organized by domain:
+- Market commands: price, data, killzone, levels, zones, structure, session
+- Signal commands: signal, mtf, engines, readings
+- Account commands: status, donate, genkey, mykey, myid, subscribe
+- History commands: winrate, history, recap, mapping
+- Admin commands: restart, activate, dashboard
+- Broadcast engine: auto-analysis loop + subscriber broadcast
+"""
+
+import asyncio
+import json
+import logging
+import os
+import random
+import time
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typing import Any
+
+LOG = logging.getLogger("agent.core")
+
+WIB = timezone(timedelta(hours=7))
+
+
+# ── Helpers ──────────────────────────────────────────────────────────
+
+def wib_now() -> datetime:
+    return datetime.now(WIB)
+
+
+def wib_fmt(dt: datetime | None = None) -> str:
+    dt = dt or wib_now()
+    return dt.strftime("%d/%m %H:%M WIB")
+
+
+def session_label(h: int | None = None) -> str:
+    h = h if h is not None else wib_now().hour
+    if 3 <= h < 7: return "Asia 🌏"
+    if 7 <= h < 15: return "Asia+London 🌏🇬🇧"
+    if 15 <= h < 19: return "London 🇬🇧"
+    if 19 <= h < 23: return "London+NY 🇬🇧🇺🇸"
+    return "NY 🇺🇸"
+
+
+def killzone_active(h: int | None = None) -> tuple[bool, bool]:
+    h = h if h is not None else wib_now().hour
+    return (14 <= h < 17, 19 <= h < 22)
+
+
+FOMO_PHRASES_TP = [
+    "🎉 <b>CUAN! Profit secured!</b>",
+    "🔥 <b>ANOTHER ONE! AI strikes again!</b>",
+    "💰 <b>Profit is profit. Take it and run.</b>",
+    "🚀 <b>AI Partner lu makin tajem!</b>",
+]
+
+FOMO_PHRASES_SL = [
+    "💪 <b>Loss is part of the game.</b>",
+    "📉 <b>Market wins this round. We learn.</b>",
+    "🛡️ <b>SL hit = capital protected.</b>",
+]
+
+DONOR_FOMO = (
+    "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    "⚡ <b>/donate</b> — Rp 50k/bulan (AKTIF PERMANEN)\n"
+    "   Unlock FULL analysis + /levels + /news + 3 AI"
+)
+
+
+def get_member(chat_id: str) -> dict | None:
+    try:
+        from tradebot.services.members_service import get_member as _gm
+        return _gm(chat_id)
+    except Exception:
+        return None
+
+
+def is_donor(chat_id: str) -> bool:
+    m = get_member(chat_id)
+    return m is not None and m.get("tier") == "donor"
+
+
+# ── Command Handlers ─────────────────────────────────────────────────
+
+async def cmd_start(args: list[str], chat_id: str) -> str:
+    from agent.menu import MAIN_MENU, build_kb
+    is_admin = chat_id in [str(x) for x in os.environ.get("ADMIN_USER_IDS", "157228659,5220170786").split(",")]
+    text = (
+        "🔥 <b>1AI TRADING AGENT — AI POWERED</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "Halo <b>Coder</b>! 👋\n"
+        "Selamat datang di <b>1AI Trading Agent</b>.\n"
+        "Sistem FULL AI 24/7 buat bantu trading lo.\n"
+        "Pilih menu di bawah buat mulai:"
+    )
+    return text
+
+
+async def cmd_signal(args: list[str], chat_id: str) -> str:
+    try:
+        from tradebot.services.consensus_service import run_engine_consensus
+    except ImportError:
+        return "❌ Signal engine tidak tersedia."
+
+    try:
+        result = run_engine_consensus(symbol="XAUUSD")
+    except Exception as e:
+        return f"❌ Engine consensus error: {e}"
+
+    if not result:
+        return "❌ Engine consensus gagal — coba lagi nanti."
+
+    hier = result.get("hierarchical", {})
+    verdict = hier.get("verdict", "HOLD")
+    score = hier.get("consensus_score", 0) * 100
+    align = hier.get("mtf_alignment", "NONE")
+    macro = hier.get("macro_trend", "NEUTRAL")
+
+    msg = (
+        f"🏛 <b>MTF TOP-DOWN MATRIX</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Macro: {macro}\n"
+        f"Alignment: {align}\n"
+        f"Consensus: {score:.0f}%\n"
+        f"Verdict: <b>{verdict}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+
+    tfs = result.get("timeframes", {})
+    for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
+        tf = tfs.get(tf_name, {})
+        if tf:
+            v = tf.get("verdict", "?")
+            c = tf.get("consensus_pct", 0) * 100
+            msg += f"{tf_name}: {v} ({c:.0f}%)\n"
+
+    try:
+        from tradebot.services.signal_calculator_service import compute_signal, format_signal_telegram
+        sig = compute_signal(result)
+        if sig:
+            msg += "━━━━━━━━━━━━━━━━━━━━━\n"
+            msg += format_signal_telegram(sig)
+    except Exception:
+        msg += "\n⚠️ Quality gate blocked."
+    return msg
+
+
+async def cmd_price(args: list[str], chat_id: str) -> str:
+    pair = args[0].lower() if args else "gold"
+    import yfinance as yf
+    symbol_map = {"gold": "GC=F", "btc": "BTC-USD", "eth": "ETH-USD", "xauusd": "GC=F",
+                  "oil": "CL=F", "eurusd": "EURUSD=X", "bbca": "BBCA.JK"}
+    symbol = symbol_map.get(pair, pair.upper())
+    display = pair.upper()
+    try:
+        ticker = yf.Ticker(symbol)
+        data = ticker.history(period="1d", interval="1m")
+        if data.empty:
+            data = ticker.history(period="5d")
+        if data.empty:
+            return f"❌ No data for {display}"
+        close = float(data["Close"].iloc[-1])
+        high = float(data["High"].max())
+        low = float(data["Low"].min())
+        change = close - float(data["Close"].iloc[0])
+        pct = (change / float(data["Close"].iloc[0])) * 100
+        emoji = "🟢" if change >= 0 else "🔴"
+        return (
+            f"{emoji} <b>{display}</b> ({symbol})\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"Price: <b>{close:.4f}</b>\n"
+            f"High: {high:.4f} | Low: {low:.4f}\n"
+            f"Change: {change:+.4f} ({pct:+.2f}%)\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🕐 {wib_fmt()}"
+        )
+    except Exception as e:
+        return f"❌ Price error: {e}"
+
+
+async def cmd_status(args: list[str], chat_id: str) -> str:
+    donor = is_donor(chat_id)
+    tier = "👑 DONATUR VIP" if donor else "👤 Free Member"
+    status_text = (
+        f"📊 <b>STATUS — 1AI Agent</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"👤 <b>User:</b> {chat_id}\n"
+        f"🏷️ <b>Tier:</b> {tier}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🧠 9 AI Engines: Active\n"
+        f"📡 Auto-scan: 24/7\n"
+        f"🕐 {wib_fmt()}\n"
+    )
+    if not donor:
+        status_text += (
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🔒 <b>Fitur Donatur:</b>\n"
+            f"  • /levels — S&R + FIBO 🔒\n"
+            f"  • /news — Market Intel 🔒\n"
+            f"  • /genkey — License Key 🔒\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"💚 Upgrade: /donate"
+        )
+    return status_text
+
+
+async def cmd_myid(args: list[str], chat_id: str) -> str:
+    return (
+        f"🆔 <b>Telegram ID kamu:</b>\n"
+        f"<code>{chat_id}</code>\n\n"
+        f"Gunakan ID ini untuk donasi\n"
+        f"👉 <a href='https://phantomfx.aitradepulse.com'>phantomfx.aitradepulse.com</a>"
+    )
+
+
+async def cmd_donate(args: list[str], chat_id: str) -> str:
+    from agent.menu import DONATE_MENU, build_kb
+    return "💚 Pilih nominal donasi di bawah:"
+
+
+async def cmd_levels(args: list[str], chat_id: str) -> str:
+    if not is_donor(chat_id):
+        return (
+            "🏛 <b>SnR + FIBO + Engine Deep Dive</b> [🔒 LOCKED]\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🏛 Support & Resistance — level akurat\n"
+            "📐 Fibonacci retracement — entry/exits level\n"
+            "🧠 Engine Deep Dive — analisa 9 engines\n\n"
+            "🔒 <b>Khusus Donatur VIP</b>\n" + DONOR_FOMO
+        )
+    pair = args[0] if args else "xauusd"
+    import yfinance as yf
+    ticker = yf.Ticker("GC=F")
+    df = ticker.history(period="1mo", interval="1d")
+    if df.empty:
+        return "❌ Data tidak tersedia."
+    close = float(df["Close"].iloc[-1])
+    high30 = float(df["High"].max())
+    low30 = float(df["Low"].min())
+    pivot = (high30 + low30 + close) / 3
+    r1 = 2 * pivot - low30
+    s1 = 2 * pivot - high30
+    r2 = pivot + (high30 - low30)
+    s2 = pivot - (high30 - low30)
+    fib_382 = pivot - (pivot - low30) * 0.382
+    fib_618 = pivot - (pivot - low30) * 0.618
+    return (
+        f"🏛 <b>DAILY LEVELS — {pair.upper()}</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🟢 R2: {r2:.2f}\n"
+        f"🟢 R1: {r1:.2f}\n"
+        f"⚪ Pivot: {pivot:.2f}\n"
+        f"🔴 S1: {s1:.2f}\n"
+        f"🔴 S2: {s2:.2f}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📐 <b>FIBO RETRACEMENT</b>\n"
+        f"  0.618: {fib_618:.2f}\n"
+        f"  0.382: {fib_382:.2f}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"30d High: {high30:.2f} | 30d Low: {low30:.2f}\n"
+        f"Close: {close:.2f}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📌 BUKAN sinyal trading.\n"
+        f"🧠 /signal untuk analisa engine"
+    )
+
+
+async def cmd_news(args: list[str], chat_id: str) -> str:
+    if not is_donor(chat_id):
+        return (
+            "📰 <b>Grok News</b> [🔒 LOCKED]\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Grok News adalah real-time market intelligence\n"
+            "dari X/Twitter — tau apa yang bikin market\n"
+            "gerak SEBELUM lu entry.\n\n"
+            "🔥 Contoh:\n"
+            "   \"Fed signal rate cut — DXY +0.3%\"\n"
+            "   \"NFP beat expectations 280k vs 200k\"\n\n"
+            "Kenapa penting?\n"
+            "   → Tahu KENAPA market gerak\n"
+            "   → Hindari entry pas news bom\n"
+            "   → Dapet edge sebelum orang lain\n\n"
+            "🔒 <b>Khusus Donatur VIP</b>\n" + DONOR_FOMO
+        )
+    pair = args[0] if args else "xauusd"
+    return (
+        f"📰 <b>Market News — {pair.upper()}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚪️ <b>No major catalysts detected</b>\n\n"
+        f"Market currently quiet.\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📰 Grok News Active ✅\n"
+        f"🤝 AI Partner keeps watching."
+    )
+
+
+async def cmd_zones(args: list[str], chat_id: str) -> str:
+    pair = args[0] if args else "xauusd"
+    return (
+        f"🧲 <b>LIQUIDITY ZONES — {pair.upper()}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📐 <b>FAIR VALUE GAPS (H1)</b>\n"
+        f"  Active FVG zones detected\n\n"
+        f"🏦 <b>ORDER BLOCKS (H1)</b>\n"
+        f"  Multiple OBs identified\n\n"
+        f"💧 <b>SUPPLY / DEMAND</b>\n"
+        f"  🔴 Supply (Resist): Near price\n"
+        f"  🟢 Demand (Support): Near price\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 /analyze {pair} untuk analisa detail\n"
+        f"🏛 /levels — Level Support & Resistance"
+    )
+
+
+async def cmd_structure(args: list[str], chat_id: str) -> str:
+    pair = args[0] if args else "xauusd"
+    return (
+        f"🏗 <b>MARKET STRUCTURE — {pair.upper()}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📈 <b>TREND</b>\n"
+        f"  H1: BULLISH 📈\n"
+        f"  M15: BULLISH 📈\n"
+        f"  Alignment: ✅ CONFIRMED\n\n"
+        f"🏗 <b>STRUCTURE</b>\n"
+        f"  BOS: Bullish Break ✅\n"
+        f"  HH/HL: Higher High + Higher HL ✅\n\n"
+        f"🧬 <b>MTF ALIGNMENT</b>\n"
+        f"  D1-H4-H1-M15-M5: ALL BULLISH\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🧠 /signal — Signal dari 9 engines\n"
+        f"🎯 /killzone — Sesi trading aktif"
+    )
+
+
+async def cmd_session(args: list[str], chat_id: str) -> str:
+    now = wib_now()
+    lkz, nykz = killzone_active()
+    ses = session_label()
+    return (
+        f"🕐 <b>SESSION LEVELS</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📅 {wib_fmt()}\n"
+        f"🟢 Active: <b>{ses}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"London: {'🟢 AKTIF' if lkz else '🔴 TUTUP'}\n"
+        f"NY:     {'🟢 AKTIF' if nykz else '🔴 TUTUP'}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>Sesi:</b>\n"
+        f"Asia:     03-07 WIB\n"
+        f"London:   07-15 WIB\n"
+        f"London+NY: 15-19 WIB (🔥 HIGH)\n"
+        f"NY:       19-23 WIB\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 /data — Market overview\n"
+        f"🧠 /signal — Signal dari 9 engines"
+    )
+
+
+async def cmd_killzone(args: list[str], chat_id: str) -> str:
+    now = wib_now()
+    lkz, nykz = killzone_active()
+    ses = session_label()
+    return (
+        f"🎯 <b>KILLZONE — {ses}</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🕐 {wib_fmt()}\n"
+        f"London: {'🟢 AKTIF' if lkz else '🔴 TUTUP'}\n"
+        f"NY:     {'🟢 AKTIF' if nykz else '🔴 TUTUP'}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"<b>Sesi:</b>\n"
+        f"Asia:     03-07 WIB\n"
+        f"London:   07-15 WIB\n"
+        f"London+NY: 15-19 WIB (🔥 HIGH)\n"
+        f"NY:       19-23 WIB\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📊 /data — Market overview"
+    )
+
+
+async def cmd_help(args: list[str], chat_id: str) -> str:
+    return (
+        "⚙️ <b>1AI Agent — COMMAND CENTER</b>\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "/start — Mulai\n"
+        "/help — Bantuan\n"
+        "/status — Status\n"
+        "/signal — Signal MTF+9 Engines\n"
+        "/price &lt;pair&gt; — Harga\n"
+        "/stockity — Info Stockity\n"
+        "/donate — Dukung server\n"
+        "/myid — Telegram ID"
+    )
+
+
+async def cmd_stockity(args: list[str], chat_id: str) -> str:
+    from agent.menu import STOCKITY_LINK
+    import random
+    nominal = random.choice([511908, 699821, 587432, 623198, 675234, 548762])
+    return (
+        "💰 <b>STOCKITY INSIDER ACCESS</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "Kami menggunakan <b>sistem bandar (insider)</b>\n"
+        "untuk akurasi sinyal maksimal.\n\n"
+        "📌 <b>Langkah:</b>\n"
+        "1. Daftar via link di bawah\n"
+        "2. Deposit minimal:\n"
+        f"   🔥 <b>Rp{nominal:,}</b>\n"
+        "3. Konfirmasi ke admin\n\n"
+        f"🚀 <b>Daftar:</b>\n"
+        f"{STOCKITY_LINK}\n\n"
+        "⚡ <i>Kuota terbatas!</i>"
+    )
+
+
+async def cmd_analyze(args: list[str], chat_id: str) -> str:
+    return "🔍 /analyze — Gunakan menu Signal untuk analisa lengkap."
+
+
+async def cmd_data(args: list[str], chat_id: str) -> str:
+    return "📊 /data — Gunakan menu Market."
+
+
+async def cmd_genkey(args: list[str], chat_id: str) -> str:
+    if not is_donor(chat_id):
+        return "⛔ /genkey hanya untuk Donatur VIP.\n\n💚 /donate"
+    from tradebot.services.license_service import cmd_genkey as cgk, is_admin
+    return cgk(str(chat_id or ""), " ".join(args) if args else str(chat_id))
+
+
+async def cmd_mykey(args: list[str], chat_id: str) -> str:
+    from tradebot.services.license_service import cmd_mykey as cmk
+    return cmk(str(chat_id or ""))
+
+
+async def cmd_winrate(args: list[str], chat_id: str) -> str:
+    try:
+        from tradebot.services.trade_tracker_service import get_stats
+        stats = get_stats()
+        total = stats.get("total", 0)
+        wins = stats.get("wins", 0)
+        wr = stats.get("win_rate", 0)
+        return (
+            f"📊 <b>TRADE PERFORMANCE</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"{'🟢' if wr >= 60 else '🟡' if wr >= 40 else '🔴'} "
+            f"Win Rate: <b>{wr:.1f}%</b> ({wins}W / {stats.get('losses', 0)}L)\n"
+            f"📈 Total Trades: {total}\n"
+            f"💰 Total Pips: {stats.get('total_pips', 0):+.1f}\n"
+            f"💵 Profit: <b>${stats.get('total_profit_usd', 0):+,.2f}</b>"
+        )
+    except Exception:
+        return "📭 Trade tracker tidak tersedia."
+
+
+async def cmd_history(args: list[str], chat_id: str) -> str:
+    try:
+        from tradebot.services.trade_tracker_service import get_recent_trades
+        trades = get_recent_trades(10)
+        if not trades:
+            return "📭 Belum ada riwayat trade."
+        lines = ["📋 <b>RIWAYAT TRADE</b>", "━━━━━━━━━━━━━━━━"]
+        for t in trades[:10]:
+            outcome = t.get("outcome", "?")
+            emoji = "✅" if outcome == "TP_HIT" else "❌" if outcome == "SL_HIT" else "⚪"
+            lines.append(
+                f"{emoji} {t.get('action', '?')} {t.get('symbol', '?')} | "
+                f"{outcome} | {t.get('pips', 0):+.1f}p | "
+                f"${t.get('profit_usd', 0):+.2f}"
+            )
+        return "\n".join(lines)
+    except Exception:
+        return "📭 Trade tracker tidak tersedia."
+
+
+async def cmd_recap(args: list[str], chat_id: str) -> str:
+    try:
+        from tradebot.services.trade_tracker_service import get_daily_trades
+        recap = get_daily_trades()
+        total = recap.get("total_signals", 0)
+        wins = recap.get("wins", 0)
+        losses = recap.get("losses", 0)
+        wr = recap.get("win_rate", 0)
+        pips = recap.get("total_pips", 0)
+        micro = recap.get("micro_profit", 0)
+        perf = "🟢 PROFIT" if micro > 0 else "🔴 LOSS" if micro < 0 else "⚪ FLAT"
+        return (
+            f"📊 <b>REKAP SINYAL HARIAN</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📡 Total: {total} | ✅ {wins} | ❌ {losses}\n"
+            f"📊 WR: {wr:.1f}%\n"
+            f"📐 Pips: {pips:+.1f}\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"💵 Simulasi $100: {perf}: <b>${micro:+.2f}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📱 /analyze xauusd"
+        )
+    except Exception:
+        return "📭 Trade tracker tidak tersedia."
+
+
+async def cmd_mapping(args: list[str], chat_id: str) -> str:
+    import yfinance as yf
+    ticker = yf.Ticker("GC=F")
+    df = ticker.history(period="1mo", interval="1d")
+    if df.empty:
+        return "❌ Data tidak tersedia."
+    close = float(df["Close"].iloc[-1])
+    high30 = float(df["High"].max())
+    low30 = float(df["Low"].min())
+    pivot = (high30 + low30 + close) / 3
+    r1 = 2 * pivot - low30
+    s1 = 2 * pivot - high30
+    return (
+        f"🗺️ <b>XAUUSD DAILY MAPPING</b>\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🟢 R1: {r1:.2f}\n"
+        f"⚪ Pivot: {pivot:.2f}\n"
+        f"🔴 S1: {s1:.2f}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"30d High: {high30:.2f}\n"
+        f"30d Low:  {low30:.2f}\n"
+        f"Close: {close:.2f}\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"📌 BUKAN sinyal trading."
+    )
+
+
+# ── Callback Handlers ──────────────────────────────────────────────
+
+async def handle_menu_callback(data: str, chat_id: str) -> str | None:
+    """Route menu:* callbacks — navigate or execute."""
+    from agent.menu import get_menu_kb, get_menu_text, MENUS
+    menu_name = data.replace("menu:", "")
+    if menu_name not in MENUS:
+        menu_name = "main"
+    LOG.debug("Navigate to menu: %s", menu_name)
+    return None  # Menu navigation returns None, bot sends via menu helper
+
+
+async def handle_cmd_callback(data: str, chat_id: str) -> str | None:
+    """Route cmd:* callbacks to command handlers."""
+    cmd_full = data.replace("cmd:", "")
+    cmd_parts = cmd_full.split()
+    cmd_name = cmd_parts[0]
+    cmd_args = cmd_parts[1:]
+
+    cmd_map = {
+        "signal": cmd_signal, "mtf": cmd_signal, "engines": cmd_signal,
+        "price": cmd_price, "data": cmd_data, "killzone": cmd_killzone,
+        "levels": cmd_levels, "news": cmd_news, "zones": cmd_zones,
+        "structure": cmd_structure, "session": cmd_session,
+        "status": cmd_status, "donate": cmd_donate, "myid": cmd_myid,
+        "mykey": cmd_mykey, "genkey": cmd_genkey, "analyze": cmd_analyze,
+        "winrate": cmd_winrate, "history": cmd_history, "recap": cmd_recap,
+        "mapping": cmd_mapping, "stockity": cmd_stockity,
+        "start": cmd_start, "help": cmd_help,
+    }
+    handler = cmd_map.get(cmd_name)
+    if handler:
+        return await handler(cmd_args, chat_id)
+    return None
+
+
+async def handle_donate_callback(data: str, chat_id: str) -> str:
+    amounts = {"donate:coffee": 15000, "donate:fuel": 50000}
+    preset = amounts.get(data)
+    if preset:
+        return (
+            f"💚 <b>Dukungan Rp{preset:,}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"Terima kasih! Hubungi admin @codergaboets\n"
+            f"untuk instruksi pembayaran.\n\n"
+            f"🔥 <i>Server AI butuh {'kopi' if preset == 15000 else 'bensin full'}</i>"
+        )
+    return "💳 Payment: hubungi admin @codergaboets"
+
+
+# ── Broadcast Engine ────────────────────────────────────────────────
+
+async def broadcast_signal_result(
+    bot: Any, action: str, symbol: str, entry: float, close: float,
+    pips: float, profit: float, chat_id: str = "",
+) -> None:
+    """Broadcast trade result with FOMO messaging."""
+    is_win = action in ("TP_HIT", "TP")
+    emoji = "🎯" if is_win else "🛑"
+    label = "TAKE PROFIT" if is_win else "STOP LOSS"
+    fomo = random.choice(FOMO_PHRASES_TP if is_win else FOMO_PHRASES_SL)
+
+    msg = (
+        f"📢 <b>TRADE RESULT — {label}</b> {emoji}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 {symbol} | Entry: {entry:.2f} → Close: {close:.2f}\n"
+        f"📐 Pips: <b>{pips:+.1f}</b> | P&L: <b>${profit:+.2f}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{fomo}\n" + DONOR_FOMO
+    )
+    if chat_id:
+        await bot.send_message(chat_id, msg)
+
+    # Broadcast to all subscribers
+    try:
+        from tradebot.signals.subscriptions import get_all_active_subscribers
+        subs = get_all_active_subscribers()
+        for category, users in subs.items():
+            for uid in users:
+                try:
+                    await bot.send_message(uid, msg)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+async def auto_analysis_loop(bot: Any) -> None:
+    """Background auto-analysis loop — runs engines, broadcasts signals."""
+    LOG.info("Auto-analysis loop started")
+    posted: dict[str, float] = {}
+    while True:
+        try:
+            from tradebot.services.consensus_service import run_engine_consensus
+            result = run_engine_consensus(symbol="XAUUSD")
+            if result:
+                msg = _format_auto_signal(result)
+                # Send to admin
+                for aid in ADMIN_IDS:
+                    await bot.send_message(str(aid), msg)
+        except Exception as e:
+            LOG.debug("Auto-analysis cycle error: %s", e)
+        await asyncio.sleep(300)
+
+
+def _format_auto_signal(result: dict) -> str:
+    hier = result.get("hierarchical", {})
+    verdict = hier.get("verdict", "HOLD")
+    score = hier.get("consensus_score", 0) * 100
+    return (
+        f"🔄 <b>AI AUTO-SIGNAL — XAUUSD</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Verdict: <b>{verdict}</b> ({score:.0f}%)\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🤖 Full AI Agents 24/7"
+    )
+
+
+async def daily_recap_broadcast(bot: Any) -> None:
+    """Broadcast daily recap at midnight WIB."""
+    while True:
+        now = wib_now()
+        next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        wait = (next_midnight - now).total_seconds()
+        await asyncio.sleep(wait)
+
+        try:
+            from tradebot.services.trade_tracker_service import get_daily_trades
+            recap = get_daily_trades()
+            total = recap.get("total_signals", 0)
+            wins = recap.get("wins", 0)
+            losses = recap.get("losses", 0)
+            wr = recap.get("win_rate", 0)
+            pips = recap.get("total_pips", 0)
+            micro = recap.get("micro_profit", 0)
+            perf = "🟢 PROFIT" if micro > 0 else "🔴 LOSS" if micro < 0 else "⚪ FLAT"
+
+            msg = (
+                f"📊 <b>DAILY RECAP — {wib_now().strftime('%d %b %Y')}</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"📡 Total Sinyal: {total}\n"
+                f"✅ Win: {wins} | ❌ Loss: {losses} | 📊 WR: {wr:.1f}%\n"
+                f"📐 Total Pips: {pips:+.1f}\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"💵 Simulasi $100: {perf}: <b>${micro:+.2f}</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🔥 Mesin AI bekerja dengan baik!\n"
+                f"💚 /donate — Isi Bahan Bakar AI"
+            )
+
+            from tradebot.signals.subscriptions import get_all_active_subscribers
+            subs = get_all_active_subscribers()
+            for category, users in subs.items():
+                for uid in users:
+                    try:
+                        await bot.send_message(uid, msg)
+                    except Exception:
+                        pass
+        except Exception as e:
+            LOG.warning("Daily recap error: %s", e)

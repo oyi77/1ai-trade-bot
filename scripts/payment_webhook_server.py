@@ -197,6 +197,39 @@ class WebhookHandler(BaseHTTPRequestHandler):
         except Exception as e:
             log.warning(f"Bemob postback failed (non-critical): {e}")
 
+        # ── Meta CAPI Purchase event ──
+        fb_pixel = os.environ.get("FB_PIXEL_ID", "771021905629860")
+        fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
+        if fb_token:
+            try:
+                capi_url = f"https://graph.facebook.com/v21.0/{fb_pixel}/events?access_token={fb_token}"
+                capi_payload = json.dumps({
+                    "data": [{
+                        "event_name": "Purchase",
+                        "event_time": int(time.time()),
+                        "action_source": "website",
+                        "event_source_url": "https://phantomfx.aitradepulse.com/lp",
+                        "user_data": {
+                            "client_ip_address": "0.0.0.0",
+                            "client_user_agent": "Vilona-Payment-Webhook/1.0"
+                        },
+                        "custom_data": {
+                            "currency": "IDR",
+                            "value": float(total_amount),
+                            "content_name": "Donation",
+                            "transaction_id": merchant_ref
+                        }
+                    }]
+                }).encode()
+                capi_req = urllib.request.Request(capi_url, data=capi_payload,
+                    headers={"Content-Type": "application/json"})
+                capi_resp = json.loads(urllib.request.urlopen(capi_req, timeout=5).read())
+                log.info(f"📊 Meta CAPI Purchase fired: events_received={capi_resp.get('events_received', 0)}")
+            except Exception as e:
+                log.warning(f"Meta CAPI Purchase failed (non-critical): {e}")
+        else:
+            log.info("Meta CAPI Purchase skipped: FB_ACCESS_TOKEN not configured")
+
         if brand == "1ai":
             msg = (
                 f"🔥 <b>BOOM! Bahan bakar server sudah masuk.</b>\n"
