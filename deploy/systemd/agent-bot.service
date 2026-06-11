@@ -1,0 +1,20 @@
+[Unit]
+Description=1AI Agent Bot — Unified VilonaBot (test/deploy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
+Environment=TELEGRAM_BOT_TOKEN=8343388239:AAFgeAkc9bvjywyCsHqRIa_RiJ6q-rp6uv0
+Environment=PYTHONUNBUFFERED=1
+Environment=DATA_DIR=/home/openclaw/projects/1ai-trade-bot/data/agent
+ExecStart=/usr/bin/python3 /home/openclaw/projects/1ai-trade-bot/launch_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
