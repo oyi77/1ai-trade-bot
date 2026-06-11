@@ -334,7 +334,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 f"Terima kasih orang baik! Mesin AI kita\n"
                 f"makin buas hari ini berkat dukunganmu. 🥂\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"💚 Mau ikut bensin server? /donate\n"
+                f"💚 Mau ikut bensin server? /subscribe\n"
                 f"📢 Signal real-time: @vilonaaichanel"
             )
             group_result = tg_send(group_msg, GROUP_CHAT_ID)

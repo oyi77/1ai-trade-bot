@@ -3171,7 +3171,7 @@ def handle_command(cmd, text, chat_id, msg):
             fuel_text = "\n".join(fuel_lines) if fuel_lines else ""
 
             txt = (
-                f"👑 <b>STATUS: SUBSCRIBER SULTAN (VIP)</b>\n"
+                f"👑 <b>STATUS: SUBSCRIBER ELITE</b>\n"
                 f"⚡️ Kuota AI: {remaining}/{DONOR_DAILY_QUOTA}x hari ini (Reset 00:00 WIB)\n"
                 f"⏱️ Cooldown: {MANUAL_THROTTLE_DONOR}s antar analisa\n"
                 f"{fuel_text}\n"

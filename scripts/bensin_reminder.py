@@ -86,7 +86,7 @@ def build_reminder(username: str, days_since: int, last_amount: int) -> str:
         f"Tapi kalau lu mau bantu subscription biar server tetep jalan "
         f"24/7 nih, gue sangat berterima kasih.\n"
         f"\n"
-        f"⚡ <b>/donate</b> — Subscription (Rp 50k aja)\n"
+        f"⚡ <b>/subscribe</b> — Subscription (Rp 50k aja)\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📊 Total subscriber bulan ini lagi di cek..\n"
         f"   Kamu terakhir isi: <b>{days_since} hari</b> lalu\n"

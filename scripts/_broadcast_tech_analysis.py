@@ -52,7 +52,7 @@ MSG = (
     "━━━━━━━━━━━━━━━━━━━━━━\n"
     "💡 <i>Tools analisa, bukan sinyal.</i>\n"
     "   Lu yang baca struktur, lu yang decide entry.\n\n"
-    "👑 Multi-TF + Full Depth → <b>/donate</b>\n"
+    "👑 Multi-TF + Full Depth → <b>/subscribe</b>\n"
     "━━━━━━━━━━━━━━━━━━━━━━\n"
     "⚡ Cobain sekarang — ketik /zones xauusd"
 )

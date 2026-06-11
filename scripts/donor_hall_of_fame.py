@@ -135,7 +135,7 @@ def build_message(donors: list) -> str | None:
     parts.extend([
         f"",
         f"⚡ Server AI kita jalan karena lo semua.",
-        f"Belum isi? /donate",
+        f"Belum isi? /subscribe",
     ])
 
     return "\n".join(parts)

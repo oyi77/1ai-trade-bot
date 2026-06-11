@@ -285,7 +285,7 @@ def get_transparency_data() -> dict:
 
         c.execute(
             "SELECT COUNT(*), COALESCE(SUM(amount),0) FROM payment_orders "
-            "WHERE status='paid' AND product_key='donor'"
+            "WHERE status='paid' AND product_key IN ('vtfx-subscribe','donor')"
         )
         drow = c.fetchone()
         donation_count = drow[0]

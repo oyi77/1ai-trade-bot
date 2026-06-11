@@ -300,7 +300,7 @@ def fmt_signal_unified(
     lines.append("")
     lines.append(f"\U0001f49a <b>Kalau sinyal ini cuan, subscription!</b>")
     lines.append(f"Server analisa 24/7 butuh biaya API & GPU.")
-    lines.append(f"\U0001f449 /donate — dukung seikhlasnya, AKTIF PERMANEN")
+    lines.append(f"\U0001f449 /subscribe — dukung seikhlasnya, AKTIF PERMANEN")
     
     # ═══ SECTION 7: SOURCE TAG ═══
     lines.append("")

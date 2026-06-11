@@ -125,7 +125,7 @@ def cmd_mykey(chat_id: str) -> str:
             "Kamu belum memiliki license key EA.\n\n"
             "💡 Jika kamu sudah Subscriber, hubungi admin:\n"
             "👉 @codergaboets\n\n"
-            "💡 Belum Subscriber? /donate"
+            "💡 Belum Subscriber? /subscribe"
         )
 
     lines = ["🔑 <b>License EA Kamu</b>\n━━━━━━━━━━━━━━━━"]

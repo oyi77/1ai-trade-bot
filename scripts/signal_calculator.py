@@ -648,7 +648,7 @@ def format_signal_telegram(signal: dict) -> str:
     lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
     lines.append(f"   <i>Real-time X/Twitter market context...</i>")
     lines.append(f"")
-    lines.append(f"⚡ <b>/donate</b> — Rp 50k/bulan")
+    lines.append(f"⚡ <b>/subscribe</b> — Rp 50k/bulan")
     lines.append(f"   Unlock AI Signal + Grok News + /levels + SnR/FIBO")
     lines.append(f"   Jangan cuma andelin engine — kasih AI lu kerjaan beneran")
 
