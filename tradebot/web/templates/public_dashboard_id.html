@@ -879,16 +879,12 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
         
         <!-- Amount buttons — single column on mobile, row on desktop -->
         <div class="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-3 mb-4">
-          <button onclick="document.getElementById('fuel-amount-input').value='10000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp50K</button>
-          <button onclick="document.getElementById('fuel-amount-input').value='25000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp25K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='50000'" 
-                  class="fuel-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp50K</button>
-          <button onclick="document.getElementById('fuel-amount-input').value='100000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp500K</button>
-          <button onclick="document.getElementById('fuel-amount-input').value='250000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp250K</button>
+                  class="fuel-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">⭐ PRO Rp50K</button>
+          <button onclick="document.getElementById('fuel-amount-input').value='150000'" 
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">👑 ELITE Rp150K</button>
+          <button onclick="document.getElementById('fuel-amount-input').value='500000'" 
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">💎 LIFETIME Rp500K</button>
         </div>
         
         <!-- Input form -->
@@ -908,7 +904,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
             </div>
             <div>
               <label class="text-[10px] text-slate-500 block mb-1">💰 Jumlah (Rp)</label>
-              <input id="fuel-amount-input" type="number" value="50000" min="10000"
+              <input id="fuel-amount-input" type="number" value="50000" min="50000"
                      class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-3 text-white text-base font-mono outline-none focus:border-emerald-500">
             </div>
           </div>
