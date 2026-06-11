@@ -612,6 +612,7 @@ PRO_DAILY_LIMIT = 20          # 🆕 pro tier: 20x/hari
 ELITE_DAILY_LIMIT = -1        # 🆕 elite/lifetime: unlimited
 # Legacy (backwards compat)
 DONOR_DAILY_QUOTA = 60
+MANUAL_THROTTLE_DONOR = 60     # legacy compat — maps to pro throttle
 FREE_DAILY_QUOTA = FREE_DAILY_LIMIT
 # Tier → daily limit mapping
 TIER_LIMITS = {"free": FREE_DAILY_LIMIT, "pro": PRO_DAILY_LIMIT, "elite": -1, "lifetime": -1, "donor": -1}

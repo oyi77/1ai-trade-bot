@@ -129,12 +129,12 @@ class EngineConsensus:
         if not self._engines:
             return None
 
-        signals: list[Signal] = []
+        signals: list[tuple[str, Signal]] = []
         for name, engine in self._engines.items():
             try:
                 sig = await engine.analyze(ticks)
                 if sig and sig.is_valid:
-                    signals.append(sig)
+                    signals.append((name, sig))
             except Exception as e:
                 LOG.warning("Engine %s error: %s", name, e)
                 continue
@@ -142,18 +142,18 @@ class EngineConsensus:
         if len(signals) < self.min_engines:
             return None
 
-        # Weighted average confidence
-        total_weight = sum(self._weights.get(s.source.value, 1.0) for s in signals)
+        # Weighted average confidence — weight by engine name, not source.value
+        total_weight = sum(self._weights.get(name, 1.0) for name, _s in signals)
         weighted_conf = sum(
-            s.confidence * self._weights.get(s.source.value, 1.0)
-            for s in signals
+            _s.confidence * self._weights.get(name, 1.0)
+            for name, _s in signals
         ) / total_weight if total_weight > 0 else 0.0
 
         if weighted_conf < self.min_confidence:
             return None
 
         # Build consensus signal from the strongest individual signal
-        best = max(signals, key=lambda s: s.confidence)
+        best_name, best = max(signals, key=lambda ns: ns[1].confidence)
         return Signal(
             symbol=best.symbol,
             direction=best.direction,
@@ -163,10 +163,10 @@ class EngineConsensus:
             grade=best.grade,
             metadata={
                 "consensus_count": len(signals),
-                "engines": [s.source.value for s in signals],
+                "engines": [name for name, _s in signals],
                 "individual_signals": [
-                    {"source": s.source.value, "confidence": s.confidence}
-                    for s in signals
+                    {"source": name, "confidence": _s.confidence}
+                    for name, _s in signals
                 ],
             },
         )

@@ -192,7 +192,7 @@ class AutonomousWorker:
                 }
                 sym = yahoo_map.get(pair, yahoo_map.get(pair_lower, pair))
                 ticker = yf.Ticker(sym)
-                data = ticker.history(period="5m")
+                data = ticker.history(period="1d", interval="5m")
                 if not data.empty:
                     return float(data["Close"].iloc[-1])
             except Exception:
