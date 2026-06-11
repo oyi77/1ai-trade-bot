@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-TradeBot (`tradebot` v0.2.0) is a modular, async Python trading framework for multi-broker signal analysis and automated trade execution. It connects to Deriv (binary options via WebSocket), MetaTrader 5, Binance, Yahoo Finance, and forex data sources. An 11-engine consensus pipeline (with MTF hierarchical analysis) analyzes market ticks and produces trading signals dispatched through a quality gate and middleware chain to brokers. Three Telegram bots (Vilona, Stockity, Subscription) handle signal distribution and payment-gated access.
+TradeBot (`tradebot` v0.2.0) is a modular, async Python trading framework for multi-broker signal analysis and automated trade execution. It connects to Deriv (binary options via WebSocket), MetaTrader 5, Binance, Yahoo Finance, and forex data sources. An 11-engine consensus pipeline (with MTF hierarchical analysis) analyzes market ticks and produces trading signals dispatched through a quality gate and middleware chain to brokers. A single unified Telegram bot (`VilonaBot`, 29 commands, categorized inline button menus) handles signal distribution, user management, and payment-gated access.
 
 **Runtime:** Python 3.11+ (developed on 3.13). All async via `asyncio`.
 
@@ -60,15 +60,16 @@ If you see any of these in `git status`, do not commit them. If they're tracked,
 ### One server, one bot, one entry point
 The codebase has been unified. The principle is:
 - **1 FastAPI app** (port 9090) — serves admin + public + API + bridge
-- **1 bot class** (`UnifiedBot`) — replaces VilonaBot/StockityBot/SubscriptionBot
+- **1 bot class** (`VilonaBot` in `tradebot/bots/platforms/vilona/`) — single unified bot with 29 commands, categorized inline button menus, role-based views (admin vs customer)
 - **1 entry point** — `python -m tradebot`
 - **3 admin pages** (login, dashboard, plans, whitelabels — at `/admin/*`)
 - **5 public pages** (landing, signals, dashboard/en/id/bilingual — all under `/`)
 - **12 public APIs** under `/api/*` (no auth)
 - **No legacy aliases.** If you see a backup or alternate path, delete it — don't add backward-compat redirects.
+- **Signal caching:** `run_engine_consensus()` results cached via `TieredCache` (120s TTL) — multiple users in the same time window share the same signal without re-running expensive AI.
 
 ### When to update AGENTS.md
-- Test counts change (currently 849 — update if you change this)
+- Test counts change (currently 934 — update if you change this)
 - New pattern is established and used in 3+ files
 - New guardrail rule learned from a bug or anti-pattern incident
 - A section is wrong (correct it; don't leave stale info)
@@ -100,12 +101,19 @@ Notifications (TelegramService / EventBus / SignalPublisher)
 Web (Unified FastAPI on port 9090)
     ├─ Public: /landing, /signals, /dashboard/{en,id,bilingual}
     ├─ Admin: /admin, /admin/plans, /admin/whitelabels (session auth)
+    ├─ Monitoring: /admin/monitoring (engine health, brokers, trades, metrics)
     └─ APIs: /api/feed, /api/transparency, /api/backtest, /api/donors, /api/fuel/* (12 public)
+    ↓
+Telegram (VilonaBot — single unified bot with button menus)
+    ├─ 29 commands across 6 categories: Signal System, Market Data, Trade History,
+    │  Account, EA License, Stockity Insider
+    ├─ Inline button menus via tradebot/services/menu.py
+    └─ Role-based views: Customer menu vs Admin panel
 ```
 
 **Key abstraction layers:**
 - `Engine` ABC → 11 concrete engines auto-discovered via `Registry`
-- `Broker` ABC → DerivWSClient, MT5Broker
+- `Broker` ABC → DerivWSClient, MT5Broker, CCXTBroker
 - `BaseDataSource` ABC → BinanceSource, YahooSource, ForexSource, StockitySource
 - `AbstractStorage` ABC → SQLiteStorage, CognitiveDB
 
@@ -115,22 +123,29 @@ Web (Unified FastAPI on port 9090)
 
 | Directory | Purpose |
 |-----------|---------|
-| `tradebot/` | Main package — all production code |
-| `tradebot/engines/` | 11 signal analysis engines + consensus + registry |
-| `tradebot/brokers/` | Broker abstractions (Deriv, MT5) |
+| `tradebot/` | Main package — all production code (20 sub-packages) |
+| `tradebot/engines/` | 11 signal analysis engines + EngineConsensus + MTFConsensus + Registry |
+| `tradebot/brokers/` | Broker ABCs + Deriv (WS), MT5, CCXT, Stockity |
 | `tradebot/signals/` | Market data sources (Binance, Yahoo, Forex, Stockity) |
-| `tradebot/pipeline/` | Signal pipeline, middleware chain, trade executor |
+| `tradebot/pipeline/` | Signal pipeline, middleware chain, trade executor, quality gate |
 | `tradebot/models/` | Dataclasses: Signal, Tick, OHLCV, Trade, Order, Balance |
-| `tradebot/config/` | Pydantic Settings + `.env` loading |
-| `tradebot/services/` | Telegram, HealthService, Watchdog, BridgeServer, SignalPublisher, PaymentService |
+| `tradebot/config/` | Pydantic Settings + `.env` loading (80+ vars) |
+| `tradebot/services/` | 14 modules: TelegramService, PaymentService, HealthService, Watchdog, SignalPublisher, menu, signal_service, trade_tracker_service, members_service, consensus_service, signal_calculator_service, license_service |
+| `tradebot/bots/` | Single unified bot: `VilonaBot` in `platforms/vilona/` (split into bot.py, commands.py, analysis.py, callbacks.py, helpers.py) |
+| `tradebot/web/` | FastAPI server: admin dashboard, public pages, monitoring API, payment webhooks |
+| `tradebot/monitoring/` | MetricsCollector, HealthProbe, TradeTracker |
 | `tradebot/storage/` | SQLiteStorage, CognitiveDB (pattern memory), TieredCache |
 | `tradebot/events/` | In-process EventBus (pub/sub, thread-safe) |
 | `tradebot/logging/` | JSON formatter, correlation IDs, setup |
 | `tradebot/utils/` | AsyncRateLimiter, async_retry, validators |
-| `tradebot/bots/` | Telegram bots: Vilona, Stockity, Subscription |
-| `tradebot/cli.py` | Unified CLI (14 subcommands) |
-| `tests/` | 849 tests across 25 files |
-| `scripts/` | Legacy standalone scripts (~70 files) — most absorbed into `tradebot` package. `scripts/_legacy/` is archive; do not import. |
+| `tradebot/analytics/` | MarketAnalyzer, backtesting |
+| `tradebot/agents/` | AI agent infrastructure |
+| `tradebot/constants/` | Shared constants |
+| `tradebot/exceptions/` | TradebotError exception hierarchy |
+| `tradebot/saas/` | SaaS subscription layer |
+| `tradebot/cli.py` | Unified CLI (argparse, 15 subcommands) |
+| `tests/` | 934 tests across 25 files |
+| `scripts/` | Legacy standalone scripts (~70 files) — most absorbed into `tradebot` package. `scripts/_legacy/` is archive; do not import from scripts/ in tradebot/ package code. |
 | `.omo/` | AI agent scratch space (gitignored) — plans, todo lists, internal notes |
 | `docs/` | API reference, ops runbook, ownership protocol |
 | `deploy/systemd/` | Systemd service files |
@@ -171,6 +186,7 @@ python -m tradebot test R_75          # Connection + pattern test
 python -m tradebot signals            # Start signal pipeline
 python -m tradebot bridge 8082        # Start HTTP bridge
 python -m tradebot health             # Health check
+python -m tradebot bot start vilona   # Start Telegram bot
 python -m tradebot config             # Show current config
 
 # Docker
@@ -274,25 +290,73 @@ class ValidationMiddleware:
         return signal    # pass through
 ```
 
+### Bot Architecture Pattern (VilonaBot)
+The unified bot uses mixin-based composition:
+```python
+# tradebot/bots/platforms/vilona/bot.py
+class VilonaBot(
+    CommandHandlersMixin,    # all /command handlers in commands.py
+    CallbackHandlersMixin,   # menu/trade/payment callbacks in callbacks.py
+    AnalysisHandlersMixin,   # AI + mechanical analysis in analysis.py
+):
+    # Core: __init__, _tg_send, handle_update, _register_commands
+```
+- 29 commands registered in `_register_commands()` dict
+- Inline button menus via `tradebot/services/menu.py` (categorized, role-based)
+- Commands return `str` (HTML), bot sends via `_tg_send()`
+- Callback data format: `menu:signals`, `cmd:signal`, `__url__` (URL buttons)
+
+### Signal Caching Pattern
+Expensive `run_engine_consensus()` calls are cached per symbol:
+```python
+# tradebot/services/consensus_service.py
+_signal_cache = TieredCache(default_ttl=120)  # 2 minute TTL
+
+def run_engine_consensus(symbol="XAUUSD"):
+    cache_key = f"signal:{symbol}"
+    cached = _signal_cache.get(cache_key)
+    if isinstance(cached, dict):
+        return cached  # cache HIT
+    result = _run(symbol=symbol)
+    if result:
+        _signal_cache.set(cache_key, result)
+    return result
+```
+
 ---
 
 ## Important Files
 
 | File | Role |
 |------|------|
-| `tradebot/__init__.py` | Package root — 65 public exports, backward-compat layer |
+| `tradebot/__init__.py` | Package root — 65+ public exports |
 | `tradebot/__main__.py` | `python -m tradebot` entry point |
-| `tradebot/cli.py` | Unified CLI (Click-based, 14 commands) |
+| `tradebot/cli.py` | Unified CLI (argparse, 15 commands) |
 | `tradebot/config/settings.py` | All configuration (Pydantic BaseSettings, 80+ vars) |
+| `tradebot/bots/platforms/vilona/bot.py` | VilonaBot class (core lifecycle, Telegram API, update dispatch) |
+| `tradebot/bots/platforms/vilona/commands.py` | CommandHandlersMixin (29 command handlers) |
+| `tradebot/bots/platforms/vilona/analysis.py` | AnalysisHandlersMixin (AI + mechanical signal detection) |
+| `tradebot/bots/platforms/vilona/callbacks.py` | CallbackHandlersMixin (menu/trade/payment callbacks) |
+| `tradebot/bots/platforms/vilona/helpers.py` | Constants, utility functions, signal formatting |
+| `tradebot/services/menu.py` | Categorized inline button menus + role-based views |
+| `tradebot/services/consensus_service.py` | Engine consensus with TieredCache (120s TTL) |
+| `tradebot/services/signal_service.py` | Signal feed data layer (absorbed from scripts/) |
+| `tradebot/services/trade_tracker_service.py` | Trade history and stats (absorbed from scripts/) |
+| `tradebot/services/members_service.py` | Member/ donor database access |
+| `tradebot/services/payment.py` | Unified PaymentService (Tripay + Duitku) |
 | `tradebot/engines/registry.py` | Engine auto-discovery |
-| `tradebot/engines/consensus.py` | EngineConsensus (weighted voting) + MTFConsensus (5-TF hierarchical) |
+| `tradebot/engines/consensus.py` | EngineConsensus + MTFConsensus |
 | `tradebot/pipeline/signal_pipeline.py` | Main processing pipeline |
 | `tradebot/pipeline/middleware.py` | 5 middleware classes |
-| `tradebot/pipeline/quality_gate.py` | TP/SL calculation, signal grading, quality validation |
+| `tradebot/pipeline/quality_gate.py` | TP/SL calculation, signal grading |
 | `tradebot/models/signal.py` | Signal dataclass (core data type) |
+| `tradebot/monitoring/tracker.py` | TradeTracker (trade recording + stats) |
+| `tradebot/storage/cache.py` | TieredCache (two-tier hot/cold with TTL) |
+| `tradebot/web/server.py` | FastAPI app (admin dashboard + public pages + APIs) |
+| `tradebot/web/monitoring_api.py` | 6 monitoring endpoints (engines, brokers, metrics, trades) |
 | `pyproject.toml` | Build config, deps, entry points, tool settings |
 | `tests/conftest.py` | Shared pytest fixtures |
-| `ARCHITECTURE.md` | System design documentation |
+| `llms.txt` | AI context file — read this first |
 
 ---
 
@@ -314,7 +378,8 @@ class ValidationMiddleware:
 ## Testing & QA
 
 ### Running Tests
-# Full suite (849 tests, ~55s)
+```bash
+# Full suite (934 tests, ~54s)
 python -m pytest tests/ -v
 
 # Single file
@@ -347,12 +412,11 @@ python -m pytest tests/ -x --tb=short
 | storage (sqlite, cache, cognitive) | 82-100% |
 | brokers (deriv patterns, strategy) | 88-99% |
 | bots (base framework) | 100% |
-| bots (handler internals) | 12-25% |
 
 ### Quality Gates
 - **Lint:** 0 ruff errors (enforced)
-- **Tests:** 849 passing, 0 failures
+- **Tests:** 934 passing, 0 failures
 - **Anti-patterns:** Zero `except Exception: pass` (all log the exception)
 - **Duplications:** Zero duplicate test functions within the same test class
-- **Legacy absorption:** All scripts/ functionality absorbed into tradebot/ package
+- **Legacy absorption:** All cross-package imports from `scripts/` eliminated from `tradebot/` package
 - **Working tree:** Clean (no dirty runtime data — if you see it, you broke gitignore)

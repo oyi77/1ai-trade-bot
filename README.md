@@ -16,6 +16,7 @@ Key capabilities:
 - **Deriv.com** — DIGITMATCH trading with Momen/Adjacency/Streak patterns
 - **Binance** — Public market data (crypto OHLCV) via REST API
 - **MT5** — MetaTrader 5 broker integration
+- **Telegram Bot** — Unified `VilonaBot` with 29 commands, categorized inline button menus
 - **Backtesting** — Tick-by-tick replay with configurable strategies
 - **Bridge server** — HTTP API for external signal injection
 - **Docker** — Ready-to-deploy multi-service setup
@@ -60,7 +61,7 @@ DERIV_MODE=demo               # "demo" or "real"
 ### 4. Run
 
 ```bash
-# Run all tests
+# Show all commands
 tradebot --help
 
 # Test connection and pattern detection
@@ -78,6 +79,9 @@ tradebot backtest R_75 Momen 500
 # Start the HTTP bridge server
 tradebot bridge 8082
 
+# Start the Telegram bot
+tradebot bot start vilona
+
 # Show latest market signal
 tradebot signals
 ```
@@ -92,14 +96,16 @@ tradebot signals
 | `tradebot test [symbol]` | Test broker connection and pattern detection |
 | `tradebot trade [symbol]` | Execute one live trade cycle |
 | `tradebot stream [symbol]` | Stream live ticks for 30 seconds |
-| `tradebot backtest [symbol] [pattern] [count]` | Run historical backtest replay |
+| `tradebot backtest [symbol] [pattern] [count]` | Historical backtest replay |
 | `tradebot bridge [port]` | Start HTTP signal bridge server |
 | `tradebot signals` | Show latest market signal |
-| `tradebot balance` | Query account balance |
-| `tradebot monitor` | Start health monitoring |
-| `tradebot export` | Export trade history to CSV |
-| `tradebot status` | Show system status summary |
 | `tradebot health` | Run health checks on all components |
+| `tradebot monitor` | Start HealthProbe HTTP server |
+| `tradebot analytics` | Daily mapping + session levels report |
+| `tradebot bot start <name>` | Start a trading bot (vilona, stockity) |
+| `tradebot bot stop <name>` | Stop a trading bot |
+| `tradebot config` | Show sanitised configuration |
+| `tradebot version` | Show version |
 
 All configuration comes from `.env` via pydantic-settings.
 
@@ -119,6 +125,14 @@ All configuration comes from `.env` via pydantic-settings.
                │  (Logging, Rate-Limit,       │
                │   Dedup, Validation)         │
                └─────────────────────────────┘
+                    │
+                    ▼
+               ┌─────────────────────────────┐
+               │  VilonaBot (Telegram)        │
+               │  29 commands, button menus   │
+               │  Role-based views             │
+               │  Signal caching (120s TTL)    │
+               └─────────────────────────────┘
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full breakdown.
@@ -130,7 +144,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full breakdown.
 ### Running Tests
 
 ```bash
-# Full test suite
+# Full test suite (934 tests)
 python -m pytest tests/ -v
 
 # With coverage
@@ -157,37 +171,62 @@ mypy tradebot/ --strict
 
 ```
 tradebot/
-├── __init__.py           # Package root
-├── __main__.py           # python -m tradebot entry
-├── cli.py                # CLI entry point (12+ commands)
-├── config/               # Pydantic settings (.env)
-├── models/               # Data models (Signal, Tick, Trade, etc.)
-├── brokers/              # Broker integrations
-│   ├── deriv/            # Deriv.com WebSocket client + patterns
-│   └── mt5/              # MetaTrader 5 integration
-├── engines/              # Signal analysis engines
-├── pipeline/             # Signal pipeline + middleware
-├── signals/              # Market data sources (Binance, Yahoo, etc.)
-├── services/             # Bridge server, health, Telegram, watchdog
-├── analytics/            # Backtesting engine + reporting
-├── storage/              # SQLite + cognitive storage
-├── utils/                # Rate limiter, validators, retry
-├── monitoring/           # Metrics, health, Prometheus
-├── logging/              # Structured logging setup
-└── exceptions/           # Exception hierarchy
+├── __init__.py             # Package root — 65+ exports
+├── __main__.py             # python -m tradebot entry
+├── cli.py                  # CLI entry point (15 subcommands)
+├── config/                 # Pydantic settings (.env)
+├── models/                 # Data models (Signal, Tick, Trade, etc.)
+├── brokers/                # Broker integrations
+│   ├── deriv/              # Deriv.com WebSocket client + patterns
+│   ├── mt5/                # MetaTrader 5 integration
+│   ├── ccxt/               # CCXT exchange integration
+│   └── stockity/           # Stockity broker
+├── engines/                # 11 Signal analysis engines + consensus
+├── pipeline/               # Signal pipeline + middleware + quality gate
+├── signals/                # Market data sources (Binance, Yahoo, etc.)
+├── services/               # 14 modules: Telegram, payments, signal feed,
+│                           #   trade tracker, members, consensus, menus
+├── bots/                   # Telegram bot
+│   └── platforms/vilona/   # VilonaBot (split into bot.py, commands.py,
+│                           #   analysis.py, callbacks.py, helpers.py)
+├── web/                    # FastAPI admin dashboard + public pages + API
+├── monitoring/             # Metrics, health, trade tracking
+├── storage/                # SQLite, cognitive storage, TieredCache
+├── analytics/              # Backtesting engine + reporting
+├── agents/                 # AI agent infrastructure
+├── events/                 # In-process EventBus
+├── logging/                # Structured logging setup
+├── utils/                  # Rate limiter, validators, retry
+├── exceptions/             # Exception hierarchy
+├── constants/              # Shared constants
+└── saas/                   # SaaS subscription layer
+
+tests/                      # 934 tests across 25 files
+scripts/                    # Legacy scripts (mostly absorbed)
 ```
 
 ### Adding a New Engine
 
-1. Create `tradebot/engines/my_engine.py` extending `BaseEngine`
-2. Implement `analyze(self, ticks)` returning a `Signal`
-3. Register it in the consensus layer
+1. Create `tradebot/engines/my_engine.py` extending `Engine` ABC
+2. Implement `async def analyze(self, ticks: list[Tick]) -> Signal | None`
+3. Engine is auto-discovered via `Registry.discover()`
 
 ### Adding a New Broker
 
-1. Create `tradebot/brokers/my_broker/` package
-2. Implement the broker interface (connect, tick subscription, trade execution)
-3. Add a CLI command in `cli.py`
+1. Create `tradebot/brokers/my_broker/` package extending `Broker` ABC
+2. Implement `connect()`, `get_balance()`, `place_order()`, `subscribe_ticks()`
+3. Add CLI command in `cli.py`
+
+### Bot Command Pattern
+
+Commands follow a standard pattern inside `CommandHandlersMixin`:
+```python
+async def _cmd_mycommand(self, args: list[str], chat_id: str | None = None) -> str:
+    """Description shown in /help."""
+    # Logic here
+    return "✅ <b>Result</b>\nFormatted HTML response"
+```
+Register in `_register_commands()` dict in `bot.py`, add button in `tradebot/services/menu.py`.
 
 ---
 
@@ -224,6 +263,7 @@ All configuration is via environment variables / `.env`. See `.env.example` for 
 | `MONITORING_*` | Health checks & metrics |
 | `BRIDGE_*` | HTTP bridge server |
 | `TELEGRAM_*` | Telegram notifications |
+| `ADMIN_*` | Admin panel config |
 
 ---
 

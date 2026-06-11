@@ -1,0 +1,107 @@
+# TradeBot — AI Context File
+
+## Project
+TradeBot (`tradebot` v0.2.0) is a modular, async Python trading framework for multi-broker signal analysis and automated trade execution. Connects to Deriv (WebSocket), MetaTrader 5, Binance, Yahoo Finance, and forex data sources.
+
+**Python:** 3.11+ (developed on 3.13). Async via `asyncio`.
+**Tests:** 934 passing, 0 failing. Run with `python -m pytest tests/ -q`.
+**Install:** `pip install -e ".[dev]"` (setuptools backend, no Poetry).
+
+## Directory Structure
+
+```
+tradebot/
+├── __init__.py          # Public API exports (~65 symbols)
+├── __main__.py          # python -m tradebot entry
+├── cli.py               # CLI (argparse, 15 subcommands)
+├── config/              # Pydantic settings (.env → settings)
+├── models/              # Dataclasses: Signal, Tick, OHLCV, Trade, Order, Balance
+├── brokers/             # Broker ABCs + DerivWSClient, MT5Broker, CCXTBroker
+├── engines/             # 11 engines + EngineConsensus + MTFConsensus + Registry
+├── pipeline/            # SignalPipeline, MiddlewareChain, QualityGate, TradeExecutor
+├── signals/             # Data sources: Binance, Yahoo, Forex, Stockity
+├── services/            # 14 modules: TelegramService, PaymentService, HealthService,
+│                        #   SignalPublisher, WatchdogService, menu, signal_service,
+│                        #   trade_tracker_service, members_service, consensus_service,
+│                        #   signal_calculator_service, license_service
+├── bots/                # VilonaBot (unified single bot, 29 commands, button menus)
+│   └── platforms/
+│       └── vilona/      # Split into: bot.py, commands.py, analysis.py, callbacks.py, helpers.py
+├── web/                 # FastAPI server (port 9090), admin + public pages, monitoring API
+├── monitoring/          # MetricsCollector, HealthProbe, TradeTracker
+├── storage/             # SQLiteStorage, CognitiveDB, TieredCache
+├── events/              # In-process EventBus (pub/sub)
+├── logging/             # JSON formatter, correlation IDs
+├── utils/               # AsyncRateLimiter, async_retry, validators
+├── analytics/           # MarketAnalyzer, backtesting
+├── agents/              # AI agent infrastructure
+├── constants/           # Shared constants
+├── exceptions/          # TradebotError hierarchy (SignalError, PipelineError, etc.)
+└── saas/                # SaaS subscription layer
+
+tests/                   # 934 tests across 25 files
+scripts/                 # Legacy scripts (~70) — most absorbed into tradebot/
+```
+
+## Code Conventions
+
+### Types
+```python
+# Python 3.10+ syntax — no Optional[X], no Union[X, Y]
+def analyze(self, ticks: list[Tick]) -> Signal | None: ...
+value: str | int | None = None
+```
+
+### Logging
+```python
+import logging
+LOG = logging.getLogger(__name__)
+LOG.info("Signal processed: %s confidence=%.2f", signal.symbol, signal.confidence)
+```
+Never bare `except:` or `except Exception: pass` — always log.
+
+### Error Handling
+```python
+from tradebot.exceptions import SignalError, PipelineError, StorageError
+raise SignalError("Missing tick data", details={"symbol": "R_75"})
+```
+
+### Dataclasses
+```python
+@dataclass
+class Signal:
+    symbol: str
+    direction: str
+    confidence: float
+    metadata: dict = field(default_factory=dict)
+```
+
+### Async
+- `asyncio_mode = auto` in pytest — all tests async by default
+- Engines: `async def analyze(self, ticks) -> Signal | None`
+- Cancellation: `try/except asyncio.CancelledError`
+- Timeouts: `asyncio.timeout()` context manager
+
+### Bot Architecture (VilonaBot)
+- Single bot class: `VilonaBot` in `tradebot/bots/platforms/vilona/bot.py`
+- Uses mixin pattern: `CommandHandlersMixin`, `CallbackHandlersMixin`, `AnalysisHandlersMixin`
+- Categorized inline button menus via `tradebot/services/menu.py`
+- Role-based views: admin vs customer (detected from ADMIN_CHAT_ID env var)
+- Signal caching: 120s TTL via TieredCache in `consensus_service.py`
+- All 29 commands registered in `_register_commands()` dict
+
+## Critical Rules (NEVER violate)
+- No `# type: ignore` without explicit justification in commit message
+- No `except: pass` or `except Exception: pass` — always log
+- No BDD comments, emoji comments, or narrative story comments
+- `# type: ignore[import-not-found]` allowed ONLY for PEP 420 namespace packages (scripts/)
+- Git commits: `<type>: <subject> — <detail>` with `Co-authored-by: Sisyphus <clio-agent@sisyphuslabs.ai>`
+- Tests paired with implementation code in same commit
+- Never commit: `.env`, `*.db`, `__pycache__/`, `.ruff_cache/`, `.mypy_cache/`
+
+## Tooling
+- **Linter:** ruff (rules: E, F, I, W, N, UP, SIM; line-length 100)
+- **Formatter:** ruff format
+- **Type checker:** mypy (strict mode)
+- **Test runner:** pytest with `asyncio_mode = auto`
+- **Coverage:** pytest-cov, target ≥70%
