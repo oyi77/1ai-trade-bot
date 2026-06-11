@@ -54,6 +54,7 @@ class PaymentService:
         username: str,
         amount: int,
         method: str = "",
+        tier: str = "pro",
         customer_email: str = "",
         customer_phone: str = "",
         order_items: list[dict] | None = None,
@@ -75,7 +76,7 @@ class PaymentService:
         if not method:
             method = settings.TRIPAY_DEFAULT_METHOD
 
-        merchant_ref = f"VTFX-{user_id}-{int(time.time())}"
+        merchant_ref = f"VTFX-{tier}-{user_id}-{int(time.time())}"
         label = "Dukung Server AI - VilonaTradeFX"
 
         raw = f"{settings.TRIPAY_MERCHANT_CODE}{merchant_ref}{amount}"
@@ -305,23 +306,24 @@ class PaymentService:
 async def create_tripay_payment(
     chat_id: str,
     username: str,
-    tier: str = "donor",
+    tier: str = "pro",
     method: str = "QRIS",
     amount: int | None = None,
 ) -> dict:
-    """Convenience wrapper — create a Tripay donation payment.
+    """Convenience wrapper — create a Tripay subscription payment.
 
     Mirrors the legacy members.payment.create_tripay_payment signature
     but uses the unified PaymentService backend.
     """
     if amount is None:
         amount = 50000
-    if amount < 10000:
-        return {"error": "Minimum subscribe Rp10.000"}
+    if amount < 50000:
+        return {"error": "Minimum subscribe Rp50.000"}
     svc = PaymentService()
     return await svc.create_tripay_transaction(
         user_id=chat_id,
         username=username,
         amount=amount,
         method=method,
+        tier=tier,
     )

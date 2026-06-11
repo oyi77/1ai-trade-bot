@@ -134,7 +134,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     <a class="nav-item" data-page="how" href="#"><span class="icon text-base">🧠</span><span>How It Works</span></a>
     <a class="nav-item" data-page="backtest" href="#"><span class="icon text-base">📊</span><span>Backtest</span></a>
     <a class="nav-item" data-page="charts" href="#"><span class="icon text-base">📈</span><span>Charts</span></a>
-    <a class="nav-item" data-page="fuel" href="#"><span class="icon text-base">⛽</span><span>Fuel AI</span><span class="ml-auto bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">DONATE</span></a>
+    <a class="nav-item" data-page="fuel" href="#"><span class="icon text-base">⛽</span><span>Subscribe</span><span class="ml-auto bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">SUBSCRIBE</span></a>
   </div>
   <div class="p-4 border-t border-white/5">
     <a href="https://t.me/berkahkaryaforexbotbot?start=ref_web" target="_blank" class="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-sm font-bold py-2.5 px-4 rounded-lg hover:shadow-lg hover:shadow-blue-500/20 transition-all">
@@ -757,121 +757,136 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   </div>
 </div>
 
-<!-- ==================== PAGE: FUEL AI (EN) ==================== -->
+<!-- ==================== PAGE: SUBSCRIBE (EN) ==================== -->
 <div class="page" id="page-fuel">
 
-  <h2 class="text-2xl font-extrabold text-white mb-2">⛽ Fuel The AI Engine</h2>
-  <p class="text-sm text-slate-400 mb-6">Power the 24/7 trading server. Every donation, no matter how small, makes a difference.</p>
+  <h2 class="text-2xl font-extrabold text-white mb-2">⛽ Partner, Not Victim</h2>
+  <p class="text-sm text-slate-400 mb-2">We give you the EA for <b>free</b>. Signals <b>free</b>. 100% transparent. Why? Because you're not a customer — you're a <b>partner</b>. If the AI prints money, chip in. If it loses, you pay nothing.</p>
 
-  <!-- Fuel Meter -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-    <div class="md:col-span-2 kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.1), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.15)">
-      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🚀 AI Fuel Status This Month</h3>
-      <div class="flex items-end gap-2 mb-2">
-        <span class="text-4xl font-mono font-extrabold text-emerald-400" id="fuel-pct">0%</span>
-        <span class="text-sm text-slate-500 pb-1">funded</span>
-      </div>
-      <div class="h-3 bg-white/5 rounded-full mb-4 overflow-hidden">
-        <div class="h-full rounded-full transition-all duration-1000" id="fuel-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
-      </div>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-        <div class="text-center bg-white/5 rounded-lg p-3">
-          <div class="font-mono font-bold text-white text-sm" id="fuel-collected">Rp 0</div>
-          <div class="text-slate-500 mt-0.5">Collected</div>
-        </div>
-        <div class="text-center bg-white/5 rounded-lg p-3">
-          <div class="font-mono font-bold text-red-400 text-sm" id="fuel-shortfall">Rp 7.3M</div>
-          <div class="text-slate-500 mt-0.5">Shortfall</div>
-        </div>
-        <div class="text-center bg-white/5 rounded-lg p-3">
-          <div class="font-mono font-bold text-emerald-400 text-sm" id="fuel-subscribers">0</div>
-          <div class="text-slate-500 mt-0.5">Subscribers</div>
-        </div>
-        <div class="text-center bg-white/5 rounded-lg p-3">
-          <div class="font-mono font-bold text-white text-sm" id="fuel-target">Rp 7.3M</div>
-          <div class="text-slate-500 mt-0.5">Target</div>
-        </div>
-      </div>
-      <div class="mt-3 text-xs text-slate-600">
-        <span id="fuel-status-text">⚠️ Critical — server needs your help</span>
-      </div>
+  <!-- LP Gimmick: Why Free + Fuel Analogy -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="kpi-card border border-white/5" style="background:linear-gradient(135deg, rgba(30,58,138,0.06), rgba(30,58,138,0.01))">
+      <h3 class="text-xs font-bold text-blue-400 mb-2">❓ Why Free?</h3>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        The <b>"paid VIP group + education"</b> model is broken. You pay premium, get copy-paste signals.
+        We flipped it: <b>AI works, you profit, servers paid by voluntary participation.</b>
+        If AI wins, you share a little. If it loses, you pay nothing for access.
+      </p>
     </div>
-
-    <!-- What You Get Card -->
-    <div class="kpi-card" style="background:linear-gradient(135deg, rgba(30,58,138,0.08), rgba(30,58,138,0.02));border-color:rgba(59,130,246,0.15)">
-      <h3 class="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">🎁 Subscriber Benefits</h3>
-      <div class="space-y-2 text-xs">
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Tier-based subscription</span></div>
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Name on the <b>Wall of Fame</b> dashboard</span></div>
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300"><b>/analyze UNLIMITED</b> — no limits</span></div>
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Priority <b>Auto-Trade EA</b></span></div>
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300"><b>GRADE A+</b> signals via Telegram</span></div>
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Proud <b>AI supporter</b> badge 🏅</span></div>
-      </div>
+    <div class="kpi-card border border-white/5" style="background:linear-gradient(135deg, rgba(6,78,59,0.06), rgba(6,78,59,0.01))">
+      <h3 class="text-xs font-bold text-emerald-400 mb-2">💧 The Fuel Analogy</h3>
+      <p class="text-xs text-slate-400 leading-relaxed">
+        You get a free car. Free fuel. Every time you reach your destination, you refill so tomorrow you can ride again.
+        <b>That's gotong royong.</b> Not subscription. Not fee. You refill because you saw the car actually runs.
+      </p>
     </div>
   </div>
 
-  <!-- TIER COMPARISON — THE GIMMICK -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-    <!-- Free Tier -->
-    <div class="kpi-card border-2 border-white/5 relative overflow-hidden">
-      <div class="absolute top-0 right-0 bg-slate-700 text-slate-300 text-[10px] font-bold px-3 py-1 rounded-bl-lg">FREE</div>
-      <h3 class="text-lg font-bold text-white mb-3">🆓 Free User</h3>
-      <div class="space-y-2 text-xs mb-4">
-        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">3x /analyze per day</span></div>
-        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">Public signals (5 min delay)</span></div>
-        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">No EA Auto-Trade access</span></div>
-        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">No priority support</span></div>
-        <div class="flex items-center gap-2"><span class="text-red-400">✗</span><span class="text-slate-400">Limited signal grades</span></div>
-      </div>
-      <div class="text-center text-xs text-slate-600 py-2 border-t border-white/5">⚠️ Server runs on developer's personal budget</div>
+  <!-- Server Cost Progress -->
+  <div class="kpi-card mb-6" style="background:linear-gradient(135deg, rgba(6,78,59,0.1), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.15)">
+    <div class="flex justify-between items-center mb-3">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">🚀 Server Fund This Month</h3>
+      <span class="text-[10px] text-slate-500"><b id="fuel-pct">0%</b> funded</span>
     </div>
-
-    <!-- Subscription Tier -->
-    <div class="kpi-card border-2 border-emerald-400/30 relative overflow-hidden" style="background:linear-gradient(135deg, rgba(6,78,59,0.12), rgba(6,78,59,0.03))">
-      <div class="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">🔥 PREMIUM</div>
-      <div class="absolute -top-6 -right-6 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl"></div>
-      <h3 class="text-lg font-bold text-emerald-400 mb-3">👑 Subscription</h3>
-      <div class="space-y-2 text-xs mb-4">
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>/analyze UNLIMITED</b> — use freely</span></div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>Real-time</b> signals, no delay</span></div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Full <b>EA Auto-Trade</b> access</span></div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Tier-based subscription</span></div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>Grade A+</b> exclusive signals</span></div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Name on <b>Wall of Fame</b> 🏆</span></div>
+    <div class="h-3 bg-white/5 rounded-full mb-4 overflow-hidden">
+      <div class="h-full rounded-full transition-all duration-1000" id="fuel-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+      <div class="text-center bg-white/5 rounded-lg p-3">
+        <div class="font-mono font-bold text-white text-sm" id="fuel-collected">Rp 0</div>
+        <div class="text-slate-500 mt-0.5">Raised</div>
       </div>
-      <div class="text-center text-xs text-emerald-300 py-2 border-t border-emerald-400/10">
-        📅 <b>Monthly subscription</b> — choose your tier
+      <div class="text-center bg-white/5 rounded-lg p-3">
+        <div class="font-mono font-bold text-red-400 text-sm" id="fuel-shortfall">Rp 7.3M</div>
+        <div class="text-slate-500 mt-0.5">Shortfall</div>
       </div>
+      <div class="text-center bg-white/5 rounded-lg p-3">
+        <div class="font-mono font-bold text-emerald-400 text-sm" id="fuel-subscribers">0</div>
+        <div class="text-slate-500 mt-0.5">Subscribers</div>
+      </div>
+      <div class="text-center bg-white/5 rounded-lg p-3">
+        <div class="font-mono font-bold text-white text-sm" id="fuel-target">Rp 7.3M</div>
+        <div class="text-slate-500 mt-0.5">Target</div>
+      </div>
+    </div>
+    <div class="mt-3 text-xs text-slate-600">
+      <span id="fuel-status-text">⚠️ Critical — server needs your help</span>
     </div>
   </div>
 
-  <!-- DONATION CTA — TRIPAY AUTO CHECKOUT (MOBILE OPTIMIZED) -->
+  <!-- 3-TIER PRICING CARDS — LP Style Gimmick -->
+  <h3 class="text-sm font-bold text-white mb-3">Choose your tier:</h3>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- PRO Tier -->
+    <div class="kpi-card border border-white/5 relative overflow-hidden text-center" style="background:linear-gradient(135deg, rgba(30,58,138,0.05), rgba(30,58,138,0.01))">
+      <div class="text-xs font-bold text-blue-400 mb-1">Fuel Filler</div>
+      <div class="text-2xl font-extrabold text-white mb-1">Rp50K<span class="text-xs text-slate-500 font-normal">/mo</span></div>
+      <div class="text-[10px] text-slate-500 mb-3">⭐ PRO</div>
+      <ul class="text-left text-[11px] space-y-1.5 mb-4" style="list-style:none;padding:0">
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">20x /analyze per day</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">SL/TP unlocked</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">EA Bridge free</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">Name on subscriber wall</span></li>
+      </ul>
+      <button onclick="document.getElementById('fuel-amount-input').value='50000'" 
+              class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2.5 rounded-lg transition-all">⭐ PRO Rp50K</button>
+    </div>
+
+    <!-- ELITE Tier — Most Popular -->
+    <div class="kpi-card border-2 border-emerald-400/30 relative overflow-hidden text-center" style="background:linear-gradient(135deg, rgba(6,78,59,0.12), rgba(6,78,59,0.03))">
+      <div class="absolute top-0 right-0 bg-emerald-500 text-black text-[9px] font-bold px-3 py-1 rounded-bl-lg">🔥 MOST POPULAR</div>
+      <div class="text-xs font-bold text-emerald-400 mb-1">Trusted Mechanic</div>
+      <div class="text-2xl font-extrabold text-emerald-400 mb-1">Rp150K<span class="text-xs text-slate-500 font-normal">/mo</span></div>
+      <div class="text-[10px] text-slate-500 mb-3">👑 ELITE</div>
+      <ul class="text-left text-[11px] space-y-1.5 mb-4" style="list-style:none;padding:0">
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300"><b>Unlimited</b> /analyze</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">All PRO features</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">GPT-4o + Grok AI access</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">Priority EA Token</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">Daily performance report</span></li>
+      </ul>
+      <button onclick="document.getElementById('fuel-amount-input').value='150000'" 
+              class="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-3 py-2.5 rounded-lg text-xs transition-all">👑 ELITE Rp150K</button>
+    </div>
+
+    <!-- LIFETIME Tier -->
+    <div class="kpi-card border border-white/5 relative overflow-hidden text-center">
+      <div class="text-xs font-bold text-amber-400 mb-1">Server Elite</div>
+      <div class="text-2xl font-extrabold text-amber-400 mb-1">Rp500K<span class="text-xs text-amber-400/60 font-normal"> once</span></div>
+      <div class="text-[10px] text-slate-500 mb-3">💎 LIFETIME</div>
+      <ul class="text-left text-[11px] space-y-1.5 mb-4" style="list-style:none;padding:0">
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">All ELITE features</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300"><b>Permanent</b> — never expires</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">Name on homepage</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">Elite API key</span></li>
+        <li class="flex items-start gap-1.5"><span class="text-emerald-400 text-[10px]">✓</span><span class="text-slate-300">1-on-1 setup support</span></li>
+      </ul>
+      <button onclick="document.getElementById('fuel-amount-input').value='500000'" 
+              class="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-2.5 rounded-lg text-xs transition-all">💎 LIFETIME Rp500K</button>
+    </div>
+  </div>
+
+  <!-- TRIPAY CHECKOUT FORM -->
   <div class="kpi-card mb-6" style="background:linear-gradient(135deg, rgba(6,78,59,0.10), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.2)">
     <div class="flex flex-col items-center gap-4">
       <div class="text-center w-full">
-        <h3 class="text-base font-bold text-emerald-400 mb-1">💚 Fuel the AI</h3>
+        <h3 class="text-base font-bold text-emerald-400 mb-1">💚 Subscribe via Tripay</h3>
         <p class="text-xs text-slate-400 mb-4">
-          Subscribe via <b>Tripay</b> — QRIS / VA / Alfamart. <b>Auto-activated!</b>
+          QRIS / VA / Alfamart. <b>Auto-activated!</b>
         </p>
         
-        <!-- Amount buttons — single column on mobile, row on desktop -->
+        <!-- Tier selection buttons -->
         <div class="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-3 mb-4">
-          <button onclick="document.getElementById('fuel-amount-input').value='10000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp10K</button>
-          <button onclick="document.getElementById('fuel-amount-input').value='25000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp25K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='50000'" 
-                  class="fuel-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp50K</button>
-          <button onclick="document.getElementById('fuel-amount-input').value='100000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp100K</button>
-          <button onclick="document.getElementById('fuel-amount-input').value='250000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp250K</button>
+                  class="fuel-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">⭐ PRO Rp50K</button>
+          <button onclick="document.getElementById('fuel-amount-input').value='150000'" 
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">👑 ELITE Rp150K</button>
+          <button onclick="document.getElementById('fuel-amount-input').value='500000'" 
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">💎 LIFETIME Rp500K</button>
         </div>
         
         <!-- Input form -->
         <div class="max-w-md mx-auto bg-slate-800/40 rounded-xl p-4 border border-slate-700/40">
-          <!-- Single column layout on mobile; two cols on sm+ -->
           <div class="flex flex-col sm:grid sm:grid-cols-2 gap-3 mb-3">
             <div>
               <label class="text-[10px] text-slate-500 block mb-1">🆔 Telegram User ID *</label>
@@ -886,7 +901,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
             </div>
             <div>
               <label class="text-[10px] text-slate-500 block mb-1">💰 Amount (Rp)</label>
-              <input id="fuel-amount-input" type="number" value="50000" min="10000"
+              <input id="fuel-amount-input" type="number" value="50000" min="50000"
                      class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-3 text-white text-base font-mono outline-none focus:border-emerald-500">
             </div>
           </div>
@@ -896,7 +911,6 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
                    class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-3 text-white text-sm font-mono outline-none focus:border-emerald-500">
           </div>
           
-          <!-- 🔽 Collapsible: How to get Telegram ID -->
           <details class="mb-3 bg-slate-900/60 rounded-lg border border-slate-700/40 overflow-hidden">
             <summary class="text-xs text-slate-400 cursor-pointer px-3 py-2.5 hover:text-slate-200 transition-colors select-none">
               ❓ How to get Telegram ID?
@@ -919,7 +933,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
         </div>
         
         <div class="text-[10px] text-slate-600 mt-3">
-          💚 After payment, <b>Subscription</b> activates automatically in seconds!
+          💚 After payment, <b>subscription activates automatically!</b>
         </div>
       </div>
     </div>
@@ -927,7 +941,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 
   <!-- WALL OF FAME (full) -->
   <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.06), rgba(6,78,59,0.01))">
-    <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">🏆 Wall of Fame — Subscriptions</h3>
+    <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">🏆 Wall of Fame — Subscribers</h3>
     <div id="fuel-sub-wall-full">
       <div class="text-sm text-slate-500 text-center py-6">Loading subscriber data...</div>
     </div>

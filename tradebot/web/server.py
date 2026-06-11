@@ -373,7 +373,17 @@ async def webhook_tripay(request: Request):
         import sqlite3
         from pathlib import Path as _Path
 
-        chat_id = merchant_ref.split("-")[1] if "-" in merchant_ref else ""
+        # Parse merchant_ref: new=VTFX-pro-12345678-ts, old=VTFX-12345678-ts
+        parts = merchant_ref.split("-")
+        if len(parts) >= 4 and parts[1] in ("pro", "elite", "lifetime"):
+            tier = parts[1]
+            chat_id = parts[2]
+        elif len(parts) >= 3:
+            tier = "pro"  # legacy fallback
+            chat_id = parts[1]
+        else:
+            tier = "pro"
+            chat_id = ""
         db_path = _Path(__file__).resolve().parent.parent / "members.db"
 
         # deduplicate: skip if already paid
@@ -408,8 +418,11 @@ async def webhook_tripay(request: Request):
             LOG.warning("payment_orders insert failed: %s", exc)
 
         if chat_id:
-            upgrade_tier(chat_id, "donor", 9999, merchant_ref)
-            LOG.info("Tripay payment PAID: %s → user %s", merchant_ref, chat_id)
+            # Map tier → days
+            tier_days = {"pro": 30, "elite": 30, "lifetime": 9999}
+            days = tier_days.get(tier, 30)
+            upgrade_tier(chat_id, tier, days, merchant_ref)
+            LOG.info("Tripay payment PAID: %s → user %s (%s tier)", merchant_ref, chat_id, tier)
 
         return {"success": True}
     except Exception as exc:
@@ -517,14 +530,21 @@ async def api_fuel_create(
     chat_id: str = "web",
     username: str = "Guest",
 ):
-    """Create a Tripay donation payment for AI Fuel."""
+    """Create a Tripay subscription payment with tier based on amount."""
     if amount < 50000:
         return JSONResponse({"success": False, "error": "Minimum subscribe Rp50.000"}, status_code=400)
+    # Map amount to tier
+    if amount >= 500000:
+        tier = "lifetime"
+    elif amount >= 150000:
+        tier = "elite"
+    else:
+        tier = "pro"
     try:
         from tradebot.services.payment import create_tripay_payment
 
         result = await create_tripay_payment(
-            chat_id=chat_id, username=username, tier="donor", amount=amount
+            chat_id=chat_id, username=username, tier=tier, amount=amount
         )
         if result.get("success"):
             return result
@@ -542,6 +562,30 @@ async def api_fuel_report(chat_id: str):
     """Receive a manual transfer confirmation from the website (dedup by chat_id)."""
     body, status = _save_fuel_report(chat_id)
     return JSONResponse(body, status_code=status)
+
+
+@app.get("/api/create-payment")
+async def api_create_payment(amount: int, method: str = "QRIS2"):
+    """Bridge endpoint for landing page — create payment with tier auto-detection."""
+    if amount < 50000:
+        return JSONResponse({"error": "Minimum Rp50.000"}, status_code=400)
+    if amount >= 500000:
+        tier = "lifetime"
+    elif amount >= 150000:
+        tier = "elite"
+    else:
+        tier = "pro"
+    try:
+        from tradebot.services.payment import create_tripay_payment
+        result = await create_tripay_payment(
+            chat_id="web", username="LP-Visitor", tier=tier, amount=amount, method=method
+        )
+        if result.get("success"):
+            return result
+        return JSONResponse(result, status_code=500)
+    except Exception as exc:
+        LOG.warning("api_create_payment failed: %s", exc)
+        return JSONResponse({"error": str(exc)[:200]}, status_code=500)
 
 
 # ── API ───────────────────────────────────────────────────────────────

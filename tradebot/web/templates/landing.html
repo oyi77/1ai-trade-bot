@@ -1097,7 +1097,7 @@ async function fetchAll(){
     // Server Cost Progress
     var target=2500000, raised=0, pct=0;
     try{
-      var pr=await fetch(BRIDGE+'/api/donations',{signal:AbortSignal.timeout(3000)});
+      var pr=await fetch(BRIDGE+'/api/fuel/stats',{signal:AbortSignal.timeout(3000)});
       var pd=await pr.json();
       if(pd&&pd.total_raised){raised=Math.min(parseInt(pd.total_raised)||0,target);pct=Math.round(raised/target*100);}
     }catch(e){}
@@ -1153,7 +1153,7 @@ function directPay(amount){
     .catch(function(e){ps.innerHTML='❌ Gagal: '+e.message});
 }
 function directPayCustom(){
-  var amount=prompt(document.body.lang==='id'?'Masukkan nominal subscribe (min Rp50.000):':'Enter donation amount (min Rp10,000):','50000');
+  var amount=prompt(document.body.lang==='id'?'Masukkan nominal subscribe (min Rp50.000):':'Enter subscribe amount (min Rp50,000):','50000');
   if(!amount)return;
   var n=parseInt(amount.replace(/[^0-9]/g,''));
   if(!n||n<50000){alert('Minimal Rp50.000');return}
