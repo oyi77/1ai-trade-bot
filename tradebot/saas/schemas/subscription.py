@@ -71,10 +71,10 @@ class CheckoutSessionResponse(BaseModel):
 # ── Donation / Tip Jar ─────────────────────────────────────────────
 
 DONATION_TIERS = {
-    "coffee": {"amount_idr": 50000, "credits": 5, "label": "Buy us a coffee (Rp 50K)"},
-    "supporter": {"amount_idr": 150000, "credits": 20, "label": "Supporter (Rp 150K)"},
-    "patron": {"amount_idr": 500000, "credits": 100, "label": "Patron (Rp 500K)"},
-    "whale": {"amount_idr": 1000000, "credits": 300, "label": "Whale (Rp 1M)"},
+    "pro": {"amount_idr": 50000, "label": "⭐ PRO (Rp 50K/month)"}
+    "elite": {"amount_idr": 150000, "label": "👑 ELITE (Rp 150K/month)"}
+    "lifetime": {"amount_idr": 500000, "label": "💎 LIFETIME (Rp 500K once)"}
+    
 }
 
 

@@ -481,7 +481,7 @@ def format_trade_close_with_cta(trade: dict) -> tuple:
             f"📈 Winrate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}"
         )
         markup = {"inline_keyboard": [
-            [{"text": "☕️ Traktir Kopi Server (Rp15k)", "callback_data": "donate:coffee"}],
+            [{"text": "⭐ Subscribe PRO (Rp50K)", "callback_data": "sub:pro"}],
             [{"text": "🚀 Isi Bensin AI (Nominal Bebas)", "callback_data": "donate:fuel"}],
         ]}
     else:

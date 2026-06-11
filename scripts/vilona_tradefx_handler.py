@@ -829,7 +829,7 @@ def handle_payment_callback(callback_query):
                 tg_send(
                     "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
                     "━━━━━━━━━━━━━━━━\n"
-                    "👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                    "👑 Status kamu sekarang: <b>Subscriber</b>\n"
                     "♾️ /analyze — UNLIMITED\n"
                     "🤖 EA Auto-Trade — AKTIF PERMANEN\n\n"
                     "Mari cetak profit! 🔥",
@@ -2865,7 +2865,7 @@ def handle_command(cmd, text, chat_id, msg):
         if _has_accepted_ultimatum(chat_id):
             # Returning user → show welcome
             is_donor = _is_donor(chat_id)
-            tier_label = "👑 DONATUR SULTAN (VIP)" if is_donor else "👤 Kawan Seperjuangan (Free Member)"
+            tier_label = "📊 Subscriber" if is_donor else "🆓 Free"
             quota = _get_quota(chat_id)
             quota_line = "UNLIMITED ♾️" if is_donor else f"{quota['remaining']}/{FREE_QUOTA_PER_DAY}"
             welcome = (
@@ -2885,7 +2885,7 @@ def handle_command(cmd, text, chat_id, msg):
             if is_donor:
                 welcome += (
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🔑 <b>AKSES DONATUR:</b>\n"
+                    f"📊 <b>AKSES SUBSCRIBER:</b>\n"
                     f"📥 Download EA MT5: phantomfx.aitradepulse.com/ea/download/\n"
                     f"🔑 Cek Licensi EA: /mykey\n"
                     f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com\n"

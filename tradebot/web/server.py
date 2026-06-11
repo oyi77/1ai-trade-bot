@@ -346,9 +346,8 @@ async def webhook_receive_snapshot(request: Request):
 async def webhook_tripay(request: Request):
     """Tripay payment callback webhook.
 
-    Called by Tripay when a payment is completed.
-    Verifies HMAC-SHA256 signature, upgrades member, and fires an
-    optional Meta CAPI income event (non-blocking).
+    Idempotent handler: only upgrades on first PAID event.
+    Records the payment to payment_orders for accounting.
     """
     from tradebot.services.payment import PaymentService
 
@@ -367,12 +366,50 @@ async def webhook_tripay(request: Request):
 
         merchant_ref = data.get("merchant_ref", "")
         status = data.get("status", "")
-        if status == "PAID":
-            from tradebot.services.members_service import upgrade_tier
-            chat_id = merchant_ref.split("-")[1] if "-" in merchant_ref else ""
-            if chat_id:
-                upgrade_tier(chat_id, "donor", 9999, merchant_ref)
-                LOG.info("Tripay payment PAID: %s → user %s", merchant_ref, chat_id)
+        if not merchant_ref or status != "PAID":
+            return {"success": True, "skipped": True}
+
+        from tradebot.services.members_service import upgrade_tier
+        import sqlite3
+        from pathlib import Path as _Path
+
+        chat_id = merchant_ref.split("-")[1] if "-" in merchant_ref else ""
+        db_path = _Path(__file__).resolve().parent.parent / "members.db"
+
+        # deduplicate: skip if already paid
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            existing = conn.execute(
+                "SELECT status FROM payment_orders WHERE merchant_ref = ?",
+                (merchant_ref,),
+            ).fetchone()
+            if existing and existing["status"] == "paid":
+                conn.close()
+                return {"success": True, "duplicate": True}
+        except Exception:
+            pass
+
+        amount = data.get("amount", 0)
+        paid_at = data.get("paid_at") or __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc
+        ).isoformat()
+
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                "INSERT OR REPLACE INTO payment_orders (merchant_ref, chat_id, amount, status, paid_at) "
+                "VALUES (?, ?, ?, 'paid', ?)",
+                (merchant_ref, chat_id, amount, paid_at),
+            )
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            LOG.warning("payment_orders insert failed: %s", exc)
+
+        if chat_id:
+            upgrade_tier(chat_id, "donor", 9999, merchant_ref)
+            LOG.info("Tripay payment PAID: %s → user %s", merchant_ref, chat_id)
 
         return {"success": True}
     except Exception as exc:
@@ -481,8 +518,8 @@ async def api_fuel_create(
     username: str = "Guest",
 ):
     """Create a Tripay donation payment for AI Fuel."""
-    if amount < 10000:
-        return JSONResponse({"success": False, "error": "Minimum donasi Rp10.000"}, status_code=400)
+    if amount < 50000:
+        return JSONResponse({"success": False, "error": "Minimum subscribe Rp50.000"}, status_code=400)
     try:
         from tradebot.services.payment import create_tripay_payment
 

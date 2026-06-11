@@ -113,7 +113,7 @@ class TelegramLayer:
                     if resp:
                         await self.send(chat_id, resp)
             elif data.startswith("donate:"):
-                amt = {"donate:coffee": 15000, "donate:fuel": 50000}.get(data)
+                amt = {}.get(data)
                 if amt:
                     await self.send(chat_id, f"💚 Rp{amt:,} — Hubungi @codergaboets")
         except Exception as e:

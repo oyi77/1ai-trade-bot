@@ -295,7 +295,7 @@ def get_transparency_data() -> dict:
         c.execute("SELECT COUNT(*) FROM members WHERE tier='donor' AND status='paid'")
         manual_donors = c.fetchone()[0]
         if manual_donors > donation_count:
-            estimated_from_manual = (manual_donors - donation_count) * 50000
+            estimated_from_manual = (manual_donors - donation_count) * 50000  # legacy estimate
             if donation_total == 0:
                 donation_total = float(estimated_from_manual)
             donation_count = manual_donors

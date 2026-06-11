@@ -627,8 +627,8 @@ td.pn{color:var(--red)}
       <button onclick="directPay(150000)" class="btn btn-p hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp150K</button>
     </div>
     <div class="dn-c">
-      <div class="dn-l" data-lang="id">Sultan Server</div>
-      <div class="dn-l hidden" data-lang="en">Server Sultan</div>
+      <div class="dn-l" data-lang="id">Elite Tier</div>
+      <div class="dn-l hidden" data-lang="en">Elite Tier</div>
       <div class="dn-p" style="color:var(--gold)">Rp500K</div>
       <ul data-lang="id">
         <li>Semua akses Montir</li>
@@ -636,7 +636,7 @@ td.pn{color:var(--red)}
         <li>API key Elite</li>
         <li>Early feature access</li>
         <li>1-on-1 setup support</li>
-        <li>+ Lencana Sultan 👑</li>
+        <li>+ Lencana Elite 👑</li>
       </ul>
       <ul class="hidden" data-lang="en">
         <li>All Mechanic perks</li>
@@ -644,7 +644,7 @@ td.pn{color:var(--red)}
         <li>Elite API key</li>
         <li>Early feature access</li>
         <li>1-on-1 setup support</li>
-        <li>Sultan badge 👑</li>
+        <li>Elite badge 👑</li>
       </ul>
       <button onclick="directPay(500000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp500K</button>
       <button onclick="directPay(500000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp500K</button>
@@ -1153,7 +1153,7 @@ function directPay(amount){
     .catch(function(e){ps.innerHTML='❌ Gagal: '+e.message});
 }
 function directPayCustom(){
-  var amount=prompt(document.body.lang==='id'?'Masukkan nominal donasi (min Rp10.000):':'Enter donation amount (min Rp10,000):','50000');
+  var amount=prompt(document.body.lang==='id'?'Pilih tier langganan:':'Choose subscription tier:','50000');
   if(!amount)return;
   var n=parseInt(amount.replace(/[^0-9]/g,''));
   if(!n||n<10000){alert('Minimal Rp10.000');return}

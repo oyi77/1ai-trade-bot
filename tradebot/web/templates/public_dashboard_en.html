@@ -852,7 +852,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
       <div class="text-center w-full">
         <h3 class="text-base font-bold text-emerald-400 mb-1">💚 Fuel the AI</h3>
         <p class="text-xs text-slate-400 mb-4">
-          Donate via <b>Tripay</b> — QRIS / VA / Alfamart. <b>Auto-activated!</b>
+          Subscribe via <b>Tripay</b> — QRIS / VA / Alfamart. <b>Auto-activated!</b>
         </p>
         
         <!-- Amount buttons — single column on mobile, row on desktop -->
@@ -919,7 +919,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
         </div>
         
         <div class="text-[10px] text-slate-600 mt-3">
-          💚 After payment, <b>VIP DONOR</b> status activates automatically in seconds!
+          💚 After payment, <b>Subscription</b> activates automatically in seconds!
         </div>
       </div>
     </div>
@@ -1421,7 +1421,7 @@ async function fuelDonate() {
             💳 Pay Now
           </a>
           <div class="text-[10px] text-slate-500 mt-3">
-            ⚡ After payment, <b>VIP DONOR</b> status activates automatically in seconds!
+            ⚡ After payment, <b>Subscription</b> activates automatically in seconds!
           </div>
           <div class="text-[10px] text-slate-600 mt-1">
             Ref: ${data.merchant_ref}
@@ -1435,7 +1435,7 @@ async function fuelDonate() {
           <img src="${data.qr_url}" class="mx-auto w-48 h-48 mb-3 rounded-lg" alt="QRIS">
           <div class="text-xs text-slate-400 mb-2">Rp ${amount.toLocaleString('en-US')}</div>
           <div class="text-[10px] text-slate-500">
-            ⚡ After payment, <b>VIP DONOR</b> status activates automatically!
+            ⚡ After payment, <b>Subscription</b> activates automatically!
           </div>
         </div>`;
     } else if (data.pay_code) {
@@ -1446,7 +1446,7 @@ async function fuelDonate() {
           <div class="text-2xl font-mono font-bold text-white mb-3">${data.pay_code}</div>
           <div class="text-xs text-slate-400 mb-2">Rp ${amount.toLocaleString('en-US')}</div>
           <div class="text-[10px] text-slate-500">
-            ⚡ After payment, <b>VIP DONOR</b> status activates automatically!
+            ⚡ After payment, <b>Subscription</b> activates automatically!
           </div>
         </div>`;
     } else {

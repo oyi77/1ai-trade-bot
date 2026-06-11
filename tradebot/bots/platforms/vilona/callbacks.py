@@ -106,7 +106,7 @@ class CallbackHandlersMixin(BaseBot):
                 "💚 <b>Dukung Server AI</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
                 "Server AI 24/7 butuh biaya API & GPU.\n\n"
-                "💰 Ketik nominal donasi:\n"
+                "💰 Ketik nominal subscribe:\n"
                 "Contoh: 50000 (Rp50.000)\n\n"
                 "Atau hubungi admin: @codergaboets"
             )
@@ -122,7 +122,7 @@ class CallbackHandlersMixin(BaseBot):
             from tradebot.services.payment_service import create_tripay_invoice
             try:
                 invoice = create_tripay_invoice(
-                    chat_id, amount, f"Donasi {chat_id} - Rp{amount:,}"
+                    chat_id, amount, f"Subscribe {chat_id} - Rp{amount:,}"
                 )
                 if invoice and invoice.get("pay_url"):
                     return (
