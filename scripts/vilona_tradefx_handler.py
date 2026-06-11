@@ -4200,35 +4200,42 @@ def handle_command(cmd, text, chat_id, msg):
         
         pip_s = 0.10 if disp in ("XAUUSD","GOLD") else (0.01 if disp == "USOIL" else (1.0 if disp in ("BTCUSD","ETHUSD") else 0.0001))
         
-        # ── FVG Zones ──
+        # ── FVG Zones (scan both H1 raw zones + M15) ──
         fvgs_found = False
         try:
             if FVG_ENGINE:
-                fvg_result = detect_fvg(ohlcv_h1, price, disp)
-                if fvg_result and fvg_result.get("fvgs"):
+                from fvg_detector import detect_fvg_zones
+                # Raw FVG zones (unfiltered by price proximity)
+                raw_zones = detect_fvg_zones(ohlcv_h1, max_age=30)
+                if raw_zones:
                     fvgs_found = True
                     lines.append("")
                     lines.append("📐 <b>FAIR VALUE GAPS (H1)</b>")
-                    for fvg in fvg_result["fvgs"][:5]:
-                        top = fvg.get("top", 0); bot = fvg.get("bottom", 0)
-                        fvg_type = fvg.get("type", "?").upper()
-                        filled = "✅ filled" if fvg.get("filled") else "⏳ open"
-                        dist = abs(price - ((top+bot)/2)) / pip_s
-                        lines.append(f"  {fvg_type}: {bot:.2f} — {top:.2f} ({filled} | {dist:.0f} pip)")
-        except: pass
-        
+                    for z in raw_zones[:5]:
+                        mid = (z.top + z.bottom) / 2
+                        filled = "✅ filled" if getattr(z, 'filled', False) else "⏳ open"
+                        dist = abs(price - mid) / pip_s
+                        lines.append(f"  {z.top:.2f} — {z.bottom:.2f} ({z.size_pips:.0f} pip | {filled} | {dist:.0f} pip away)")
+        except Exception as e:
+            logger.debug(f"FVG zone scan error: {e}")
+
         if not fvgs_found:
             lines.append("")
             lines.append("📐 <b>FAIR VALUE GAPS</b>")
-            lines.append("  No active FVG detected near price.")
-        
-        # ── Order Blocks ──
+            lines.append("  No FVG in last 30 H1 bars — market efisien tanpa gap.")
+
+        # ── Order Blocks + Structure (BOS) ──
         obs_found = False
         try:
             if SMC_ENGINE:
                 smc = analyze_smc_scalper(ohlcv_h1, disp)
                 if smc:
+                    # Try order_blocks first, then blocks, then _bos for structure
                     blocks = smc.get("order_blocks", smc.get("blocks", []))
+                    bos = smc.get("_bos", {})
+                    idm = smc.get("_idm", {})
+                    false_break = smc.get("_false_break", {})
+
                     if blocks:
                         obs_found = True
                         lines.append("")
@@ -4238,13 +4245,31 @@ def handle_command(cmd, text, chat_id, msg):
                             ob_dir = ob.get("direction", ob.get("type", "?"))
                             ob_strength = ob.get("strength", "?")
                             if ob_price > 0:
-                                lines.append(f"  {'🟢' if 'BULL' in str(ob_dir).upper() else '🔴'} {ob_dir}: {ob_price:.2f} (str: {ob_strength})")
-        except: pass
-        
+                                emoji = "🟢" if "BULL" in str(ob_dir).upper() else "🔴"
+                                lines.append(f"  {emoji} {ob_dir}: {ob_price:.2f} (str: {ob_strength})")
+
+                    # Show BOS/IDM even if no order blocks
+                    if bos and bos.get("direction"):
+                        if not obs_found:
+                            lines.append("")
+                            lines.append("🏦 <b>MARKET STRUCTURE (H1)</b>")
+                            obs_found = True  # mark as found so we don't show "none"
+                        bos_dir = bos.get("direction", "?")
+                        bos_emoji = "🟢" if bos_dir == "BUY" else "🔴"
+                        lines.append(f"  {bos_emoji} <b>BOS ({bos_dir}):</b> ${bos.get('price', 0):.2f}")
+                    if idm and idm.get("direction"):
+                        idm_dir = idm.get("direction", "?")
+                        lines.append(f"  ⚡ IDM ({idm_dir}): ${idm.get('price', 0):.2f}")
+                    if false_break and false_break.get("direction"):
+                        fb_dir = false_break.get("direction", "?")
+                        lines.append(f"  ⚠️ False Break ({fb_dir}): ${false_break.get('price', 0):.2f}")
+        except Exception as e:
+            logger.debug(f"OB/Structure scan error: {e}")
+
         if not obs_found:
             lines.append("")
             lines.append("🏦 <b>ORDER BLOCKS</b>")
-            lines.append("  No significant OB near current price.")
+            lines.append("  No significant OB / BOS near current price.")
         
         # ── Supply/Demand ──
         try:
