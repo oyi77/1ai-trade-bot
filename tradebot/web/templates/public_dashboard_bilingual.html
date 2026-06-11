@@ -146,8 +146,9 @@ document.addEventListener('DOMContentLoaded', function() { vilonaSetLang(window.
     <div class="text-xs text-slate-500 font-semibold tracking-wider mt-0.5">AI TRADE FX</div>
   </div>
   <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5">
-    <span class="live-dot"></span>
-    <span class="text-xs text-slate-400">Engine Active</span>
+    <span id="sys-status-dot" class="live-dot"></span>
+    <span id="sys-status-text" class="text-xs text-slate-400">Engine Active</span>
+    <span id="sys-status-sub" class="text-[10px] text-slate-600"></span>
     <span class="text-xs text-slate-600 font-mono ml-auto" id="live-clock">--:--</span>
   </div>
   <div class="flex-1 py-3">
@@ -1079,9 +1080,63 @@ function loadTradingViewWidgets() {
   if (allOk) _tvLoaded = true; // Only mark loaded AFTER all scripts created
 }
 
+/* ═══ SYSTEM HEALTH STATUS ═══ */
+async function updateSystemStatus() {
+  try {
+    const resp = await fetch('/health');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const dot = document.getElementById('sys-status-dot');
+    const text = document.getElementById('sys-status-text');
+    const sub = document.getElementById('sys-status-sub');
+    
+    if (data.status === 'healthy' || data.status === 'degraded') {
+      const components = data.components || {};
+      const total = Object.keys(components).length;
+      const healthy = Object.values(components).filter((c) => 
+        c.status === 'healthy' || c.status === 'ok'
+      ).length;
+      
+      if (total === 0) {
+        dot.className = 'inline-block w-2 h-2 rounded-full bg-yellow-400';
+        text.textContent = 'Status Unknown / Tidak Diketahui';
+        text.className = 'text-xs text-yellow-400';
+        if (sub) sub.textContent = '';
+      } else if (healthy === total) {
+        dot.className = 'inline-block w-2 h-2 rounded-full bg-emerald-400';
+        text.textContent = 'All Systems Online / Semua Online';
+        text.className = 'text-xs text-emerald-400';
+        if (sub) sub.textContent = `${total}/${total}`;
+      } else if (healthy >= total / 2) {
+        dot.className = 'inline-block w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
+        text.textContent = `${total - healthy} Degraded / Terdegradasi`;
+        text.className = 'text-xs text-yellow-400';
+        if (sub) sub.textContent = `${healthy}/${total}`;
+      } else {
+        dot.className = 'inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse';
+        text.textContent = `${total - healthy} Offline`;
+        text.className = 'text-xs text-red-400';
+        if (sub) sub.textContent = `${healthy}/${total}`;
+      }
+    } else {
+      dot.className = 'inline-block w-2 h-2 rounded-full bg-gray-500';
+      text.textContent = data.status || 'Unknown / Tidak Diketahui';
+      text.className = 'text-xs text-slate-500';
+      if (sub) sub.textContent = '';
+    }
+  } catch(e) {
+    const dot = document.getElementById('sys-status-dot');
+    const text = document.getElementById('sys-status-text');
+    if (dot) dot.className = 'inline-block w-2 h-2 rounded-full bg-gray-500';
+    if (text) { text.textContent = 'Unknown / Tidak Diketahui'; text.className = 'text-xs text-slate-500'; }
+  }
+}
+
 // Init
 loadAll();
+updateSystemStatus();
 setInterval(loadAll, 30000);
+setInterval(updateSystemStatus, 15000);
 </script>
 </body>
 </html>

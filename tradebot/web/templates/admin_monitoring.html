@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .stat-card { @apply bg-gray-800 rounded-xl p-6 border border-gray-700; }
+        .table-row { @apply border-b border-gray-700 hover:bg-gray-750; }
+        .status-ok { @apply text-emerald-400; }
+        .status-degraded { @apply text-yellow-400; }
+        .status-down { @apply text-red-400; }
+        .engine-card { @apply bg-gray-800/50 rounded-lg p-4 border border-gray-700/50; }
+        .broker-card { @apply bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 flex items-center justify-between; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-6">
+                <h1 class="text-xl font-bold text-emerald-400">📡 1ai-trade-bot</h1>
+                <a href="/admin" class="text-gray-300 hover:text-white transition">Dashboard</a>
+                <a href="/admin/monitoring" class="text-blue-400 font-semibold">Monitoring</a>
+                <a href="/admin/plans" class="text-gray-300 hover:text-white transition">Plans</a>
+                <a href="/admin/whitelabels" class="text-gray-300 hover:text-white transition">Whitelabels</a>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-xs text-gray-500" id="refresh-indicator">auto-refresh</span>
+                <a href="/logout" class="text-sm text-red-400 hover:text-red-300 transition font-semibold">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+
+        <!-- Status Bar -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8" id="status-bar">
+            <div class="stat-card text-center">
+                <div class="text-gray-400 text-sm mb-1">Uptime</div>
+                <div class="text-lg font-mono font-bold text-white" id="stat-uptime">--</div>
+            </div>
+            <div class="stat-card text-center">
+                <div class="text-gray-400 text-sm mb-1">Engines</div>
+                <div class="text-lg font-mono font-bold text-blue-400" id="stat-engines">0</div>
+            </div>
+            <div class="stat-card text-center">
+                <div class="text-gray-400 text-sm mb-1">Open Trades</div>
+                <div class="text-lg font-mono font-bold text-yellow-400" id="stat-open">0</div>
+            </div>
+            <div class="stat-card text-center">
+                <div class="text-gray-400 text-sm mb-1">Errors</div>
+                <div class="text-lg font-mono font-bold" id="stat-errors">0</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+            <!-- Engine Health -->
+            <div class="stat-card">
+                <h2 class="text-lg font-semibold mb-4">🧠 Engine Health</h2>
+                <div id="engine-list" class="space-y-2">
+                    <div class="text-sm text-gray-500 text-center py-8">Loading engines...</div>
+                </div>
+            </div>
+
+            <!-- Broker Connections -->
+            <div class="stat-card">
+                <h2 class="text-lg font-semibold mb-4">🔌 Broker Connections</h2>
+                <div id="broker-list" class="space-y-3">
+                    <div class="text-sm text-gray-500 text-center py-8">Loading brokers...</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Live Trades -->
+        <div class="stat-card mb-8">
+            <h2 class="text-lg font-semibold mb-4">📊 Live Trades</h2>
+            <div id="live-trades">
+                <div class="text-sm text-gray-500 text-center py-8">Loading live trades...</div>
+            </div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+            <div class="stat-card">
+                <h2 class="text-lg font-semibold mb-4">📈 Signal Metrics</h2>
+                <div id="signal-metrics">
+                    <div class="text-sm text-gray-500 text-center py-8">Loading metrics...</div>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <h2 class="text-lg font-semibold mb-4">⚡ Trade Performance</h2>
+                <div id="trade-metrics">
+                    <div class="text-sm text-gray-500 text-center py-8">Loading metrics...</div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Latency Distribution -->
+        <div class="stat-card mb-8">
+            <h2 class="text-lg font-semibold mb-4">⏱ Latency Distribution</h2>
+            <div id="latency-metrics">
+                <div class="text-sm text-gray-500 text-center py-8">Loading latency...</div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const API = '/api/monitoring';
+
+        async function fetchJson(url) {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        }
+
+        function statusClass(status) {
+            if (status === 'ok') return 'status-ok';
+            if (status === 'degraded') return 'status-degraded';
+            return 'status-down';
+        }
+
+        function statusDot(status) {
+            if (status === 'ok' || status === true) return '🟢';
+            if (status === 'degraded') return '🟡';
+            return '🔴';
+        }
+
+        async function loadAll() {
+            try {
+                const [statusData, metricsData, tradesData] = await Promise.all([
+                    fetchJson(`${API}/status`),
+                    fetchJson(`${API}/metrics`),
+                    fetchJson(`${API}/trades/live`),
+                ]);
+
+                renderStatusBar(statusData);
+                renderEngines(statusData.engines || []);
+                renderBrokers(statusData.brokers || []);
+                renderLiveTrades(tradesData);
+                renderMetrics(metricsData);
+            } catch (err) {
+                document.getElementById('status-bar').innerHTML =
+                    `<div class="col-span-4 text-center text-red-400 py-4">Failed to load: ${err.message}</div>`;
+            }
+        }
+
+        function renderStatusBar(status) {
+            document.getElementById('stat-uptime').textContent = status.uptime_human || '--';
+            document.getElementById('stat-engines').textContent = (status.engines || []).length;
+            document.getElementById('stat-open').textContent = document.querySelector('#live-trades .trade-count')?.textContent || '0';
+            document.getElementById('stat-errors').textContent = status.metrics?.errors || 0;
+
+            const el = document.getElementById('stat-errors');
+            const errCount = status.metrics?.errors || 0;
+            el.className = `text-lg font-mono font-bold ${errCount > 0 ? 'text-red-400' : 'text-emerald-400'}`;
+        }
+
+        function renderEngines(engines) {
+            const container = document.getElementById('engine-list');
+            if (!engines.length) {
+                container.innerHTML = '<div class="text-sm text-gray-500 text-center py-4">No engines discovered</div>';
+                return;
+            }
+            container.innerHTML = engines.map(e => `
+                <div class="engine-card flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-medium text-white">${e.name}</div>
+                        <div class="text-xs text-gray-500">${e.type || 'unknown'}</div>
+                    </div>
+                    <span class="text-sm ${e.available ? 'text-emerald-400' : 'text-red-400'}">
+                        ${e.available ? '● Active' : '○ Unavailable'}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function renderBrokers(brokers) {
+            const container = document.getElementById('broker-list');
+            if (!brokers.length) {
+                container.innerHTML = '<div class="text-sm text-gray-500 text-center py-4">No broker info</div>';
+                return;
+            }
+            container.innerHTML = brokers.map(b => `
+                <div class="broker-card">
+                    <div>
+                        <div class="text-sm font-medium text-white capitalize">${b.platform}</div>
+                        <div class="text-xs text-gray-500 mt-0.5">${b.detail || ''}</div>
+                    </div>
+                    <span class="text-sm ${b.available ? 'text-emerald-400' : 'text-gray-500'}">
+                        ${b.available ? '● Connected' : '○ Disconnected'}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function renderLiveTrades(data) {
+            const container = document.getElementById('live-trades');
+            const trades = data.trades || [];
+
+            if (!data.available || trades.length === 0) {
+                container.innerHTML = '<div class="text-sm text-gray-500 text-center py-4">No open positions</div>';
+                document.getElementById('stat-open').textContent = '0';
+                return;
+            }
+
+            document.getElementById('stat-open').textContent = trades.length;
+
+            let html = `<div class="text-xs text-gray-500 mb-3">${trades.length} open position(s)</div>`;
+            html += `<table class="w-full"><thead><tr class="text-left text-gray-400 text-sm border-b border-gray-700">
+                <th class="pb-2">ID</th><th class="pb-2">Symbol</th><th class="pb-2">Action</th>
+                <th class="pb-2">Entry</th><th class="pb-2">SL</th><th class="pb-2">TP</th>
+                <th class="pb-2">Stake</th><th class="pb-2">Opened</th>
+            </tr></thead><tbody>`;
+
+            trades.forEach(t => {
+                html += `<tr class="table-row text-sm">
+                    <td class="py-2 font-mono text-xs text-gray-400">${(t.trade_id || '').slice(0, 16)}</td>
+                    <td class="py-2 font-medium">${t.symbol || '--'}</td>
+                    <td class="py-2 ${(t.action === 'BUY' || t.action === 'CALL') ? 'text-emerald-400' : 'text-red-400'}">${t.action || '--'}</td>
+                    <td class="py-2 font-mono">${t.entry_price || '--'}</td>
+                    <td class="py-2 font-mono text-red-400">${t.sl || '--'}</td>
+                    <td class="py-2 font-mono text-emerald-400">${t.tp || '--'}</td>
+                    <td class="py-2 font-mono">${t.stake || '--'}</td>
+                    <td class="py-2 text-xs text-gray-400">${(t.open_time || '').slice(0, 16)}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderMetrics(data) {
+            const signals = data.signals || {};
+            const trades = data.trades || {};
+            const latency = data.latency || {};
+
+            // Signal metrics
+            const sigContainer = document.getElementById('signal-metrics');
+            sigContainer.innerHTML = `
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between"><span class="text-gray-400">Total Signals</span><span class="font-mono font-bold text-white">${signals.total || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">By Source</span><span class="font-mono text-gray-300">${Object.entries(signals.by_source || {}).map(([k,v]) => `${k}: ${v}`).join(', ') || 'none'}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">By Symbol</span><span class="font-mono text-gray-300">${Object.entries(signals.by_symbol || {}).map(([k,v]) => `${k}: ${v}`).join(', ') || 'none'}</span></div>
+                </div>
+            `;
+
+            // Trade metrics
+            const trContainer = document.getElementById('trade-metrics');
+            trContainer.innerHTML = `
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between"><span class="text-gray-400">Total Trades</span><span class="font-mono font-bold text-white">${trades.total || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">Won</span><span class="font-mono font-bold text-emerald-400">${trades.won || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">Lost</span><span class="font-mono font-bold text-red-400">${trades.lost || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">Breakeven</span><span class="font-mono text-gray-300">${trades.breakeven || 0}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">Win Rate</span><span class="font-mono font-bold ${(trades.win_rate || 0) >= 0.5 ? 'text-emerald-400' : 'text-red-400'}">${((trades.win_rate || 0) * 100).toFixed(1)}%</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">Total P&L</span><span class="font-mono font-bold ${(trades.total_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}">${(trades.total_pnl || 0).toFixed(2)}</span></div>
+                    <div class="flex justify-between"><span class="text-gray-400">Streak</span><span class="font-mono text-gray-300">${trades.streak || 'none'}</span></div>
+                </div>
+            `;
+
+            // Latency
+            const latContainer = document.getElementById('latency-metrics');
+            if (latency.count > 0) {
+                const buckets = latency.buckets || {};
+                let html = `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">`;
+                html += `<div><span class="text-gray-400">Avg</span><div class="font-mono font-bold text-white">${latency.avg_ms}ms</div></div>`;
+                html += `<div><span class="text-gray-400">Max</span><div class="font-mono font-bold text-yellow-400">${latency.max_ms}ms</div></div>`;
+                html += `<div><span class="text-gray-400">Count</span><div class="font-mono text-gray-300">${latency.count}</div></div>`;
+                html += `</div>`;
+                html += `<div class="mt-4"><div class="text-xs text-gray-500 mb-2">Distribution</div>`;
+                html += `<div class="space-y-1">`;
+                for (const [bucket, count] of Object.entries(buckets)) {
+                    const pct = latency.count > 0 ? ((count / latency.count) * 100).toFixed(0) : 0;
+                    html += `<div class="flex items-center gap-2 text-xs">
+                        <span class="text-gray-400 w-20">${bucket}</span>
+                        <div class="flex-1 bg-gray-700 rounded-full h-2">
+                            <div class="bg-blue-500 rounded-full h-2" style="width: ${pct}%"></div>
+                        </div>
+                        <span class="text-gray-500 w-8 text-right">${count}</span>
+                    </div>`;
+                }
+                html += `</div></div>`;
+                latContainer.innerHTML = html;
+            } else {
+                latContainer.innerHTML = '<div class="text-sm text-gray-500 text-center py-4">No latency data recorded yet</div>';
+            }
+        }
+
+        // Initial load + auto-refresh every 10s
+        loadAll();
+        setInterval(loadAll, 10000);
+
+        // Show last refresh time
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('refresh-indicator').textContent =
+                `updated ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        }, 1000);
+    </script>
+</body>
+</html>
