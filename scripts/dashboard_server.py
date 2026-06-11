@@ -293,7 +293,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ═══ API: DONORS ═══
     def api_donors(self):
-        """Donor list from real payment_orders."""
+        """Subscriber list from real payment_orders."""
         donors_sql = _read_sqlite(MEMBERS_DB_PATH,
             "SELECT m.nama, m.username, po.amount, po.paid_at, m.tier "
             "FROM payment_orders po LEFT JOIN members m ON po.chat_id = m.chat_id "

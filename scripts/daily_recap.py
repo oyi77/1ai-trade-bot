@@ -93,7 +93,7 @@ def generate_daily_recap(date_str=""):
     lines.append(f"")
     if micro > 0:
         lines.append(f"\U0001f4b0 <b>Profit hari ini Rp {micro_idr:+,}!</b>")
-        lines.append(f"\U0001f9d1\u200d\U0001f4bb Kalau bermanfaat, traktir kopi server AI ya! \U0001f91d")
+        lines.append(f"\U0001f9d1\u200d\U0001f4bb Kalau bermanfaat, subscribe ya bro 🚀! \U0001f91d")
         lines.append(f"\U0001f449 /donate \u2014 Dukung Server AI")
     elif micro < 0:
         lines.append(f"\U0001f4b8 <b>Rugi Rp {micro_idr:+,} hari ini.</b>")

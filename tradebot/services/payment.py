@@ -105,7 +105,7 @@ class PaymentService:
                 resp = await client.post(url, json=payload, headers=headers)
                 resp.raise_for_status()
                 result = resp.json()
-                self._store_payment(merchant_ref, user_id, username, amount, "vtfx-donasi")
+                self._store_payment(merchant_ref, user_id, username, amount, "vtfx-subscribe")
                 return result
         except Exception as exc:
             LOG.error("Tripay create transaction failed: %s", exc)
@@ -317,7 +317,7 @@ async def create_tripay_payment(
     if amount is None:
         amount = 50000
     if amount < 10000:
-        return {"error": "Minimum donasi Rp10.000"}
+        return {"error": "Minimum subscribe Rp10.000"}
     svc = PaymentService()
     return await svc.create_tripay_transaction(
         user_id=chat_id,

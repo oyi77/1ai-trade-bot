@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Weekly Donor Hall of Fame — posted every Monday 09:00 WIB.
+Weekly Subscriber Hall of Fame — posted every Monday 09:00 WIB.
 Queries payment_orders for last 7 days paid entries, ranks top 3 by amount,
 and posts to the Telegram channel.
 """
@@ -102,7 +102,7 @@ def get_weekly_donors():
 
 
 def build_message(donors: list) -> str | None:
-    """Build the Donor Hall of Fame message from ranked donor list."""
+    """Build the Subscriber Hall of Fame message from ranked subscriber list."""
     if not donors:
         return None
 
@@ -130,7 +130,7 @@ def build_message(donors: list) -> str | None:
         parts.append(f"🥉 {top3_name} — Rp{top3_amt:,}")
 
     if remaining > 0:
-        parts.append(f"💚 +{remaining} donatur lain")
+        parts.append(f"💚 +{remaining} subscriber lain")
 
     parts.extend([
         f"",
@@ -168,7 +168,7 @@ def send_to_channel(text: str) -> bool:
 
     try:
         asyncio.run(_send())
-        log.info("✅ Donor Hall of Fame posted to channel")
+        log.info("✅ Subscriber Hall of Fame posted to channel")
         return True
     except Exception as e:
         log.error("Channel post failed: %s", e)
@@ -185,7 +185,7 @@ def main():
 
     donors = get_weekly_donors()
 
-    # Only run if at least 1 donor this week
+    # Only run if at least 1 subscriber this week
     if not donors:
         log.info("No donors this week — skipping Hall of Fame")
         return

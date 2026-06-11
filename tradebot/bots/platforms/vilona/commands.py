@@ -716,7 +716,7 @@ class CommandHandlersMixin(BaseBot):
         )
 
     async def _cmd_levels(self, args: list[str], chat_id: str | None = None) -> str:
-        """SnR + FIBO + Engine Deep Dive. Donor only."""
+        """SnR + FIBO + Engine Deep Dive. Subscriber only."""
         from tradebot.services.members_service import get_member
         member = get_member(str(chat_id or ""))
         is_donor = member and member.get("tier") == "donor"
@@ -773,7 +773,7 @@ class CommandHandlersMixin(BaseBot):
             return f"❌ Levels error: {e}"
 
     async def _cmd_news(self, args: list[str], chat_id: str | None = None) -> str:
-        """Grok News — real-time X/Twitter intelligence. Donor only."""
+        """Grok News — real-time X/Twitter intelligence. Subscriber only."""
         from tradebot.services.members_service import get_member
         member = get_member(str(chat_id or ""))
         is_donor = member and member.get("tier") == "donor"
@@ -919,7 +919,7 @@ class CommandHandlersMixin(BaseBot):
         upgrade_tier(target_id, "donor", days, ref)
         return (
             f"🔥 <b>USER {target_id} AKTIVATED</b>\n"
-            f"Tier: donor\nDuration: {days} hari\n"
+            f"Tier: subscriber\nDuration: {days} hari\n"
             f"User sekarang Subscriber VIP!"
         )
 
@@ -1291,12 +1291,12 @@ class CommandHandlersMixin(BaseBot):
             return "✅ Semua subscriber aktif."
         lines = ["⏰ <b>STALE DONOR REMINDERS</b>", "━━━━━━━━━━━━━━━━"]
         reminders_sent = 0
-        for donor in stale[:20]:
+        for subscriber in stale[:20]:
             user_id = donor.get("chat_id") or donor.get("id", "")
             days_since = donor.get("days_since_last", 0)
             last_donation = donor.get("last_donation_date", "?")
             lines.append(f"• <code>{user_id}</code> — {days_since} hari sejak subscribe terakhir ({last_donation})")
-            # Send DM to stale donor
+            # Send DM to stale subscriber
             reminder_text = (
                 f"⏰ <b>Pengingat Trading!</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
@@ -1305,7 +1305,7 @@ class CommandHandlersMixin(BaseBot):
                 f"Server AI masih jalan 24/7 buat kamu.\n"
                 f"Kalau ada waktu, mampir yuk! 🥂\n\n"
                 f"👉 /analyze — Cek market sekarang\n"
-                f"👉 /donate — Isi bahan bakar AI"
+                f"👉 /donate — Isi subscription"
             )
             try:
                 if user_id:
@@ -1314,7 +1314,7 @@ class CommandHandlersMixin(BaseBot):
             except Exception:
                 pass
         lines.append(f"━━━━━━━━━━━━━━━━")
-        lines.append(f"📨 Reminder terkirim ke {reminders_sent}/{len(stale)} donor")
+        lines.append(f"📨 Reminder terkirim ke {reminders_sent}/{len(stale)} subscriber")
         return "\n".join(lines)
 
     async def _cmd_donate_manual(self, args: list[str], chat_id: str | None = None) -> str:

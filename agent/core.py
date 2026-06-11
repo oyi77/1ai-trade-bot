@@ -185,8 +185,8 @@ async def cmd_price(args: list[str], chat_id: str) -> str:
 
 
 async def cmd_status(args: list[str], chat_id: str) -> str:
-    donor = is_donor(chat_id)
-    tier = "👑 DONATUR VIP" if donor else "👤 Free Member"
+    subscriber = is_donor(chat_id)
+    tier = "👑 SUBSCRIBER VIP" if subscriber else "👤 Free Member"
     status_text = (
         f"📊 <b>STATUS — 1AI Agent</b>\n"
         f"━━━━━━━━━━━━━━━━\n"
@@ -200,7 +200,7 @@ async def cmd_status(args: list[str], chat_id: str) -> str:
     if not donor:
         status_text += (
             f"━━━━━━━━━━━━━━━━\n"
-            f"🔒 <b>Fitur Donatur:</b>\n"
+            f"🔒 <b>Fitur Subscriber:</b>\n"
             f"  • /levels — S&R + FIBO 🔒\n"
             f"  • /news — Market Intel 🔒\n"
             f"  • /genkey — License Key 🔒\n"
@@ -214,14 +214,14 @@ async def cmd_myid(args: list[str], chat_id: str) -> str:
     return (
         f"🆔 <b>Telegram ID kamu:</b>\n"
         f"<code>{chat_id}</code>\n\n"
-        f"Gunakan ID ini untuk donasi\n"
+        f"Gunakan ID ini untuk subscribe\n"
         f"👉 <a href='https://phantomfx.aitradepulse.com'>phantomfx.aitradepulse.com</a>"
     )
 
 
 async def cmd_donate(args: list[str], chat_id: str) -> str:
     from agent.menu import DONATE_MENU, build_kb
-    return "💚 Pilih nominal donasi di bawah:"
+    return "💚 Pilih nominal subscribe di bawah:"
 
 
 async def cmd_levels(args: list[str], chat_id: str) -> str:
@@ -232,7 +232,7 @@ async def cmd_levels(args: list[str], chat_id: str) -> str:
             "🏛 Support & Resistance — level akurat\n"
             "📐 Fibonacci retracement — entry/exits level\n"
             "🧠 Engine Deep Dive — analisa 9 engines\n\n"
-            "🔒 <b>Khusus Donatur VIP</b>\n" + DONOR_FOMO
+            "🔒 <b>Khusus Subscriber VIP</b>\n" + DONOR_FOMO
         )
     pair = args[0] if args else "xauusd"
     import yfinance as yf
@@ -286,7 +286,7 @@ async def cmd_news(args: list[str], chat_id: str) -> str:
             "   → Tahu KENAPA market gerak\n"
             "   → Hindari entry pas news bom\n"
             "   → Dapet edge sebelum orang lain\n\n"
-            "🔒 <b>Khusus Donatur VIP</b>\n" + DONOR_FOMO
+            "🔒 <b>Khusus Subscriber VIP</b>\n" + DONOR_FOMO
         )
     pair = args[0] if args else "xauusd"
     display = pair.upper()
@@ -535,7 +535,7 @@ async def cmd_data(args: list[str], chat_id: str) -> str:
 
 async def cmd_genkey(args: list[str], chat_id: str) -> str:
     if not is_donor(chat_id):
-        return "⛔ /genkey hanya untuk Donatur VIP.\n\n💚 /donate"
+        return "⛔ /genkey hanya untuk Subscriber VIP.\n\n💚 /donate"
     from tradebot.services.license_service import cmd_genkey as cgk, is_admin
     return cgk(str(chat_id or ""), " ".join(args) if args else str(chat_id))
 

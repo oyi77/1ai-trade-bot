@@ -17,7 +17,7 @@ Public routes (no auth):
   /api/today_trades    Today's trades
   /api/transparency    LP transparency data
   /api/backtest        Backtest results
-  /api/donors          Donor list
+  /api/donors          Subscriber list
   /api/daily_analyze   Daily analyze request counts
   /api/daily_recap     Daily trade recap
   /api/fuel/create     Tripay donation payment (POST)
@@ -483,7 +483,7 @@ async def api_backtest():
 
 @app.get("/api/donors")
 async def api_donors():
-    """Donor list."""
+    """Subscriber list."""
     return {"donors": _get_donor_list()}
 
 

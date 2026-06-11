@@ -60,10 +60,10 @@ ACCOUNT_MENU: list[list[tuple[str, str]]] = [
 ]
 
 DONATE_MENU: list[list[tuple[str, str]]] = [
-    [("donate:coffee", "☕️ Kopi (Rp 15K)")],
-    [("donate:learn", "🍱 Makan Siang (Rp 25K)")],
-    [("donate:fuel", "🚀 Bensin Full (Rp 50K)")],
-    [("donate:custom", "💰 Nominal Bebas"), ("cancel_input", "❌ Batal")],
+    [("sub:pro", "☕️ Kopi (Rp 15K)")],
+    [("sub:pro", "🍱 Makan Siang (Rp 25K)")],
+    [("sub:elite", "🚀 Bensin Full (Rp 50K)")],
+    [("sub:lifetime", "💰 Nominal Bebas"), ("cancel_input", "❌ Batal")],
     [("menu:main", "🔙 Back")],
 ]
 
@@ -161,7 +161,7 @@ def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> st
             "Status, subscribe, donate, dan pengaturan."
         ),
         "donate": (
-            "💚 <b>DONASI — VILONA AI</b>\n"
+            "💚 <b>SUBSCRIBE — VILONA AI</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "Dukung server AI tetap hidup!\n"
             "Pilih nominal di bawah:"

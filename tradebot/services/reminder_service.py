@@ -1,4 +1,4 @@
-"""Bensin reminder service — automated donation reminders for stale donors.
+"""Bensin reminder service — automated donation reminders for stale subscribers.
 
 Ported from scripts/bensin_reminder.py with full legacy fidelity.
 Monday 08:00 WIB: checks donors > 30 days since last donation,
@@ -57,12 +57,12 @@ def get_stale_donors(min_days: int = 30) -> list[dict]:
 
         return get_stale_donors(min_days=min_days)
     except Exception as e:
-        LOG.warning("Failed to get stale donors: %s", e)
+        LOG.warning("Failed to get stale subscribers: %s", e)
         return []
 
 
 def build_reminder(donor: dict) -> str:
-    """Build gentle bensin reminder message for a stale donor."""
+    """Build gentle bensin reminder message for a stale subscriber."""
     days_since = donor.get("days_since", 0)
     last_amount = donor.get("last_amount", 0)
     username = donor.get("username", "Sobat")
@@ -82,7 +82,7 @@ def build_reminder(donor: dict) -> str:
         f"━━━━━━━━━━━━━━━━\n"
         f"Halo {username}! 👋\n\n"
         f"{urgency}\n"
-        f"Terakhir isi bensin: {days_str} lalu\n"
+        f"Terakhir subscription: {days_str} lalu\n"
         f"Nominal terakhir: {amount_str}\n\n"
         f"Server AI butuh bahan bakar biar tetap jalan:\n"
         f"🔥 Analisa real-time\n"
@@ -95,7 +95,7 @@ def build_reminder(donor: dict) -> str:
 
 
 async def send_bensin_reminders(bot_token: str) -> int:
-    """Send bensin reminders to stale donors. Returns count sent.
+    """Send bensin reminders to stale subscribers. Returns count sent.
 
     Args:
         bot_token: Telegram Bot API token.
@@ -123,7 +123,7 @@ async def send_bensin_reminders(bot_token: str) -> int:
 
     stale_donors = get_stale_donors(min_days=30)
     if not stale_donors:
-        LOG.info("No stale donors found for reminder")
+        LOG.info("No stale subscribers found for reminder")
         state["last_week"] = current_week
         _save_state(state)
         return 0
@@ -133,7 +133,7 @@ async def send_bensin_reminders(bot_token: str) -> int:
     sent_count = 0
     already_sent = set(state.get("sent_users", {}).get(current_week, []))
 
-    for donor in stale_donors:
+    for subscriber in stale_donors:
         chat_id = donor.get("chat_id", "")
         if not chat_id or str(chat_id) in already_sent:
             continue
@@ -163,5 +163,5 @@ async def send_bensin_reminders(bot_token: str) -> int:
     state["sent_users"] = {current_week: list(already_sent)}
     _save_state(state)
 
-    LOG.info("Bensin reminder: sent %d / %d stale donors", sent_count, len(stale_donors))
+    LOG.info("Bensin reminder: sent %d / %d stale subscribers", sent_count, len(stale_donors))
     return sent_count

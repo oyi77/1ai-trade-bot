@@ -154,7 +154,7 @@ td.pn{color:var(--red)}
 .prg-f{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--blue),var(--cyan));transition:width .5s}
 .prg-l{display:flex;justify-content:space-between;font-size:9px;color:var(--txt2);margin-top:3px}
 
-/* ── DONOR WALL ── */
+/* ── SUBSCRIBER WALL ── */
 .dw{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
 .dw-item{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:9px;color:var(--txt2)}
 
@@ -179,7 +179,7 @@ td.pn{color:var(--red)}
 .ft{text-align:center;padding:20px 0;font-size:10px;color:var(--txt2);border-top:1px solid rgba(30,45,74,.3);margin-top:16px}
 .ft .ref{font-size:9px;color:var(--text-dim);margin-top:6px}
 
-/* ── RINGKASAN DONASI ── */
+/* ── RINGKASAN SUBSCRIBE ── */
 .rd{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 @media(max-width:500px){.rd{grid-template-columns:1fr}}
 
@@ -240,8 +240,8 @@ td.pn{color:var(--red)}
   <div class="hero-cta">
     <a href="#ea" class="btn btn-p" data-lang="id">🤖 Download EA Gratis</a>
     <a href="#ea" class="btn btn-p hidden" data-lang="en">🤖 Download Free EA</a>
-    <a href="#donate" class="btn btn-s" data-lang="id">💚 Gotong Royong</a>
-    <a href="#donate" class="btn btn-s hidden" data-lang="en">💚 Contribute</a>
+    <a href="#subscribe" class="btn btn-s" data-lang="id">💚 Gotong Royong</a>
+    <a href="#subscribe" class="btn btn-s hidden" data-lang="en">💚 Contribute</a>
   </div>
 </section>
 
@@ -528,7 +528,7 @@ td.pn{color:var(--red)}
 </section>
 
 <!-- ═══ SECTION 3: GOTONG ROYONG ═══ -->
-<section class="section" id="donate">
+<section class="section" id="subscribe">
   <div class="st" data-lang="id">💚 GOTONG ROYONG — PARTNER, BUKAN KORBAN</div>
   <div class="st hidden" data-lang="en">💚 CONTRIBUTE — PARTNER, NOT VICTIM</div>
 
@@ -574,7 +574,7 @@ td.pn{color:var(--red)}
       <div style="font-size:12px;font-weight:600;margin-bottom:4px" data-lang="id">💧 Analogi Bensin</div>
       <div style="font-size:12px;font-weight:600;margin-bottom:4px;display:none" data-lang="en">💧 The Fuel Analogy</div>
       <p style="font-size:11px;color:var(--txt2);line-height:1.6" data-lang="id">
-        Lo naik mobil gratisan. Bensin gratis. Tiap sampe tujuan, lo isi bensin lagi biar besok jalan lagi. 
+        Lo naik mobil gratisan. Subscribe gratis. Tiap sampe tujuan, lo subscribe lagi biar besok jalan lagi. 
         <strong>Itu gotong royong.</strong> Bukan iuran. Bukan langganan. Lo isi karena lo lihat sendiri mobil ini beneran jalan.
       </p>
       <p style="font-size:11px;color:var(--txt2);line-height:1.6;display:none" data-lang="en">
@@ -591,24 +591,24 @@ td.pn{color:var(--red)}
     <div class="dn-c">
       <div class="dn-l" data-lang="id">Penyiram Bensin</div>
       <div class="dn-l hidden" data-lang="en">Fuel Filler</div>
-      <div class="dn-p" style="color:var(--txt2)">Rp50K</div>
+      <div class="dn-p" style="color:var(--txt2)">Rp50K<span class="text-xs text-slate-500">/bln</span></div>
       <ul data-lang="id">
         <li>Akses signal Telegram</li>
         <li>EA Bridge gratis</li>
-        <li>Nama di donor wall</li>
+        <li>Nama di subscriber wall</li>
       </ul>
       <ul class="hidden" data-lang="en">
         <li>Telegram signal access</li>
         <li>Free EA Bridge</li>
-        <li>Name on donor wall</li>
+        <li>Name on subscriber wall</li>
       </ul>
-      <button onclick="directPay(50000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp50K</button>
-      <button onclick="directPay(50000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp50K</button>
+      <button onclick="directPay(50000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Subscribe Rp50K</button>
+      <button onclick="directPay(50000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Subscribe Rp50K</button>
     </div>
     <div class="dn-c feat">
       <div class="dn-l" data-lang="id">Montir Kepercayaan</div>
       <div class="dn-l hidden" data-lang="en">Trusted Mechanic</div>
-      <div class="dn-p gld">Rp150K</div>
+      <div class="dn-p gld">Rp150K<span class="text-xs text-slate-500">/bln</span></div>
       <ul data-lang="id">
         <li>Semua akses Fuel Filler</li>
         <li>Token EA Priority</li>
@@ -623,20 +623,20 @@ td.pn{color:var(--red)}
         <li>VIP Telegram group</li>
         <li>Daily performance report</li>
       </ul>
-      <button onclick="directPay(150000)" class="btn btn-p" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp150K</button>
-      <button onclick="directPay(150000)" class="btn btn-p hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp150K</button>
+      <button onclick="directPay(150000)" class="btn btn-p" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Subscribe Rp150K</button>
+      <button onclick="directPay(150000)" class="btn btn-p hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Subscribe Rp150K</button>
     </div>
     <div class="dn-c">
-      <div class="dn-l" data-lang="id">Sultan Server</div>
-      <div class="dn-l hidden" data-lang="en">Server Sultan</div>
-      <div class="dn-p" style="color:var(--gold)">Rp500K</div>
+      <div class="dn-l" data-lang="id">Elite Server</div>
+      <div class="dn-l hidden" data-lang="en">Server Elite</div>
+      <div class="dn-p" style="color:var(--gold)">Rp500K<span class="text-xs text-amber-400"> sekali</span></div>
       <ul data-lang="id">
         <li>Semua akses Montir</li>
         <li>Nama di dashboard homepage</li>
         <li>API key Elite</li>
         <li>Early feature access</li>
         <li>1-on-1 setup support</li>
-        <li>+ Lencana Sultan 👑</li>
+        <li>+ Lencana Elite 👑</li>
       </ul>
       <ul class="hidden" data-lang="en">
         <li>All Mechanic perks</li>
@@ -644,10 +644,10 @@ td.pn{color:var(--red)}
         <li>Elite API key</li>
         <li>Early feature access</li>
         <li>1-on-1 setup support</li>
-        <li>Sultan badge 👑</li>
+        <li>Elite badge 👑</li>
       </ul>
-      <button onclick="directPay(500000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Donasi Rp500K</button>
-      <button onclick="directPay(500000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Donate Rp500K</button>
+      <button onclick="directPay(500000)" class="btn btn-s" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="id">💚 Subscribe Rp500K</button>
+      <button onclick="directPay(500000)" class="btn btn-s hidden" style="padding:8px;font-size:11px;width:100%;justify-content:center;cursor:pointer;border:none" data-lang="en">💚 Subscribe Rp500K</button>
     </div>
   </div>
 
@@ -660,11 +660,11 @@ td.pn{color:var(--red)}
     </div>
   </div>
 
-  <!-- Donor Wall -->
+  <!-- Subscriber Wall -->
   <div class="cd-sm">
-    <div class="cl" style="margin-bottom:4px" data-lang="id">🙏 Donatur Terbaru</div>
-    <div class="cl hidden" style="margin-bottom:4px" data-lang="en">🙏 Recent Donors</div>
-    <div class="dw" id="donor-wall">
+    <div class="cl" style="margin-bottom:4px" data-lang="id">🙏 Subscriber Terbaru</div>
+    <div class="cl hidden" style="margin-bottom:4px" data-lang="en">🙏 Recent Subscribers</div>
+    <div class="dw" id="subscriber-wall">
       <span style="font-size:10px;color:var(--txt2)" data-lang="id">Jadilah yang pertama!</span>
       <span class="hidden" style="font-size:10px;color:var(--txt2)" data-lang="en">Be the first!</span>
     </div>
@@ -700,7 +700,7 @@ td.pn{color:var(--red)}
   <div class="sb" data-lang="id">Siap CUAN bareng AI?</div>
   <div class="sb hidden" data-lang="en">Ready to profit with AI?</div>
   <p class="sbp" style="margin:0 auto 16px" data-lang="id">
-    Download EA gratis. Lihat sendiri hasilnya. Kalo AI cuan, isi bensin server. Kalo loss, lo gak rugi apa-apa.
+    Download EA gratis. Lihat sendiri hasilnya. Kalo AI cuan, subscribe. Kalo loss, lo gak rugi apa-apa.
     <br><strong>Fair buat kedua belah pihak.</strong>
   </p>
   <p class="sbp hidden" style="margin:0 auto 16px" data-lang="en">
@@ -710,8 +710,8 @@ td.pn{color:var(--red)}
   <div class="hero-cta">
     <a href="#ea" class="btn btn-p" style="padding:14px 36px;font-size:15px" data-lang="id">⬇️ Download EA Gratis Sekarang</a>
     <a href="#ea" class="btn btn-p hidden" style="padding:14px 36px;font-size:15px" data-lang="en">⬇️ Download Free EA Now</a>
-    <a href="#donate" class="btn btn-s" style="padding:14px 36px;font-size:15px" data-lang="id">💚 Isi Bensin Server</a>
-    <a href="#donate" class="btn btn-s hidden" style="padding:14px 36px;font-size:15px" data-lang="en">💚 Fuel the Server</a>
+    <a href="#subscribe" class="btn btn-s" style="padding:14px 36px;font-size:15px" data-lang="id">💚 Isi Bensin Server</a>
+    <a href="#subscribe" class="btn btn-s hidden" style="padding:14px 36px;font-size:15px" data-lang="en">💚 Fuel the Server</a>
   </div>
 </section>
 
@@ -719,8 +719,8 @@ td.pn{color:var(--red)}
 <div id="sticky-cta" style="position:fixed;bottom:0;left:0;right:0;z-index:99;display:flex;gap:6px;padding:8px 12px;background:rgba(7,11,20,.95);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--border)">
   <a href="#ea" class="btn btn-p" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="id">🤖 Download EA Gratis</a>
   <a href="#ea" class="btn btn-p hidden" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="en">🤖 Download Free EA</a>
-  <a href="#donate" class="btn btn-s" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="id">💚 Isi Bensin</a>
-  <a href="#donate" class="btn btn-s hidden" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="en">💚 Fuel Up</a>
+  <a href="#subscribe" class="btn btn-s" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="id">💚 Isi Bensin</a>
+  <a href="#subscribe" class="btn btn-s hidden" style="flex:1;justify-content:center;padding:10px;font-size:12px" data-lang="en">💚 Fuel Up</a>
 </div>
 <style>@media(min-width:601px){#sticky-cta{display:none!important}}</style>
 
@@ -1153,10 +1153,10 @@ function directPay(amount){
     .catch(function(e){ps.innerHTML='❌ Gagal: '+e.message});
 }
 function directPayCustom(){
-  var amount=prompt(document.body.lang==='id'?'Masukkan nominal donasi (min Rp10.000):':'Enter donation amount (min Rp10,000):','50000');
+  var amount=prompt(document.body.lang==='id'?'Masukkan nominal subscribe (min Rp50.000):':'Enter donation amount (min Rp10,000):','50000');
   if(!amount)return;
   var n=parseInt(amount.replace(/[^0-9]/g,''));
-  if(!n||n<10000){alert('Minimal Rp10.000');return}
+  if(!n||n<50000){alert('Minimal Rp50.000');return}
   directPay(n);
 }
 

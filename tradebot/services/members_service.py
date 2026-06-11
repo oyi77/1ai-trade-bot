@@ -1,4 +1,4 @@
-"""Members service — member/ donor database access.
+"""Members service — member/ subscriber database access.
 
 Provides member lookup, creation, and tier upgrades
 using the SQLite database at the project root.

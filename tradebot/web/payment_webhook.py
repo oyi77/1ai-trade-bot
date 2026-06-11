@@ -83,7 +83,7 @@ def _upgrade_member(chat_id: str, merchant_ref: str, tier: str = "donor") -> boo
         from tradebot.services.members_service import activate_premium, mark_payment_paid
 
         mark_payment_paid(merchant_ref)
-        # Map tier → days: pro=30, elite=30, lifetime=9999, donor (legacy)=9999
+        # Map tier → days: pro=30, elite=30, lifetime=9999, subscriber (legacy)=9999
         tier_days = {"pro": 30, "elite": 30, "lifetime": 9999, "donor": 9999}
         days = tier_days.get(tier, 9999)
         activate_premium(str(chat_id), tier, days)
@@ -179,7 +179,7 @@ def _send_telegram_notification(chat_id: str, brand: str, tier: str = "donor") -
             "cta": "Channel: @vilonaaichanel | Group: @vilona_tradefx_group",
         },
         "donor": {
-            "label": "💚 DONATUR",
+            "label": "💚 SUBSCRIBER",
             "analyze": "UNLIMITED ♾️",
             "perks": "EA Auto-Trade • Bridge • Full Akses",
             "cta": "Download EA: https://bit.ly/vilona-ea",

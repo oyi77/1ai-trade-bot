@@ -18,9 +18,9 @@ TRIPAY_CALLBACK_URL  = os.environ.get("TRIPAY_CALLBACK_URL", "")
 DEFAULT_METHOD       = os.environ.get("TRIPAY_DEFAULT_METHOD", "QRIS2")
 
 # Donation model — "Dukung Server AI" (pay-what-you-want)
-# Any amount above minimum → DONATUR status
+# Any amount above minimum → SUBSCRIBER status
 PRODUCT_TIERS = {
-    "vtfx-donasi": {"tier": "donor", "price": 0, "label_prefix": "Donatur"},
+    "vtfx-subscribe": {"tier": "donor", "price": 0, "label_prefix": "Subscriber"},
 }
 
 MIN_DONATION = 10000  # Minimum Rp10.000
@@ -68,7 +68,7 @@ def create_transaction(user_id: str, username: str, amount: int,
         method = DEFAULT_METHOD
 
     prefix = "1AI" if brand_id == "1ai" else "VTFX"
-    product_key = f"{brand_id}-donasi"
+    product_key = f"{brand_id}-subscribe"
     brand_label = "1AI Agent" if brand_id == "1ai" else "VilonaTradeFX"
     label = f"Dukung Server AI - {brand_label}"
 

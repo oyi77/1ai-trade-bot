@@ -482,7 +482,7 @@ def format_trade_close_with_cta(trade: dict) -> tuple:
         )
         markup = {"inline_keyboard": [
             [{"text": "⭐ Subscribe PRO (Rp50K)", "callback_data": "sub:pro"}],
-            [{"text": "🚀 Isi Bensin AI (Nominal Bebas)", "callback_data": "donate:fuel"}],
+            [{"text": "🚀 Subscription (Nominal Bebas)", "callback_data": "sub:elite"}],
         ]}
     else:
         # ── SL HIT — Humble learning + upgrade funnel ──
@@ -505,7 +505,7 @@ def format_trade_close_with_cta(trade: dict) -> tuple:
             f"📈 Winrate: {stats['win_rate']:.1f}% ({stats['wins']}W/{stats['losses']}L){called_line}"
         )
         markup = {"inline_keyboard": [
-            [{"text": "📚 Dukung AI Belajar (Tripay)", "callback_data": "donate:learn"}],
+            [{"text": "📚 Dukung AI Belajar (Tripay)", "callback_data": "sub:pro"}],
         ]}
 
     return text, markup

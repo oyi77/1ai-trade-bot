@@ -311,7 +311,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
     </div>
   </div>
 
-  <!-- Activity + Donor Wall + Daily Stats Row -->
+  <!-- Activity + Subscriber Wall + Daily Stats Row -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
     <div class="kpi-card">
       <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">👥 Recent Activity</h3>
@@ -320,8 +320,8 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
       </div>
     </div>
     <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.08), rgba(6,78,59,0.02));border-color:rgba(52,211,153,0.1)">
-      <h3 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">💚 Donor Wall</h3>
-      <div id="donor-wall">
+      <h3 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">💚 Subscriber Wall</h3>
+      <div id="subscriber-wall">
         <div class="text-sm text-slate-500 text-center py-6">Belum ada subscriber. Jadi yang pertama! 🚀</div>
       </div>
     </div>
@@ -401,7 +401,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
 
     <!-- Funding -->
     <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.08), rgba(6,78,59,0.02));border-color:rgba(52,211,153,0.1)">
-      <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">💚 Bahan Bakar AI Terkumpul</h3>
+      <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">💚 Subscription Terkumpul</h3>
       <div class="h-2 bg-white/5 rounded-full mb-4 overflow-hidden">
         <div class="h-full rounded-full transition-all duration-1000" id="fund-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
       </div>
@@ -409,7 +409,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
         <div class="flex justify-between"><span class="text-slate-400">Terkumpul Bulan Ini</span><span class="font-mono font-bold text-emerald-400" id="fund-collected">Rp 0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Monthly Target</span><span class="font-mono text-slate-300" id="fund-target">Rp 7,357,500</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Donation Transactions</span><span class="font-mono text-slate-300" id="fund-transactions">0</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Total Donors</span><span class="font-mono text-emerald-400" id="fund-donors">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Subscribers</span><span class="font-mono text-emerald-400" id="fund-subscribers">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Shortfall</span><span class="font-mono font-bold text-red-400" id="fund-shortfall">Rp 0</span></div>
       </div>
       <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" class="mt-4 block text-center bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-2.5 rounded-lg transition-colors">💚 Fuel the AI</a>
@@ -434,7 +434,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
         <div class="flex justify-between"><span class="text-slate-400">Total Members</span><span class="font-mono font-bold text-white" id="comm-members">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">├ Free (Trial)</span><span class="font-mono text-slate-300" id="comm-free">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">├ Pro (Paid)</span><span class="font-mono text-blue-400" id="comm-pro">0</span></div>
-        <div class="flex justify-between pl-4"><span class="text-slate-400">└ Donors</span><span class="font-mono text-emerald-400" id="comm-donors">0</span></div>
+        <div class="flex justify-between pl-4"><span class="text-slate-400">└ Subscribers</span><span class="font-mono text-emerald-400" id="comm-subscribers">0</span></div>
         <div class="h-divider"></div>
         <div class="flex justify-between"><span class="text-slate-400">Aktif Hari Ini</span><span class="font-mono text-blue-400" id="comm-active">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Total Sinyal</span><span class="font-mono text-slate-300" id="comm-signals">0</span></div>
@@ -760,7 +760,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
     <div class="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold mb-2">
       <span class="w-4 h-4 rounded-full bg-emerald-400 flex items-center justify-center text-[8px] font-black text-black">✓</span> Verified by Vilona AI
     </div>
-    <!-- Donate CTA Buttons -->
+    <!-- Subscribe CTA Buttons -->
     <div class="flex flex-wrap justify-center gap-3 mb-4">
       <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
          class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20">
@@ -782,13 +782,13 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
 <!-- ==================== PAGE: FUEL AI (ID) ==================== -->
 <div class="page" id="page-fuel">
 
-  <h2 class="text-2xl font-extrabold text-white mb-2">⛽ Isi Bahan Bakar AI</h2>
-  <p class="text-sm text-slate-400 mb-6">Dukung server trading 24/7 agar tetap hidup. Donasi sekecil apapun berarti besar.</p>
+  <h2 class="text-2xl font-extrabold text-white mb-2">⛽ Isi Subscription</h2>
+  <p class="text-sm text-slate-400 mb-6">Dukung server trading 24/7 agar tetap hidup. Subscribe sekecil apapun berarti besar.</p>
 
   <!-- Fuel Meter -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
     <div class="md:col-span-2 kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.1), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.15)">
-      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🚀 Status Bahan Bakar AI Bulan Ini</h3>
+      <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🚀 Status Subscription Bulan Ini</h3>
       <div class="flex items-end gap-2 mb-2">
         <span class="text-4xl font-mono font-extrabold text-emerald-400" id="fuel-pct">0%</span>
         <span class="text-sm text-slate-500 pb-1">terkumpul</span>
@@ -806,8 +806,8 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
           <div class="text-slate-500 mt-0.5">Kekurangan</div>
         </div>
         <div class="text-center bg-white/5 rounded-lg p-3">
-          <div class="font-mono font-bold text-emerald-400 text-sm" id="fuel-donors">0</div>
-          <div class="text-slate-500 mt-0.5">Donatur</div>
+          <div class="font-mono font-bold text-emerald-400 text-sm" id="fuel-subscribers">0</div>
+          <div class="text-slate-500 mt-0.5">Subscriber</div>
         </div>
         <div class="text-center bg-white/5 rounded-lg p-3">
           <div class="font-mono font-bold text-white text-sm" id="fuel-target">Rp 7.3jt</div>
@@ -821,10 +821,10 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
 
     <!-- What You Get Card -->
     <div class="kpi-card" style="background:linear-gradient(135deg, rgba(30,58,138,0.08), rgba(30,58,138,0.02));border-color:rgba(59,130,246,0.15)">
-      <h3 class="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">🎁 Yang Didapat Donatur</h3>
+      <h3 class="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">🎁 Yang Didapat Subscriber</h3>
       <div class="space-y-2 text-xs">
         <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Status <b>Subscriber</b> aktif (tier-based)</span></div>
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Nama muncul di <b>Donor Wall</b> dashboard</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Nama muncul di <b>Subscriber Wall</b> dashboard</span></div>
         <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Akses sesuai tier langganan kamu</span></div>
         <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Prioritas <b>Auto-Trade EA</b></span></div>
         <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Sinyal <b>GRADE A+</b> via Telegram</span></div>
@@ -849,7 +849,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
       <div class="text-center text-xs text-slate-600 py-2 border-t border-white/5">⚠️ Server berjalan dari kantong pribadi developer</div>
     </div>
 
-    <!-- Donor Tier -->
+    <!-- Subscriber Tier -->
     <div class="kpi-card border-2 border-emerald-400/30 relative overflow-hidden" style="background:linear-gradient(135deg, rgba(6,78,59,0.12), rgba(6,78,59,0.03))">
       <div class="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">🔥 PREMIUM</div>
       <div class="absolute -top-6 -right-6 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl"></div>
@@ -860,7 +860,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
         <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>EA Auto-Trade</b> full akses</span></div>
         <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Support <b>prioritas 24/7</b></span></div>
         <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Sinyal <b>GRADE A+</b> eksklusif</span></div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Nama di <b>Donor Wall</b> 🏆</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Nama di <b>Subscriber Wall</b> 🏆</span></div>
       </div>
       <div class="text-center text-xs text-emerald-300 py-2 border-t border-emerald-400/10">
         📅 <b>Subscription</b> — pilih tier yang sesuai
@@ -872,21 +872,21 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
   <div class="kpi-card mb-6" style="background:linear-gradient(135deg, rgba(6,78,59,0.10), rgba(6,78,59,0.03));border-color:rgba(52,211,153,0.2)">
     <div class="flex flex-col items-center gap-4">
       <div class="text-center w-full">
-        <h3 class="text-base font-bold text-emerald-400 mb-1">💚 Isi Bensin AI</h3>
+        <h3 class="text-base font-bold text-emerald-400 mb-1">💚 Subscription</h3>
         <p class="text-xs text-slate-400 mb-4">
-          Donasi via <b>Tripay</b> — QRIS / VA / Alfamart. <b>Otomatis aktif!</b>
+          Subscribe via <b>Tripay</b> — QRIS / VA / Alfamart. <b>Otomatis aktif!</b>
         </p>
         
         <!-- Amount buttons — single column on mobile, row on desktop -->
         <div class="flex flex-col sm:flex-row sm:flex-wrap justify-center gap-3 mb-4">
           <button onclick="document.getElementById('fuel-amount-input').value='10000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp10K</button>
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp50K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='25000'" 
                   class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp25K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='50000'" 
                   class="fuel-btn bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp50K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='100000'" 
-                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp100K</button>
+                  class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp500K</button>
           <button onclick="document.getElementById('fuel-amount-input').value='250000'" 
                   class="fuel-btn bg-slate-700 hover:bg-emerald-600 text-white text-xs font-bold px-4 py-3 rounded-lg transition-all">Rp250K</button>
         </div>
@@ -930,7 +930,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
             </div>
           </details>
           
-          <button onclick="fuelDonate()" 
+          <button onclick="fuelSubscribe()" 
                   class="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-4 rounded-lg text-sm transition-all">
             ⚡ Bayar via Tripay
           </button>
@@ -947,10 +947,10 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
     </div>
   </div>
 
-  <!-- DONOR WALL (full) -->
+  <!-- SUBSCRIBER WALL (full) -->
   <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.06), rgba(6,78,59,0.01))">
     <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">🏆 Wall of Fame — Top Subscribers</h3>
-    <div id="fuel-donor-wall-full">
+    <div id="fuel-subscriber-wall-full">
       <div class="text-sm text-slate-500 text-center py-6">Memuat data subscriber...</div>
     </div>
     <div class="text-center text-[10px] text-slate-600 mt-3">🙏 Terima kasih para pahlawan AI Indonesia!</div>
@@ -1014,13 +1014,13 @@ function fmtPip(n) {
 /* ═══ LOAD ALL DATA ═══ */
 async function loadAll() {
   try {
-    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes, fuelRes, snapRes, engineRes] = await Promise.all([
+    const [feed, trade, userAct, transparency, backtestRes, subscribersRes, dailyRes, recapRes, fuelRes, snapRes, engineRes] = await Promise.all([
       fetch('/api/feed').then(r => r.json()),
       fetch('/api/trade_stats').then(r => r.json()),
       fetch('/api/user_activity').then(r => r.json()),
       fetch('/api/transparency').then(r => r.json()),
       fetch('/api/backtest').then(r => r.json()),
-      fetch('/api/donors').then(r => r.json()),
+      fetch('/api/subscribers').then(r => r.json()),
       fetch('/api/daily_analyze').then(r => r.json()),
       fetch('/api/daily_recap').then(r => r.json()),
       fetch('/api/fuel/stats').then(r => r.json()),
@@ -1033,7 +1033,7 @@ async function loadAll() {
     const trans = transparency || {};
     const userSigs = userAct.signals || [];
     const backtest = backtestRes || {};
-    const donors = donorsRes.donors || [];
+    const subscribers = subscribersRes.subscribers || [];
     const daily = dailyRes || {};
     const recap = recapRes || {};
     const snapshot = snapRes || {};
@@ -1087,7 +1087,7 @@ async function loadAll() {
 
     document.getElementById('fund-collected').textContent = fmtRupiah(donationTotal);
     document.getElementById('fund-transactions').textContent = trans.donation_transactions || 0;
-    document.getElementById('fund-donors').textContent = trans.total_donors || 0;
+    document.getElementById('fund-subscribers').textContent = trans.total_subscribers || 0;
     document.getElementById('fund-shortfall').textContent = fmtRupiah(shortfall);
     document.getElementById('fund-bar').style.width = pct + '%';
 
@@ -1100,18 +1100,18 @@ async function loadAll() {
     document.getElementById('comm-members').textContent = trans.total_members || 0;
     document.getElementById('comm-free').textContent = trans.total_free || 0;
     document.getElementById('comm-pro').textContent = trans.total_pro || 0;
-    document.getElementById('comm-donors').textContent = trans.total_donors || 0;
+    document.getElementById('comm-subscribers').textContent = trans.total_subscribers || 0;
     document.getElementById('comm-active').textContent = trans.active_users_today || 0;
     document.getElementById('comm-signals').textContent = trans.signals_total || 0;
     const analysesEl = document.getElementById('comm-analyses');
     if (analysesEl) analysesEl.textContent = daily.total_all_time || 0;
 
-    renderDonorWall(donors);
+    renderSubscriberWall(subscribers);
     renderDailyAnalyze(daily, trans);
     renderBacktest(backtest);
     renderDailyRecap(recap);
     renderFuelStats(fuelRes);
-    renderFuelDonorWall(donors);
+    renderFuelSubscriberWall(subscribers);
     renderEngineReadings(engineData);
 
   } catch(e) {
@@ -1170,14 +1170,14 @@ function renderUserActivity(signals) {
   }).join('');
 }
 
-function renderDonorWall(donors) {
-  const el = document.getElementById('donor-wall');
-  if (!donors || !donors.length) {
-    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No donors yet. Be the first 💚</div>';
+function renderSubscriberWall(subscribers) {
+  const el = document.getElementById('subscriber-wall');
+  if (!subscribers || !subscribers.length) {
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No subscribers yet. Be the first 💚</div>';
     return;
   }
-  donors.sort((a,b) => (b.amount||0) - (a.amount||0));
-  el.innerHTML = donors.map((d, i) => {
+  subscribers.sort((a,b) => (b.amount||0) - (a.amount||0));
+  el.innerHTML = subscribers.map((d, i) => {
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'💚';
     const dt = d.paid_at ? new Date(d.paid_at).toLocaleDateString('id-ID',{timeZone:'Asia/Jakarta'}) : '-';
     return `<div class="flex items-center justify-between py-2 border-b border-white/5 last:border-b-0 text-xs">
@@ -1567,14 +1567,14 @@ function renderFuelStats(stats) {
   const pct = s.percent || 0;
   const collected = s.collected || 0;
   const shortfall = s.shortfall || 7357500;
-  const donors = s.donors || 0;
+  const subscribers = s.subscribers || 0;
   const target = s.monthly_cost || 7357500;
   
   const elPct = document.getElementById('fuel-pct');
   const elBar = document.getElementById('fuel-bar');
   const elCollected = document.getElementById('fuel-collected');
   const elShortfall = document.getElementById('fuel-shortfall');
-  const elDonors = document.getElementById('fuel-donors');
+  const elSubscribers = document.getElementById('fuel-subscribers');
   const elTarget = document.getElementById('fuel-target');
   const elStatus = document.getElementById('fuel-status-text');
   
@@ -1582,7 +1582,7 @@ function renderFuelStats(stats) {
   if (elBar) elBar.style.width = pct + '%';
   if (elCollected) elCollected.textContent = fmtRupiah(collected);
   if (elShortfall) elShortfall.textContent = fmtRupiah(shortfall);
-  if (elDonors) elDonors.textContent = donors;
+  if (elSubscribers) elSubscribers.textContent = subscribers;
   if (elTarget) elTarget.textContent = fmtRupiah(target);
   
   if (elStatus) {
@@ -1602,15 +1602,15 @@ function renderFuelStats(stats) {
   }
 }
 
-function renderFuelDonorWall(donors) {
-  const el = document.getElementById('fuel-donor-wall-full');
+function renderFuelSubscriberWall(subscribers) {
+  const el = document.getElementById('fuel-subscriber-wall-full');
   if (!el) return;
-  if (!donors || !donors.length) {
+  if (!subscribers || !subscribers.length) {
     el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">Belum ada subscriber. Subscribe sekarang! 🚀</div>';
     return;
   }
-  donors.sort((a,b) => (b.amount||0) - (a.amount||0));
-  el.innerHTML = donors.map((d, i) => {
+  subscribers.sort((a,b) => (b.amount||0) - (a.amount||0));
+  el.innerHTML = subscribers.map((d, i) => {
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'💚';
     const dt = d.paid_at ? new Date(d.paid_at).toLocaleDateString('id-ID',{timeZone:'Asia/Jakarta'}) : '-';
     return `<div class="flex items-center justify-between py-3 border-b border-white/5 last:border-b-0">
@@ -1626,7 +1626,7 @@ function renderFuelDonorWall(donors) {
   }).join('');
 }
 
-async function fuelDonate() {
+async function fuelSubscribe() {
   const chatId = document.getElementById('fuel-chat-id').value.trim();
   const amount = parseInt(document.getElementById('fuel-amount-input').value);
   const username = document.getElementById('fuel-username').value.trim() || 'Guest';
@@ -1702,7 +1702,7 @@ async function fuelDonate() {
           <div class="text-xl mb-2">⚠️</div>
           <div class="text-sm font-bold text-red-400">Gagal membuat pembayaran</div>
           <div class="text-xs text-slate-400 mt-1">${data.error || 'Coba lagi nanti'}</div>
-          <div class="text-xs text-slate-600 mt-2">Alternatif: buka bot Telegram <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 underline">@berkahkaryaforexbotbot</a> dan ketik /donate</div>
+          <div class="text-xs text-slate-600 mt-2">Alternatif: buka bot Telegram <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 underline">@berkahkaryaforexbotbot</a> dan ketik /subscribe</div>
         </div>`;
     }
   } catch(e) {
@@ -1718,7 +1718,7 @@ async function fuelDonate() {
   }
 }
 
-// Donor wall removed — handled in fuel stats section
+// Subscriber wall removed — handled in fuel stats section
 
 
 /* ═══ SYSTEM HEALTH STATUS ═══ */

@@ -80,7 +80,7 @@ class CallbackHandlersMixin(BaseBot):
             return "⏭ Sinyal dilewati. Analisa lagi: /analyze"
 
     def _handle_payment_callback(self, chat_id: str, data: str) -> str:
-        if data == "donate:coffee":
+        if data == "sub:pro":
             amount = 15000
             DONATION_INPUT_STATE.pop(chat_id, None)
             return (
@@ -90,7 +90,7 @@ class CallbackHandlersMixin(BaseBot):
                 "untuk instruksi pembayaran.\n\n"
                 "🔥 <i>Server AI butuh kopi biar makin ganas!</i>"
             )
-        if data == "donate:fuel":
+        if data == "sub:elite":
             amount = 50000
             DONATION_INPUT_STATE.pop(chat_id, None)
             return (
@@ -100,7 +100,7 @@ class CallbackHandlersMixin(BaseBot):
                 "untuk instruksi pembayaran.\n\n"
                 "🚀 <i>Bensin full! AI siap cetak profit!</i>"
             )
-        if data == "donate:custom":
+        if data == "sub:lifetime":
             DONATION_INPUT_STATE[chat_id] = True
             return (
                 "💚 <b>Dukung Server AI</b>\n"

@@ -127,7 +127,7 @@ def generate_briefing():
     lines.extend([
         f"━━━━━━━━━━━━━━━━━━━━━━",
         f"",
-        f"👑 <b>DONATUR</b> dapet briefing LENGKAP tiap pagi:",
+        f"👑 <b>SUBSCRIBER</b> dapet briefing LENGKAP tiap pagi:",
         f"   ✅ Key levels presisi (bukan nebak)",
         f"   ✅ Entry strategy + SL/TP placement",
         f"   ✅ News risk assessment (hindari jebakan)",

@@ -26,7 +26,7 @@ GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID", "")
 BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
 BOT_TOKEN_1AI = os.environ.get("TELEGRAM_BOT_TOKEN_1AI", "8343388239:AAFgeAkc9bvjywyCsHqRIa_RiJ6q-rp6uv0")
 
-# ── Donation model: ANY amount → donor (LIFETIME) ─────────
+# ── Donation model: ANY amount → subscriber (LIFETIME) ─────────
 # No more fixed tiers. "Dukung Server AI" = pay-what-you-want.
 DONOR_DAYS = 9999  # Lifetime access — bukan subscription
 
@@ -82,7 +82,7 @@ def _already_processed(merchant_ref: str) -> bool:
 
 
 def upgrade_member(chat_id: str, tier: str, days: int, merchant_ref: str = "") -> bool:
-    """Upgrade member ke DONATUR via members.db (SQLite). Returns True on full success."""
+    """Upgrade member ke SUBSCRIBER via members.db (SQLite). Returns True on full success."""
     try:
         from members import upgrade_tier as mem_upgrade, mark_payment_paid
         mem_upgrade(chat_id, tier, days, merchant_ref)
@@ -258,7 +258,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"💰 <b>Rp{int(total_amount):,}</b> — Makasih Bro!\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                f"👑 Status kamu sekarang: <b>SUBSCRIBER VIP</b>\n"
                 f"\n"
                 f"Akses VIP kamu <b>AKTIF PERMANEN</b>.\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -280,7 +280,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"💰 <b>Rp{int(total_amount):,}</b> — Makasih Bro!\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                f"👑 Status kamu sekarang: <b>SUBSCRIBER VIP</b>\n"
                 f"\n"
                 f"Akses VIP kamu <b>AKTIF PERMANEN</b>.\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -341,7 +341,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
             if group_result is None:
                 log.warning("tg_send to GROUP_CHAT_ID returned None (group notification may not have been delivered)")
 
-        log.info(f"✅ Donation complete: {chat_id} → DONATUR (ref={merchant_ref[:16]} amount={total_amount})")
+        log.info(f"✅ Donation complete: {chat_id} → SUBSCRIBER (ref={merchant_ref[:16]} amount={total_amount})")
         self._json({"status": "ok", "chat_id": chat_id, "donor": True})
 
     def log_message(self, format, *args):

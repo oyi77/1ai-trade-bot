@@ -7,7 +7,7 @@ behavior — these are a mechanical port of the original implementations.
 
 Functions:
     get_backtest_data      — Load XAUUSD / grid / per-engine backtest results
-    get_donor_list         — Donor members + their paid amounts from members.db
+    get_donor_list         — Subscriber members + their paid amounts from members.db
     get_daily_analyze_stats — Per-day analyze request counts from quota_cache/
     get_trade_stats        — Trade history summary stats
     get_daily_mapping      — Latest daily mapping date

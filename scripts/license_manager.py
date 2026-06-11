@@ -29,7 +29,7 @@ def is_admin(chat_id: str) -> bool:
     return str(chat_id) in ADMIN_IDS
 
 def cmd_genkey(chat_id: str, sub: str = "", msg: dict = None) -> str:
-    """Generate a new EA license key for a donor.
+    """Generate a new EA license key for a subscriber.
     Usage: /genkey <user_id> [days]
     """
     if not is_admin(chat_id):
@@ -123,9 +123,9 @@ def cmd_mykey(chat_id: str) -> str:
             "🔑 <b>License EA Kamu</b>\n"
             "━━━━━━━━━━━━━━━━\n"
             "Kamu belum memiliki license key EA.\n\n"
-            "💡 Jika kamu sudah Donatur, hubungi admin:\n"
+            "💡 Jika kamu sudah Subscriber, hubungi admin:\n"
             "👉 @codergaboets\n\n"
-            "💡 Belum Donatur? /donate"
+            "💡 Belum Subscriber? /donate"
         )
 
     lines = ["🔑 <b>License EA Kamu</b>\n━━━━━━━━━━━━━━━━"]

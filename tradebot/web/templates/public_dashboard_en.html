@@ -387,7 +387,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
         <div class="flex justify-between"><span class="text-slate-400">Collected This Month</span><span class="font-mono font-bold text-emerald-400" id="fund-collected">Rp 0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Monthly Target</span><span class="font-mono text-slate-300" id="fund-target">Rp 7,357,500</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Donation Transactions</span><span class="font-mono text-slate-300" id="fund-transactions">0</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Total Subscribers</span><span class="font-mono text-emerald-400" id="fund-donors">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Subscribers</span><span class="font-mono text-emerald-400" id="fund-subscribers">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Shortfall</span><span class="font-mono font-bold text-red-400" id="fund-shortfall">Rp 0</span></div>
       </div>
       <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" class="mt-4 block text-center bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-2.5 rounded-lg transition-colors">💚 Fuel the AI</a>
@@ -412,7 +412,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
         <div class="flex justify-between"><span class="text-slate-400">Total Members</span><span class="font-mono font-bold text-white" id="comm-members">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">├ Free (Trial)</span><span class="font-mono text-slate-300" id="comm-free">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">├ Pro (Paid)</span><span class="font-mono text-blue-400" id="comm-pro">0</span></div>
-        <div class="flex justify-between pl-4"><span class="text-slate-400">└ Subscribers</span><span class="font-mono text-emerald-400" id="comm-donors">0</span></div>
+        <div class="flex justify-between pl-4"><span class="text-slate-400">└ Subscribers</span><span class="font-mono text-emerald-400" id="comm-subscribers">0</span></div>
         <div class="h-divider"></div>
         <div class="flex justify-between"><span class="text-slate-400">Active Today</span><span class="font-mono text-blue-400" id="comm-active">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Total Signals</span><span class="font-mono text-slate-300" id="comm-signals">0</span></div>
@@ -784,8 +784,8 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
           <div class="text-slate-500 mt-0.5">Shortfall</div>
         </div>
         <div class="text-center bg-white/5 rounded-lg p-3">
-          <div class="font-mono font-bold text-emerald-400 text-sm" id="fuel-donors">0</div>
-          <div class="text-slate-500 mt-0.5">Donors</div>
+          <div class="font-mono font-bold text-emerald-400 text-sm" id="fuel-subscribers">0</div>
+          <div class="text-slate-500 mt-0.5">Subscribers</div>
         </div>
         <div class="text-center bg-white/5 rounded-lg p-3">
           <div class="font-mono font-bold text-white text-sm" id="fuel-target">Rp 7.3M</div>
@@ -998,7 +998,7 @@ async function loadAll() {
       fetch('/api/user_activity').then(r => r.json()),
       fetch('/api/transparency').then(r => r.json()),
       fetch('/api/backtest').then(r => r.json()),
-      fetch('/api/donors').then(r => r.json()),
+      fetch('/api/subscribers').then(r => r.json()),
       fetch('/api/daily_analyze').then(r => r.json()),
       fetch('/api/daily_recap').then(r => r.json()),
       fetch('/api/fuel/stats').then(r => r.json()),
@@ -1011,7 +1011,7 @@ async function loadAll() {
     const trans = transparency || {};
     const userSigs = userAct.signals || [];
     const backtest = backtestRes || {};
-    const subscribers = subRes.donors || [];
+    const subscribers = subRes.subscribers || [];
     const daily = dailyRes || {};
     const recap = recapRes || {};
     const snapshot = snapRes || {};
@@ -1065,7 +1065,7 @@ async function loadAll() {
 
     document.getElementById('fund-collected').textContent = fmtRupiah(donationTotal);
     document.getElementById('fund-transactions').textContent = trans.donation_transactions || 0;
-    document.getElementById('fund-donors').textContent = trans.total_donors || 0;
+    document.getElementById('fund-subscribers').textContent = trans.total_subscribers || 0;
     document.getElementById('fund-shortfall').textContent = fmtRupiah(shortfall);
     document.getElementById('fund-bar').style.width = pct + '%';
 
@@ -1078,7 +1078,7 @@ async function loadAll() {
     document.getElementById('comm-members').textContent = trans.total_members || 0;
     document.getElementById('comm-free').textContent = trans.total_free || 0;
     document.getElementById('comm-pro').textContent = trans.total_pro || 0;
-    document.getElementById('comm-donors').textContent = trans.total_donors || 0;
+    document.getElementById('comm-subscribers').textContent = trans.total_subscribers || 0;
     document.getElementById('comm-active').textContent = trans.active_users_today || 0;
     document.getElementById('comm-signals').textContent = trans.signals_total || 0;
     const analysesEl = document.getElementById('comm-analyses');
@@ -1320,14 +1320,14 @@ function renderFuelStats(stats) {
   const pct = s.percent || 0;
   const collected = s.collected || 0;
   const shortfall = s.shortfall || 7357500;
-  const subscribers = s.donors || 0;
+  const subscribers = s.subscribers || 0;
   const target = s.monthly_cost || 7357500;
   
   const elPct = document.getElementById('fuel-pct');
   const elBar = document.getElementById('fuel-bar');
   const elCollected = document.getElementById('fuel-collected');
   const elShortfall = document.getElementById('fuel-shortfall');
-  const elDonors = document.getElementById('fuel-donors');
+  const elSubscribers = document.getElementById('fuel-subscribers');
   const elTarget = document.getElementById('fuel-target');
   const elStatus = document.getElementById('fuel-status-text');
   
@@ -1335,12 +1335,12 @@ function renderFuelStats(stats) {
   if (elBar) elBar.style.width = pct + '%';
   if (elCollected) elCollected.textContent = fmtRupiah(collected);
   if (elShortfall) elShortfall.textContent = fmtRupiah(shortfall);
-  if (elDonors) elDonors.textContent = donors;
+  if (elSubscribers) elSubscribers.textContent = subscribers;
   if (elTarget) elTarget.textContent = fmtRupiah(target);
   
   if (elStatus) {
     if (pct >= 75) {
-      elStatus.textContent = '✅ Server funded — thank you donors!';
+      elStatus.textContent = '✅ Server funded — thank you subscribers!';
       elStatus.className = 'text-xs text-emerald-400';
     } else if (pct >= 50) {
       elStatus.textContent = '🟡 Halfway — help us reach the goal';
@@ -1355,11 +1355,11 @@ function renderFuelStats(stats) {
   }
 }
 
-function renderFuelDonorWall(donors) {
+function renderFuelSubscriberWall(subscribers) {
   const el = document.getElementById('fuel-sub-wall-full');
   if (!el) return;
   if (!subscribers || !subscribers.length) {
-    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No donors yet. Be the first! 💚</div>';
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No subscribers yet. Be the first! 💚</div>';
     return;
   }
   subscribers.sort((a,b) => (b.amount||0) - (a.amount||0));

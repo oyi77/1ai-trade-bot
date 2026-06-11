@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bensin AI Reminder — DM otomatis ke donor yang >30 hari gak isi ulang.
+Bensin AI Reminder — DM otomatis ke subscriber yang >30 hari gak isi ulang.
 Jalan setiap Senin pagi 08:00 WIB via cron. Gentle reminder, no pressure.
 """
 import os, sys, json, time, logging
@@ -80,15 +80,15 @@ def build_reminder(username: str, days_since: int, last_amount: int) -> str:
         f"🤖 Hai <b>{username}</b>! AI Partner lu di sini…\n"
         f"\n"
         f"{vibe}. Udah <b>{days_since} hari</b> sejak terakhir lu "
-        f"isi bensin server (Rp{last_amount:,}).\n"
+        f"subscription server (Rp{last_amount:,}).\n"
         f"\n"
         f"💚 Akses VIP lu <b>TETAP AKTIF permanen</b> — gak bakal ilang. "
-        f"Tapi kalau lu mau bantu isi bensin biar server tetep jalan "
+        f"Tapi kalau lu mau bantu subscription biar server tetep jalan "
         f"24/7 nih, gue sangat berterima kasih.\n"
         f"\n"
-        f"⚡ <b>/donate</b> — Isi bensin (Rp 50k aja)\n"
+        f"⚡ <b>/donate</b> — Subscription (Rp 50k aja)\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📊 Total donatur bulan ini lagi di cek..\n"
+        f"📊 Total subscriber bulan ini lagi di cek..\n"
         f"   Kamu terakhir isi: <b>{days_since} hari</b> lalu\n"
         f"\n"
         f"Makasih Bro! 🙏"
@@ -113,13 +113,13 @@ def main():
     stale = get_stale_donors(min_days=30)
     
     if not stale:
-        log.info("✅ Semua donor aktif bulan ini — no reminder needed")
+        log.info("✅ Semua subscriber aktif bulan ini — no reminder needed")
         _mark_sent()
         return
     
-    log.info(f"📨 Akan reminder {len(stale)} donor yang >30 hari")
+    log.info(f"📨 Akan reminder {len(stale)} subscriber yang >30 hari")
     sent_count = 0
-    for donor in stale:
+    for subscriber in stale:
         text = build_reminder(
             donor["username"],
             donor["days_since"],

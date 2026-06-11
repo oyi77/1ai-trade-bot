@@ -316,7 +316,7 @@ class VilonaBot(
                 pass
             await asyncio.sleep(3600)
 
-    # ── Donor / anti-abuse checks ───────────────────────────────────────
+    # ── Subscriber / anti-abuse checks ───────────────────────────────────────
 
     def _is_donor(self, chat_id: str) -> bool:
         try:
@@ -343,7 +343,7 @@ class VilonaBot(
         ts = self._user_last_analyze.get(chat_id)
         if ts and (now - ts) < throttle:
             wait = int(throttle - (now - ts))
-            label = "Donatur" if is_donor else "Free"
+            label = "Subscriber" if is_donor else "Free"
             return True, f"⏳ [{label}] Tunggu {wait} detik sebelum analisa berikutnya."
 
         # Layer 3: same-pair cooldown
@@ -378,7 +378,7 @@ class VilonaBot(
             return (
                 False,
                 0,
-                f"🛑 Kuota Donatur Harian Penuh! {self._donor_daily_quota}x/hari. Reset besok 00:00 WIB.",
+                f"🛑 Kuota Subscriber Harian Penuh! {self._donor_daily_quota}x/hari. Reset besok 00:00 WIB.",
             )
         remaining = max(0, self._donor_daily_quota - record["count"])
         return True, remaining, None

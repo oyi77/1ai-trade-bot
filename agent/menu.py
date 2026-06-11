@@ -49,9 +49,9 @@ ACCOUNT_MENU = [
 ]
 
 DONATE_MENU = [
-    [Button.inline("☕️ Kopi (Rp 15K)", "donate:coffee")],
-    [Button.inline("🚀 Bensin Full (Rp 50K)", "donate:fuel")],
-    [Button.inline("💰 Nominal Bebas", "donate:custom")],
+    [Button.inline("☕️ Kopi (Rp 15K)", "sub:pro")],
+    [Button.inline("🚀 Bensin Full (Rp 50K)", "sub:elite")],
+    [Button.inline("💰 Nominal Bebas", "sub:lifetime")],
     [Button.inline("🔙 Back", "menu:account")],
 ]
 
@@ -92,7 +92,7 @@ MENU_TEXTS = {
     "market": "📊 <b>MARKET DATA</b>\n━━━━━━━━━━━━━━━━━━━━━\nHarga real-time, killzone, level S&R.",
     "history": "📈 <b>TRADE HISTORY</b>\n━━━━━━━━━━━━━━━━━━━━━\nWin rate, daily recap, mapping.",
     "account": "👤 <b>ACCOUNT</b>\n━━━━━━━━━━━━━━━━━━━━━\nStatus, donate, dan pengaturan.",
-    "donate": "💚 <b>DONASI — 1AI Agent</b>\n━━━━━━━━━━━━━━━━━━━━━\nDukung server AI tetap hidup!\nPilih nominal di bawah:",
+    "donate": "💚 <b>SUBSCRIBE — 1AI Agent</b>\n━━━━━━━━━━━━━━━━━━━━━\nDukung server AI tetap hidup!\nPilih nominal di bawah:",
     "stockity": "💰 <b>STOCKITY INSIDER</b>\n━━━━━━━━━━━━━━━━━━━━━\nKami menggunakan sistem bandar (insider).",
     "admin_panel": "⚙️ <b>ADMIN PANEL</b>\n━━━━━━━━━━━━━━━━━━━━━\nManajemen bot.",
     "help": "⚙️ <b>1AI Agent — COMMAND CENTER</b>\n━━━━━━━━━━━━━━━━━━━━━\nGunakan menu atau command.",

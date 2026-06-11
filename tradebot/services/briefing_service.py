@@ -2,7 +2,7 @@
 
 Ported from scripts/pre_market_briefing.py with full legacy fidelity.
 Fetches XAUUSD from gold-api.com + DXY from Yahoo Finance.
-Computes H1 SMA bias. Generates donor-teaser briefing with locked sections.
+Computes H1 SMA bias. Generates subscriber-teaser briefing with locked sections.
 """
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def _compute_sma_bias(price: float | None, dxy: float | None) -> str:
 
 
 def generate_briefing() -> str:
-    """Generate the full pre-market briefing with donor-teaser formatting.
+    """Generate the full pre-market briefing with subscriber-teaser formatting.
 
     Shows price + DXY for all users. Locked sections (bias/SL/TP) for free tier.
     """
@@ -138,7 +138,7 @@ def generate_briefing() -> str:
 
     lines.append("━━━━━━━━━━━━━━━━━━━━━━")
 
-    # ── Donor teaser: locked sections ──
+    # ── Subscriber teaser: locked sections ──
     lines.append("")
     lines.append("🟢 <b>Support & Resistance</b> [🔒 DONOR ONLY]")
     lines.append("🔴 <b>Entry/SL/TP</b> [🔒 DONOR ONLY]")

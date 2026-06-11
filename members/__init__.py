@@ -285,7 +285,7 @@ def get_user_last_donation(chat_id: str) -> dict | None:
 
 
 def get_stale_donors(min_days: int = 30) -> list[dict]:
-    """Find all donor members whose last donation was > min_days ago.
+    """Find all subscriber members whose last donation was > min_days ago.
     Returns lista of {chat_id, days_since_last, last_amount, username}"""
     from datetime import datetime, timezone, timedelta
     now = datetime.now(WIB)

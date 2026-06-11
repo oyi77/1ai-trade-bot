@@ -47,9 +47,9 @@ MSG = (
     "• Fair Value Gaps (FVG)\n"
     "• Liquidity Zones\n"
     "• Session Levels\n\n"
-    "👑 <b>Fitur Premium — Khusus Donatur</b>\n"
+    "👑 <b>Fitur Premium — Khusus Subscriber</b>\n"
     "Free member bisa lihat command, akses penuh\n"
-    "setelah donasi.\n\n"
+    "setelah subscribe.\n\n"
     "🔥 Cobain sekarang: /levels xauusd\n"
     "💚 Support AI: /donate"
 )

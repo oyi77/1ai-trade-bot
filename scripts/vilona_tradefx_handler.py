@@ -600,7 +600,7 @@ def _cleanup_expired_pending_signals():
 USER_LAST_ANALYZE = {}  # chat_id -> timestamp
 USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
 USER_LAST_PAIR = {}  # chat_id -> {"pair": str, "at": timestamp} — same-pair cooldown
-USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — donor quota
+USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — subscriber quota
 DONOR_ANALYZE_COUNT: dict = {}  # chat_id -> int — analyze counter, fuel gauge reminder every 3rd
 
 MANUAL_THROTTLE_FREE = 120   # free user: 120 detik antar analisa
@@ -621,7 +621,7 @@ DIRECTION_LOCK_SECONDS = 60
 DONATION_INPUT_STATE = {}  # chat_id -> True (waiting for user to type amount)
 
 def _is_manual_blocked(chat_id, pair=""):
-    """Multi-layer anti-abuse: cooldown + same-pair + donor daily quota + direction lock."""
+    """Multi-layer anti-abuse: cooldown + same-pair + subscriber daily quota + direction lock."""
     now = time.time()
     is_donor = _is_donor(str(chat_id))
     throttle = MANUAL_THROTTLE_DONOR if is_donor else MANUAL_THROTTLE_FREE
@@ -658,7 +658,7 @@ def _is_manual_blocked(chat_id, pair=""):
 
 
 def _check_donor_quota(chat_id):
-    """Check & deduct donor daily quota. Returns (ok, remaining, message)."""
+    """Check & deduct subscriber daily quota. Returns (ok, remaining, message)."""
     today = wib_now().strftime("%Y-%m-%d")
     record = USER_DAILY_ANALYZE.get(chat_id, {})
     if record.get("date") != today:
@@ -906,8 +906,8 @@ def handle_payment_callback(callback_query):
         # Show donation info — no more old tiers
         txt = get_pricing_table() if PAYMENT_ENGINE else "💎 Info dukung server AI belum tersedia."
         markup = {"inline_keyboard": [
-            [{"text": "☕️ Traktir Kopi (Rp15k)", "callback_data": "donate:coffee"},
-             {"text": "🚀 Nominal Bebas", "callback_data": "donate:fuel"}],
+            [{"text": "☕️ Subscribe PRO (Rp15k)", "callback_data": "sub:pro"},
+             {"text": "🚀 Nominal Bebas", "callback_data": "sub:elite"}],
             [{"text": "📞 Tanya Admin", "url": "https://t.me/codergaboets"}],
         ]}
         tg_send(txt, chat_id, reply_markup=markup)
@@ -948,10 +948,10 @@ def handle_payment_callback(callback_query):
                 "⚡ <b>Upgrade Tier</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
                 "Pilih nominal dukungan:\n\n"
-                "☕️ Rp15K — Traktir kopi\n"
-                "📚 Rp25K — Dukung AI belajar\n"
+                "⭐ Subscribe PRO — Rp50K/bln\n"
+                "👑 Subscribe ELITE — Rp150K/bln\n"
                 "🚀 Nominal bebas — Upgrade tier\n\n"
-                "Semua dukungan = DONATUR VIP AKTIF PERMANEN.",
+                "Semua dukungan = SUBSCRIBER VIP AKTIF PERMANEN.",
                 chat_id
             )
             return
@@ -959,7 +959,7 @@ def handle_payment_callback(callback_query):
         if not PAYMENT_ENGINE:
             tg_send(
                 "💳 <b>Payment gateway offline.</b>\n\n"
-                "Tapi tenang, kamu tetap bisa donasi manual:\n\n"
+                "Tapi tenang, kamu tetap bisa subscribe manual:\n\n"
                 "💚 <b>Transfer ke:</b>\n"
                 "🏦 BCA: 8531425531 a.n. MOH SUHUD\n"
                 "📱 Dana/Ovo/GoPay: 08123456789 (konfirm admin)\n\n"
@@ -1001,7 +1001,7 @@ def handle_payment_callback(callback_query):
             f"⏰ Expired: 1 jam\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"Klik tombol di bawah untuk bayar 👇\n\n"
-            f"<i>Setelah bayar, bot auto-upgrade kamu ke 🟢 DONATUR dalam 1-5 menit.</i>"
+            f"<i>Setelah bayar, bot auto-upgrade kamu ke 🟢 SUBSCRIBER dalam 1-5 menit.</i>"
         )
 
         markup = {"inline_keyboard": [
@@ -2911,7 +2911,7 @@ def handle_command(cmd, text, chat_id, msg):
         text = (
             f"🆔 <b>Telegram ID kamu:</b>\n"
             f"<code>{chat_id}</code>\n\n"
-            f"Gunakan ID ini untuk donasi di website kami\n"
+            f"Gunakan ID ini untuk subscribe di website kami\n"
             f"👉 <a href='https://phantomfx.aitradepulse.com'>phantomfx.aitradepulse.com</a>"
         )
         tg_send(text, chat_id)
@@ -3104,9 +3104,9 @@ def handle_command(cmd, text, chat_id, msg):
             _uname = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
             _send_donate_menu(chat_id, _uname)
             tg_send(
-                "🔒 <b>DOWNLOAD EA — DONATUR ONLY</b>\n\n"
+                "🔒 <b>DOWNLOAD EA — SUBSCRIBER ONLY</b>\n\n"
                 "EA ini exclusive buat member yang sudah support project.\n"
-                "Silakan donasi dulu ya, Bro!",
+                "Silakan subscribe dulu ya, Bro!",
                 chat_id
             )
         else:
@@ -3114,7 +3114,7 @@ def handle_command(cmd, text, chat_id, msg):
             if ea_path.exists():
                 _send_document(chat_id, str(ea_path), "VilonaTradeFX_EA.ex5",
                               "🎯 <b>Vilona TradeFX EA</b>\nCent + IDR compatible ✅\nSmart trailing ready ✅")
-                logger.info(f"📥 /download served to donor chat_id={chat_id}")
+                logger.info(f"📥 /download served to subscriber chat_id={chat_id}")
             else:
                 tg_send("❌ EA file not found. Contact admin.", chat_id)
 
@@ -3126,7 +3126,7 @@ def handle_command(cmd, text, chat_id, msg):
         quota = _get_quota(chat_id)
 
         if is_donor:
-            # Donor daily quota tracking
+            # Subscriber daily quota tracking
             today = wib_now().strftime("%Y-%m-%d")
             record = USER_DAILY_ANALYZE.get(chat_id, {})
             used = record.get("count", 0) if record.get("date") == today else 0
@@ -3171,7 +3171,7 @@ def handle_command(cmd, text, chat_id, msg):
             fuel_text = "\n".join(fuel_lines) if fuel_lines else ""
 
             txt = (
-                f"👑 <b>STATUS: DONATUR SULTAN (VIP)</b>\n"
+                f"👑 <b>STATUS: SUBSCRIBER SULTAN (VIP)</b>\n"
                 f"⚡️ Kuota AI: {remaining}/{DONOR_DAILY_QUOTA}x hari ini (Reset 00:00 WIB)\n"
                 f"⏱️ Cooldown: {MANUAL_THROTTLE_DONOR}s antar analisa\n"
                 f"{fuel_text}\n"
@@ -3222,7 +3222,7 @@ def handle_command(cmd, text, chat_id, msg):
                     f"📊 Free Member: {FREE_QUOTA_PER_DAY}x analisa/hari\n"
                     f"📉 Sisa: 0/{FREE_QUOTA_PER_DAY}\n\n"
                     "⚡ <b>Upgrade Tier!</b>\n"
-                    "Donasi sukarela untuk akses unlimited:\n"
+                    "Subscribe sukarela untuk akses unlimited:\n"
                     "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n\n"
                     "⏰ Reset: besok jam 00:00 WIB",
                     chat_id
@@ -3505,7 +3505,7 @@ def handle_command(cmd, text, chat_id, msg):
                             "⭐ <b>PREMIUM TIER — Multi-Model Consensus</b>\n"
                             "3 AI model (DeepSeek + GPT-4o + Claude) konsensus.\n"
                             "Akurasi maksimal berkat support kamu! 🥂\n"
-                            "👉 /subscribe — Ajak teman ikut donasi"
+                            "👉 /subscribe — Ajak teman ikut subscribe"
                         )
                     # ── Fuel Gauge Reminder (every 3rd analyze for donors) ──
                     if is_donor:
@@ -3841,7 +3841,7 @@ def handle_command(cmd, text, chat_id, msg):
         _send_donate_menu(chat_id, username)
 
     elif cmd == "/testpay":
-        """🧪 Test payment: donasi minimal — verifikasi webhook Tripay."""
+        """🧪 Test payment: subscribe minimal — verifikasi webhook Tripay."""
         if not chat_id:
             return
         if not PAYMENT_ENGINE:
@@ -3866,7 +3866,7 @@ def handle_command(cmd, text, chat_id, msg):
             "🧪 <b>Test Upgrade Tier — Rp10,000</b>\n"
             "━━━━━━━━━━━━━━━━\n"
             "💰 Total: <b>Rp10,000</b>\n"
-            "👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
+            "👑 Status: SUBSCRIBER VIP — AKTIF PERMANEN\n"
             "⏰ Expired: 1 jam\n"
             "━━━━━━━━━━━━━━━━\n"
             "Klik tombol bayar di bawah 👇\n\n"
@@ -3883,7 +3883,7 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send(txt, chat_id, reply_markup=markup)
 
     elif cmd == "/activate":
-        """Admin: Manual activation — set user ke DONATUR."""
+        """Admin: Manual activation — set user ke SUBSCRIBER."""
         if not chat_id:
             return
         # Admin check: use chat_id list
@@ -3915,16 +3915,16 @@ def handle_command(cmd, text, chat_id, msg):
                 f"✅ <b>Manual Activation Berhasil</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"👤 User: <code>{target_id}</code>\n"
-                f"👑 Status: <b>DONATUR VIP — AKTIF PERMANEN</b>",
+                f"👑 Status: <b>SUBSCRIBER VIP — AKTIF PERMANEN</b>",
                 chat_id
             )
 
             # DM the activated user
             if BOT_TOKEN:
                 user_msg = (
-                    f"🔥 <b>BOOM! Kamu sekarang DONATUR VIP!</b>\n"
+                    f"🔥 <b>BOOM! Kamu sekarang SUBSCRIBER VIP!</b>\n"
                     f"━━━━━━━━━━━━━━━━\n"
-                    f"👑 Status: <b>DONATUR VIP — AKTIF PERMANEN</b>\n"
+                    f"👑 Status: <b>SUBSCRIBER VIP — AKTIF PERMANEN</b>\n"
                     f"━━━━━━━━━━━━━━━━\n"
                     f"✅ /analyze UNLIMITED\n"
                     f"✅ EA Auto-Trade\n"
@@ -4003,7 +4003,7 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"❌ Mapping error: {e}", chat_id)
 
     elif cmd == "/news":
-        """Grok News — real-time X/Twitter market intelligence. Donor only."""
+        """Grok News — real-time X/Twitter market intelligence. Subscriber only."""
         if not _is_donor(str(chat_id)):
             tg_send(
                 f"📰 <b>Grok News</b> [🔒 LOCKED]\n"
@@ -4602,8 +4602,8 @@ def handle_command(cmd, text, chat_id, msg):
                 "🔒 Fitur ini eksklusif untuk Subscriber.\n"
                 "\n"
                 "💚 <b>ISI BAHAN BAKAR AI</b>\n"
-                "Donasi sekali — akses permanen!\n"
-                "👉 /subscribe — Lihat opsi donasi\n"
+                "Subscribe sekali — akses permanen!\n"
+                "👉 /subscribe — Lihat opsi subscribe\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Server AI ini memproses jutaan data\n"
                 "tiap hari. Butuh biaya API & GPU\n"
@@ -5051,7 +5051,7 @@ def handle_command(cmd, text, chat_id, msg):
 
     elif cmd == "/genkey":
         """Donor/Admin: Generate EA license key."""
-        # ── DONOR GATE: donor or admin can generate license keys ──
+        # ── DONOR GATE: subscriber or admin can generate license keys ──
         admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
         if not _is_donor(str(chat_id)) and str(chat_id) not in admin_ids:
             _uname = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
@@ -6279,7 +6279,7 @@ def main():
                                         txt = (
                                             f"⚡ <b>Upgrade Tier Rp{amount:,}</b>\n"
                                             f"━━━━━━━━━━━━━━━━\n"
-                                            f"👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
+                                            f"👑 Status: SUBSCRIBER VIP — AKTIF PERMANEN\n"
                                         )
                                         if pay_code:
                                             txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
