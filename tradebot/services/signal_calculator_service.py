@@ -425,7 +425,7 @@ def format_signal_telegram(signal: dict) -> str:
         f"{callout}",
         "",
         "\u26a0\ufe0f <i>Risk 1% per trade. Full AI - verify sendiri.</i>",
-        "\U0001f49a Server GRATIS -> /donate | @berkahkaryaforexbotbot",
+        "\U0001f49a Server GRATIS -> /subscribe | @berkahkaryaforexbotbot",
     ]
 
     return "\n".join(lines)

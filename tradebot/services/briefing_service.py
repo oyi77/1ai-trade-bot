@@ -147,7 +147,7 @@ def generate_briefing() -> str:
     lines.append("💡 <b>Briefing ini cuma preview.</b>")
     lines.append("   Dapatkan analisa REAL di @vilonaaichanel")
     lines.append("")
-    lines.append("⚡ <b>/donate</b> — Rp 50k/bulan")
+    lines.append("⚡ <b>/subscribe</b> — Rp 50k/bulan")
     lines.append("   🟢 FULL Entry/SL/TP + 2 AI + Grok News")
     lines.append("   📊 SnR/FIBO levels + winrate tracker")
 

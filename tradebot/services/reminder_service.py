@@ -89,7 +89,7 @@ def build_reminder(donor: dict) -> str:
         f"🤖 AI DeepSeek + GPT-4o\n"
         f"📰 Grok News dari X/Twitter\n\n"
         f"Yuk isi ulang biar bot tetap aktif:\n"
-        f"💚 /donate — Mulai dari Rp15.000\n\n"
+        f"💚 /subscribe — Mulai dari Rp50.000\n\n"
         f"Makasih udah dukung server AI! 🙏"
     )
 
