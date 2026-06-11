@@ -7,10 +7,24 @@ import json
 import logging
 import time
 from typing import Any
+from random import choice
 
 from tradebot.bots.base import BaseBot
 
 LOG = logging.getLogger("tradebot.bots.vilona.analysis")
+
+FOMO_PHRASES = [
+    "🔥 Sinyal ini cuma untuk yang FAST RESPONSE!",
+    "⚡ 9 engines udah konsensus — tinggal kamu yang belum action!",
+    "💰 Orang lain udah cuan, kamu masih tunggu apa?",
+    "🎯 Setiap detik delay = profit yang hilang!",
+    "🚀 Ini bukan latihan. Ini real signal.",
+    "💎 DIAMOND ALERT — Jangan sampai kelewatan!",
+    "⚡ Signal premium detected! Upgrade buat akses FULL analysis!",
+    "🔥 90% orang yang subscribe cuan tiap hari. Kamu kapan?",
+    "💰 Udah 15 member lain yg eksekusi signal ini. Lo ketinggalan!",
+    "🎯 Signal akurasi tinggi — cuma buat subscriber PREMIUM.",
+]
 
 
 class AnalysisHandlersMixin(BaseBot):
@@ -43,11 +57,66 @@ class AnalysisHandlersMixin(BaseBot):
                         msg = format_signal_basic(sig, price, display)
                         await self._tg_send(msg)
                         self.bridge.post_signal(sig, price)
+                        await self._broadcast_signal(sig, display, price)
                         LOG.info("Auto signal: %s %s | %s", display, sig["action"], reason)
                     await asyncio.sleep(2)
             except Exception as e:
                 LOG.error("Auto-analysis error: %s", e)
             await asyncio.sleep(self._scan_interval_sec)
+
+    async def _broadcast_signal(self, sig: dict[str, Any], display: str, price: float) -> None:
+        """Broadcast signal to subscribers with proven FOMO format from @vilonaaichanel."""
+        try:
+            from tradebot.signals.subscriptions import get_all_active_subscribers
+
+            subscribers = get_all_active_subscribers()
+            if not subscribers:
+                return
+
+            action = sig.get("action", "HOLD")
+            entry = sig.get("entry", price or 0)
+            sl = sig.get("sl", 0)
+            tp = sig.get("tp", 0)
+            confidence = sig.get("confidence", 0)
+            grade = sig.get("grade", "?")
+            rr = sig.get("rr_ratio", sig.get("rr", 0))
+
+            icon = "🟢" if action == "BUY" else "🔴"
+            sl_pips = abs(entry - sl) if sl else 0
+            tp_pips = abs(tp - entry) if tp else 0
+
+            msg = (
+                f"{icon} <b>SINYAL {action} — {display}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📍 <b>BUY ZONE:</b> ${entry:.2f}\n"
+                f"🔴 <b>SL:</b> ${sl:.2f} ({sl_pips:.0f} pip)\n"
+                f"🟢 <b>TP:</b> ${tp:.2f} ({tp_pips:.0f} pip)\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Grade {grade}\n"
+                f"📐 RR 1:{rr:.1f} | <b>Confidence:</b> {confidence:.0%}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"✅ Quality Gate PASS\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚡ Mau signal REAL-TIME langsung ke HP?\n"
+                f"   /subscribe all — Subscribe sekarang!\n\n"
+                f"💚 Atau dukung server AI biar makin akurat:\n"
+                f"   /donate — Isi Bahan Bakar AI\n\n"
+                f"⚠️ NFA — Not Financial Advice"
+            )
+
+            sent = 0
+            for category, user_ids in subscribers.items():
+                for uid in user_ids:
+                    try:
+                        await self._tg_send(msg, chat_id=uid)
+                        sent += 1
+                    except Exception:
+                        LOG.debug("Broadcast failed to %s", uid)
+                    await asyncio.sleep(0.05)
+
+            LOG.info("Signal broadcast to %d subscribers for %s", sent, display)
+        except Exception as e:
+            LOG.warning("Broadcast failed: %s", e)
 
     def _detect_mechanical_signal(
         self,
