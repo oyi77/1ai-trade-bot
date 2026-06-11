@@ -5325,9 +5325,10 @@ def _process_subscription_reminders():
 def format_daily_mapping():
     """Daily market mapping/insight — key levels from actual session range + pivot structure.
     Uses time-filtered 24h bars + swing pivots for realistic S/R levels."""
+    import pandas as pd
     now = wib_now()
     day_name = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"][now.weekday()]
-    cutoff_12h = (now - timedelta(hours=12)).timestamp()
+    cutoff_12h = pd.Timestamp(now - timedelta(hours=12))
     
     lines = [
         f"📐 MARKET MAPPING",
