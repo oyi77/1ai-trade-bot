@@ -1804,6 +1804,34 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             sl = 0
             tp = 0
 
+    # --- ZONE SL GUARD: ensure SL protects the full entry zone (±0.05%) ---
+    # Only widens SL if it doesn't exceed the 35 pip max from entry
+    if action in ("BUY","SELL") and entry and sl and zone_lo and zone_hi:
+        zone_sl_map = {"XAUUSD": 2.0, "GOLD": 2.0}  # 20 pip from zone boundary
+        min_zone_sl = zone_sl_map.get(display, 0)
+        pip_s = 0.10 if display in ("XAUUSD","GOLD") else 0.01
+        max_sl_pts = 3.5  # 35 pip for XAUUSD
+        if min_zone_sl > 0:
+            if action == "BUY":
+                zone_sl_dist = zone_lo - sl
+                if zone_sl_dist < min_zone_sl:
+                    new_sl = round(zone_lo - min_zone_sl, 2)
+                    # Only apply if new SL stays within 35 pip from entry
+                    if abs(entry - new_sl) <= max_sl_pts:
+                        sl = new_sl
+                        logger.info(f"    [ZONE SL GUARD] BUY SL widened: zone_lo={zone_lo:.2f} → SL={sl} ({zone_sl_dist/pip_s:.0f}→{min_zone_sl/pip_s:.0f} pip from zone)")
+                    else:
+                        logger.info(f"    [ZONE SL GUARD] BUY skipped: would push SL beyond 35 pip from entry")
+            else:
+                zone_sl_dist = sl - zone_hi
+                if zone_sl_dist < min_zone_sl:
+                    new_sl = round(zone_hi + min_zone_sl, 2)
+                    if abs(entry - new_sl) <= max_sl_pts:
+                        sl = new_sl
+                        logger.info(f"    [ZONE SL GUARD] SELL SL widened: zone_hi={zone_hi:.2f} → SL={sl} ({zone_sl_dist/pip_s:.0f}→{min_zone_sl/pip_s:.0f} pip from zone)")
+                    else:
+                        logger.info(f"    [ZONE SL GUARD] SELL skipped: would push SL beyond 35 pip from entry")
+
     # Fallback SL/TP — wider for realistic fills, tighter for consistency
     if (sl == 0 or tp == 0) and price and price > 0:
         if display in ("XAUUSD", "GOLD"):
@@ -1874,16 +1902,36 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         elif tp_dist >= lvl3_min: num_tp = 3
         elif tp_dist >= lvl2_min: num_tp = 2
 
+        # Minimum spread between TP levels (50% of min_tp1 = 15 pip for XAUUSD)
+        min_spread = min_tp1 * 0.5
+
         if action == "BUY":
             tp1 = round(entry + min_tp1, 2)
-            if num_tp >= 2: tp2 = round(entry + tp_dist * 0.50, 2)
-            if num_tp >= 3: tp3 = round(entry + tp_dist * 0.75, 2)
+            if num_tp >= 2:
+                raw = round(entry + tp_dist * 0.50, 2)
+                tp2 = max(raw, tp1 + min_spread)
+                tp2 = min(tp2, tp)  # don't exceed full TP
+            if num_tp >= 3:
+                raw = round(entry + tp_dist * 0.75, 2)
+                tp3 = max(raw, tp2 + min_spread)
+                tp3 = min(tp3, tp)
             if num_tp >= 4: tp4 = tp
         else:
             tp1 = round(entry - min_tp1, 2)
-            if num_tp >= 2: tp2 = round(entry - tp_dist * 0.50, 2)
-            if num_tp >= 3: tp3 = round(entry - tp_dist * 0.75, 2)
+            if num_tp >= 2:
+                raw = round(entry - tp_dist * 0.50, 2)
+                tp2 = min(raw, tp1 - min_spread)  # SELL: tp2 is lower
+                tp2 = max(tp2, tp)  # don't exceed full TP (below entry)
+            if num_tp >= 3:
+                raw = round(entry - tp_dist * 0.75, 2)
+                tp3 = min(raw, tp2 - min_spread)
+                tp3 = max(tp3, tp)
             if num_tp >= 4: tp4 = tp
+
+        # Override rr_ratio with TP1-based effective RR (realistic first target)
+        if tp1 and entry and sl and abs(entry - sl) > 0:
+            tp1_rr = abs(tp1 - entry) / abs(entry - sl)
+            sig["rr_ratio"] = f"1:{tp1_rr:.1f}"
 
     # Winrate stats
     wr_text = ""
