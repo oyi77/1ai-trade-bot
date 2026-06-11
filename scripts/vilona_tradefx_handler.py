@@ -2857,7 +2857,7 @@ def handle_command(cmd, text, chat_id, msg):
                         "risk_percent": 1.0,
                         "comment": f"TEST-BRIDGE-{now_ts}",
                         "source": "testbridge",
-                        "rr_ratio": 1.0,
+                        "rr_ratio": 1.5,  # satisfy quality gate min 1.5
                         "layers": [],
                         "target_user": "",
                         "telegram_message_id": None,
