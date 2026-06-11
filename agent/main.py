@@ -31,16 +31,15 @@ from agent.core import (
     cmd_levels, cmd_news, cmd_zones, cmd_structure, cmd_session,
     cmd_killzone, cmd_help, cmd_stockity, cmd_analyze, cmd_data,
     cmd_genkey, cmd_mykey, cmd_winrate, cmd_history, cmd_recap, cmd_mapping,
-    handle_menu_callback, handle_cmd_callback, handle_donate_callback,
     auto_analysis_loop, daily_recap_broadcast,
 )
-from agent.telethon_layer import TelethonLayer
+from agent.telegram_layer import TelegramLayer
 
 
 async def main():
-    tl = TelethonLayer()
+    tl = TelegramLayer()
 
-    # Register all command handlers
+    # Register all command handlers — callbacks handled automatically by TelegramLayer
     for cmd, handler in [
         ("start", cmd_start), ("help", cmd_help),
         ("signal", cmd_signal), ("price", cmd_price),
@@ -53,20 +52,8 @@ async def main():
         ("genkey", cmd_genkey), ("mykey", cmd_mykey),
         ("winrate", cmd_winrate), ("history", cmd_history),
         ("recap", cmd_recap), ("mapping", cmd_mapping),
-        ("subscribe", cmd_help),
     ]:
         tl.register_command(cmd, handler)
-
-    # Register callback handlers
-    tl.register_callback_prefix("menu:", handle_menu_callback)
-    tl.register_callback_prefix("cmd:", handle_cmd_callback)
-    tl.register_callback_prefix("donate:", handle_donate_callback)
-
-    # Set message handler for menu navigation callback response
-    async def on_message(text: str, chat_id: str):
-        pass  # Commands are handled by router
-
-    tl.set_message_handler(on_message)
 
     # Start background tasks
     async def bg_wrapper():
