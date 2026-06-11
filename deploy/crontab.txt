@@ -1,0 +1,84 @@
+PATH=/home/openclaw/.local/bin:/home/openclaw/bin:/usr/local/bin:/usr/bin:/bin:/home/linuxbrew/.linuxbrew/bin
+
+# === ADS & MONITORING ===
+
+# === TELETON MASTER ORCHESTRATOR — 15 min all-systems check ===
+*/15 * * * * cd /home/openclaw/.openclaw/workspace && python3 scripts/teleton_orchestrator.py --send >> logs/teleton_cron.log 2>&1
+
+# === 🏰 BERKAHKARYA KINGDOM — 24/7 CONTENT SCHEDULER ===
+
+# Content Scheduler: 3x per hour
+
+# X/Twitter: 2x per hour
+
+# FB Profiles: 2x per hour
+
+# Scheduler health check every 6 hours
+
+# Scrape new profiles daily at 2 AM
+PATH=/home/openclaw/.local/bin:/home/openclaw/bin:/usr/local/bin:/usr/bin:/bin:/home/linuxbrew/.linuxbrew/bin
+# SELF-WAKE VERIS — Proactive keep-alive setiap 15 menit
+*/15 * * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/1041_autonomous_governor.py >> logs/1041_governor.log 2>&1
+# === 0858 FAILSAFE — emergency pause if guardian dead ===
+# DISABLED - */15 * * * * /home/openclaw/.openclaw/workspace/scripts/failsafe_0858.sh >> /home/openclaw/.openclaw/workspace/logs/failsafe_0858.log 2>&1
+
+# === X/TWITTER POSTER — setiap 30 menit ===
+15,45 * * * * cd /home/openclaw/.openclaw/workspace && /usr/bin/python3 scripts/x_poster.py --post >> logs/x_poster.log 2>&1
+
+# === FB PAGE POSTER — setiap 4 jam ===
+0 */4 * * * cd /home/openclaw/projects/1ai-social && /usr/bin/python3 scripts/fb_direct_poster.py --post-pages >> /home/openclaw/.openclaw/workspace/logs/fb_direct_post.log 2>&1
+
+# === FB WARMING — setiap 6 jam ===
+30 */6 * * * cd /home/openclaw/projects/1ai-social && /usr/bin/python3 scripts/fb_direct_poster.py --warm-accounts >> /home/openclaw/.openclaw/workspace/logs/fb_direct_post.log 2>&1
+
+# === NYAMIRESEP CPC GUARDIAN — 15 min ===
+*/15 * * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/nyamiresep_cpc_guard.py >> logs/nyamiresep_cpc_guard.log 2>&1
+# === DECISION CENTER AUTO-EXECUTE (Vilona v2.0) ===
+# Morning auto-execute: full analyze + execute + Telegram report (7 AM)
+0 7 * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/decision_center_autoexec.py --telegram >> logs/decision_center.log 2>&1
+
+# Mid-day auto-execute: all accounts (12 PM)
+0 12 * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/decision_center_autoexec.py --telegram >> logs/decision_center.log 2>&1
+
+# Evening auto-execute: all accounts (6 PM)
+0 18 * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/decision_center_autoexec.py --telegram >> logs/decision_center.log 2>&1
+
+# Midnight auto-execute: final check + execute + report
+0 0 * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/decision_center_autoexec.py --telegram >> logs/decision_center.log 2>&1
+
+
+# Auto-sync Shopee data: copy file terbaru dari inbound setiap jam
+0 * * * * find /home/openclaw/.openclaw/media/inbound -name "*CommissionReport*" -mmin -120 -exec cp {} /home/openclaw/projects/1ai-ads/data/shopee/inbound/ \; 2>/dev/null
+# Auto Scale-Out setiap jam (cek winner + expand audiences)
+30 * * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/auto_scale_out.py >> logs/scale_out.log 2>&1
+# Rak Dapur Content Scheduler - 3x daily
+0 8 * * * cd ~/projects/1ai-ads && python3 scripts/rakdapur_scheduler.py >> logs/rakdapur_schedule.log 2>&1
+0 14 * * * cd ~/projects/1ai-ads && python3 scripts/rakdapur_scheduler.py >> logs/rakdapur_schedule.log 2>&1
+0 20 * * * cd ~/projects/1ai-ads && python3 scripts/rakdapur_scheduler.py >> logs/rakdapur_schedule.log 2>&1
+0 8,14,20 * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/rakdapur_kingdom.py --now >> logs/rakdapur_kingdom.log 2>&1
+30 */4 * * * cd ~/projects/1ai-content && python3 scripts/ig_fb_poster.py --post >> logs/ig_poster.log 2>&1
+0 */3 * * * cd ~/projects/1ai-social && python3 scripts/fb_direct_poster.py --post-groups >> ~/.openclaw/workspace/logs/fb_group_post.log 2>&1
+
+# === FB GROUP PIPELINE — join + check + post setiap 15 menit ===
+*/15 * * * * cd /home/openclaw/.openclaw/workspace && /usr/bin/python3 scripts/fb_group_pipeline.py >> logs/fb_group_pipeline.log 2>&1
+
+# === FB PROFILE POSTER — posting ke profil FB setiap 30 menit ===
+25,55 * * * * cd /home/openclaw/.openclaw/workspace && /usr/bin/python3 scripts/fb_profile_poster.py --post >> logs/fb_profile_poster.log 2>&1
+0 0 * * * cd ~/projects/1ai-ads && python3 scripts/kingdom_report_sender.py >> logs/kingdom_report.log 2>&1
+# PhantomFX Auto-Analyzer — every 15 min London+NY, every 30 min Asian
+# DISABLED */15 9-16 * * * cd ~/projects/1ai-trade-bot && python3 scripts/phantomfx_auto_analyzer.py --quiet >> logs/phantomfx_analyzer_cron.log 2>&1
+# DISABLED */15 19-22 * * * cd ~/projects/1ai-trade-bot && python3 scripts/phantomfx_auto_analyzer.py --quiet >> logs/phantomfx_analyzer_cron.log 2>&1
+# DISABLED */30 0-8,17-18,23 * * * cd ~/projects/1ai-trade-bot && python3 scripts/phantomfx_auto_analyzer.py --quiet >> logs/phantomfx_analyzer_cron.log 2>&1
+# Cookie Engine — daily Shopee affiliate report (8 AM WIB)
+0 8 * * * cd /home/openclaw/projects/1ai-ads && python3 scripts/daily_shopee_meta_cookie_engine.py --date $(date -d 'yesterday' +\%Y-\%m-\%d) --send-telegram >> logs/cookie_engine_cron.log 2>&1
+
+0 */6 * * * python3 /home/openclaw/tools/autonomous_health_check.py >> /home/openclaw/logs/health_check_cron.log 2>&1
+0 */6 * * * cd /home/openclaw/.openclaw/workspace && python3 scripts/kakriput_health_check.py >> logs/health_check.log 2>&1
+# Shopee Affiliate Auto-Audit — every 6 hours
+0 */6 * * * /home/openclaw/projects/1ai-ads/scripts/shopee_audit_cron.sh >> /home/openclaw/projects/1ai-ads/logs/shopee_audit_cron.log 2>&1
+0 */2 * * * cd /home/openclaw/.openclaw/workspace && /bin/bash tools/learning_loop/run_loop.sh >> tools/learning_loop/cron.log 2>&1
+# Auto Signal Publisher — every 15 min (fallback from handler)
+# DISABLED — handled by auto_analyze_loop in handler: */15 * * * * cd /home/openclaw/projects/1ai-trade-bot && python3 scripts/auto_signal_publisher.py --quiet >> logs/auto_signal_publisher.log 2>&1
+
+# AdForge DB backup - every 6 hours
+0 */6 * * * mkdir -p /home/openclaw/backups/adforge && cp /home/openclaw/.openclaw/workspace/adforge/db/adforge.db /home/openclaw/backups/adforge/adforge_$(date +\%Y\%m\%d_\%H\%M).db && cp /home/openclaw/projects/1ai-ads/db/adforge.db /home/openclaw/backups/adforge/1ai-ads_$(date +\%Y\%m\%d_\%H\%M).db && find /home/openclaw/backups/adforge -name '*.db' -mtime +7 -delete
