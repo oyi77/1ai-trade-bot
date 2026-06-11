@@ -65,6 +65,22 @@ def verify_tripay_signature(body: bytes, callback_sig: str) -> bool:
     return hmac.compare_digest(expected, callback_sig)
 
 
+def _already_processed(merchant_ref: str) -> bool:
+    """Check if this payment was already processed (idempotency guard)."""
+    if not merchant_ref:
+        return False
+    try:
+        from members import _conn
+        with _conn() as db:
+            row = db.execute(
+                "SELECT status FROM payment_orders WHERE merchant_ref=? AND status='paid'",
+                (merchant_ref,)
+            ).fetchone()
+            return row is not None
+    except Exception:
+        return False
+
+
 def upgrade_member(chat_id: str, tier: str, days: int, merchant_ref: str = "") -> bool:
     """Upgrade member ke DONATUR via members.db (SQLite). Returns True on full success."""
     try:
@@ -141,6 +157,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if status not in ("PAID", "SUCCESS", "SETTLEMENT"):
             log.info(f"Ignoring status: {status}")
             self._json({"status": "ignored", "reason": f"status={status}"})
+            return
+
+        # ── IDEMPOTENCY GUARD: skip if already processed ──
+        if _already_processed(merchant_ref):
+            log.info(f"Duplicate callback ignored (already paid): {merchant_ref}")
+            self._json({"status": "already_processed", "ref": merchant_ref})
             return
 
         chat_id = ""
