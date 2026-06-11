@@ -424,6 +424,16 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "mode": "instance_broadcast",
             })
         elif path == "/download/ea" or path == "/download/ea.ex5" or path == "/ea/download":
+            # ── DONOR GATE: require valid API key with pro/elite tier ──
+            is_valid, tier_info = validate_key(api_key)
+            if not is_valid:
+                self._json({"error": "donor only — valid API key required"}, 403)
+                return
+            key_config = load_keys()
+            key_data = key_config["keys"].get(api_key, {})
+            if key_data.get("tier", "starter") == "starter":
+                self._json({"error": "donor only — upgrade to access EA download"}, 403)
+                return
             # Serve EA compiled binary for download (no source — misuse prevention)
             ea_path = os.path.join(PROJECT_DIR, "ea", "VilonaTradeFX_EA.ex5")
             try:

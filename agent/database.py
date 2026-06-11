@@ -14,21 +14,23 @@ import sqlite3
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from threading import Lock
+from threading import RLock
 from typing import Any
 
 LOG = logging.getLogger("agent.db")
 
+WIB = timezone(timedelta(hours=7))
+
 DB_PATH = Path("/home/openclaw/projects/1ai-trade-bot/data/agent.db")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-_lock = Lock()
+_lock = RLock()
 
 WIB = timezone(timedelta(hours=7))
 
 
 def _conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), timeout=5)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
