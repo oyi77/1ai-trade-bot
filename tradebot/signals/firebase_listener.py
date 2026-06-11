@@ -33,87 +33,137 @@ FIREBASE_SIGNAL_URL = (
 
 @dataclass
 class ExternalSignal:
-    """A trading signal from an external source (Firebase/TradingView/API)."""
-    source: str                          # "firebase", "tradingview", "webhook"
-    symbol: str                          # "BTC", "ETH", "XAUUSD", "CRYPTO_IDX"
-    direction: str                       # "BUY", "SELL", "CALL", "PUT"
-    entry_price: float
-    stop_loss: float
-    take_profit_1: float
+    """A trading signal from an external source (Firebase/TradingView/API).
+
+    Handles TWO signal types:
+
+    1. **Binary options** (Stockity, Pocket Option, etc.):
+       - Predict UP (CALL) or DOWN (PUT) within an expiry time
+       - Expiry: 5s (blitz), 30s, 60s, 2m, 5m, 15m, 30m, 60m
+       - Win = fixed payout (~90%), Loss = 100% of stake
+       - No SL/TP — binary outcome at expiry
+       - Compensation: recovery direction if signal is wrong
+       - Market: CRYPTO_IDX, BTC_IDX, ETH_IDX, GOLD_IDX, forex, etc.
+
+    2. **Crypto spot/futures** (signals_trading_bot, Firebase):
+       - Direction: BUY or SELL
+       - Entry price, Stop Loss, Take Profit levels
+       - Leverage for futures
+    """
+    # Source identification
+    source: str = "firebase"              # "firebase", "tradingview", "webhook"
+    signal_type: str = "binary"          # "binary", "spot", "futures"
+    signal_id: str = ""
+    timestamp: str = ""
+
+    # Binary-specific fields
+    direction: str = "CALL"              # "CALL" (UP) or "PUT" (DOWN) for binary
+    symbol: str = "CRYPTO_IDX"           # Asset being traded
+    entry_price: float = 0               # Current price at signal time
+    expiry_time: str = ""                # Exact expiry time e.g. "12:58" (WIB/GMT+7)
+    expiry_duration: str = ""            # Expiry length: "5s", "60s", "5m", "15m", etc.
+    mode: str = "standard"               # "blitz" (5s) or "standard" (1m-60m)
+
+    # Compensation (recovery if wrong)
+    compensation: str = "SEARAH"         # "SEARAH" (same) or "BERLAWANAN" (opposite)
+    max_risk_level: str = "K2"           # Risk/martingale level: "K1", "K2", "K3"
+
+    # Premium
+    is_premium: bool = False
+
+    # Crypto spot/futures fields
+    stop_loss: float = 0
+    take_profit_1: float = 0
     take_profit_2: float | None = None
     take_profit_3: float | None = None
     leverage: int | None = None
-    signal_type: str = "spot"           # "spot", "futures", "binary"
-    signal_id: str = ""
-    is_premium: bool = False
     confidence: float = 0.5
-    timestamp: str = ""
-    expiry_time: str = ""               # Binary options expiry (e.g. "12:58")
+
+    # Raw data
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def side(self) -> str:
-        if self.direction in ("CALL", "PUT"):
-            return self.direction
-        return "BUY" if self.entry_price > self.stop_loss else "SELL"
+    def direction_label(self) -> str:
+        """Human-readable direction label."""
+        if self.direction in ("CALL", "UP", "BUY"):
+            return "CALL" if self.signal_type == "binary" else "BUY"
+        return "PUT" if self.signal_type == "binary" else "SELL"
+
+    @property
+    def is_up(self) -> bool:
+        return self.direction in ("CALL", "UP", "BUY")
 
     @property
     def is_valid(self) -> bool:
         if self.signal_type == "binary":
-            return bool(self.symbol and self.entry_price > 0)
-        return all([
-            self.symbol, self.entry_price > 0,
-            self.stop_loss > 0, self.take_profit_1 > 0,
-        ])
+            return bool(self.symbol) and self.entry_price > 0
+        return all([self.symbol, self.entry_price > 0, self.stop_loss > 0, self.take_profit_1 > 0])
+
+    @property
+    def side(self) -> str:
+        """Alias for direction_label."""
+        return self.direction_label
+
+    def compensation_direction(self) -> str:
+        """If this signal expires wrong, which direction to trade next."""
+        if self.compensation == "BERLAWANAN":
+            return "PUT" if self.is_up else "CALL"
+        return self.direction  # SEARAH = same direction
 
     @classmethod
     def from_firestore(cls, doc: dict[str, Any]) -> ExternalSignal | None:
+        """Parse a Firebase Firestore document into an ExternalSignal.
+
+        Handles both:
+        - Binary options signals (CALL/PUT with expiry)
+        - Crypto signals (BUY/SELL with entry/SL/TP)
+        """
         try:
             fields = doc.get("fields", doc)
-            symbol = fields.get("symbol", fields.get("pair", ""))
-
-            # Binary options signal from Stockity
             sig_type = fields.get("type", "spot")
             direction = fields.get("direction", "")
+            symbol = fields.get("symbol", fields.get("pair", "CRYPTO_IDX"))
 
-            if sig_type == "binary" or direction in ("CALL", "PUT"):
-                entry = float(fields.get("entry", fields.get("buy", 0)))
+            # Detect binary options signal
+            is_binary = sig_type == "binary" or direction in ("CALL", "PUT", "UP", "DOWN")
+
+            if is_binary:
+                entry = float(fields.get("entry", fields.get("buy", fields.get("price", 0))))
                 return cls(
                     source="firebase",
-                    symbol=symbol.upper() if symbol else "CRYPTO_IDX",
-                    direction=direction or "CALL",
-                    entry_price=entry,
-                    stop_loss=0,
-                    take_profit_1=0,
                     signal_type="binary",
                     signal_id=doc.get("_id", doc.get("name", "")),
-                    is_premium=fields.get("isPremium", False),
-                    timestamp=fields.get("createdAt", ""),
-                    expiry_time=fields.get("expiry", fields.get("time", "")),
+                    timestamp=fields.get("createdAt", fields.get("timestamp", "")),
+                    direction=direction or "CALL",
+                    symbol=symbol.upper(),
+                    entry_price=entry,
+                    expiry_time=fields.get("expiry", fields.get("time", fields.get("expired_at", ""))),
+                    expiry_duration=fields.get("duration", fields.get("expiry_duration", "")),
+                    mode="blitz" if fields.get("duration") == "5s" else "standard",
+                    compensation=fields.get("compensation", fields.get("kompensasi", "SEARAH")).upper(),
+                    max_risk_level=fields.get("max_risk", fields.get("risk_level", "K2")).upper(),
+                    is_premium=fields.get("isPremium", fields.get("premium", False)),
                     raw=fields,
                 )
 
-            # Crypto signal (spot/futures)
+            # Crypto signal (spot/futures from signals_trading_bot)
             entry = float(fields.get("buy", fields.get("entry", 0)))
             stop = float(fields.get("stop", 0))
             tp1 = float(fields.get("tp1", 0))
-            tp2 = fields.get("tp2")
-            tp3 = fields.get("tp3")
-            lev = fields.get("leverage")
             return cls(
                 source="firebase",
-                symbol=symbol.upper() if symbol else "",
+                signal_type=sig_type,
+                signal_id=doc.get("_id", doc.get("name", "")),
+                timestamp=fields.get("createdAt", ""),
                 direction="BUY" if entry > stop else "SELL",
+                symbol=symbol.upper(),
                 entry_price=entry,
                 stop_loss=stop,
                 take_profit_1=tp1,
-                take_profit_2=float(tp2) if tp2 else None,
-                take_profit_3=float(tp3) if tp3 else None,
-                leverage=int(lev) if lev else None,
-                signal_type=sig_type,
-                signal_id=doc.get("_id", doc.get("name", "")),
+                take_profit_2=float(fields.get("tp2")) if fields.get("tp2") else None,
+                take_profit_3=float(fields.get("tp3")) if fields.get("tp3") else None,
+                leverage=int(fields.get("leverage", 1)) if fields.get("leverage") else None,
                 is_premium=fields.get("isPremium", False),
-                timestamp=fields.get("createdAt", ""),
                 raw=fields,
             )
         except (ValueError, TypeError, KeyError) as e:
@@ -121,33 +171,35 @@ class ExternalSignal:
             return None
 
     def format_telegram(self) -> str:
-        """Format signal as Telegram message using competitor's proven format."""
+        """Format as Telegram message matching competitor proven format."""
         if self.signal_type == "binary":
-            icon = "🟩📈" if self.direction in ("BUY", "CALL") else "🔻📉"
-            arrow = "🔼" if self.direction in ("BUY", "CALL") else "🔽"
-            market_label = self.symbol
-            time_str = self.expiry_time or "NOW"
-            return (
-                f"{icon} {self.direction} NOW {arrow} |⌚ {self.timestamp[:10]}\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"👉 {time_str}  {'B' if self.direction in ('BUY','CALL') else 'S'}\n"
-                f"📊 MARKET: 𝗖𝗿𝘆𝗽𝘁𝗼𝗜𝗗𝗫\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"⚠️ MAXIMAL K2 | KOMPENSASI SEARAH\n"
-                f"⚠️ LIHAT JAM DI GMT+7\n"
-                f"⚠️ -1 MENIT SEBELUM SIGNAL\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🔄 /start untuk Cek Signal Berikutnya"
-            )
+            icon = "🟩📈" if self.is_up else "🔻📉"
+            arrow = "🔼" if self.is_up else "🔽"
+            dir_short = "B" if self.is_up else "S"
+            comp_label = "SEARAH" if self.compensation == "SEARAH" else "LAWAN"
+            time_display = self.expiry_time or "NOW"
+            date_str = self.timestamp[:10] if self.timestamp else ""
 
-        # Crypto format
-        icon = "🟢" if self.direction in ("BUY", "CALL") else "🔴"
+            lines = [
+                f"{icon} {'CALL' if self.is_up else 'PUT'} NOW {arrow} |⌚ {date_str}",
+                f"━━━━━━━━━━━━━━━━━━",
+                f"👉 {time_display}  {dir_short}",
+                f"📊 MARKET: {self.symbol}",
+                f"━━━━━━━━━━━━━━━━━━",
+                f"⚠️ MAXIMAL {self.max_risk_level} | KOMPENSASI {comp_label}",
+                f"⚠️ LIHAT JAM DI GMT+7",
+                f"⚠️ -1 MENIT SEBELUM SIGNAL",
+                f"━━━━━━━━━━━━━━━━━━",
+                f"🔄 /start untuk Cek Signal Berikutnya",
+            ]
+            return "\n".join(lines)
+
+        icon = "🟢" if self.is_up else "🔴"
         return (
             f"{icon} <b>{self.direction} — {self.symbol}</b>\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"Entry: {self.entry_price:.2f}\n"
             f"SL: {self.stop_loss:.2f} | TP: {self.take_profit_1:.2f}\n"
-            f"Confidence: {self.confidence:.0%}\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"⚡ /subscribe all — Dapat signal real-time!"
         )
