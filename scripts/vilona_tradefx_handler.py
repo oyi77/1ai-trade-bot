@@ -5596,6 +5596,8 @@ def auto_analyze_loop():
                 if disp == "BTCUSD" and not _consec_2bar_confirm("BTCUSD", action):
                     logger.info(f"⏳ BTC 2-BAR WAIT: {action} — waiting for next bar confirm")
                     continue
+                # Channel posts always show full SL/TP (marketing)
+                mech_sig["_tier_capped"] = False
                 text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp")
                 _entry = mech_sig.get("entry", price) or 0
                 _sl = mech_sig.get("sl", 0) or 0
