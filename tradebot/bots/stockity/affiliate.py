@@ -158,7 +158,7 @@ def can_use_whitelabel(user_id: str) -> tuple[bool, str]:
         f"• Active paid plan (Pro/Elite/Whale)\n"
         f"• OR donations ≥ Rp {MIN_DONATION_FOR_WHITELABEL:,}\\\n\n"
         f"Your donations: Rp {donated:,}\\n"
-        f"Upgrade: /plans | Donate: /donate"
+        f"Upgrade: /plans | Subscribe: /subscribe"
     )
 
 

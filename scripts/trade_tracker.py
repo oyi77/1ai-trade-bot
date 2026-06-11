@@ -417,7 +417,7 @@ def format_trade_close_alert(trade: dict) -> str:
             f"   Tapi signal selanjutnya bisa lebih akurat lagi.\n"
             f"   Bayangin 3 AI + Grok News analisa bareng.\n"
             f"\n"
-            f"⚡ <b>/donate</b> — Rp 50k/bulan\n"
+            f"⚡ <b>/subscribe</b> — Rp 50k/bulan\n"
             f"   Unlock AI Signal + Grok News + /levels\n"
         )
     else:
@@ -428,7 +428,7 @@ def format_trade_close_alert(trade: dict) -> str:
             f"🔋 AI butuh lebih banyak tenaga buat analisa.\n"
             f"   1 AI doang kadang miss — 3 AI lebih presisi.\n"
             f"\n"
-            f"⚡ <b>/donate</b> — upgrade AI lu sekarang\n"
+            f"⚡ <b>/subscribe</b> — upgrade AI lu sekarang\n"
             f"   Jangan biarin AI lu kerja sendirian\n"
         )
     

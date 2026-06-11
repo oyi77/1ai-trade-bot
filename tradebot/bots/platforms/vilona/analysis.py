@@ -100,7 +100,7 @@ class AnalysisHandlersMixin(BaseBot):
                 f"⚡ Mau signal REAL-TIME langsung ke HP?\n"
                 f"   /subscribe all — Subscribe sekarang!\n\n"
                 f"💚 Atau dukung server AI biar makin akurat:\n"
-                f"   /donate — Isi Bahan Bakar AI\n\n"
+                f"   /subscribe — Isi Bahan Bakar AI\n\n"
                 f"⚠️ NFA — Not Financial Advice"
             )
 

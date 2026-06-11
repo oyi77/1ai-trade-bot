@@ -69,7 +69,7 @@ class UnifiedBot:
       - Trading commands (/signal, /scan, /symbols, /stats, /cookies)
       - Account commands (/balance, /deposit)
       - Shared commands via register_standard_commands()
-        (/plans, /upgrade, /donate, /subscribe, /affiliate, /whitelabel, etc.)
+        (/plans, /upgrade, /subscribe, /subscribe, /affiliate, /whitelabel, etc.)
       - Platform routing: auto-detects from user's linked platform
     """
 

@@ -106,7 +106,7 @@ class CommandHandlersMixin(BaseBot):
             "/status — Status akun & fitur",
             "/subscribe — Info subscription",
             "/autosync — Auto-sync EA settings",
-            "/donate — Dukung server AI",
+            "/subscribe — Dukung server AI",
             "",
             "🔑 <b>EA LICENSE</b>",
             "/genkey — Generate license key",
@@ -117,7 +117,7 @@ class CommandHandlersMixin(BaseBot):
             "/stockity — Info referral + deposit",
             "",
             "━━━━━━━━━━━━━━━━",
-            "💚 Server AI GRATIS — dukung via /donate",
+            "💚 Server AI GRATIS — dukung via /subscribe",
         ]
         return "\n".join(lines)
 
@@ -201,7 +201,7 @@ class CommandHandlersMixin(BaseBot):
             f"📡 Auto-scan: {'ON' if self._autosync_enabled else 'OFF'}\n"
             f"🕐 {wib_fmt()}\n"
             "━━━━━━━━━━━━━━━━\n"
-            "💚 GRATIS — dukung via /donate"
+            "💚 GRATIS — dukung via /subscribe"
         )
 
     async def _cmd_subscribe(self, args: list[str], chat_id: str | None = None) -> str:
@@ -210,7 +210,7 @@ class CommandHandlersMixin(BaseBot):
             "━━━━━━━━━━━━━━━━\n"
             "Bot ini GRATIS untuk semua fitur.\n"
             "━━━━━━━━━━━━━━━━\n"
-            "💚 Dukung server AI via /donate"
+            "💚 Dukung server AI via /subscribe"
         )
 
     async def _cmd_autosync(self, args: list[str], chat_id: str | None = None) -> str:
@@ -239,7 +239,7 @@ class CommandHandlersMixin(BaseBot):
         is_donor = member and member.get("tier") == "donor"
 
         if not is_admin(target) and not is_donor:
-            return "⛔ <b>Akses Dibatasi</b>\n/genkey hanya untuk Subscriber VIP.\n\n💚 Dukung server AI dulu: /donate"
+            return "⛔ <b>Akses Dibatasi</b>\n/genkey hanya untuk Subscriber VIP.\n\n💚 Dukung server AI dulu: /subscribe"
 
         sub = " ".join(args) if args else target
         return cmd_genkey(target, sub)
@@ -728,7 +728,7 @@ class CommandHandlersMixin(BaseBot):
                 "📐 Fibonacci retracement — entry/exits level\n"
                 "🧠 Engine Deep Dive — analisa 9 engines\n\n"
                 "🔒 <b>Khusus Subscriber VIP</b>\n\n"
-                "⚡ /donate — Rp 50k/bulan (AKTIF PERMANEN)\n"
+                "⚡ /subscribe — Rp 50k/bulan (AKTIF PERMANEN)\n"
                 "   Unlock /levels + /news + 2 AI analysis"
             )
         pair = args[0] if args else "xauusd"
@@ -793,7 +793,7 @@ class CommandHandlersMixin(BaseBot):
                 "   → Hindari entry pas news bom\n"
                 "   → Dapet edge sebelum orang lain\n\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "⚡ /donate — Rp 50k/bulan\n"
+                "⚡ /subscribe — Rp 50k/bulan\n"
                 "   Unlock Grok News + /levels + 2 AI"
             )
         pair = args[0] if args else "xauusd"
@@ -1077,7 +1077,7 @@ class CommandHandlersMixin(BaseBot):
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Auto-trailing SL saat profit jalan.\n"
                 "👑 Khusus Subscriber.\n"
-                "⚡ /donate untuk unlock."
+                "⚡ /subscribe untuk unlock."
             )
         # Query trailing status from bridge
         try:
@@ -1147,7 +1147,7 @@ class CommandHandlersMixin(BaseBot):
     async def _cmd_autotrade(self, args: list[str], chat_id: str | None = None) -> str:
         target = str(chat_id or "")
         if not self._is_donor(target):
-            return "🔒 <b>Auto-Trade</b> khusus Subscriber. /donate untuk unlock."
+            return "🔒 <b>Auto-Trade</b> khusus Subscriber. /subscribe untuk unlock."
         # Toggle EA autotrade via bridge autosync
         self._autosync_enabled = not self._autosync_enabled
         self._set_autosync(target, self._autosync_enabled)
@@ -1269,7 +1269,7 @@ class CommandHandlersMixin(BaseBot):
                 f"📌 <b>LOCKED — Subscriber Only</b>",
                 f"👑 Full briefing dengan AI sentiment, key levels,",
                 f"   dan trade plan buka setiap pagi.",
-                f"   → /donate untuk unlock",
+                f"   → /subscribe untuk unlock",
                 f"━━━━━━━━━━━━━━━━",
                 f"💡 Dashboard: /dashboard",
                 f"📊 Today's signal: /signal",
@@ -1305,7 +1305,7 @@ class CommandHandlersMixin(BaseBot):
                 f"Server AI masih jalan 24/7 buat kamu.\n"
                 f"Kalau ada waktu, mampir yuk! 🥂\n\n"
                 f"👉 /analyze — Cek market sekarang\n"
-                f"👉 /donate — Isi subscription"
+                f"👉 /subscribe — Isi subscription"
             )
             try:
                 if user_id:
@@ -1320,15 +1320,15 @@ class CommandHandlersMixin(BaseBot):
     async def _cmd_donate_manual(self, args: list[str], chat_id: str | None = None) -> str:
         target = str(chat_id or "")
         if target not in DONATION_INPUT_STATE:
-            return "❌ Gunakan /donate dulu untuk memulai."
+            return "❌ Gunakan /subscribe dulu untuk memulai."
         DONATION_INPUT_STATE.pop(target, None)
         amount_str = " ".join(args) if args else ""
         if not amount_str:
-            return "❌ Masukkan nominal. Contoh: /donate_manual 50000"
+            return "❌ Masukkan nominal. Contoh: /subscribe_manual 50000"
         try:
             amount = int(amount_str.replace(".", "").replace(",", ""))
         except ValueError:
-            return "❌ Nominal tidak valid. Contoh: /donate_manual 50000"
+            return "❌ Nominal tidak valid. Contoh: /subscribe_manual 50000"
         if amount < 10000:
             return "💰 Minimal Rp10,000."
         # Try Tripay payment
@@ -1483,7 +1483,7 @@ class CommandHandlersMixin(BaseBot):
             f"🤖 Autosync: {autosync}\n"
             f"🎯 Trailing: {trailing_status}\n"
             f"━━━━━━━━━━━━━━━━\n"
-            f"/donate — Upgrade ke Subscriber\n"
+            f"/subscribe — Upgrade ke Subscriber\n"
             f"/autosync — Toggle auto-trade\n"
             f"/trailing — Konfigurasi trailing"
         )

@@ -3,7 +3,7 @@ Shared command handlers — every platform bot registers these once.
 Zero duplication across Stockity, Deriv, MT5, Vilona, CCXT bots.
 
 Handlers provided:
-  /plans /upgrade /donate /confirm   — Plan & payments
+  /plans /upgrade /subscribe /confirm   — Plan & payments
   /signals /subscribe /unsubscribe   — Signal categories
   /affiliate /whitelabel             — Growth & referrals
   /set_share /set_rate /set_plan     — Admin commands
@@ -100,7 +100,7 @@ async def _h_plans(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     total_donated = get_total_donations(user_id)
     if total_donated > 0:
         lines.append(f"\n❤️ Your donations: Rp {total_donated:,} — terima kasih!")
-    lines.append("To donate: `/donate <amount>`")
+    lines.append("To donate: `/subscribe <amount>`")
     await update.message.reply_markdown("\n".join(lines))
 
 
@@ -211,7 +211,7 @@ async def _h_donate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         lines = [
             "❤️ *Donations*\n",
             "Support the bot development!\n",
-            "Usage: `/donate <amount>`\n",
+            "Usage: `/subscribe <amount>`\n",
             "Min: Rp 1.000 | Max: Rp 10.000.000\n",
         ]
         if total > 0:
@@ -227,7 +227,7 @@ async def _h_donate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         amount = int(args[0])
     except ValueError:
-        await update.message.reply_markdown("❌ Invalid amount. Use: `/donate 50000`")
+        await update.message.reply_markdown("❌ Invalid amount. Use: `/subscribe 50000`")
         return
 
     if amount < 1000:

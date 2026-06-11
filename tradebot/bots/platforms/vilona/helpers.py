@@ -128,7 +128,7 @@ def format_signal_basic(sig: dict[str, Any], price: float, display: str) -> str:
         f"💡 <i>{reasoning[:200]}</i>\n"
         f"\n"
         f"⚡ 1% risk only. Full AI — verify sendiri.\n"
-        f"💚 Server ini GRATIS — dukung via /donate | @berkahkaryaforexbotbot"
+        f"💚 Server ini GRATIS — dukung via /subscribe | @berkahkaryaforexbotbot"
     )
     return msg
 

@@ -51,7 +51,7 @@ MSG = (
     "Free member bisa lihat command, akses penuh\n"
     "setelah subscribe.\n\n"
     "🔥 Cobain sekarang: /levels xauusd\n"
-    "💚 Support AI: /donate"
+    "💚 Support AI: /subscribe"
 )
 
 sent = 0
