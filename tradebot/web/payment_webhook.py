@@ -77,7 +77,7 @@ def _verify_tripay_signature(data: dict) -> bool:
     return hmac.compare_digest(expected, callback_signature)
 
 
-def _upgrade_member(chat_id: str, merchant_ref: str, tier: str = "donor") -> bool:
+def _upgrade_member(chat_id: str, merchant_ref: str, tier: str = "pro") -> bool:
     """Upgrade member to specified tier with appropriate expiry."""
     try:
         from tradebot.services.members_service import activate_premium, mark_payment_paid
@@ -284,7 +284,7 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
         # OLD format: VTFX-{chat_id}-{timestamp}
         parts = merchant_ref.split("-")
         brand = "vilona" if parts[0] in ("VTFX", "VTFX") else "vilona"
-        tier = "donor"
+        tier = "pro"
         chat_id = ""
         if len(parts) >= 4:
             # New format: VTFX-pro-12345678-1718123456

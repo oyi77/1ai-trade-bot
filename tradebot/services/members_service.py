@@ -105,9 +105,38 @@ def get_total_donations() -> int:
         return row[0] if row else 0
 
 
+def activate_premium(chat_id: str, tier: str = "pro", days: int = 30) -> bool:
+    """Activate premium tier for a member (wrapper for payment webhook)."""
+    try:
+        upgrade_tier(str(chat_id), tier, days)
+        return True
+    except Exception as exc:
+        LOG.error("activate_premium(%s) failed: %s", chat_id, exc)
+        return False
+
+
+def mark_payment_paid(merchant_ref: str) -> bool:
+    """Mark a payment order as paid (wrapper for payment webhook)."""
+    import sqlite3
+    from datetime import datetime as _dt
+    try:
+        now = _dt.now(WIB).isoformat()
+        with _conn() as db:
+            db.execute(
+                "UPDATE payment_orders SET status='paid', paid_at=? WHERE merchant_ref=?",
+                (now, merchant_ref),
+            )
+        return True
+    except Exception as exc:
+        LOG.error("mark_payment_paid(%s) failed: %s", merchant_ref, exc)
+        return False
+
+
 __all__ = [
+    "activate_premium",
     "ensure_member",
     "get_member",
     "get_total_donations",
+    "mark_payment_paid",
     "upgrade_tier",
 ]

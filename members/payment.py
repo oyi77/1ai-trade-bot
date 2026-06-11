@@ -68,7 +68,7 @@ FREE_DAILY_LIMIT = 5
 # Backward compat: old donate callbacks use tier="donor" → maps to "lifetime" (grandfathered)
 PRICING["donor"] = dict(PRICING["lifetime"], tier="donor", label="Subscriber 💚")
 
-MIN_DONATION = int(os.environ.get("TRIPAY_MIN_DONATION", "10000"))
+MIN_DONATION = int(os.environ.get("TRIPAY_MIN_DONATION", "50000"))
 
 # ── Tripay Config ─────────────────────────────────────────
 _TRIPAY_KEY = os.environ.get("TRIPAY_API_KEY", "")

@@ -129,7 +129,7 @@ class PaymentService:
         """Check Tripay transaction status by reference."""
         payload = {
             "merchant_ref": reference,
-            "signature": self._tripay_sign(reference + settings.TRIPAY_MERCHANT_CODE),
+            "signature": self._tripay_sign(settings.TRIPAY_MERCHANT_CODE + reference),
         }
         url = f"{settings.TRIPAY_BASE_URL}/transaction/detail"
         headers = {
@@ -316,7 +316,9 @@ async def create_tripay_payment(
     but uses the unified PaymentService backend.
     """
     if amount is None:
-        amount = 50000
+        # Look up tier price; default to pro
+        tier_prices = {"pro": 50000, "elite": 150000, "lifetime": 500000}
+        amount = tier_prices.get(tier, 50000)
     if amount < 50000:
         return {"error": "Minimum subscribe Rp50.000"}
     svc = PaymentService()
