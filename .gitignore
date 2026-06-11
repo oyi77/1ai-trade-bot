@@ -68,3 +68,4 @@ venv/
 # Legacy
 strategies/vilona_tradefx/.env
 logs/*.log
+*.db

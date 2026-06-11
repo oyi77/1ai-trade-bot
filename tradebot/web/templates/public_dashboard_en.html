@@ -289,7 +289,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     </div>
   </div>
 
-  <!-- Activity + Donor Wall + Daily Stats Row -->
+  <!-- Activity + Wall of Fame + Daily Stats Row -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
     <div class="kpi-card">
       <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">👥 Recent Activity</h3>
@@ -298,9 +298,9 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
       </div>
     </div>
     <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.08), rgba(6,78,59,0.02));border-color:rgba(52,211,153,0.1)">
-      <h3 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">💚 Donor Wall</h3>
-      <div id="donor-wall">
-        <div class="text-sm text-slate-500 text-center py-6">Be the first donor 💚</div>
+      <h3 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-2">💚 Wall of Fame</h3>
+      <div id="sub-wall">
+        <div class="text-sm text-slate-500 text-center py-6">Be the first subscriber 🚀</div>
       </div>
     </div>
     <div class="kpi-card">
@@ -387,7 +387,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
         <div class="flex justify-between"><span class="text-slate-400">Collected This Month</span><span class="font-mono font-bold text-emerald-400" id="fund-collected">Rp 0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Monthly Target</span><span class="font-mono text-slate-300" id="fund-target">Rp 7,357,500</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Donation Transactions</span><span class="font-mono text-slate-300" id="fund-transactions">0</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Total Donors</span><span class="font-mono text-emerald-400" id="fund-donors">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Total Subscribers</span><span class="font-mono text-emerald-400" id="fund-donors">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Shortfall</span><span class="font-mono font-bold text-red-400" id="fund-shortfall">Rp 0</span></div>
       </div>
       <a href="https://t.me/berkahkaryaforexbotbot" target="_blank" class="mt-4 block text-center bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold py-2.5 rounded-lg transition-colors">💚 Fuel the AI</a>
@@ -412,7 +412,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
         <div class="flex justify-between"><span class="text-slate-400">Total Members</span><span class="font-mono font-bold text-white" id="comm-members">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">├ Free (Trial)</span><span class="font-mono text-slate-300" id="comm-free">0</span></div>
         <div class="flex justify-between pl-4"><span class="text-slate-400">├ Pro (Paid)</span><span class="font-mono text-blue-400" id="comm-pro">0</span></div>
-        <div class="flex justify-between pl-4"><span class="text-slate-400">└ Donors</span><span class="font-mono text-emerald-400" id="comm-donors">0</span></div>
+        <div class="flex justify-between pl-4"><span class="text-slate-400">└ Subscribers</span><span class="font-mono text-emerald-400" id="comm-donors">0</span></div>
         <div class="h-divider"></div>
         <div class="flex justify-between"><span class="text-slate-400">Active Today</span><span class="font-mono text-blue-400" id="comm-active">0</span></div>
         <div class="flex justify-between"><span class="text-slate-400">Total Signals</span><span class="font-mono text-slate-300" id="comm-signals">0</span></div>
@@ -738,7 +738,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     <div class="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold mb-2">
       <span class="w-4 h-4 rounded-full bg-emerald-400 flex items-center justify-center text-[8px] font-black text-black">✓</span> Verified by Vilona AI
     </div>
-    <!-- Donate CTA Buttons -->
+    <!-- Subscription CTA -->
     <div class="flex flex-wrap justify-center gap-3 mb-4">
       <a href="https://t.me/berkahkaryaforexbotbot" target="_blank"
          class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-semibold text-sm hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20">
@@ -799,10 +799,10 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 
     <!-- What You Get Card -->
     <div class="kpi-card" style="background:linear-gradient(135deg, rgba(30,58,138,0.08), rgba(30,58,138,0.02));border-color:rgba(59,130,246,0.15)">
-      <h3 class="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">🎁 Donor Benefits</h3>
+      <h3 class="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">🎁 Subscriber Benefits</h3>
       <div class="space-y-2 text-xs">
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Permanent <b>VIP DONOR</b> status</span></div>
-        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Name on the <b>Donor Wall</b> dashboard</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Tier-based subscription</span></div>
+        <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Name on the <b>Wall of Fame</b> dashboard</span></div>
         <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300"><b>/analyze UNLIMITED</b> — no limits</span></div>
         <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300">Priority <b>Auto-Trade EA</b></span></div>
         <div class="flex items-start gap-2"><span class="text-emerald-400 mt-0.5">✓</span><span class="text-slate-300"><b>GRADE A+</b> signals via Telegram</span></div>
@@ -827,21 +827,21 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
       <div class="text-center text-xs text-slate-600 py-2 border-t border-white/5">⚠️ Server runs on developer's personal budget</div>
     </div>
 
-    <!-- Donor Tier -->
+    <!-- Subscription Tier -->
     <div class="kpi-card border-2 border-emerald-400/30 relative overflow-hidden" style="background:linear-gradient(135deg, rgba(6,78,59,0.12), rgba(6,78,59,0.03))">
       <div class="absolute top-0 right-0 bg-emerald-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-lg">🔥 PREMIUM</div>
       <div class="absolute -top-6 -right-6 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl"></div>
-      <h3 class="text-lg font-bold text-emerald-400 mb-3">👑 VIP Donor</h3>
+      <h3 class="text-lg font-bold text-emerald-400 mb-3">👑 Subscription</h3>
       <div class="space-y-2 text-xs mb-4">
         <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>/analyze UNLIMITED</b> — use freely</span></div>
         <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>Real-time</b> signals, no delay</span></div>
         <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Full <b>EA Auto-Trade</b> access</span></div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Permanent <b>DONOR VIP</b> status</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Tier-based subscription</span></div>
         <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300"><b>Grade A+</b> exclusive signals</span></div>
-        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Name on <b>Donor Wall</b> 🏆</span></div>
+        <div class="flex items-center gap-2"><span class="text-emerald-400">✓</span><span class="text-slate-300">Name on <b>Wall of Fame</b> 🏆</span></div>
       </div>
       <div class="text-center text-xs text-emerald-300 py-2 border-t border-emerald-400/10">
-        💚 <b>Permanent active status</b> — donate just ONCE
+        📅 <b>Monthly subscription</b> — choose your tier
       </div>
     </div>
   </div>
@@ -908,7 +908,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
             </div>
           </details>
           
-          <button onclick="fuelDonate()" 
+          <button onclick="fuelSubscribe()" 
                   class="w-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-4 py-4 rounded-lg text-sm transition-all">
             ⚡ Pay via Tripay
           </button>
@@ -925,11 +925,11 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     </div>
   </div>
 
-  <!-- DONOR WALL (full) -->
+  <!-- WALL OF FAME (full) -->
   <div class="kpi-card" style="background:linear-gradient(135deg, rgba(6,78,59,0.06), rgba(6,78,59,0.01))">
-    <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">🏆 Wall of Fame — VIP Donors</h3>
-    <div id="fuel-donor-wall-full">
-      <div class="text-sm text-slate-500 text-center py-6">Loading donor data...</div>
+    <h3 class="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">🏆 Wall of Fame — Subscriptions</h3>
+    <div id="fuel-sub-wall-full">
+      <div class="text-sm text-slate-500 text-center py-6">Loading subscriber data...</div>
     </div>
     <div class="text-center text-[10px] text-slate-600 mt-3">🙏 Thank you, AI heroes!</div>
   </div>
@@ -992,7 +992,7 @@ function fmtPip(n) {
 /* ═══ LOAD ALL DATA ═══ */
 async function loadAll() {
   try {
-    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes, fuelRes, snapRes, engineRes] = await Promise.all([
+    const [feed, trade, userAct, transparency, backtestRes, subRes, dailyRes, recapRes, fuelRes, snapRes, engineRes] = await Promise.all([
       fetch('/api/feed').then(r => r.json()),
       fetch('/api/trade_stats').then(r => r.json()),
       fetch('/api/user_activity').then(r => r.json()),
@@ -1011,7 +1011,7 @@ async function loadAll() {
     const trans = transparency || {};
     const userSigs = userAct.signals || [];
     const backtest = backtestRes || {};
-    const donors = donorsRes.donors || [];
+    const subscribers = subRes.donors || [];
     const daily = dailyRes || {};
     const recap = recapRes || {};
     const snapshot = snapRes || {};
@@ -1084,7 +1084,7 @@ async function loadAll() {
     const analysesEl = document.getElementById('comm-analyses');
     if (analysesEl) analysesEl.textContent = daily.total_all_time || 0;
 
-    renderDonorWall(donors);
+    renderSubWall(subscribers);
     renderDailyAnalyze(daily, trans);
     renderBacktest(backtest);
     renderDailyRecap(recap);
@@ -1147,14 +1147,14 @@ function renderUserActivity(signals) {
   }).join('');
 }
 
-function renderDonorWall(donors) {
-  const el = document.getElementById('donor-wall');
-  if (!donors || !donors.length) {
-    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No donors yet. Be the first 💚</div>';
+function renderSubWall(subscribers) {
+  const el = document.getElementById('sub-wall');
+  if (!subscribers || !subscribers.length) {
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No subscribers yet. Be the first! 🚀</div>';
     return;
   }
-  donors.sort((a,b) => (b.amount||0) - (a.amount||0));
-  el.innerHTML = donors.map((d, i) => {
+  subscribers.sort((a,b) => (b.amount||0) - (a.amount||0));
+  el.innerHTML = subscribers.map((d, i) => {
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'💚';
     const dt = d.paid_at ? new Date(d.paid_at).toLocaleDateString('id-ID',{timeZone:'Asia/Jakarta'}) : '-';
     return `<div class="flex items-center justify-between py-2 border-b border-white/5 last:border-b-0 text-xs">
@@ -1320,7 +1320,7 @@ function renderFuelStats(stats) {
   const pct = s.percent || 0;
   const collected = s.collected || 0;
   const shortfall = s.shortfall || 7357500;
-  const donors = s.donors || 0;
+  const subscribers = s.donors || 0;
   const target = s.monthly_cost || 7357500;
   
   const elPct = document.getElementById('fuel-pct');
@@ -1346,24 +1346,24 @@ function renderFuelStats(stats) {
       elStatus.textContent = '🟡 Halfway — help us reach the goal';
       elStatus.className = 'text-xs text-yellow-400';
     } else if (pct >= 25) {
-      elStatus.textContent = '🟠 Server needs help urgently — donate now';
+      elStatus.textContent = '🟠 Server needs help — subscribe now';
       elStatus.className = 'text-xs text-orange-400';
     } else {
-      elStatus.textContent = '🔴 CRITICAL — server runs on personal funds. Please donate!';
+      elStatus.textContent = '🔴 CRITICAL — server runs on personal funds. Please subscribe!';
       elStatus.className = 'text-xs text-red-400';
     }
   }
 }
 
 function renderFuelDonorWall(donors) {
-  const el = document.getElementById('fuel-donor-wall-full');
+  const el = document.getElementById('fuel-sub-wall-full');
   if (!el) return;
-  if (!donors || !donors.length) {
+  if (!subscribers || !subscribers.length) {
     el.innerHTML = '<div class="text-sm text-slate-500 text-center py-6">No donors yet. Be the first! 💚</div>';
     return;
   }
-  donors.sort((a,b) => (b.amount||0) - (a.amount||0));
-  el.innerHTML = donors.map((d, i) => {
+  subscribers.sort((a,b) => (b.amount||0) - (a.amount||0));
+  el.innerHTML = subscribers.map((d, i) => {
     const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'💚';
     const dt = d.paid_at ? new Date(d.paid_at).toLocaleDateString('en-US',{timeZone:'Asia/Jakarta'}) : '-';
     return `<div class="flex items-center justify-between py-3 border-b border-white/5 last:border-b-0">
@@ -1379,7 +1379,7 @@ function renderFuelDonorWall(donors) {
   }).join('');
 }
 
-async function fuelDonate() {
+async function fuelSubscribe() {
   const chatId = document.getElementById('fuel-chat-id').value.trim();
   const amount = parseInt(document.getElementById('fuel-amount-input').value);
   const username = document.getElementById('fuel-username').value.trim() || 'Guest';
@@ -1455,7 +1455,7 @@ async function fuelDonate() {
           <div class="text-xl mb-2">⚠️</div>
           <div class="text-sm font-bold text-red-400">Payment creation failed</div>
           <div class="text-xs text-slate-400 mt-1">${data.error || 'Try again later'}</div>
-          <div class="text-xs text-slate-600 mt-2">Alternative: open Telegram bot <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 underline">@berkahkaryaforexbotbot</a> and type /donate</div>
+          <div class="text-xs text-slate-600 mt-2">Alternative: open Telegram bot <a href="https://t.me/berkahkaryaforexbotbot" class="text-blue-400 underline">@berkahkaryaforexbotbot</a> and type /subscribe</div>
         </div>`;
     }
   } catch(e) {
