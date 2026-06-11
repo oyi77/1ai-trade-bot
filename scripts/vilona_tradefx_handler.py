@@ -1452,6 +1452,8 @@ def _format_news_context(news: dict | None) -> str:
     """Format Grok news context for signal display."""
     if not news:
         return ""
+    if isinstance(news, str):
+        return ""  # string (e.g. preview text) — skip formatting
     headline = news.get("headline", "")
     sentiment = news.get("sentiment", "NEUTRAL")
     impact = news.get("impact", "LOW")
