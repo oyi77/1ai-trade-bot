@@ -189,7 +189,7 @@ class VilonaBot(
             "mykey": self._cmd_mykey,
             "myid": self._cmd_myid,
             "ea": self._cmd_ea,
-            "download": self._cmd_download,
+            "download": self._cmd_ea,
             "symbols": self._cmd_symbols,
             "data": self._cmd_data,
             "killzone": self._cmd_killzone,
@@ -515,6 +515,44 @@ class VilonaBot(
                     LOG.error("tg_send fallback failed: %s", e2)
             else:
                 LOG.error("tg_send failed: %s", e)
+            return False
+
+    async def _tg_send_video_file(self, chat_id: str, video: str) -> bool:
+        """Send a video to a chat. video can be file_id or local path."""
+        target = chat_id or self.chat_id
+        if not target or not self.bot_token:
+            return False
+        try:
+            import urllib.request
+            if os.path.exists(video):
+                boundary = "----FormBoundary7MA4YWxkTrZu0gW"
+                import mimetypes
+                mime_type = mimetypes.guess_type(video)[0] or "video/mp4"
+                with open(video, "rb") as f:
+                    file_data = f.read()
+                body = (
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="chat_id"\r\n\r\n{target}\r\n'
+                    f"--{boundary}\r\n"
+                    f'Content-Disposition: form-data; name="video"; filename="{os.path.basename(video)}"\r\n'
+                    f"Content-Type: {mime_type}\r\n\r\n"
+                ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
+                req = urllib.request.Request(
+                    f"https://api.telegram.org/bot{self.bot_token}/sendVideo",
+                    data=body,
+                    headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+                )
+            else:
+                payload = json.dumps({"chat_id": target, "video": video}).encode()
+                req = urllib.request.Request(
+                    f"https://api.telegram.org/bot{self.bot_token}/sendVideo",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return bool(json.loads(r.read()))
+        except Exception as e:
+            LOG.warning("_tg_send_video_file failed: %s", e)
             return False
 
     async def _tg_answer_callback(self, cb_id: str, text: str = "") -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import random
@@ -494,6 +495,11 @@ class CommandHandlersMixin(BaseBot):
             return f"❌ Mapping error: {e}"
 
     async def _cmd_signal(self, args: list[str], chat_id: str | None = None) -> str:
+        pair_arg = args[0].lower().strip() if args else "xauusd"
+        symbol_map = {"xauusd":"XAUUSD","gold":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
+                      "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL","usoil":"USOIL",
+                      "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        symbol = symbol_map.get(pair_arg, "XAUUSD")
         try:
             from tradebot.services.consensus_service import run_engine_consensus
             from tradebot.services.signal_calculator_service import (
@@ -504,7 +510,7 @@ class CommandHandlersMixin(BaseBot):
             return "❌ Signal engine tidak tersedia."
 
         try:
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"❌ Engine consensus error: {e}"
 
@@ -554,13 +560,18 @@ class CommandHandlersMixin(BaseBot):
         return msg
 
     async def _cmd_mtf(self, args: list[str], chat_id: str | None = None) -> str:
+        pair_arg = args[0].lower().strip() if args else "xauusd"
+        symbol_map = {"xauusd":"XAUUSD","gold":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
+                      "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL","usoil":"USOIL",
+                      "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        symbol = symbol_map.get(pair_arg, "XAUUSD")
         try:
             from tradebot.services.consensus_service import run_engine_consensus
         except ImportError:
             return "❌ Engine consensus tidak tersedia."
 
         try:
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"❌ MTF error: {e}"
 
@@ -605,10 +616,15 @@ class CommandHandlersMixin(BaseBot):
         return msg
 
     async def _cmd_engines(self, args: list[str], chat_id: str | None = None) -> str:
+        pair_arg = args[0].lower().strip() if args else "xauusd"
+        symbol_map = {"xauusd":"XAUUSD","gold":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
+                      "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL","usoil":"USOIL",
+                      "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        symbol = symbol_map.get(pair_arg, "XAUUSD")
         from tradebot.services.consensus_service import run_engine_consensus
 
         try:
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"❌ MTF error: {e}"
 
@@ -651,13 +667,18 @@ class CommandHandlersMixin(BaseBot):
         return msg
 
     async def _cmd_engine_readings(self, args: list[str], chat_id: str | None = None) -> str:
+        pair_arg = args[0].lower().strip() if args else "xauusd"
+        symbol_map = {"xauusd":"XAUUSD","gold":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
+                      "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL","usoil":"USOIL",
+                      "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        symbol = symbol_map.get(pair_arg, "XAUUSD")
         try:
             from tradebot.services.consensus_service import run_engine_consensus
         except ImportError:
             return "❌ Engine consensus tidak tersedia."
 
         try:
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"❌ Engine error: {e}"
 
@@ -1161,6 +1182,11 @@ class CommandHandlersMixin(BaseBot):
         return f"🤖 <b>Auto-Trade: {state}</b>\nSinyal akan auto-trade ke EA tanpa konfirmasi."
 
     async def _cmd_pulse(self, args: list[str], chat_id: str | None = None) -> str:
+        pair_arg = args[0].lower().strip() if args else "xauusd"
+        symbol_map = {"xauusd":"XAUUSD","gold":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
+                      "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL","usoil":"USOIL",
+                      "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        symbol = symbol_map.get(pair_arg, "XAUUSD")
         target = chat_id or self.chat_id
         try:
             from tradebot.services.consensus_service import run_engine_consensus
@@ -1168,7 +1194,7 @@ class CommandHandlersMixin(BaseBot):
             return "📡 Market pulse: Engine consensus tidak tersedia."
         result = None
         try:
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"📡 Market pulse: {e}"
         if not result:
@@ -1283,19 +1309,19 @@ class CommandHandlersMixin(BaseBot):
         if not self._is_admin(target):
             return "⛔ Hanya admin."
         try:
-            from tradebot.services.members_service import get_stale_donors
+            from members import get_stale_donors
             stale = get_stale_donors()
         except Exception:
             return "🔧 Members service tidak tersedia."
         if not stale:
             return "✅ Semua subscriber aktif."
-        lines = ["⏰ <b>STALE DONOR REMINDERS</b>", "━━━━━━━━━━━━━━━━"]
+        lines = ["⏰ <b>STALE SUBSCRIBER REMINDERS</b>", "━━━━━━━━━━━━━━━━"]
         reminders_sent = 0
         for subscriber in stale[:20]:
-            user_id = donor.get("chat_id") or donor.get("id", "")
-            days_since = donor.get("days_since_last", 0)
-            last_donation = donor.get("last_donation_date", "?")
-            lines.append(f"• <code>{user_id}</code> — {days_since} hari sejak subscribe terakhir ({last_donation})")
+            user_id = subscriber.get("chat_id") or subscriber.get("id", "")
+            days_since = subscriber.get("days_since", 0)
+            last_amount = subscriber.get("last_amount", "?")
+            lines.append(f"• <code>{user_id}</code> — {days_since} hari sejak subscribe ({last_amount})")
             # Send DM to stale subscriber
             reminder_text = (
                 f"⏰ <b>Pengingat Trading!</b>\n"
