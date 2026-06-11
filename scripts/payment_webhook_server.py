@@ -302,6 +302,27 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if result is None:
             log.warning(f"tg_send DM to {chat_id} returned None (message may not have been delivered)")
 
+        # ── Extra DM: SL/TP unlocked CTA ──────────────────────────
+        time.sleep(3)
+        extra_msg = (
+            '🔥 <b>SELAMAT BRO!</b>\n'
+            '━━━━━━━━━━━━━━━━━━━━━\n'
+            'SL/TP udah <b>TERBUKA</b> buat kamu!\n'
+            '\n'
+            'Sekarang lu bisa:\n'
+            '✅ /analyze — Signal FULL + SL/TP\n'
+            '✅ Grok News — Real-time market news\n'
+            '✅ EA Auto-Trade — Bridge AKTIF\n'
+            '\n'
+            '🔥 Coba sekarang: /analyze\n'
+            '━━━━━━━━━━━━━━━━━━━━━\n'
+            'Makasih udah support server! 💚'
+        )
+        extra_result = tg_send(extra_msg, chat_id, bot_token=token)
+        if extra_result is None:
+            log.warning(f"tg_send SL/TP DM to {chat_id} returned None")
+        # ── End extra DM ───────────────────────────────────────────
+
         # Notify group — Social Proof (semangat gotong royong)
         if GROUP_CHAT_ID:
             group_msg = (

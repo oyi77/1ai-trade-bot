@@ -591,6 +591,7 @@ USER_LAST_ANALYZE = {}  # chat_id -> timestamp
 USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
 USER_LAST_PAIR = {}  # chat_id -> {"pair": str, "at": timestamp} — same-pair cooldown
 USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — donor quota
+DONOR_ANALYZE_COUNT: dict = {}  # chat_id -> int — analyze counter, fuel gauge reminder every 3rd
 
 MANUAL_THROTTLE_FREE = 120   # free user: 120 detik antar analisa
 MANUAL_THROTTLE_DONOR = 60   # donor: 60 detik antar analisa (lebih cepet)
@@ -3420,6 +3421,18 @@ def handle_command(cmd, text, chat_id, msg):
                             "Akurasi maksimal berkat support kamu! 🥂\n"
                             "👉 /donate — Ajak teman ikut donasi"
                         )
+                    # ── Fuel Gauge Reminder (every 3rd analyze for donors) ──
+                    if is_donor:
+                        DONOR_ANALYZE_COUNT[str(chat_id)] = DONOR_ANALYZE_COUNT.get(str(chat_id), 0) + 1
+                        if DONOR_ANALYZE_COUNT[str(chat_id)] % 3 == 0:
+                            try:
+                                from members import get_monthly_fuel_stats
+                                fuel = get_monthly_fuel_stats()
+                                fuel_pct = int((fuel['total'] / 500000) * 100)
+                                fuel_bar = '█' * min(10, int(fuel['total'] / 50000)) + '░' * (10 - min(10, int(fuel['total'] / 50000)))
+                                text += f'\n━━━━━━━━━━━━━━━━━━━━━━\n⛽ Server Fuel: {fuel_bar} {fuel_pct}%\nRp{fuel["total"]:,} / Rp500,000 | {fuel["donor_count"]} donatur\n⚡ /donate — Isi bensin'
+                            except Exception:
+                                pass
                     keyboard = {
                         "inline_keyboard": [[
                             {"text": "🔥 Trade Auto", "callback_data": f"trade:{int(time.time())}"},
@@ -5445,6 +5458,33 @@ def auto_analyze_loop():
         except: return ""
     def _set_last_mapping(date_str):
         MAPPING_TRACKER.write_text(date_str)
+    # ── Persistent Signal State (missed move detection) ──
+    def _save_scan_state(state: dict):
+        """Save scan state dict to disk as JSON."""
+        try:
+            (DATA_DIR / '.scan_state').write_text(json.dumps(state))
+        except Exception as e:
+            logger.debug(f"Failed to save scan state: {e}")
+    def _load_scan_state():
+        """Load scan state dict from disk, or empty dict."""
+        try:
+            f = DATA_DIR / '.scan_state'
+            if f.exists():
+                return json.loads(f.read_text())
+        except Exception:
+            pass
+        return {}
+    def _check_missed_move(price, state):
+        """Check if price moved >500 pips since last scan (1 pip = 0.10 for XAUUSD).
+        Returns (missed: bool, gap_pips: float)."""
+        last_price = state.get('last_price')
+        if last_price is None:
+            return False, 0.0
+        gap = abs(price - last_price)
+        gap_pips = gap / 0.10
+        if gap_pips > 500:
+            return True, round(gap_pips, 1)
+        return False, round(gap_pips, 1)
     last_mapping_day = _get_last_mapping()  # init from disk
 
     while True:
@@ -5509,6 +5549,12 @@ def auto_analyze_loop():
             if not price:
                 time.sleep(30)
                 continue
+
+            # ── Missed move detection ──
+            _ss = _load_scan_state()
+            _missed, _gap_pips = _check_missed_move(price, _ss)
+            if _missed:
+                logger.warning(f"⚠️ MISSED MOVE [{disp}]: price moved {_gap_pips} pips since last scan")
 
             # Check trade outcomes (TP/SL hits) — with donation CTA
             if TRADE_TRACKER:
@@ -5766,6 +5812,14 @@ def auto_analyze_loop():
 
             # ── Market Pulse DISABLED (user wants clean channel, signals only) ──
             # ── Active Signal DISABLED (redundant — mechanical+AI consensus already covers this) ──
+
+            # ── Save persistent scan state for missed move detection ──
+            _save_scan_state({
+                'last_price': price,
+                'last_action': action if 'action' in dir() else '',
+                'last_signal_time': log.get('last_signal_time', ''),
+                'last_kz': kz,
+            })
 
             time.sleep(90 if (lkz or nykz) else 120)
 
