@@ -1423,7 +1423,7 @@ async function updateSystemStatus() {
       // Count healthy vs total components
       const components = data.components || {};
       const total = Object.keys(components).length;
-      const healthy = Object.values(components).filter((c: any) => 
+      const healthy = Object.values(components).filter((c) => 
         c.status === 'healthy' || c.status === 'ok'
       ).length;
       
