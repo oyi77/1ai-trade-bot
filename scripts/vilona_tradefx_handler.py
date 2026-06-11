@@ -5314,10 +5314,11 @@ def _process_subscription_reminders():
 
 
 def format_daily_mapping():
-    """Daily market mapping/insight — key levels, market structure, no trade signals.
-    Posts to channel as educational content separate from auto-signals."""
+    """Daily market mapping/insight — key levels from actual session range + pivot structure.
+    Uses time-filtered 24h bars + swing pivots for realistic S/R levels."""
     now = wib_now()
     day_name = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"][now.weekday()]
+    cutoff_12h = (now - timedelta(hours=12)).timestamp()
     
     lines = [
         f"📐 MARKET MAPPING",
@@ -5330,7 +5331,6 @@ def format_daily_mapping():
 
     # ── Monday Sentiment ──
     if now.weekday() == 0:
-        # Fetch DXY for sentiment direction
         dxy_val = None
         try:
             if MARKET_DATA:
@@ -5342,31 +5342,81 @@ def format_daily_mapping():
         lines.append(f"📅 Monday Sentiment: {sent_label} — Waspadai Gaps & Volatilitas Pembukaan.")
         lines.append(f"")
     
-    # Try to get key levels for each asset
     if MARKET_DATA:
         for pair, disp, _, is_forex in AUTO_SCAN_ASSETS:
             try:
-                bars = MARKET_DATA.get_ohlcv(pair, "1h", 50)
+                bars = MARKET_DATA.get_ohlcv(pair, "1h", 60)
                 if not bars or len(bars) < 5:
                     continue
-                high_24h = max(b.high for b in bars[-24:]) if len(bars) >= 24 else max(b.high for b in bars)
-                low_24h = min(b.low for b in bars[-24:]) if len(bars) >= 24 else min(b.low for b in bars)
+
+                # ── Time-filtered session range (REAL 24h, not 24-bar count) ──
+                recent = [b for b in bars if b.timestamp >= cutoff_12h]
+                if len(recent) < 4:
+                    recent = bars[-12:]  # graceful fallback for sparse data
+                
+                high_ses = max(b.high for b in recent)
+                low_ses = min(b.low for b in recent)
                 close = bars[-1].close
-                high_w = max(b.high for b in bars[-min(40,len(bars)):])
-                low_w = min(b.low for b in bars[-min(40,len(bars)):])
-                
-                mid = (high_24h + low_24h) / 2
-                r1 = high_24h + (high_24h - low_24h) * 0.382
-                s1 = low_24h - (high_24h - low_24h) * 0.382
-                
-                sma20 = sum(b.close for b in bars[-20:]) / min(20, len(bars))
+
+                # ── Weekly: full data range ──
+                high_w = max(b.high for b in bars)
+                low_w = min(b.low for b in bars)
+
+                # ── Pivot-based Support / Resistance (swing structure) ──
+                pivot_bars = bars[-min(40, len(bars)):]
+                swing_highs = []
+                swing_lows = []
+                # Detect swings: bar higher/lower than 2 neighbors each side
+                n = len(pivot_bars)
+                for i in range(2, n - 2):
+                    b = pivot_bars[i]
+                    if (b.high > pivot_bars[i-1].high and b.high > pivot_bars[i-2].high and
+                        b.high > pivot_bars[i+1].high and b.high > pivot_bars[i+2].high):
+                        swing_highs.append(b.high)
+                    if (b.low < pivot_bars[i-1].low and b.low < pivot_bars[i-2].low and
+                        b.low < pivot_bars[i+1].low and b.low < pivot_bars[i+2].low):
+                        swing_lows.append(b.low)
+
+                # Resistance: nearest swing high ABOVE current price
+                # If all pivots are below price, use session high + projected extension
+                resistance = None
+                for sh in reversed(swing_highs):
+                    if sh > close:
+                        resistance = sh
+                        break
+                if resistance is None:
+                    # Price above all swing highs → use session high as ceiling
+                    resistance = high_ses
+
+                # Support: nearest swing low BELOW current price
+                # If all pivots are above price, use session low as floor
+                support = None
+                for sl in reversed(swing_lows):
+                    if sl < close:
+                        support = sl
+                        break
+                if support is None:
+                    support = low_ses
+
+                # ── SMA trend ──
+                n20 = min(20, len(bars))
+                sma20 = sum(b.close for b in bars[-n20:]) / n20
                 trend = "📈 BULLISH" if close > sma20 else ("📉 BEARISH" if close < sma20 else "➡️ SIDEWAYS")
-                
+
+                # ── Price position in session range ──
+                if high_ses != low_ses:
+                    pos_pct = (close - low_ses) / (high_ses - low_ses) * 100
+                else:
+                    pos_pct = 50
+
+                # Range pip label for XAUUSD
+                pip_label = f" ({int((high_ses - low_ses) / 0.10)} pip)" if disp == "XAUUSD" else ""
+
                 lines.append(f"")
                 lines.append(f"💱 {disp}")
-                lines.append(f"   Price: {close:.2f} | {trend}")
-                lines.append(f"   Range 24H: {low_24h:.2f} — {high_24h:.2f}")
-                lines.append(f"   Resistance: {r1:.2f} | Support: {s1:.2f}")
+                lines.append(f"   Price: {close:.2f} | {trend} | 📍{pos_pct:.0f}% range")
+                lines.append(f"   Session Range: {low_ses:.2f} — {high_ses:.2f}{pip_label}")
+                lines.append(f"   Resistance: {resistance:.2f} | Support: {support:.2f}")
                 lines.append(f"   Weekly High: {high_w:.2f} | Low: {low_w:.2f}")
             except Exception:
                 pass
