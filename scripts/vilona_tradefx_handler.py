@@ -4870,7 +4870,20 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send("❌ Gagal cek license. Coba lagi atau hubungi @codergaboets.", chat_id)
 
     elif cmd == "/genkey":
-        """Admin: Generate EA license key."""
+        """Donor/Admin: Generate EA license key."""
+        # ── DONOR GATE: donor or admin can generate license keys ──
+        admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
+        if not _is_donor(str(chat_id)) and str(chat_id) not in admin_ids:
+            _send_donate_menu(chat_id, username)
+            tg_send(
+                "🔑 <b>Generate License Key</b> [🔒 LOCKED]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Fitur generate key EA hanya untuk Donatur.\n"
+                "Support project dulu ya Bro!\n\n"
+                "⚡ /donate — Isi Bahan Bakar AI",
+                chat_id
+            )
+            return
         if not LICENSE_ENGINE:
             tg_send("🔧 License engine belum aktif. Hubungi @codergaboets.", chat_id)
             return
