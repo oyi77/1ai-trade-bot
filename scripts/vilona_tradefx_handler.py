@@ -1934,6 +1934,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         if tp1 and entry and sl and abs(entry - sl) > 0:
             tp1_rr = abs(tp1 - entry) / abs(entry - sl)
             sig["rr_ratio"] = f"1:{tp1_rr:.1f}"
+            rr = f"{tp1_rr:.1f}"  # refresh display variable
 
     # Winrate stats
     wr_text = ""
