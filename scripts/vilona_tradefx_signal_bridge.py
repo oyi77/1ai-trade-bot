@@ -354,46 +354,6 @@ class SignalHandler(BaseHTTPRequestHandler):
             self._json(result)
 
 
-        elif path == "/api/capi":
-            """Facebook CAPI — forward events to Conversions API."""
-            length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(length) if length else b"{}"
-            try:
-                body = json.loads(raw)
-            except json.JSONDecodeError:
-                self._json({"error": "invalid json"}, 400)
-                return
-            event_name = body.get("event_name", "PageView")
-            event_data = body.get("event_data", {})
-            fb_pixel = os.environ.get("FB_PIXEL_ID", "771021905629860")
-            fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
-            if not fb_token:
-                self._json({"status": "skipped", "reason": "no FB_ACCESS_TOKEN configured"}, 200)
-                return
-            try:
-                import urllib.request as ureq
-                capi_url = f"https://graph.facebook.com/v21.0/{fb_pixel}/events?access_token={fb_token}"
-                capi_payload = json.dumps({
-                    "data": [{
-                        "event_name": event_name,
-                        "event_time": int(time.time()),
-                        "action_source": "website",
-                        "event_source_url": body.get("source_url", "https://phantomfx.aitradepulse.com/lp"),
-                        "user_data": {
-                            "client_ip_address": self.client_address[0],
-                            "client_user_agent": self.headers.get("User-Agent", "")
-                        },
-                        "custom_data": event_data
-                    }]
-                }).encode()
-                req = ureq.Request(capi_url, data=capi_payload, headers={"Content-Type": "application/json"})
-                resp = ureq.urlopen(req, timeout=5)
-                result = json.loads(resp.read())
-                self._json({"status": "sent", "fb_response": result})
-            except Exception as e:
-                log.error(f"CAPI error: {e}")
-                self._json({"status": "error", "detail": str(e)}, 500)
-
         elif path.startswith("/ack/"):
             signal_id = path.split("/ack/", 1)[1]
             with LOCK:
@@ -750,7 +710,47 @@ class SignalHandler(BaseHTTPRequestHandler):
         api_key = params.get("api_key", [""])[0]
         account_id = params.get("account_id", [None])[0]
 
-        if path == "/signal":
+        if path == "/api/capi":
+            """Facebook CAPI — forward events to Conversions API."""
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                body = json.loads(raw)
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+            event_name = body.get("event_name", "PageView")
+            event_data = body.get("event_data", {})
+            fb_pixel = os.environ.get("FB_PIXEL_ID", "771021905629860")
+            fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
+            if not fb_token:
+                self._json({"status": "skipped", "reason": "no FB_ACCESS_TOKEN configured"}, 200)
+                return
+            try:
+                import urllib.request as ureq
+                capi_url = f"https://graph.facebook.com/v21.0/{fb_pixel}/events?access_token={fb_token}"
+                capi_payload = json.dumps({
+                    "data": [{
+                        "event_name": event_name,
+                        "event_time": int(time.time()),
+                        "action_source": "website",
+                        "event_source_url": body.get("source_url", "https://phantomfx.aitradepulse.com/lp"),
+                        "user_data": {
+                            "client_ip_address": self.client_address[0],
+                            "client_user_agent": self.headers.get("User-Agent", "")
+                        },
+                        "custom_data": event_data
+                    }]
+                }).encode()
+                req = ureq.Request(capi_url, data=capi_payload, headers={"Content-Type": "application/json"})
+                resp = ureq.urlopen(req, timeout=5)
+                result = json.loads(resp.read())
+                self._json({"status": "sent", "fb_response": result})
+            except Exception as e:
+                log.error(f"CAPI error: {e}")
+                self._json({"status": "error", "detail": str(e)}, 500)
+
+        elif path == "/signal":
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             try:
@@ -901,46 +901,6 @@ class SignalHandler(BaseHTTPRequestHandler):
                     TRAIL_CONFIG[instance_id]["step_pips"] = int(body["step_pips"])
             _save_trail_config()
             self._json({"status": "ok", "config": dict(TRAIL_CONFIG[instance_id])})
-
-        elif path == "/api/capi":
-            """Facebook CAPI — forward events to Conversions API."""
-            length = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(length) if length else b"{}"
-            try:
-                body = json.loads(raw)
-            except json.JSONDecodeError:
-                self._json({"error": "invalid json"}, 400)
-                return
-            event_name = body.get("event_name", "PageView")
-            event_data = body.get("event_data", {})
-            fb_pixel = os.environ.get("FB_PIXEL_ID", "771021905629860")
-            fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
-            if not fb_token:
-                self._json({"status": "skipped", "reason": "no FB_ACCESS_TOKEN configured"}, 200)
-                return
-            try:
-                import urllib.request as ureq
-                capi_url = f"https://graph.facebook.com/v21.0/{fb_pixel}/events?access_token={fb_token}"
-                capi_payload = json.dumps({
-                    "data": [{
-                        "event_name": event_name,
-                        "event_time": int(time.time()),
-                        "action_source": "website",
-                        "event_source_url": body.get("source_url", "https://phantomfx.aitradepulse.com/lp"),
-                        "user_data": {
-                            "client_ip_address": self.client_address[0],
-                            "client_user_agent": self.headers.get("User-Agent", "")
-                        },
-                        "custom_data": event_data
-                    }]
-                }).encode()
-                req = ureq.Request(capi_url, data=capi_payload, headers={"Content-Type": "application/json"})
-                resp = ureq.urlopen(req, timeout=5)
-                result = json.loads(resp.read())
-                self._json({"status": "sent", "fb_response": result})
-            except Exception as e:
-                log.error(f"CAPI error: {e}")
-                self._json({"status": "error", "detail": str(e)}, 500)
 
         elif path.startswith("/ack/"):
             signal_id = path.split("/ack/", 1)[1]

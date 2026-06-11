@@ -1,11 +1,12 @@
 # TradeBot — AI Context File
 
 ## Project
-TradeBot (`tradebot` v0.2.0) is a modular, async Python trading framework for multi-broker signal analysis and automated trade execution. Connects to Deriv (WebSocket), MetaTrader 5, Binance, Yahoo Finance, and forex data sources.
+TradeBot (`tradebot` v0.2.0) is a modular, async Python trading framework for multi-broker signal analysis and automated trade execution. Connects to Deriv (WebSocket), MetaTrader 5, Binance, Yahoo Finance, forex, Stockity, CCXT, and Firebase data sources.
 
 **Python:** 3.11+ (developed on 3.13). Async via `asyncio`.
-**Tests:** 934 passing, 0 failing. Run with `python -m pytest tests/ -q`.
+**Tests:** 932 passing (2 pre-existing failures unrelated). Run: `python -m pytest tests/ -q`.
 **Install:** `pip install -e ".[dev]"` (setuptools backend, no Poetry).
+**Lint:** `ruff check tradebot/` — 0 errors enforced. `ruff format tradebot/` for formatting.
 
 ## Directory Structure
 
@@ -14,20 +15,18 @@ tradebot/
 ├── __init__.py          # Public API exports (~65 symbols)
 ├── __main__.py          # python -m tradebot entry
 ├── cli.py               # CLI (argparse, 15 subcommands)
-├── config/              # Pydantic settings (.env → settings)
-├── models/              # Dataclasses: Signal, Tick, OHLCV, Trade, Order, Balance
-├── brokers/             # Broker ABCs + DerivWSClient, MT5Broker, CCXTBroker
+├── config/              # Pydantic settings (.env → settings, 80+ vars)
+├── models/              # Dataclasses: Signal, Tick, OHLCV, Trade, Order, Balance, ExternalSignal
+├── brokers/             # Broker ABCs + DerivWSClient, MT5Broker, CCXTBroker, StockityBroker
 ├── engines/             # 11 engines + EngineConsensus + MTFConsensus + Registry
 ├── pipeline/            # SignalPipeline, MiddlewareChain, QualityGate, TradeExecutor
-├── signals/             # Data sources: Binance, Yahoo, Forex, Stockity
-├── services/            # 14 modules: TelegramService, PaymentService, HealthService,
-│                        #   SignalPublisher, WatchdogService, menu, signal_service,
-│                        #   trade_tracker_service, members_service, consensus_service,
-│                        #   signal_calculator_service, license_service
-├── bots/                # VilonaBot (unified single bot, 29 commands, button menus)
+├── signals/             # 8 data sources: Binance, Yahoo, Forex, Stockity, CCXT, MT5, Deriv, Firebase
+├── services/            # 15+ modules: Telegram, Payment, Health, Watchdog, menu, signal_service,
+│                        #   trade_tracker, members, license, consensus, signal_calculator
+├── bots/                # VilonaBot (unified, 30+ commands, 9 menus with inline buttons)
 │   └── platforms/
-│       └── vilona/      # Split into: bot.py, commands.py, analysis.py, callbacks.py, helpers.py
-├── web/                 # FastAPI server (port 9090), admin + public pages, monitoring API
+│       └── vilona/      # bot.py, commands.py, analysis.py, callbacks.py, helpers.py
+├── web/                 # FastAPI (port 9090), admin dashboard, public pages, monitoring, bridge API
 ├── monitoring/          # MetricsCollector, HealthProbe, TradeTracker
 ├── storage/             # SQLiteStorage, CognitiveDB, TieredCache
 ├── events/              # In-process EventBus (pub/sub)
@@ -36,18 +35,50 @@ tradebot/
 ├── analytics/           # MarketAnalyzer, backtesting
 ├── agents/              # AI agent infrastructure
 ├── constants/           # Shared constants
-├── exceptions/          # TradebotError hierarchy (SignalError, PipelineError, etc.)
+├── exceptions/          # TradebotError hierarchy
 └── saas/                # SaaS subscription layer
 
-tests/                   # 934 tests across 25 files
-scripts/                 # Legacy scripts (~70) — most absorbed into tradebot/
+tests/                   # 932 tests across 26 files
+scripts/                 # Legacy scripts — most absorbed into tradebot/. Only _legacy/ remains active.
 ```
+
+## 8 Data Sources (All Integrated)
+
+| Source | File | Type | Status |
+|--------|------|------|--------|
+| Stockity | `tradebot/signals/stockity.py` | REST + WebSocket | ✅ Full |
+| Binance | `tradebot/signals/binance.py` | REST | ✅ Full |
+| Yahoo | `tradebot/signals/yahoo.py` | yfinance wrapper | ✅ Full |
+| Forex | `tradebot/signals/forex.py` | REST | ✅ Full |
+| CCXT | `tradebot/signals/ccxt_source.py` | 10+ exchanges | ✅ New |
+| MT5 | `tradebot/signals/mt5_source.py` | MetaTrader 5 | ✅ New |
+| Deriv | `tradebot/signals/deriv_source.py` | WebSocket | ✅ New |
+| Firebase | `tradebot/signals/firebase_listener.py` | Firestore REST | ✅ New |
+
+All registered in `MarketAggregator` (`tradebot/signals/market.py`) with priority routing.
+
+## Bot Architecture (VilonaBot)
+- **Class:** `VilonaBot` in `tradebot/bots/platforms/vilona/bot.py`
+- **Pattern:** Mixin-based — `CommandHandlersMixin`, `CallbackHandlersMixin`, `AnalysisHandlersMixin`
+- **Commands:** 30+ handlers registered in `_register_commands()` dict
+- **Menus:** 9 categorized inline button menus via `tradebot/services/menu.py` (main, admin, signals, market, history, account, donate, stockity, help)
+- **Navigation:** `menu:*` callbacks for menu nav, `cmd:*` for command execution, `__url__` for URL buttons
+- **Role-based:** Admin vs customer menus (detected from ADMIN_CHAT_ID env var)
+- **Signal caching:** 120s TTL via TieredCache in `consensus_service.py`
+- **Broadcast:** Auto-signal broadcast to subscribers via `_broadcast_signal()`
+- **Donation presets:** Coffee (Rp15K), Fuel (Rp50K), Custom
+
+## Web Server (FastAPI, port 9090)
+- **55 routes** — admin dashboard, public pages, monitoring API, bridge API, webhooks
+- **Bridge API:** 8 endpoints (`/api/bridge/*`) for MT5 EA signal polling
+- **Monitoring:** 6 endpoints (`/api/monitoring/*`)
+- **Webhooks:** `/api/webhook/snapshot`, `/api/webhook/tripay`
 
 ## Code Conventions
 
 ### Types
 ```python
-# Python 3.10+ syntax — no Optional[X], no Union[X, Y]
+# Python 3.10+ — no Optional[X], no Union[X, Y]
 def analyze(self, ticks: list[Tick]) -> Signal | None: ...
 value: str | int | None = None
 ```
@@ -72,6 +103,7 @@ raise SignalError("Missing tick data", details={"symbol": "R_75"})
 class Signal:
     symbol: str
     direction: str
+    predicted_digit: int
     confidence: float
     metadata: dict = field(default_factory=dict)
 ```
@@ -79,29 +111,34 @@ class Signal:
 ### Async
 - `asyncio_mode = auto` in pytest — all tests async by default
 - Engines: `async def analyze(self, ticks) -> Signal | None`
+- Brokers: `async def connect/get_balance/place_order/subscribe_ticks`
 - Cancellation: `try/except asyncio.CancelledError`
 - Timeouts: `asyncio.timeout()` context manager
 
-### Bot Architecture (VilonaBot)
-- Single bot class: `VilonaBot` in `tradebot/bots/platforms/vilona/bot.py`
-- Uses mixin pattern: `CommandHandlersMixin`, `CallbackHandlersMixin`, `AnalysisHandlersMixin`
-- Categorized inline button menus via `tradebot/services/menu.py`
-- Role-based views: admin vs customer (detected from ADMIN_CHAT_ID env var)
-- Signal caching: 120s TTL via TieredCache in `consensus_service.py`
-- All 29 commands registered in `_register_commands()` dict
-
 ## Critical Rules (NEVER violate)
 - No `# type: ignore` without explicit justification in commit message
-- No `except: pass` or `except Exception: pass` — always log
+- No `except: pass` or `except Exception: pass` — always log the exception
 - No BDD comments, emoji comments, or narrative story comments
+- No deleting/modifying `AGENTS.md` or `llms.txt` without understanding the full project context
+- No adding new dependencies without checking `pyproject.toml` first
+- No committing: `.env`, `*.db`, `__pycache__/`, `.ruff_cache/`, `.mypy_cache/`, `.pytest_cache/`
 - `# type: ignore[import-not-found]` allowed ONLY for PEP 420 namespace packages (scripts/)
 - Git commits: `<type>: <subject> — <detail>` with `Co-authored-by: Sisyphus <clio-agent@sisyphuslabs.ai>`
-- Tests paired with implementation code in same commit
-- Never commit: `.env`, `*.db`, `__pycache__/`, `.ruff_cache/`, `.mypy_cache/`
+- Tests must be paired with implementation code in same commit
+- Always run `ruff check` and `pytest tests/` before committing
+- Never use `except: pass` without `LOG` — every exception must be logged
+
+## AI Safety Guardrails (Hermes/OpenClaw)
+- Read `AGENTS.md` files at each directory level before modifying files in that directory
+- Run `python -m pytest tests/ -q` BEFORE making ANY changes — confirm baseline
+- After changes, run `ruff check tradebot/` and fix ALL errors before committing
+- Never modify both `bot.py` and `commands.py` in the same commit without separate concern
+- Never modify a data source and its MarketAggregator registration in separate commits
+- If a test fails, fix the CODE not the TEST (unless the test expectation is wrong)
 
 ## Tooling
 - **Linter:** ruff (rules: E, F, I, W, N, UP, SIM; line-length 100)
 - **Formatter:** ruff format
 - **Type checker:** mypy (strict mode)
 - **Test runner:** pytest with `asyncio_mode = auto`
-- **Coverage:** pytest-cov, target ≥70%
+- **Coverage:** pytest-cov, target ≥70%; excludes `__version__`, `cli`, `__main__`
