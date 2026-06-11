@@ -425,6 +425,20 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
             except FileNotFoundError:
                 self._json({"error": "file not found"}, 404)
+        elif path == "/lp" or path == "/lp/":
+            # Landing page
+            lp_path = "/var/www/phantomfx-lp/index.html"
+            try:
+                with open(lp_path, "r") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(content.encode("utf-8"))))
+                self.end_headers()
+                self.wfile.write(content.encode("utf-8"))
+            except FileNotFoundError:
+                self._json({"error": "landing page not found"}, 404)
         elif path == "/api/trade-log":
             log_path = os.path.join(PROJECT_DIR, "data", "trade_log.json")
             try:
