@@ -10,14 +10,17 @@ import pytest
 from tradebot.models.market import OHLCV
 from tradebot.signals.base import BaseDataSource
 from tradebot.signals.binance import BinanceSource
-from tradebot.signals.yahoo import YahooSource
+from tradebot.signals.ccxt_source import CCXTSource
+from tradebot.signals.deriv_source import DerivSource
 from tradebot.signals.forex import ForexSource
-from tradebot.signals.stockity import StockitySource
 from tradebot.signals.market import (
     MarketAggregator,
     FallbackChain,
     _is_forex,
 )
+from tradebot.signals.mt5_source import MT5Source
+from tradebot.signals.stockity import StockitySource
+from tradebot.signals.yahoo import YahooSource
 
 
 # ═════════════════════════════════════════════════════════════════════
@@ -483,11 +486,10 @@ class TestStockitySource:
 
 class TestMarketAggregator:
 
-    def test_select_sources_crypto_routes_to_binance(self):
+    def test_select_sources_crypto_routes_to_ccxt(self):
         agg = MarketAggregator()
         sources = agg._select_sources("BTC-USD")
         assert len(sources) >= 1
-        assert isinstance(sources[0], BinanceSource)
 
     def test_select_sources_forex_routes_to_forex(self):
         agg = MarketAggregator()

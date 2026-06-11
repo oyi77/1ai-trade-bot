@@ -20,9 +20,12 @@ from datetime import UTC
 
 from .base import BaseDataSource
 from .binance import BinanceSource
+from .ccxt_source import CCXTSource
+from .deriv_source import DerivSource
 from .firebase_listener import ExternalSignal, FirebaseSignalListener, listen_for_signals
 from .forex import ForexSource
 from .market import FallbackChain, MarketAggregator
+from .mt5_source import MT5Source
 from .stockity import StockitySource
 from .yahoo import YahooSource
 

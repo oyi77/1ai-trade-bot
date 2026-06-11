@@ -9,6 +9,7 @@ fallback for specific assets using free APIs).
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -17,7 +18,10 @@ from tradebot.models.market import OHLCV
 
 from .base import BaseDataSource
 from .binance import BinanceSource
+from .ccxt_source import CCXTSource
+from .deriv_source import DerivSource, is_deriv_symbol
 from .forex import ForexSource
+from .mt5_source import MT5Source
 from .stockity import StockitySource
 from .yahoo import YahooSource
 
@@ -70,10 +74,12 @@ class MarketAggregator:
 
     Routes each symbol to the best available data source:
 
-    * **Stockity sources** for platform assets (``CRYPTO_IDX``, …).
-    * **Binance** for well-known crypto symbols (``BTC-USD``, …).
+    * **Deriv** for synthetic indices (``R_75``, ``1HZ10V``, …).
+    * **Stockity** for platform assets (``CRYPTO_IDX``, …).
+    * **Binance/CCXT** for crypto symbols (``BTC-USD``, ``ETH-USD``, …).
     * **ForexSource** for forex pairs (``EURUSD=X``, …).
     * **Yahoo** for everything else (stocks, indices, commodities, …).
+    * **MT5** for symbols available in MetaTrader 5.
 
     Each source is tried in priority order with automatic fallback
     to the next available source on failure.
@@ -84,6 +90,9 @@ class MarketAggregator:
         self._yahoo = YahooSource()
         self._forex = ForexSource()
         self._stockity = StockitySource()
+        self._ccxt = CCXTSource()
+        self._deriv = DerivSource()
+        self._mt5 = MT5Source()
         self._http: httpx.AsyncClient | None = None
 
         # Cache for source resolution
@@ -101,17 +110,25 @@ class MarketAggregator:
         """Return data sources to try, in priority order."""
         sym = _normalise_symbol(symbol)
 
+        # Deriv synthetic indices → Deriv only
+        if is_deriv_symbol(sym):
+            return [self._deriv]
+
         # Platform assets → Stockity only
         if sym in PLATFORM_ASSETS or sym.startswith("CRYPTO"):
             return [self._stockity]
 
-        # Crypto → Binance → Yahoo
+        # Crypto → CCXT → Binance → Yahoo → MT5
         if sym in CRYPTO_SYMBOLS:
-            return [self._binance, self._yahoo]
+            return [self._ccxt, self._binance, self._yahoo, self._mt5]
 
         # Forex → ForexSource → Yahoo
         if _is_forex(sym):
             return [self._forex, self._yahoo]
+
+        # Commodities (XAUUSD, USOIL) → MT5 → Yahoo
+        if sym in ("XAUUSD", "USOIL", "BTCUSD", "ETHUSD"):
+            return [self._mt5, self._yahoo]
 
         # Everything else → Yahoo
         return [self._yahoo]
