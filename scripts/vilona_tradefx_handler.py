@@ -3016,7 +3016,8 @@ def handle_command(cmd, text, chat_id, msg):
 
     elif cmd == "/download":
         if not _is_donor(chat_id):
-            _send_donate_menu(chat_id, username)
+            _uname = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
+            _send_donate_menu(chat_id, _uname)
             tg_send(
                 "🔒 <b>DOWNLOAD EA — DONATUR ONLY</b>\n\n"
                 "EA ini exclusive buat member yang sudah support project.\n"
@@ -3455,7 +3456,26 @@ def handle_command(cmd, text, chat_id, msg):
                     except Exception:
                         pass
             else:
-                tg_send("❌ Analisa gagal — coba lagi nanti.", chat_id)
+                # ── AI FALLBACK: Mechanical signal when all AI models fail ──
+                logger.warning(f"AI all failed for {disp} — falling back to mechanical")
+                try:
+                    mech_sig, mech_reason = detect_mechanical_signal(disp, disp, price, ohlcv_bars)
+                    if mech_sig:
+                        mech_sig["_tier_capped"] = True
+                        mech_sig["action"] = mech_sig.get("action", "HOLD") or "HOLD"
+                        mech_sig["confidence"] = mech_sig.get("confidence", 25)
+                        action = mech_sig["action"]
+                        _touch_manual(str(chat_id), action=action if action in ("BUY","SELL") else None, asset=disp)
+                        mech_sig = _clamp_sltp(mech_sig, disp)
+                        curr = "Rp" if is_idx else "$"
+                        text = fmt_signal(mech_sig, price, dxy, wib_now().hour, disp, curr, quality="C")
+                        text += f"\n\n⚠️ <b>Mechanical Fallback</b> — AI models sedang sibuk (rate limit).\nAkurasi terbatas. Coba /analyze lagi nanti."
+                        tg_send(text, chat_id)
+                    else:
+                        tg_send("❌ Analisa gagal — semua mesin analisa sibuk. Coba lagi dalam 1 menit.", chat_id)
+                except Exception as e:
+                    logger.error(f"Mechanical fallback error: {e}")
+                    tg_send("❌ Analisa gagal — sistem lagi penuh. Coba lagi ya bro.", chat_id)
         elif not sub_norm:
             tg_send("🧠 <b>ANALISA AI — Pilih Aset</b>\n━━━━━━━━━━━━━━━━\n"
                     "💎 /analyze xauusd — Gold\n₿ /analyze btc — Bitcoin\n"
@@ -4943,7 +4963,8 @@ def handle_command(cmd, text, chat_id, msg):
         # ── DONOR GATE: donor or admin can generate license keys ──
         admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
         if not _is_donor(str(chat_id)) and str(chat_id) not in admin_ids:
-            _send_donate_menu(chat_id, username)
+            _uname = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
+            _send_donate_menu(chat_id, _uname)
             tg_send(
                 "🔑 <b>Generate License Key</b> [🔒 LOCKED]\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
