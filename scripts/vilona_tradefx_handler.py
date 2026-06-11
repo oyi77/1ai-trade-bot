@@ -668,9 +668,14 @@ def _check_donor_quota(chat_id):
     record["count"] += 1
     USER_DAILY_ANALYZE[chat_id] = record
     
+    # -1 means unlimited — never block
+    if DONOR_DAILY_QUOTA < 0:
+        return True, -1, None
+    
     # Check quota AFTER increment — user gets exactly QUOTA x per day
     if record["count"] > DONOR_DAILY_QUOTA:
-        return False, max(0, DONOR_DAILY_QUOTA - record["count"]), f"🛑 <b>Kuota Subscriber Harian Penuh!</b>\\n━━━━━━━━━━━━━━━━\\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\\n⏰ Reset: besok jam 00:00 WIB\\n\\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
+        remaining = max(0, DONOR_DAILY_QUOTA - record["count"])
+        return False, remaining, f"🛑 <b>Kuota Subscriber Harian Penuh!</b>\\n━━━━━━━━━━━━━━━━\\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\\n⏰ Reset: besok jam 00:00 WIB\\n\\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
     
     remaining = max(0, DONOR_DAILY_QUOTA - record["count"])
     if remaining <= 5:
@@ -3163,7 +3168,7 @@ def handle_command(cmd, text, chat_id, msg):
 
             txt = (
                 f"👑 <b>STATUS: SUBSCRIBER ELITE</b>\n"
-                f"⚡️ Kuota AI: {remaining}/{DONOR_DAILY_QUOTA}x hari ini (Reset 00:00 WIB)\n"
+                f"⚡️ Kuota AI: {'UNLIMITED ♾️' if DONOR_DAILY_QUOTA < 0 else f'{remaining}/{DONOR_DAILY_QUOTA}x'} hari ini (Reset 00:00 WIB)\n"
                 f"⏱️ Cooldown: {MANUAL_THROTTLE_DONOR}s antar analisa\n"
                 f"{fuel_text}\n"
                 f"━━━━━━━━━━━━━━━━\n"
