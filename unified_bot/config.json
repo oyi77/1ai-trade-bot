@@ -1,0 +1,577 @@
+# Unified Bot Configuration
+
+## Configuration Overview
+
+This file contains the configuration for the Unified Trading Bot, including brand configurations, API settings, and application settings.
+
+## Configuration Structure
+
+```json
+{
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false,
+    "workers": 1,
+    "timeout": 30,
+    "max_request_size": 10485760
+  },
+  "brands": [
+    {
+      "brand_id": "default",
+      "domain": "https://default.example.com",
+      "name": "Default Trading Bot",
+      "logo_url": null,
+      "primary_color": "#2563eb",
+      "features": {
+        "enable_real_trading": false,
+        "enable_paper_trading": true,
+        "max_open_trades": 10,
+        "risk_percentage": 0.02
+      },
+      "pricing": {
+        "default_currency": "USD",
+        "plans": {
+          "free": {"price": 0, "features": ["basic"]},
+          "pro": {"price": 99, "features": ["advanced", "priority_support"]},
+          "enterprise": {"price": 499, "features": ["advanced", "priority_support", "dedicated_support"]}
+        }
+      }
+    },
+    {
+      "brand_id": "example",
+      "domain": "https://example.com",
+      "name": "Example Trading Bot",
+      "logo_url": "https://example.com/logo.png",
+      "primary_color": "#10b981",
+      "features": {
+        "enable_real_trading": true,
+        "enable_paper_trading": true,
+        "max_open_trades": 20,
+        "risk_percentage": 0.01
+      },
+      "pricing": {
+        "default_currency": "USD",
+        "plans": {
+          "free": {"price": 0, "features": ["basic"]},
+          "pro": {"price": 149, "features": ["advanced", "priority_support"]},
+          "enterprise": {"price": 699, "features": ["advanced", "priority_support", "dedicated_support"]}
+        }
+      }
+    }
+  ],
+  "settings": {
+    "environment": "production",
+    "log_level": "info",
+    "enable_metrics": true,
+    "metrics_retention_hours": 24,
+    "rate_limit_per_minute": 60,
+    "max_request_size": 10485760,
+    "cors_origins": ["*"],
+    "enable_authentication": true,
+    "jwt_secret": "your-jwt-secret",
+    "jwt_expiration": 3600
+  }
+}
+```
+
+## Configuration Sections
+
+### 1. API Configuration
+
+```json
+"api": {
+  "host": "0.0.0.0",
+  "port": 8000,
+  "debug": false,
+  "workers": 1,
+  "timeout": 30,
+  "max_request_size": 10485760
+}
+```
+
+**Parameters:**
+- `host`: Host address for the API server
+- `port`: Port number for the API server
+- `debug`: Enable/disable debug mode
+- `workers`: Number of worker processes
+- `timeout`: Request timeout in seconds
+- `max_request_size`: Maximum request size in bytes
+
+### 2. Brand Configuration
+
+```json
+"brands": [
+  {
+    "brand_id": "example",
+    "domain": "https://example.com",
+    "name": "Example Trading Bot",
+    "logo_url": "https://example.com/logo.png",
+    "primary_color": "#10b981",
+    "features": {
+      "enable_real_trading": true,
+      "enable_paper_trading": true,
+      "max_open_trades": 20,
+      "risk_percentage": 0.01
+    },
+    "pricing": {
+      "default_currency": "USD",
+      "plans": {
+        "free": {"price": 0, "features": ["basic"]},
+        "pro": {"price": 149, "features": ["advanced", "priority_support"]},
+        "enterprise": {"price": 699, "features": ["advanced", "priority_support", "dedicated_support"]}
+      }
+    }
+  }
+]
+```
+
+**Parameters:**
+
+#### Brand Identification
+- `brand_id`: Unique brand identifier (alphanumeric with underscores or hyphens)
+- `domain`: Brand domain or subdomain
+- `name`: Brand display name
+- `logo_url`: Brand logo URL
+- `primary_color`: Primary brand color (hex code)
+
+#### Features Configuration
+- `enable_real_trading`: Enable real trading mode
+- `enable_paper_trading`: Enable paper trading mode
+- `max_open_trades`: Maximum number of open trades
+- `risk_percentage`: Risk percentage per trade
+- Additional features depend on brand configuration
+
+#### Pricing Configuration
+- `default_currency`: Default currency for pricing
+- `plans`: Pricing plans with features
+
+### 3. Application Settings
+
+```json
+"settings": {
+  "environment": "production",
+  "log_level": "info",
+  "enable_metrics": true,
+  "metrics_retention_hours": 24,
+  "rate_limit_per_minute": 60,
+  "max_request_size": 10485760,
+  "cors_origins": ["*"],
+  "enable_authentication": true,
+  "jwt_secret": "your-jwt-secret",
+  "jwt_expiration": 3600
+}
+```
+
+**Parameters:**
+
+#### Environment Settings
+- `environment`: Application environment (development, testing, production)
+- `log_level`: Logging level (debug, info, warning, error)
+- `enable_metrics`: Enable/disable metrics collection
+- `metrics_retention_hours`: Metrics retention period in hours
+
+#### Performance Settings
+- `rate_limit_per_minute`: Rate limit for API requests per minute
+- `max_request_size`: Maximum request size in bytes
+- `cors_origins`: CORS allowed origins
+
+#### Security Settings
+- `enable_authentication`: Enable/disable authentication
+- `jwt_secret`: JWT secret key
+- `jwt_expiration`: JWT token expiration time in seconds
+
+## Brand Features Configuration
+
+### Core Trading Features
+```json
+{
+  "enable_real_trading": true,
+  "enable_paper_trading": true,
+  "max_open_trades": 20,
+  "risk_percentage": 0.01,
+  "daily_loss_limit": 0.05,
+  "position_size_limit": 0.1,
+  "max_drawdown_limit": 0.2
+}
+```
+
+### Signal Features
+```json
+{
+  "enable_signal_generation": true,
+  "min_confidence_threshold": 0.7,
+  "signal_providers": ["binance", "coingecko"],
+  "custom_indicators": ["my_custom_indicator"]
+}
+```
+
+### Payment Features
+```json
+{
+  "payment_methods": ["stripe", "paypal", "bank_transfer"],
+  "auto_subscription": true,
+  "trial_enabled": true,
+  "trial_days": 7
+}
+```
+
+### User Management Features
+```json
+{
+  "email_verification_required": true,
+  "phone_verification_required": false,
+  "two_factor_auth_required": false,
+  "kyc_verification_required": false
+}
+```
+
+### Analytics Features
+```json
+{
+  "enable_analytics": true,
+  "analytics_retention_days": 90,
+  "custom_reports_enabled": false
+}
+```
+
+## Configuration Files
+
+### Configuration File Locations
+
+| File | Purpose |
+|------|---------|
+| `config.json` | Main configuration file |
+| `.env` | Environment variables |
+| `brands.json` | Brand configurations (legacy) |
+| `api_config.json` | API configuration |
+
+### Configuration File Examples
+
+#### config.json
+```json
+{
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false
+  },
+  "brands": [],
+  "settings": {
+    "environment": "production",
+    "log_level": "info"
+  }
+}
+```
+
+#### .env
+```bash
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=8000
+API_DEBUG=false
+
+# JWT Configuration
+JWT_SECRET=your-jwt-secret-here
+JWT_EXPIRATION=3600
+
+# Database Configuration
+DATABASE_URL=sqlite:///unified_bot.db
+
+# External Services
+STRIPE_SECRET_KEY=sk_test_...
+PAYPAL_CLIENT_ID=...
+
+# Logging
+LOG_LEVEL=info
+LOG_FORMAT=json
+```
+
+## Configuration Validation
+
+### Required Fields
+
+- **Brand Configuration**: `brand_id`, `domain`, `name`
+- **API Configuration**: `host`, `port`
+- **Settings Configuration**: `environment`, `log_level`
+
+### Validation Rules
+
+- **Brand ID**: Must be alphanumeric with underscores or hyphens
+- **Domain**: Must start with http:// or https://
+- **Currency**: Must be valid ISO currency code or cryptocurrency symbol
+- **Rate Limits**: Must be positive integers
+- **Time Values**: Must be positive numbers
+
+## Configuration Management
+
+### Configuration Commands
+
+| Command | Description |
+|---------|-------------|
+| `config:init` | Initialize configuration |
+| `config:load` | Load configuration from file |
+| `config:save` | Save configuration to file |
+| `config:validate` | Validate configuration |
+| `config:export` | Export configuration to file |
+| `config:import` | Import configuration from file |
+
+### Configuration Tools
+
+#### Python API
+```python
+from unified_bot.config import load_config, save_config, validate_config
+
+# Load configuration
+config = load_config("config.json")
+
+# Validate configuration
+validate_config(config)
+
+# Save configuration
+save_config(config, "config.json")
+```
+
+#### Command Line Interface
+```bash
+# Load configuration
+python -m unified_bot config:load config.json
+
+# Validate configuration
+python -m unified_bot config:validate config.json
+
+# Save configuration
+python -m unified_bot config:save config.json
+```
+
+## Security Considerations
+
+### Configuration Security
+
+#### Sensitive Data
+- **JWT Secrets**: Store in environment variables or secure vault
+- **API Keys**: Store in environment variables or secure vault
+- **Database Passwords**: Store in environment variables or secure vault
+
+#### Access Control
+- **File Permissions**: Restrict access to configuration files
+- **Directory Permissions**: Restrict access to configuration directory
+- **Process Permissions**: Run with least privileges
+
+### Configuration Best Practices
+
+#### Development
+- **Use environment variables**: Store sensitive data in environment variables
+- **Use .env files**: Store local configuration in .env files
+- **Use configuration management**: Use configuration management tools
+
+#### Production
+- **Use secrets management**: Use secrets management tools
+- **Use configuration management**: Use configuration management tools
+- **Use infrastructure as code**: Use infrastructure as code tools
+
+## Configuration Monitoring
+
+### Monitoring Metrics
+
+| Metric | Description |
+|--------|-------------|
+| `configuration_load_time` | Time to load configuration |
+| `configuration_validation_time` | Time to validate configuration |
+| `configuration_save_time` | Time to save configuration |
+| `configuration_error_count` | Number of configuration errors |
+
+### Monitoring Tools
+
+#### Prometheus
+```yaml
+# prometheus.yml
+rule_files:
+  - "config_rules.yml"
+
+scrape_configs:
+  - job_name: 'unified_bot'
+    static_configs:
+      - targets: ['localhost:8000']
+```
+
+#### Grafana
+```json
+{
+  "dashboard": {
+    "panels": [
+      {
+        "title": "Configuration Load Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "unified_bot_config_load_time_seconds",
+            "legendFormat": "{{instance}}"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## Configuration Migration
+
+### Migration Commands
+
+| Command | Description |
+|---------|-------------|
+| `migrate:config` | Migrate configuration from old format to new format |
+| `migrate:data` | Migrate data from old system to new system |
+| `migrate:brands` | Migrate brands from old system to new system |
+| `migrate:users` | Migrate users from old system to new system |
+
+### Migration Scripts
+
+#### Python Migration Script
+```python
+import json
+from unified_bot.config import load_config, save_config
+
+# Load old configuration
+with open("old_config.json", "r") as f:
+    old_config = json.load(f)
+
+# Convert configuration
+new_config = {
+    "api": old_config.get("api", {}),
+    "brands": old_config.get("brands", []),
+    "settings": old_config.get("settings", {})
+}
+
+# Save new configuration
+save_config(new_config, "config.json")
+```
+
+## Configuration Documentation
+
+### Documentation Structure
+
+| File | Description |
+|------|-------------|
+| `config.json` | Main configuration file |
+| `.env` | Environment variables |
+| `CONFIGURATION.md` | Configuration documentation |
+| `CONFIG_SETUP.md` | Configuration setup guide |
+
+### Configuration Examples
+
+#### Development Configuration
+```json
+{
+  "api": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "debug": true
+  },
+  "brands": [],
+  "settings": {
+    "environment": "development",
+    "log_level": "debug"
+  }
+}
+```
+
+#### Production Configuration
+```json
+{
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false
+  },
+  "brands": [],
+  "settings": {
+    "environment": "production",
+    "log_level": "info"
+  }
+}
+```
+
+## Configuration Support
+
+### Support Channels
+
+| Channel | Description |
+|---------|-------------|
+| GitHub Issues | Report configuration issues |
+| Documentation | Configuration documentation |
+| Community | Configuration discussions |
+
+### Configuration Support
+
+#### Configuration Issues
+- **Configuration Validation**: Validate configuration files
+- **Configuration Loading**: Load configuration files
+- **Configuration Saving**: Save configuration files
+- **Configuration Migration**: Migrate configuration files
+
+#### Configuration Features
+- **Brand Configuration**: Configure brand settings
+- **API Configuration**: Configure API settings
+- **Feature Configuration**: Configure feature settings
+- **Pricing Configuration**: Configure pricing settings
+
+## Configuration Maintenance
+
+### Configuration Maintenance Commands
+
+| Command | Description |
+|---------|-------------|
+| `config:backup` | Backup configuration |
+| `config:restore` | Restore configuration |
+| `config:cleanup` | Clean up configuration |
+| `config:optimize` | Optimize configuration |
+
+### Configuration Maintenance Tools
+
+#### Backup Configuration
+```bash
+# Backup configuration
+python -m unified_bot config:backup
+
+# Restore configuration
+python -m unified_bot config:restore backup.json
+```
+
+#### Clean Configuration
+```bash
+# Clean configuration
+python -m unified_bot config:cleanup
+
+# Optimize configuration
+python -m unified_bot config:optimize
+```
+
+## Configuration Best Practices
+
+### Configuration Best Practices
+
+#### Development
+- **Use configuration management**: Use configuration management tools
+- **Use environment variables**: Store sensitive data in environment variables
+- **Use .env files**: Store local configuration in .env files
+- **Use configuration validation**: Validate configuration files
+
+#### Production
+- **Use secrets management**: Use secrets management tools
+- **Use configuration management**: Use configuration management tools
+- **Use infrastructure as code**: Use infrastructure as code tools
+- **Use monitoring**: Monitor configuration usage
+
+#### Security
+- **Use encryption**: Encrypt sensitive configuration data
+- **Use access control**: Restrict access to configuration files
+- **Use authentication**: Authenticate access to configuration files
+- **Use auditing**: Audit configuration changes
+
+## Conclusion
+
+This configuration file provides comprehensive configuration options for the Unified Trading Bot, including brand configurations, API settings, and application settings. It supports multiple environments, secure configuration management, and comprehensive monitoring and maintenance capabilities.
+
+The configuration file is designed to be flexible and extensible, allowing for easy customization and adaptation to different requirements and environments.

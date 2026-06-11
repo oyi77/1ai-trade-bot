@@ -12,6 +12,7 @@ from database import Database
 from trade_client import TradeClient, TradeOrder, Direction
 
 LOG = logging.getLogger("subscription_bot.signaler")
+
 STOCKITY_SYMBOLS = ["CRYPTO_IDX"]
 SCAN_SYMBOLS = list(STOCKITY_SYMBOLS)
 
@@ -35,7 +36,13 @@ class StockitySignalGenerator:
 
 
 class ProactiveSignaler:
-    def __init__(self, db: Database, trade_client: Optional[TradeClient] = None, authtoken: str = "", cookie: str = ""):
+    def __init__(
+        self,
+        db: Database,
+        trade_client: Optional[TradeClient] = None,
+        authtoken: str = "",
+        cookie: str = "",
+    ):
         self.db = db
         self.trade_client = trade_client
         self._generator = StockitySignalGenerator(authtoken=authtoken, cookie=cookie)
@@ -57,9 +64,12 @@ class ProactiveSignaler:
             sig = await self._generator.generate(symbol)
             if sig is None:
                 continue
+
             if sig.action == "WAIT" and sig.confidence < Config.MIN_CONFIDENCE:
                 continue
+
             signals.append(sig)
+
             last = self._last_signals.get(symbol)
             now = int(time.time())
             is_new = (
@@ -68,21 +78,29 @@ class ProactiveSignaler:
                 or abs(last[1] - sig.confidence) > 10
                 or (now - last[2]) > 3600
             )
+
             if is_new:
                 LOG.info("NEW signal: %s %s %d%%", symbol, sig.action, sig.confidence)
                 self._last_signals[symbol] = (sig.action, sig.confidence, now)
+
                 if self._dispatch:
                     await self._dispatch(sig)
+
                 if (
                     self._auto_dispatch
                     and sig.is_tradeable
                     and sig.confidence >= Config.MIN_CONFIDENCE
                 ):
                     await self._auto_dispatch(sig)
+
         return signals
 
     async def _loop(self):
-        LOG.info("Proactive signaler started (interval=%ds, min_conf=%d%%)", Config.SCAN_INTERVAL, Config.MIN_CONFIDENCE)
+        LOG.info(
+            "Proactive signaler started (interval=%ds, min_conf=%d%%)",
+            Config.SCAN_INTERVAL,
+            Config.MIN_CONFIDENCE,
+        )
         while self._running:
             try:
                 await self.scan_once()
@@ -121,3 +139,6 @@ class ProactiveSignaler:
     @property
     def is_running(self) -> bool:
         return self._running
+
+
+SignalGenerator = StockitySignalGenerator

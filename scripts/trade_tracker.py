@@ -26,7 +26,15 @@ USD_IDR = 16350
 def _load() -> dict:
     try:
         if DATA_FILE.exists():
-            return json.loads(DATA_FILE.read_text())
+            text = DATA_FILE.read_text().strip()
+            if not text:
+                raise ValueError("empty")
+            payload = json.loads(text)
+            if isinstance(payload, list):
+                payload = {"trades": payload, "stats": {"total": 0, "wins": 0, "losses": 0, "breakeven": 0, "total_pips": 0.0, "total_profit_usd": 0.0, "best_win_pips": 0.0, "worst_loss_pips": 0.0}}
+            elif not isinstance(payload, dict):
+                raise ValueError("invalid")
+            return payload
     except Exception:
         pass
     return {"trades": [], "stats": {"total": 0, "wins": 0, "losses": 0, "breakeven": 0,
