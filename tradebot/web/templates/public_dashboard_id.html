@@ -265,6 +265,14 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     </div>
   </div>
 
+  <!-- AI Engine Performance — Live Visualization -->
+  <div class="kpi-card mb-5">
+    <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🧠 AI Engine Consensus <span class="text-[10px] text-slate-500 font-normal">· Updated live every 30s</span></h3>
+    <div id="live-engines">
+      <div class="text-center py-8 text-sm text-slate-500">⏳ Loading AI engine data...</div>
+    </div>
+  </div>
+
   <!-- Daily Trading Report -->
   <div class="kpi-card mb-5">
     <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">📋 Laporan Trading Harian</h3>
@@ -986,7 +994,8 @@ async function loadAll() {
       fetch('/api/daily_analyze').then(r => r.json()),
       fetch('/api/daily_recap').then(r => r.json()),
       fetch('/api/fuel/stats').then(r => r.json()),
-      fetch('/api/live-snapshot').then(r => r.json()).catch(() => null)
+      fetch('/api/live-snapshot').then(r => r.json()).catch(() => null),
+      fetch('/api/engine-readings').then(r => r.json()).catch(() => null)
     ]);
 
     const signals = feed.signals || [];
@@ -998,6 +1007,7 @@ async function loadAll() {
     const daily = dailyRes || {};
     const recap = recapRes || {};
     const snapshot = snapRes || {};
+    const engineData = engineRes || {};
 
     const total = ts.total || 0;
     const wins = ts.wins || 0;
@@ -1072,6 +1082,7 @@ async function loadAll() {
     renderDailyRecap(recap);
     renderFuelStats(fuelRes);
     renderFuelDonorWall(donors);
+    renderEngineReadings(engineData);
 
   } catch(e) {
     console.error('Load error:', e);
@@ -1145,6 +1156,60 @@ function renderDonorWall(donors) {
     </div>`;
   }).join('');
   el.innerHTML += '<div class="text-center text-[10px] text-slate-600 mt-3">🙏 Thank you supporters!</div>';
+}
+
+/* ═══ RENDER ENGINE READINGS — LIVE AI PERFORMANCE ═══ */
+function renderEngineReadings(data) {
+  const el = document.getElementById('live-engines');
+  if (!el) return;
+  // Get the most granular timeframe (M15 > H1 > H4 > D1)
+  const tfs = data.timeframes || {};
+  const tfOrder = ['M15','M5','H1','H4','D1'];
+  let tf = {};
+  for (const key of tfOrder) {
+    if (tfs[key]) { tf = tfs[key]; break; }
+  }
+  const engines = tf.engines || data.engines || {};
+  const names = Object.keys(engines);
+  if (!names.length) {
+    el.innerHTML = '<div class="col-span-full text-sm text-slate-500 text-center py-8">⏳ AI Engine Consensus belum tersedia — tunggu update berikutnya</div>';
+    return;
+  }
+  // Hierarchical verdict
+  const hier = data.hierarchical || {};
+  const verdict = hier.verdict || 'HOLD';
+  const score = hier.consensus_score ? Math.round(hier.consensus_score * 100) : 0;
+  const vCls = verdict === 'BUY' ? 'text-emerald-400' : verdict === 'SELL' ? 'text-red-400' : 'text-slate-400';
+  const align = data.mtf_alignment || 'UNKNOWN';
+  const aCls = align === 'ALIGNED' ? 'text-emerald-400' : align === 'CONFLICT' ? 'text-red-400' : 'text-amber-400';
+  const trend = data.macro_trend || 'NEUTRAL';
+  
+  // Consensus bar
+  let html = '<div class="flex flex-wrap items-center gap-3 mb-4 p-3 bg-slate-800/30 rounded-lg border border-white/5">';
+  html += `<span class="text-xs text-slate-400">🧠 MTF Verdict</span>`;
+  html += `<span class="text-sm font-bold ${vCls}">${verdict} (${score}%)</span>`;
+  html += `<span class="text-xs ${aCls}">${align}</span>`;
+  html += `<span class="text-xs text-slate-500">Trend: ${trend}</span>`;
+  html += `<span class="text-[10px] text-slate-600 ml-auto">${data.symbol || 'XAUUSD'}</span>`;
+  html += '</div>';
+  
+  // Engine grid
+  html += '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">';
+  names.sort().forEach(k => {
+    const e = engines[k];
+    const dir = (e.direction || 'HOLD').toUpperCase();
+    const conf = e.confidence ? (e.confidence > 1 ? Math.round(e.confidence) : Math.round(e.confidence * 100)) : '--';
+    const dirColor = dir === 'BUY' ? '#34d399' : dir === 'SELL' ? '#f87171' : '#94a3b8';
+    const confColor = typeof conf === 'number' && conf >= 70 ? '#34d399' : typeof conf === 'number' && conf >= 50 ? '#fbbf24' : '#94a3b8';
+    html += `<div class="text-center bg-white/5 rounded-lg p-2.5 border border-white/5 hover:border-blue-500/30 transition-all">
+      <div class="text-[10px] font-bold text-blue-400 uppercase mb-1">${k}</div>
+      <div class="text-base font-mono font-bold" style="color:${dirColor}">${dir}</div>
+      <div class="text-[10px] font-mono" style="color:${confColor}">${conf}%</div>
+    </div>`;
+  });
+  html += '</div>';
+  
+  el.innerHTML = html;
 }
 
 function renderDailyAnalyze(daily, trans) {
