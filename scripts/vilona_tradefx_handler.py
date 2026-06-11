@@ -207,7 +207,9 @@ XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 OMNIROUTE_MODELS = ["deepseek-chat", "gpt-4o", "claude-sonnet-4-20250514"]
-OMNIROUTE_FREE_MODELS = ["auto/best-free", "auto/free-chat", "auto/free-all"]
+OMNIROUTE_FREE_MODELS = ["auto/best-free", "auto/free-chat", "auto/free-all",
+                         "mistral/mistral-large-2411", "cohere/command-a-03-2025",
+                         "google/gemini-2.5-flash", "af/moonshot/kimi-k2.6"]
 
 # ── AI Token Usage Tracking ──
 # Per-analysis-cycle counter. Reset at start of each ask_ai_ensemble() call.
