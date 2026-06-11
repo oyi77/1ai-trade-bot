@@ -250,4 +250,38 @@ def get_total_donations() -> int:
         return row[0] if row else 0
 
 
+def get_monthly_fuel_stats() -> dict:
+    """Return monthly donation stats for fuel gauge.
+    Returns: {total: int, donor_count: int, month: str}"""
+    month_start = datetime.now(WIB).replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    with _conn() as db:
+        total = db.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM payment_orders WHERE status='paid' AND paid_at >= ?",
+            (month_start,)
+        ).fetchone()[0]
+        donors = db.execute(
+            "SELECT COUNT(DISTINCT chat_id) FROM payment_orders WHERE status='paid' AND paid_at >= ?",
+            (month_start,)
+        ).fetchone()[0]
+    return {
+        "total": total or 0,
+        "donor_count": donors or 0,
+        "month": datetime.now(WIB).strftime("%B %Y"),
+    }
+
+
+def get_user_last_donation(chat_id: str) -> dict | None:
+    """Return user's last donation info. {days_ago: int, amount: int} or None."""
+    with _conn() as db:
+        row = db.execute(
+            "SELECT amount, paid_at FROM payment_orders WHERE chat_id=? AND status='paid' ORDER BY paid_at DESC LIMIT 1",
+            (str(chat_id),)
+        ).fetchone()
+        if not row:
+            return None
+        paid_dt = datetime.fromisoformat(row["paid_at"])
+        days_ago = (datetime.now(WIB) - paid_dt).days
+        return {"days_ago": days_ago, "amount": row["amount"]}
+
+
 init_db()

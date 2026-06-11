@@ -1,5 +1,5 @@
 [Unit]
-Description=1AI Agent Bot — Production Telethon Layer
+Description=1AI Agent Bot — Production
 After=network-online.target
 Wants=network-online.target
 
@@ -7,10 +7,11 @@ Wants=network-online.target
 Type=simple
 User=openclaw
 WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
-Environment=TELEGRAM_BOT_TOKEN=8343388239:AAFgeAkc9bvjywyCsHqRIa_RiJ6q-rp6uv0
+Environment=TELEGRAM_BOT_TOKEN=8343388239:AAHWOVrRzwVeyGHav-DY9RvfSosDYteHuIg
 Environment=TELEGRAM_API_ID=23647272
 Environment=TELEGRAM_API_HASH=1f69a4e0f03e5f51ddfa5b67ac7b5c49
 Environment=ADMIN_USER_IDS=157228659,5220170786
+Environment=GROK_API_KEY=xai-Z0z54954ovqntReO5jdnuTIF4b6
 Environment=PYTHONUNBUFFERED=1
 ExecStart=/usr/bin/python3 -m agent.main
 Restart=always

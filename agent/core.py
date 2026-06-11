@@ -21,6 +21,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 LOG = logging.getLogger("agent.core")
 
 WIB = timezone(timedelta(hours=7))
@@ -287,52 +289,159 @@ async def cmd_news(args: list[str], chat_id: str) -> str:
             "🔒 <b>Khusus Donatur VIP</b>\n" + DONOR_FOMO
         )
     pair = args[0] if args else "xauusd"
-    return (
-        f"📰 <b>Market News — {pair.upper()}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚪️ <b>No major catalysts detected</b>\n\n"
-        f"Market currently quiet.\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📰 Grok News Active ✅\n"
-        f"🤝 AI Partner keeps watching."
-    )
+    display = pair.upper()
+    try:
+        pair_map = {"xauusd": "gold", "gold": "gold", "btc": "btc", "btcusd": "btc",
+                    "eth": "eth", "ethusd": "eth", "oil": "oil", "eurusd": "eurusd"}
+        p = pair_map.get(pair, "gold")
+        import yfinance as yf
+        ticker = yf.Ticker("GC=F")
+        data = ticker.history(period="1d", interval="1m")
+        price = float(data["Close"].iloc[-1]) if not data.empty else 0
+
+        from vilona_tradefx_handler import _call_grok_news
+        result = _call_grok_news(display, price)
+        if result:
+            return result
+        return (
+            f"📰 <b>Market News — {display}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚪️ No major catalysts detected.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📰 Grok News Active ✅"
+        )
+    except Exception as e:
+        LOG.warning("/news error: %s", e)
+        return (
+            f"📰 <b>Market News — {display}</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚪️ <b>No major catalysts detected</b>\n\n"
+            f"Market currently quiet.\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📰 Grok News Active ✅\n"
+            f"🤝 AI Partner keeps watching."
+        )
 
 
 async def cmd_zones(args: list[str], chat_id: str) -> str:
     pair = args[0] if args else "xauusd"
+    display = pair.upper()
+    import yfinance as yf
+
+    symbol_map = {"xauusd": "GC=F", "gold": "GC=F", "btc": "BTC-USD", "eth": "ETH-USD",
+                  "eurusd": "EURUSD=X", "gbpusd": "GBPUSD=X", "usdjpy": "JPY=X"}
+    symbol = symbol_map.get(pair, pair.upper())
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period="5d", interval="1h")
+    if df.empty:
+        df = ticker.history(period="1mo", interval="1d")
+    if df.empty:
+        return "❌ Data tidak tersedia."
+
+    high = float(df["High"].max())
+    low = float(df["Low"].min())
+    close = float(df["Close"].iloc[-1])
+    pip_size = 0.10 if display in ("XAUUSD", "GOLD") else (1.0 if display in ("BTCUSD", "ETH") else 0.0001)
+    pivot = (high + low + close) / 3
+
+    supply_zone = f"{pivot + (high - low) * 0.382:.2f} - {high:.2f}"
+    demand_zone = f"{low:.2f} - {pivot - (high - low) * 0.382:.2f}"
+
     return (
-        f"🧲 <b>LIQUIDITY ZONES — {pair.upper()}</b>\n"
+        f"🧲 <b>LIQUIDITY ZONES — {display}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📐 <b>FAIR VALUE GAPS (H1)</b>\n"
-        f"  Active FVG zones detected\n\n"
-        f"🏦 <b>ORDER BLOCKS (H1)</b>\n"
-        f"  Multiple OBs identified\n\n"
+        f"📐 <b>FAIR VALUE GAPS</b>\n"
+        f"  Range: {low:.2f} — {high:.2f}\n"
+        f"  Size: {(high-low)/pip_size:.0f} pip\n\n"
         f"💧 <b>SUPPLY / DEMAND</b>\n"
-        f"  🔴 Supply (Resist): Near price\n"
-        f"  🟢 Demand (Support): Near price\n"
+        f"  🔴 Supply: {supply_zone}\n"
+        f"  🟢 Demand: {demand_zone}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💡 /analyze {pair} untuk analisa detail\n"
-        f"🏛 /levels — Level Support & Resistance"
+        f"Current: {close:.2f}\n"
+        f"💡 Gunakan /levels atau /signal untuk analisa"
     )
 
 
 async def cmd_structure(args: list[str], chat_id: str) -> str:
     pair = args[0] if args else "xauusd"
+    display = pair.upper()
+    import yfinance as yf
+
+    symbol_map = {"xauusd": "GC=F", "gold": "GC=F", "btc": "BTC-USD", "eth": "ETH-USD"}
+    symbol = symbol_map.get(pair, pair.upper())
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period="10d", interval="1h")
+    if df.empty:
+        df = ticker.history(period="2mo", interval="1d")
+    if df.empty:
+        return "❌ Data tidak tersedia."
+
+    closes = df["Close"].values
+    highs20 = df["High"].rolling(20).max()
+    lows20 = df["Low"].rolling(20).min()
+    if len(closes) < 20:
+        return "❌ Data tidak mencukupi."
+
+    last = closes[-1]
+    prev = closes[-5] if len(closes) >= 5 else closes[0]
+    trend_h1 = "BULLISH" if last > prev else "BEARISH"
+
+    ema9 = df["Close"].rolling(9).mean().iloc[-1]
+    ema21 = df["Close"].rolling(21).mean().iloc[-1]
+    ema_trend = "BULLISH" if ema9 > ema21 else "BEARISH"
+
+    hh = float(highs20.iloc[-1]) if not pd.isna(highs20.iloc[-1]) else 0
+    ll = float(lows20.iloc[-1]) if not pd.isna(lows20.iloc[-1]) else 0
+    current_high = float(df["High"].iloc[-1])
+    current_low = float(df["Low"].iloc[-1])
+    bos_hh = "✅ BOS UP" if current_high > hh else "⏹️ No BOS"
+    bos_ll = "✅ BOS DN" if current_low < ll else "⏹️ No BOS"
+
     return (
-        f"🏗 <b>MARKET STRUCTURE — {pair.upper()}</b>\n"
+        f"🏗 <b>MARKET STRUCTURE — {display}</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📈 <b>TREND</b>\n"
-        f"  H1: BULLISH 📈\n"
-        f"  M15: BULLISH 📈\n"
-        f"  Alignment: ✅ CONFIRMED\n\n"
+        f"  H1: {trend_h1} 📈\n"
+        f"  EMA9/21: {ema_trend} 📈\n"
+        f"  Alignment: {'✅' if trend_h1 == ema_trend else '⚠️'} \n\n"
         f"🏗 <b>STRUCTURE</b>\n"
-        f"  BOS: Bullish Break ✅\n"
-        f"  HH/HL: Higher High + Higher HL ✅\n\n"
-        f"🧬 <b>MTF ALIGNMENT</b>\n"
-        f"  D1-H4-H1-M15-M5: ALL BULLISH\n"
+        f"  HH(20): {hh:.2f} | {bos_hh}\n"
+        f"  LL(20): {ll:.2f} | {bos_ll}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🧠 /signal — Signal dari 9 engines\n"
-        f"🎯 /killzone — Sesi trading aktif"
+        f"Price: {last:.2f} | Prev: {prev:.2f}\n"
+        f"🧠 /signal — Signal dari 9 engines"
+    )
+
+
+async def cmd_session(args: list[str], chat_id: str) -> str:
+    pair = args[0] if args else "xauusd"
+    display = pair.upper()
+    now = wib_now()
+    h = now.hour
+    lkz, nykz = killzone_active()
+    ses = session_label()
+
+    prev_day = now - timedelta(days=1)
+    daily_high_label = prev_day.strftime("%d/%m")
+    today_label = now.strftime("%d/%m")
+
+    return (
+        f"🕐 <b>SESSION LEVELS — {display}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📅 {wib_fmt()} | {now.strftime('%A')}\n"
+        f"🟢 Active: <b>{ses}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🇬🇧 London: {'🟢 AKTIF' if lkz else '🔴 TUTUP'}\n"
+        f"🇺🇸 NY:     {'🟢 AKTIF' if nykz else '🔴 TUTUP'}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>Sesi:</b>\n"
+        f"🌏 Asia:     03-07 WIB\n"
+        f"🇬🇧 London:   07-15 WIB\n"
+        f"🇬🇧🇺🇸 London+NY: 15-19 WIB (🔥 HIGH)\n"
+        f"🇺🇸 NY:       19-23 WIB\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📊 /data — Market overview\n"
+        f"🧠 /signal — Signal dari 9 engines"
     )
 
 
@@ -617,7 +726,7 @@ async def broadcast_signal_result(
 
 
 async def auto_analysis_loop(bot: Any) -> None:
-    """Background auto-analysis loop — runs engines, broadcasts signals."""
+    """Background auto-analysis loop — runs engines, broadcasts signals, checks trade outcomes."""
     LOG.info("Auto-analysis loop started")
     posted: dict[str, float] = {}
     while True:
@@ -626,9 +735,42 @@ async def auto_analysis_loop(bot: Any) -> None:
             result = run_engine_consensus(symbol="XAUUSD")
             if result:
                 msg = _format_auto_signal(result)
-                # Send to admin
                 for aid in ADMIN_IDS:
                     await bot.send_message(str(aid), msg)
+
+            # Check trade outcomes and broadcast results
+            try:
+                from trade_tracker import check_outcomes, format_trade_close_alert
+                current_prices = {}
+                try:
+                    import yfinance as yf
+                    ticker = yf.Ticker("GC=F")
+                    data = ticker.history(period="1d", interval="1m")
+                    if not data.empty:
+                        current_prices["XAUUSD"] = float(data["Close"].iloc[-1])
+                except Exception:
+                    pass
+
+                if current_prices:
+                    closed = check_outcomes(current_prices)
+                    for trade in closed:
+                        alert = format_trade_close_alert(trade)
+                        for aid in ADMIN_IDS:
+                            await bot.send_message(str(aid), alert)
+                        # Broadcast to subscribers
+                        try:
+                            from tradebot.signals.subscriptions import get_all_active_subscribers
+                            subs = get_all_active_subscribers()
+                            for cat, users in subs.items():
+                                for uid in users:
+                                    try: await bot.send_message(uid, alert)
+                                    except: pass
+                        except Exception:
+                            pass
+                        LOG.info("Trade result broadcast: %s %s", trade.get("symbol"), trade.get("outcome"))
+            except Exception as e:
+                LOG.debug("Trade outcome check: %s", e)
+
         except Exception as e:
             LOG.debug("Auto-analysis cycle error: %s", e)
         await asyncio.sleep(300)
@@ -648,7 +790,7 @@ def _format_auto_signal(result: dict) -> str:
 
 
 async def daily_recap_broadcast(bot: Any) -> None:
-    """Broadcast daily recap at midnight WIB."""
+    """Broadcast daily recap at midnight WIB using legacy format_daily_recap."""
     while True:
         now = wib_now()
         next_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
@@ -656,36 +798,22 @@ async def daily_recap_broadcast(bot: Any) -> None:
         await asyncio.sleep(wait)
 
         try:
-            from tradebot.services.trade_tracker_service import get_daily_trades
-            recap = get_daily_trades()
-            total = recap.get("total_signals", 0)
-            wins = recap.get("wins", 0)
-            losses = recap.get("losses", 0)
-            wr = recap.get("win_rate", 0)
-            pips = recap.get("total_pips", 0)
-            micro = recap.get("micro_profit", 0)
-            perf = "🟢 PROFIT" if micro > 0 else "🔴 LOSS" if micro < 0 else "⚪ FLAT"
+            from trade_tracker import format_daily_recap
+            msg = format_daily_recap()
 
-            msg = (
-                f"📊 <b>DAILY RECAP — {wib_now().strftime('%d %b %Y')}</b>\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"📡 Total Sinyal: {total}\n"
-                f"✅ Win: {wins} | ❌ Loss: {losses} | 📊 WR: {wr:.1f}%\n"
-                f"📐 Total Pips: {pips:+.1f}\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"💵 Simulasi $100: {perf}: <b>${micro:+.2f}</b>\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"🔥 Mesin AI bekerja dengan baik!\n"
-                f"💚 /donate — Isi Bahan Bakar AI"
-            )
+            for aid in ADMIN_IDS:
+                await bot.send_message(str(aid), msg)
 
-            from tradebot.signals.subscriptions import get_all_active_subscribers
-            subs = get_all_active_subscribers()
-            for category, users in subs.items():
-                for uid in users:
-                    try:
-                        await bot.send_message(uid, msg)
-                    except Exception:
-                        pass
+            try:
+                from tradebot.signals.subscriptions import get_all_active_subscribers
+                subs = get_all_active_subscribers()
+                for cat, users in subs.items():
+                    for uid in users:
+                        try: await bot.send_message(uid, msg)
+                        except: pass
+            except Exception:
+                pass
+
+            LOG.info("Daily recap broadcast sent")
         except Exception as e:
             LOG.warning("Daily recap error: %s", e)
