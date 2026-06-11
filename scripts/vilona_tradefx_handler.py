@@ -4553,10 +4553,10 @@ def handle_command(cmd, text, chat_id, msg):
                  f"🟢 Active: <b>{active_kz}</b>"]
         
         try:
-            from session_levels import calculate_all_levels, get_session_levels
-            
+            from session_levels import calculate_all_levels
+
             # Get OHLCV for session calculation
-            ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+            ohlcv_bars = _fetch_ohlcv_for_ai(pair, keep=60)
             if not ohlcv_bars or len(ohlcv_bars) < 30:
                 # Fallback: try MARKET_DATA
                 if MARKET_DATA:
@@ -4569,6 +4569,10 @@ def handle_command(cmd, text, chat_id, msg):
                 sess = calculate_all_levels(ohlcv_bars)
                 
                 if sess:
+                    # Compute session ranges (not stored in SessionLevels dataclass)
+                    asia_rng = sess.asia_high - sess.asia_low if (sess.asia_high and sess.asia_low) else 0
+                    london_rng = sess.london_high - sess.london_low if (sess.london_high and sess.london_low) else 0
+
                     lines.append("")
                     lines.append("━━━━━━━━━━━━━━━━━━━━━━")
                     
@@ -4576,31 +4580,31 @@ def handle_command(cmd, text, chat_id, msg):
                     if lkz and sess.london_high:
                         lines.append(f"🇬🇧 <b>LONDON (Active)</b>")
                         lines.append(f"  High: {sess.london_high:.2f} | Low: {sess.london_low:.2f}")
-                        if sess.london_range:
-                            lines.append(f"  Range: {sess.london_range:.2f} ({sess.london_range/pip_s:.0f} pip)")
+                        if london_rng:
+                            lines.append(f"  Range: {london_rng:.2f} ({london_rng/pip_s:.0f} pip)")
                     elif nykz and sess.ny_high:
                         lines.append(f"🇺🇸 <b>NEW YORK (Active)</b>")
                         lines.append(f"  High: {sess.ny_high:.2f} | Low: {sess.ny_low:.2f}")
                     elif sess.asia_high:
                         lines.append(f"🌏 <b>ASIA</b>")
                         lines.append(f"  High: {sess.asia_high:.2f} | Low: {sess.asia_low:.2f}")
-                        if sess.asia_range:
-                            lines.append(f"  Range: {sess.asia_range:.2f} ({sess.asia_range/pip_s:.0f} pip)")
+                        if asia_rng:
+                            lines.append(f"  Range: {asia_rng:.2f} ({asia_rng/pip_s:.0f} pip)")
                     
                     # All 3 sessions (always show for context)
                     if sess.asia_high and not (not nykz and not lkz):
                         lines.append("")
                         lines.append(f"🌏 <b>ASIA</b>")
                         lines.append(f"  High: {sess.asia_high:.2f} | Low: {sess.asia_low:.2f}")
-                        if sess.asia_range:
-                            lines.append(f"  Range: {sess.asia_range:.2f} ({sess.asia_range/pip_s:.0f} pip)")
+                        if asia_rng:
+                            lines.append(f"  Range: {asia_rng:.2f} ({asia_rng/pip_s:.0f} pip)")
                     
                     if sess.london_high and not lkz:
                         lines.append("")
                         lines.append(f"🇬🇧 <b>LONDON</b>")
                         lines.append(f"  High: {sess.london_high:.2f} | Low: {sess.london_low:.2f}")
-                        if sess.london_range:
-                            lines.append(f"  Range: {sess.london_range:.2f} ({sess.london_range/pip_s:.0f} pip)")
+                        if london_rng:
+                            lines.append(f"  Range: {london_rng:.2f} ({london_rng/pip_s:.0f} pip)")
                     
                     if sess.ny_high and not nykz:
                         lines.append("")
@@ -4640,8 +4644,8 @@ def handle_command(cmd, text, chat_id, msg):
                         
                         # Which session typically has wider range
                         ranges = []
-                        if sess.asia_range: ranges.append(("Asia", sess.asia_range))
-                        if sess.london_range: ranges.append(("London", sess.london_range))
+                        if asia_rng: ranges.append(("Asia", asia_rng))
+                        if london_rng: ranges.append(("London", london_rng))
                         if sess.ny_high and sess.ny_low:
                             ny_rng = sess.ny_high - sess.ny_low
                             ranges.append(("NY", ny_rng))
