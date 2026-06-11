@@ -24,6 +24,7 @@ TRIPAY_MERCHANT_CODE = os.environ.get("TRIPAY_MERCHANT_CODE", "T23409")
 ADMIN_CHAT_ID = os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", os.environ.get("VILONA_TRADEFX_CHAT_ID", ""))
 GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID", "")
 BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
+BOT_TOKEN_1AI = os.environ.get("TELEGRAM_BOT_TOKEN_1AI", "8343388239:AAFgeAkc9bvjywyCsHqRIa_RiJ6q-rp6uv0")
 
 # ── Donation model: ANY amount → donor (LIFETIME) ─────────
 # No more fixed tiers. "Dukung Server AI" = pay-what-you-want.
@@ -142,12 +143,16 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self._json({"status": "ignored", "reason": f"status={status}"})
             return
 
-        # Extract chat_id from merchant_ref: VTFX-{chat_id}-{timestamp}
         chat_id = ""
+        brand = "vilona"
         try:
             parts = merchant_ref.split("-")
-            if len(parts) >= 2 and parts[0] == "VTFX":
-                chat_id = parts[1]
+            if len(parts) >= 2:
+                prefix = parts[0].upper()
+                if prefix == "VTFX":
+                    brand, chat_id = "vilona", parts[1]
+                elif prefix == "1AI":
+                    brand, chat_id = "1ai", parts[1]
         except Exception as e:
             log.warning(f"Failed to extract chat_id from ref {merchant_ref}: {e}")
 
@@ -156,52 +161,69 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self._json({"error": "invalid merchant_ref"}, 400)
             return
 
-        # ALL payments → donor (pay-what-you-want model)
-        tier, days = "donor", DONOR_DAYS
+        token = BOT_TOKEN_1AI if brand == "1ai" else BOT_TOKEN
 
         # Upgrade member to DONOR
-        if not upgrade_member(chat_id, tier, days, merchant_ref):
+        if not upgrade_member(chat_id, "donor", DONOR_DAYS, merchant_ref):
             log.error(f"Member upgrade failed for {chat_id} — returning 500 for retry")
             self._json({"status": "error", "message": "upgrade_failed"}, 500)
             return
 
-        # ── DONATUR message (no subscription, no ref display) ──
-        channel_link = "https://t.me/vilonaaichanel"
-        group_link = "https://t.me/+kX8tspebrpVhMmE1"
-        ea_link = "https://phantomfx.aitradepulse.com/ea/download/"
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+            from unified_bot.telegram.whitelabel_runner import track_commission
+            track_commission(payment_id=merchant_ref, amount=float(total_amount),
+                user_id=chat_id, brand_id=brand)
+        except Exception as e:
+            log.warning(f"Commission tracking skipped: {e}")
 
-        msg = (
-            f"🔥 <b>BOOM! Bahan bakar server sudah masuk.</b>\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💰 <b>Rp{int(total_amount):,}</b> — Makasih Bro!\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
-            f"\n"
-            f"Sebagai bentuk terima kasih karena kamu ikut\n"
-            f"menghidupi Server AI Vilona, akses VIP kamu\n"
-            f"sudah <b>AKTIF PERMANEN</b>.\n"
-            f"\n"
-            f"Akses ini bukan langganan sementara.\n"
-            f"Selama ekosistem ini hidup, kamu adalah bagian\n"
-            f"dari keluarga inti Vilona AI. 🥂\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✅ <b>/analyze</b> — UNLIMITED\n"
-            f"✅ <b>EA Auto-Trade</b> — AKTIF\n"
-            f"✅ <b>EA Bridge</b> — AKTIF PERMANEN\n"
-            f"✅ <b>Master API Key</b> — bisa dipakai multi MT5\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📥 <b>Download EA MT5:</b>\n{ea_link}\n"
-            f"\n"
-            f"📢 Channel: {channel_link}\n"
-            f"👥 Grup: {group_link}"
-        )
-
-        markup = {"inline_keyboard": [
-            [{"text": "📥 Download EA MT5", "url": ea_link}],
-            [{"text": "📢 Join Channel Sinyal", "url": channel_link}],
-            [{"text": "👥 Join Group Diskusi", "url": group_link}],
-        ]}
-        result = tg_send(msg, chat_id, reply_markup=markup)
+        if brand == "1ai":
+            msg = (
+                f"🔥 <b>BOOM! Bahan bakar server sudah masuk.</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 <b>Rp{int(total_amount):,}</b> — Makasih Bro!\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                f"\n"
+                f"Akses VIP kamu <b>AKTIF PERMANEN</b>.\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"✅ /analyze — UNLIMITED\n"
+                f"✅ /sinyal — REAL-TIME\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📞 Admin: @codergaboets"
+            )
+            markup = {"inline_keyboard": [
+                [{"text": "📊 Analyze Now", "url": "https://t.me/agent_1ai2_bot"}],
+                [{"text": "📞 Contact Admin", "url": "https://t.me/codergaboets"}],
+            ]}
+        else:
+            channel_link = "https://t.me/vilonaaichanel"
+            group_link = "https://t.me/+kX8tspebrpVhMmE1"
+            ea_link = "https://phantomfx.aitradepulse.com/ea/download/"
+            msg = (
+                f"🔥 <b>BOOM! Bahan bakar server sudah masuk.</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💰 <b>Rp{int(total_amount):,}</b> — Makasih Bro!\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                f"\n"
+                f"Akses VIP kamu <b>AKTIF PERMANEN</b>.\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"✅ /analyze — UNLIMITED\n"
+                f"✅ EA Auto-Trade — AKTIF\n"
+                f"✅ EA Bridge — AKTIF PERMANEN\n"
+                f"✅ Master API Key — multi MT5\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📥 Download EA MT5: {ea_link}\n"
+                f"📢 Channel: {channel_link}\n"
+                f"👥 Grup: {group_link}"
+            )
+            markup = {"inline_keyboard": [
+                [{"text": "📥 Download EA MT5", "url": ea_link}],
+                [{"text": "📢 Join Channel", "url": channel_link}],
+                [{"text": "👥 Join Grup", "url": group_link}],
+            ]}
+        result = tg_send(msg, chat_id, bot_token=token, reply_markup=markup)
         if result is None:
             log.warning(f"tg_send DM to {chat_id} returned None (message may not have been delivered)")
 

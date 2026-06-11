@@ -64,6 +64,7 @@ from tradebot.services.plans import (
     set_plan_price,
 )
 from tradebot.web.monitoring_api import router as monitoring_router
+from tradebot.web.bridge_api import router as bridge_router
 from tradebot.web.public_dashboard import (
     get_backtest_data as _get_backtest_data,
 )
@@ -105,6 +106,8 @@ app.add_middleware(
 
 # Wire monitoring API router (no auth — internal/loopback only by default)
 app.include_router(monitoring_router)
+# Wire bridge API router (MT5 EA signal polling)
+app.include_router(bridge_router)
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 # ═══════════════════════════════════════════════════════════
@@ -339,6 +342,43 @@ async def webhook_receive_snapshot(request: Request):
         return JSONResponse({"ok": False, "error": str(exc)[:200]}, status_code=400)
 
 
+@app.post("/api/webhook/tripay")
+async def webhook_tripay(request: Request):
+    """Tripay payment callback webhook.
+
+    Called by Tripay when a payment is completed.
+    Verifies HMAC-SHA256 signature, upgrades member, sends notification.
+    """
+    from tradebot.services.payment import PaymentService
+
+    try:
+        body = await request.body()
+        data = json.loads(body) if body else {}
+
+        callback_signature = request.headers.get("X-Callback-Signature", "")
+        if not callback_signature:
+            return JSONResponse({"success": False, "error": "Missing signature"}, status_code=400)
+
+        svc = PaymentService()
+        raw_data = body.decode() if isinstance(body, bytes) else str(body)
+        if not svc.verify_tripay_callback(raw_data, callback_signature):
+            return JSONResponse({"success": False, "error": "Invalid signature"}, status_code=403)
+
+        merchant_ref = data.get("merchant_ref", "")
+        status = data.get("status", "")
+        if status == "PAID":
+            from tradebot.services.members_service import upgrade_tier
+            chat_id = merchant_ref.split("-")[1] if "-" in merchant_ref else ""
+            if chat_id:
+                upgrade_tier(chat_id, "donor", 9999, merchant_ref)
+                LOG.info("Tripay payment PAID: %s → user %s", merchant_ref, chat_id)
+
+        return {"success": True}
+    except Exception as exc:
+        LOG.error("Tripay webhook error: %s", exc)
+        return JSONResponse({"success": False, "error": str(exc)[:200]}, status_code=500)
+
+
 @app.get("/api/live-snapshot")
 async def api_live_snapshot():
     """Serve latest dashboard_snapshot to frontend with fallback."""
@@ -536,35 +576,6 @@ async def api_set_affiliate_rate(
         _check_auth(request)
     set_affiliate_rate(user_id, rate)
     return JSONResponse({"ok": True, "user_id": user_id, "rate": rate})
-
-
-# ── Bridge API (merged from tradebot/services/bridge_server.py) ──────
-
-_bridge_state: dict = {}
-
-
-def set_bridge_state(state: dict) -> None:
-    """Update bridge state from external signal pipelines."""
-    _bridge_state.update(state)
-
-
-@app.get("/api/bridge/signal")
-async def bridge_signal():
-    return _bridge_state.get("signal", {"status": "no_signal"})
-
-
-@app.get("/api/bridge/status")
-async def bridge_status():
-    return {
-        "status": "ok",
-        "engine_count": len(_bridge_state.get("engines", [])),
-        "connected": _bridge_state.get("connected", False),
-    }
-
-
-@app.get("/api/bridge/balance")
-async def bridge_balance():
-    return _bridge_state.get("balance", {"balance": None})
 
 
 # ── Health ─────────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ class App:
     async def start(self, web: bool = True, bot: bool = True) -> None:
         """Start all subsystems."""
         self._running = True
+        self._assert_payment_webhooks_configured()
         LOG.info("🚀 Starting 1ai-trade-bot...")
 
         tasks = []
@@ -58,6 +59,24 @@ class App:
         import contextlib
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    @staticmethod
+    def _assert_payment_webhooks_configured() -> None:
+        """Fail fast if payment callback URLs are not configured."""
+        from tradebot.config import settings
+        missing = [
+            name
+            for name, value in [
+                ("TRIPAY_CALLBACK_URL", settings.TRIPAY_CALLBACK_URL),
+                ("DUITKU_CALLBACK_URL", settings.DUITKU_CALLBACK_URL),
+            ]
+            if not value
+        ]
+        if missing:
+            raise SystemExit(
+                f"Payment webhook not configured: {', '.join(missing)}. "
+                "Set them in .env before starting the service."
+            )
 
     async def _run_web(self) -> None:
         """Run FastAPI via uvicorn."""

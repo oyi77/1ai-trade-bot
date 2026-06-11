@@ -1,15 +1,14 @@
 [Unit]
-Description=Unified Bot — All Brands (Whitelabel, Single Process)
-After=network-online.target ollama.service
-Wants=network-online.target ollama.service
+Description=1ai-trade-bot — Unified Trading System
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=openclaw
 WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
 Environment=PYTHONUNBUFFERED=1
-Environment=DATA_DIR=/home/openclaw/projects/1ai-trade-bot/data/whitelabel
-ExecStart=/home/openclaw/projects/1ai-trade-bot/.venv/bin/python -m unified_bot.telegram.whitelabel_runner
+ExecStart=/usr/bin/python3 -m tradebot --host 0.0.0.0 --port 9090
 Restart=always
 RestartSec=10
 StandardOutput=journal
