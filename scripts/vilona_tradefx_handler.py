@@ -1059,6 +1059,35 @@ def _set_trailing(chat_id, enabled=True):
         logger.error(f"Failed to set trailing: {e}")
 
 
+def _send_document(chat_id, file_path, filename, caption=""):
+    """Send a document/file via Telegram Bot API (multipart/form-data)."""
+    import urllib.request as ureq
+    boundary = "----VilonaBoundary" + str(int(time.time()))
+    with open(file_path, "rb") as f:
+        file_data = f.read()
+
+    body = b""
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'.encode()
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode()
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n'.encode()
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="document"; filename="{filename}"\r\n'.encode()
+    body += b"Content-Type: application/octet-stream\r\n\r\n"
+    body += file_data
+    body += f"\r\n--{boundary}--\r\n".encode()
+
+    try:
+        req = ureq.Request(f"{TELEGRAM_API}/sendDocument", data=body)
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        ureq.urlopen(req, timeout=30)
+        logger.info(f"📎 Document sent: {filename} to chat_id={chat_id}")
+    except Exception as e:
+        logger.error(f"Failed to send document {filename}: {e}")
+
+
 # ── MECHANICAL SIGNAL DETECTION ──
 def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=None):
     """Mechanical signal: Quant + FVG + Hermes → fire without AI consensus."""
@@ -2957,6 +2986,24 @@ def handle_command(cmd, text, chat_id, msg):
                 "Bridge update SL setiap 10 detik ke EA kamu.</i>",
                 chat_id
             )
+
+    elif cmd == "/download":
+        if not _is_donor(chat_id):
+            _send_donate_menu(chat_id, username)
+            tg_send(
+                "🔒 <b>DOWNLOAD EA — DONATUR ONLY</b>\n\n"
+                "EA ini exclusive buat member yang sudah support project.\n"
+                "Silakan donasi dulu ya, Bro!",
+                chat_id
+            )
+        else:
+            ea_path = PROJECT_DIR / "ea" / "VilonaTradeFX_EA.ex5"
+            if ea_path.exists():
+                _send_document(chat_id, str(ea_path), "VilonaTradeFX_EA.ex5",
+                              "🎯 <b>Vilona TradeFX EA</b>\nCent + IDR compatible ✅\nSmart trailing ready ✅")
+                logger.info(f"📥 /download served to donor chat_id={chat_id}")
+            else:
+                tg_send("❌ EA file not found. Contact admin.", chat_id)
 
     elif cmd == "/status":
         # Weekend indicator
