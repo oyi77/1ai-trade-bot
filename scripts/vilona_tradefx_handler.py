@@ -517,7 +517,7 @@ def _fetch_json_url(url, timeout=5):
 
 def format_bridge_status():
     health = _fetch_json_url("http://localhost:8765/health")
-    accounts = _fetch_json_url("http://localhost:8765/accounts")
+    accounts = _fetch_json_url(f"http://localhost:8765/accounts?api_key={MASTER_API_KEY}")
     webhook = _fetch_json_url("http://localhost:8787/health")
 
     bridge_ok = health.get("status") == "ok"

@@ -272,6 +272,16 @@ class SignalHandler(BaseHTTPRequestHandler):
         elif path == "/accounts":
             self._json(self._build_accounts_response())
         elif path in ("/download/ea", "/download/ea.ex5", "/ea/download"):
+            # ── DONOR GATE: require valid API key with pro/elite tier ──
+            is_valid, tier_info = validate_key(api_key)
+            if not is_valid:
+                self._json({"error": "donor only — valid API key required"}, 403)
+                return
+            config = load_keys()
+            key_data = config["keys"].get(api_key, {})
+            if key_data.get("tier", "starter") == "starter":
+                self._json({"error": "donor only — upgrade to access EA download"}, 403)
+                return
             ea_path = Path(settings.DATA_DIR).parent / "ea" / "VilonaTradeFX_EA.ex5"
             try:
                 content = ea_path.read_bytes()
@@ -408,6 +418,10 @@ class SignalHandler(BaseHTTPRequestHandler):
                 LOG.error("News fetch error: %s", e)
                 self._json({"items": [], "error": str(e)})
         elif path == "/api/config":
+            # ── LOCALHOST ONLY ──
+            if self.client_address[0] not in ("127.0.0.1", "::1", "localhost"):
+                self._json({"error": "admin only"}, 403)
+                return
             self._json({"api_key": "VT-MASTER-734AD731F5FB"})
         elif path == "/api/donations":
             try:

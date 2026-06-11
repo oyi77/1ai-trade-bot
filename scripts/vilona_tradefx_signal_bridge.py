@@ -377,9 +377,17 @@ class SignalHandler(BaseHTTPRequestHandler):
             self._json({"keys": keys_safe, "tiers": config["tiers"]})
 
         elif path == "/history":
+            # ── Require valid API key ──
+            if not validate_key(api_key)[0]:
+                self._json({"error": "api_key required"}, 403)
+                return
             with LOCK:
                 self._json({"count": len(HISTORY), "signals": list(HISTORY)})
         elif path == "/accounts":
+            # ── Require valid API key ──
+            if not validate_key(api_key)[0]:
+                self._json({"error": "api_key required"}, 403)
+                return
             with LOCK:
                 # List all instances grouped by api_key
                 now = time.time()
