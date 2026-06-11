@@ -1026,7 +1026,8 @@ async function loadAll() {
     renderBacktest(backtest);
     renderDailyRecap(recap);
     renderFuelStats(fuelRes);
-    renderFuelDonorWall(donors);
+    renderLiveSnapshot(snapshot);
+    renderEngineReadings(engineData);
 
   } catch(e) {
     console.error('Load error:', e);
@@ -1460,6 +1461,76 @@ async function updateSystemStatus() {
     if (text) { text.textContent = 'Status Unknown'; text.className = 'text-xs text-slate-500'; }
   }
 }
+
+/* ═══ RENDER ENGINE READINGS — LIVE AI PERFORMANCE ═══ */
+let _currentEngineData = {};
+let _activeTf = 'H1';
+
+function renderEngineReadings(data) {
+  _currentEngineData = data || {};
+  _renderEnginesForTf(_activeTf);
+}
+
+function _renderEnginesForTf(tfKey) {
+  const el = document.getElementById('live-engines');
+  const consensusBar = document.getElementById('engine-consensus-bar');
+  if (!el) return;
+  const data = _currentEngineData;
+  const tfs = data.timeframes || {};
+  const tf = tfs[tfKey] || {};
+  const hier = data.hierarchical || {};
+  const verdict = hier.verdict || tf.verdict || 'HOLD';
+  const score = Math.round((hier.consensus_score || tf.consensus_pct || 0) * 100);
+  const trend = data.macro_trend || 'NEUTRAL';
+  const align = data.mtf_alignment || 'UNKNOWN';
+  const buyCount = tf.buy_count || 0;
+  const sellCount = tf.sell_count || 0;
+  const totalCount = tf.total || 0;
+  const vBg = verdict === 'BUY' ? '#34d399' : verdict === 'SELL' ? '#f87171' : '#64748b';
+  const aCls = align === 'ALIGNED' ? 'text-emerald-400' : align === 'CONFLICT' ? 'text-red-400' : 'text-amber-400';
+  const trendCls = trend === 'BULLISH' ? 'text-emerald-400' : trend === 'BEARISH' ? 'text-red-400' : 'text-slate-400';
+  let cbHtml = `<div class="flex flex-wrap items-center gap-3 p-3 rounded-lg" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05)">`;
+  cbHtml += `<div class="flex items-center gap-2"><span class="text-[10px] text-slate-500 font-semibold uppercase">Verdict</span><span class="px-2.5 py-1 rounded-md text-xs font-bold" style="background:${vBg}20;color:${vBg};border:1px solid ${vBg}30">${verdict} ${score > 0 ? '· '+score+'%' : ''}</span></div>`;
+  cbHtml += `<span class="text-xs text-slate-400">🔵 ${buyCount} BUY / 🔴 ${sellCount} SELL / ⚪ ${totalCount - buyCount - sellCount} HOLD</span>`;
+  const engines = tf.engines || {};
+  cbHtml += `<span class="text-xs text-slate-500">⚙️ ${Object.keys(engines).length} engines</span>`;
+  cbHtml += `<span class="text-xs ${trendCls}">📈 ${trend}</span>`;
+  cbHtml += `<span class="text-xs ${aCls}">${align}</span>`;
+  if (data.price) cbHtml += `<span class="text-xs text-slate-500 font-mono ml-auto">${data.symbol || 'XAUUSD'} $${data.price.toFixed(1)}</span>`;
+  cbHtml += '</div>';
+  if (consensusBar) consensusBar.innerHTML = cbHtml;
+  const names = Object.keys(engines);
+  if (!names.length) {
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-8">⏳ AI Engine Consensus not available — waiting for next update</div>';
+    return;
+  }
+  names.sort((a,b)=>{const o={BUY:0,SELL:1,HOLD:2};return (o[(engines[a].direction||'HOLD').toUpperCase()]||2)-(o[(engines[b].direction||'HOLD').toUpperCase()]||2);});
+  let html = '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">';
+  names.forEach(k => {
+    const e=engines[k], dir=(e.direction||'HOLD').toUpperCase(), rc=parseFloat(e.confidence)||0, cp=rc>1?Math.min(rc,100):Math.min(Math.round(rc*100),100);
+    const dc=dir==='BUY'?'#34d399':dir==='SELL'?'#f87171':'#94a3b8', bc=dir==='BUY'?'#34d399':dir==='SELL'?'#f87171':'#64748b';
+    const pCls=dir==='BUY'?'engine-active-buy':dir==='SELL'?'engine-active-sell':'';
+    const det=e.details||'', did=`ed-${k}-${tfKey}`;
+    html+=`<div class="rounded-lg p-2.5 border cursor-pointer transition-all hover:border-blue-500/40 ${pCls}" style="background:${dc}06;border-color:${dc}20" onclick="toggleDetail('${did}')"><div class="text-[10px] font-bold uppercase tracking-wide" style="color:${dc}">${k}</div><div class="text-sm font-mono font-bold mt-0.5" style="color:${dc}">${dir}</div><div class="conf-bar"><div class="conf-fill" style="width:${cp}%;background:${bc}"></div></div><div class="text-[10px] font-mono mt-0.5" style="color:${dc}">${cp}%</div>${det?`<div class="engine-detail" id="${did}">${det}</div>`:''}</div>`;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function toggleDetail(id){const el=document.getElementById(id);if(el)el.classList.toggle('show');}
+document.addEventListener('click',function(e){const tab=e.target.closest('.tf-tab');if(!tab)return;const tf=tab.dataset.tf;if(!tf)return;document.querySelectorAll('.tf-tab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');_activeTf=tf;_renderEnginesForTf(tf);});
+
+function formatUptime(sec){if(!sec||sec<=0)return'0m';const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);return h>0?h+'h '+m+'m':m+'m';}
+function _engineHasData(d){return d&&d.timeframes&&Object.keys(d.timeframes).some(k=>d.timeframes[k]&&d.timeframes[k].engines&&Object.keys(d.timeframes[k].engines).length>0);}
+function renderLiveSnapshot(snap){if(!snap)snap={};try{
+  const perf=snap.performance||{},wr=typeof perf.win_rate==='number'?perf.win_rate:0,wrPct=Math.round(wr*100);
+  const wrEl=document.getElementById('hero-winrate'),wrBar=document.getElementById('hero-wr-bar');
+  if(wrEl)wrEl.textContent=wrPct+'%';if(wrBar)wrBar.style.width=Math.min(wrPct,100)+'%';
+  if(wrPct>60&&wrEl)wrEl.style.color='#34d399';else if(wrPct>=40&&wrEl)wrEl.style.color='#fbbf24';else if(wrEl)wrEl.style.color='#f87171';
+  const status=snap.status||{},state=status.state||'connecting',detail=status.detail||(_engineHasData(_currentEngineData)?'Engine data loaded':'Waiting for worker...');
+  const pair=status.pair||(_currentEngineData.symbol||'---'),uptime=snap.uptime_seconds||0,cycles=snap.total_cycles||0;
+  ['ai-status-detail','ai-pair','ai-uptime','ai-cycles'].forEach(id=>{const el=document.getElementById(id);if(id==='ai-status-detail'&&el)el.textContent=detail;if(id==='ai-pair'&&el)el.textContent=pair;if(id==='ai-uptime'&&el)el.textContent=formatUptime(uptime);if(id==='ai-cycles'&&el)el.textContent=cycles+' cycles';});
+}catch(e){console.warn('renderLiveSnapshot error:',e.message);}}
 
 // Init
 loadAll();
