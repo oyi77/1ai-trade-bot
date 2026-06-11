@@ -84,8 +84,8 @@ class VilonaBot(
         self._manual_throttle_free = 120
         self._manual_throttle_donor = 60
         self._same_pair_cooldown = 90
-        self._donor_daily_quota = 60
-        self._free_daily_quota = 3
+        self._donor_daily_quota = 20
+        self._free_daily_quota = 5
         self._direction_lock_seconds = 60
 
         # Ultimatum system
@@ -325,7 +325,7 @@ class VilonaBot(
             if member:
                 status = member.get("status", "")
                 tier = member.get("tier", "")
-                return status in ("paid", "donor") or tier in ("pro", "elite", "paid", "donor")
+                return status in ("paid",) or tier in ("pro", "elite", "lifetime", "paid")
         except Exception:
             pass
         return False

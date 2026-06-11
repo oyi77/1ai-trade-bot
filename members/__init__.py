@@ -171,7 +171,7 @@ def is_premium(chat_id: str) -> bool:
 
 def check_quota(chat_id: str) -> dict:
     """Check daily quota: starter=3, pro=50, elite=999."""
-    quotas = {"starter": 3, "pro": 50, "elite": 999}
+    quotas = {"starter": 5, "pro": 20, "elite": 999, "lifetime": 999, "donor": 999}
     today = datetime.now(WIB).strftime("%Y-%m-%d")
 
     with _conn() as db:
@@ -181,10 +181,10 @@ def check_quota(chat_id: str) -> dict:
         ).fetchone()
 
     if not row:
-        return {"used": 0, "total": 3, "tier": "starter"}
+        return {"used": 0, "total": 5, "tier": "starter"}
 
     tier = row["tier"] or "starter"
-    total = quotas.get(tier, 3)
+    total = quotas.get(tier, 5)
 
     # Reset if new day
     if row["quota_date"] != today:
@@ -198,7 +198,7 @@ def use_quota(chat_id: str) -> bool:
     today = datetime.now(WIB).strftime("%Y-%m-%d")
     chat_id = str(chat_id)
 
-    quotas = {"starter": 3, "pro": 50, "elite": 999}
+    quotas = {"starter": 5, "pro": 20, "elite": 999, "lifetime": 999, "donor": 999}
 
     with _conn() as db:
         row = db.execute(
@@ -294,7 +294,7 @@ def get_stale_donors(min_days: int = 30) -> list[dict]:
     stale = []
     with _conn() as db:
         rows = db.execute(
-            "SELECT chat_id, username, nama FROM members WHERE tier='donor'"
+            "SELECT chat_id, username, nama FROM members WHERE tier IN ('pro','elite','lifetime','donor')"
         ).fetchall()
         for r in rows:
             last = db.execute(

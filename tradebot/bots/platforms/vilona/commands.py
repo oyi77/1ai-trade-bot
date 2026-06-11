@@ -236,7 +236,7 @@ class CommandHandlersMixin(BaseBot):
 
         target = str(chat_id or "")
         member = get_member(target)
-        is_donor = member and member.get("tier") == "donor"
+        is_donor = member and member.get("tier") in ("pro", "elite", "lifetime")
 
         if not is_admin(target) and not is_donor:
             return "⛔ <b>Akses Dibatasi</b>\n/genkey hanya untuk Subscriber VIP.\n\n💚 Dukung server AI dulu: /subscribe"
@@ -719,7 +719,7 @@ class CommandHandlersMixin(BaseBot):
         """SnR + FIBO + Engine Deep Dive. Subscriber only."""
         from tradebot.services.members_service import get_member
         member = get_member(str(chat_id or ""))
-        is_donor = member and member.get("tier") == "donor"
+        is_donor = member and member.get("tier") in ("pro", "elite", "lifetime")
         if not is_donor:
             return (
                 "🏛 <b>SnR + FIBO + Engine Deep Dive</b> [🔒 LOCKED]\n"
@@ -776,7 +776,7 @@ class CommandHandlersMixin(BaseBot):
         """Grok News — real-time X/Twitter intelligence. Subscriber only."""
         from tradebot.services.members_service import get_member
         member = get_member(str(chat_id or ""))
-        is_donor = member and member.get("tier") == "donor"
+        is_donor = member and member.get("tier") in ("pro", "elite", "lifetime")
         if not is_donor:
             return (
                 "📰 <b>Grok News</b> [🔒 LOCKED]\n"
@@ -916,7 +916,7 @@ class CommandHandlersMixin(BaseBot):
         days = int(args[1]) if len(args) > 1 else 9999
         ref = f"VTFX-{target_id}-MANUAL"
         ensure_member(target_id)
-        upgrade_tier(target_id, "donor", days, ref)
+        upgrade_tier(target_id, "pro", days, ref)
         return (
             f"🔥 <b>USER {target_id} AKTIVATED</b>\n"
             f"Tier: subscriber\nDuration: {days} hari\n"
