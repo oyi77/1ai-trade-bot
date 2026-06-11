@@ -604,10 +604,17 @@ USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — d
 DONOR_ANALYZE_COUNT: dict = {}  # chat_id -> int — analyze counter, fuel gauge reminder every 3rd
 
 MANUAL_THROTTLE_FREE = 120   # free user: 120 detik antar analisa
-MANUAL_THROTTLE_DONOR = 60   # donor: 60 detik antar analisa (lebih cepet)
+MANUAL_THROTTLE_PRO = 60     # pro: 60 detik
+MANUAL_THROTTLE_ELITE = 30   # elite/lifetime: 30 detik
 SAME_PAIR_COOLDOWN = 90       # same pair cooldown (all users)
-DONOR_DAILY_QUOTA = 60        # donor: 60x analisa/hari (cukup buat 1x tiap 12 menit)
-FREE_DAILY_QUOTA = 3          # free: 3x/hari
+FREE_DAILY_LIMIT = 5          # 🆕 free tier: 5x/hari (cost Rp25/hari)
+PRO_DAILY_LIMIT = 20          # 🆕 pro tier: 20x/hari
+ELITE_DAILY_LIMIT = -1        # 🆕 elite/lifetime: unlimited
+# Legacy (backwards compat)
+DONOR_DAILY_QUOTA = 60
+FREE_DAILY_QUOTA = FREE_DAILY_LIMIT
+# Tier → daily limit mapping
+TIER_LIMITS = {"free": FREE_DAILY_LIMIT, "pro": PRO_DAILY_LIMIT, "elite": -1, "lifetime": -1, "donor": -1}
 DIRECTION_LOCK_SECONDS = 60
 
 # ── Custom donation input state ──
@@ -845,6 +852,55 @@ def handle_payment_callback(callback_query):
                 "Coba lagi nanti atau kirim bukti pembayaran ke admin: @codergaboets",
                 chat_id
             )
+
+    elif data.startswith("sub:"):
+        # ── Subscription tier callback ──
+        sub_tier = data.split(":", 1)[1] if ":" in data else ""
+        if sub_tier in ("pro", "elite", "lifetime"):
+            try:
+                from members.payment import create_tripay_payment
+                result = create_tripay_payment(str(chat_id), username, tier=sub_tier)
+                if result.get("success"):
+                    payment_url = result.get("payment_url", "")
+                    pay_code = result.get("pay_code", "")
+                    amount = result.get("amount", 0)
+                    tier_label = result.get("tier_label", sub_tier.upper())
+                    txt = (
+                        f"💳 <b>Pembayaran {tier_label}</b>\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"💰 Total: Rp{amount:,}\n"
+                        f"📎 Kode: <code>{pay_code}</code>\n\n"
+                        f"🔗 <a href='{payment_url}'>Klik di sini untuk bayar</a>\n\n"
+                        f"⏰ Link berlaku 1 jam.\n"
+                        f"Status akan otomatis aktif setelah pembayaran."
+                    )
+                    markup = {"inline_keyboard": [[
+                        {"text": "🔄 Cek Status", "callback_data": f"check:{result.get('reference','')}"},
+                    ]]}
+                    tg_send(txt, chat_id, reply_markup=markup)
+                else:
+                    tg_send(f"❌ {result.get('error', 'Gagal.')}", chat_id)
+            except Exception as e:
+                logger.error(f"Sub callback error: {e}")
+                tg_send("❌ Sistem pembayaran sibuk. Coba lagi.", chat_id)
+        elif sub_tier == "pay":
+            # Show all payment methods
+            txt = (
+                "💳 <b>Pilih Metode Pembayaran</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "Ketik /subscribe pro — Rp50K/bulan\n"
+                "Ketik /subscribe elite — Rp150K/bulan\n"
+                "Ketik /subscribe lifetime — Rp500K (sekali)\n\n"
+                "Atau pilih tier di bawah:"
+            )
+            markup = {"inline_keyboard": [
+                [{"text": "⭐ PRO — Rp50K/bulan", "callback_data": "sub:pro"}],
+                [{"text": "👑 ELITE — Rp150K/bulan", "callback_data": "sub:elite"}],
+                [{"text": "💎 LIFETIME — Rp500K", "callback_data": "sub:lifetime"}],
+            ]}
+            tg_send(txt, chat_id, reply_markup=markup)
+        else:
+            tg_send("Pilih tier: /subscribe pro | elite | lifetime", chat_id)
 
     elif data.startswith("pricing:"):
         # Show donation info — no more old tiers
@@ -2706,7 +2762,7 @@ def auto_capture_video_file_id(chat_id, message):
 
 
 # ── Quota System ──
-FREE_QUOTA_PER_DAY = 3
+FREE_QUOTA_PER_DAY = 5  # same as FREE_DAILY_LIMIT
 QUOTA_DIR = DATA_DIR / "quota_cache"
 QUOTA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -2736,6 +2792,38 @@ def _deduct_quota(chat_id):
     except Exception:
         pass
     return quota["remaining"] > 0, quota["remaining"]
+
+
+def _get_user_tier(chat_id):
+    """Return tier info: {tier, limit (-1=unlimited), throttle, is_paid, label}.
+    Grandfather existing donors -> lifetime tier."""
+    try:
+        from members import get_member as m_get
+        member = m_get(str(chat_id))
+        if member:
+            tier = member.get("tier", "free")
+            status = member.get("status", "")
+            # Grandfather: old donors get lifetime
+            if status in ("paid", "donor") and tier in ("paid", "donor", "", None):
+                tier = "lifetime"
+            limit = TIER_LIMITS.get(tier, FREE_DAILY_LIMIT)
+            if tier in ("elite", "lifetime", "donor"):
+                throttle = MANUAL_THROTTLE_ELITE
+            elif tier == "pro":
+                throttle = MANUAL_THROTTLE_PRO
+            else:
+                throttle = MANUAL_THROTTLE_FREE
+            labels = {"pro": "⭐ Pro", "elite": "👑 Elite",
+                      "lifetime": "💎 Lifetime", "donor": "💎 Lifetime (GF)",
+                      "free": "🆓 Free"}
+            return {"tier": tier, "limit": limit, "throttle": throttle,
+                    "is_paid": tier != "free",
+                    "label": labels.get(tier, "🆓 Free")}
+    except Exception:
+        pass
+    return {"tier": "free", "limit": FREE_DAILY_LIMIT,
+            "throttle": MANUAL_THROTTLE_FREE,
+            "is_paid": False, "label": "🆓 Free"}
 
 
 def _is_donor(chat_id):
@@ -3717,13 +3805,50 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send(txt, chat_id)
 
     elif cmd == "/bill" or cmd == "/subscribe":
-        # ── Legacy commands → redirect to /donate ──
+        # ── TIERED SUBSCRIPTION ──
         if not chat_id:
             return
         username = ""
         if msg:
             username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
-        _send_donate_menu(chat_id, username)
+        sub_arg = sub_norm if sub_norm else ""
+        if sub_arg in ("pro", "elite", "lifetime"):
+            # Direct tier purchase
+            try:
+                from members.payment import create_tripay_payment
+                result = create_tripay_payment(str(chat_id), username, tier=sub_arg)
+                if result.get("success"):
+                    payment_url = result.get("payment_url", "")
+                    pay_code = result.get("pay_code", "")
+                    amount = result.get("amount", 0)
+                    tier_label = result.get("tier_label", sub_arg.upper())
+                    txt = (
+                        f"💳 <b>Pembayaran {tier_label}</b>\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"💰 Total: Rp{amount:,}\n"
+                        f"📎 Kode: <code>{pay_code}</code>\n\n"
+                        f"🔗 <a href='{payment_url}'>Klik di sini untuk bayar</a>\n\n"
+                        f"⏰ Link berlaku 1 jam.\n"
+                        f"Status akan otomatis aktif setelah pembayaran."
+                    )
+                    tg_send(txt, chat_id)
+                else:
+                    tg_send(f"❌ {result.get('error', 'Gagal membuat pembayaran.')}", chat_id)
+            except Exception as e:
+                logger.error(f"Subscribe error: {e}")
+                tg_send("❌ Sistem pembayaran sedang sibuk. Coba lagi nanti.", chat_id)
+            return
+
+        # Show tier selection
+        from members.payment import get_pricing_table
+        txt = get_pricing_table()
+        markup = {"inline_keyboard": [
+            [{"text": "⭐ PRO — Rp50K/bulan", "callback_data": "sub:pro"},
+             {"text": "👑 ELITE — Rp150K/bulan", "callback_data": "sub:elite"}],
+            [{"text": "💎 LIFETIME — Rp500K (sekali)", "callback_data": "sub:lifetime"}],
+            [{"text": "💳 Bayar via QRIS/VA", "callback_data": "sub:pay"}],
+        ]}
+        tg_send(txt, chat_id, reply_markup=markup)
 
     elif cmd == "/donate":
         # ── /donate — Siram Bahan Bakar Mesin AI ──
@@ -6260,7 +6385,7 @@ def main():
                         data = cb.get("data", "")
                         if data.startswith("ultimatum:"):
                             handle_ultimatum_callback(cb)
-                        elif data.startswith(("pay:", "check:", "pricing:", "donate:", "cancel_input")):
+                        elif data.startswith(("pay:", "check:", "pricing:", "donate:", "sub:", "cancel_input")):
                             handle_payment_callback(cb)
                         else:
                             handle_trade_callback(cb)

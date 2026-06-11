@@ -1,23 +1,74 @@
 #!/usr/bin/env python3
 """
-Vilona Trade FX — Payment Integration
+Vilona Trade FX — Tiered Subscription + Payment Integration
 Tripay pricing info + transaction creation.
+Model: Monthly recurring tiers (Pro/Elite) + Lifetime one-time.
 """
 import json, logging, os, sys, time, urllib.request, urllib.error
 from pathlib import Path
 
 logger = logging.getLogger("vtfx-payment")
 
-# ── Donation Model — "Dukung Server AI" ────────────────────
-# Pay-what-you-want, minimum Rp10.000
+# ── TIERED PRICING (Monthly Recurring) ──────────────────
+# Free: 5 /analyze per day (DeepSeek only, SL/TP locked)
+# Pro: 20 /analyze per day (DeepSeek only, SL/TP unlocked)
+# Elite: Unlimited /analyze (DeepSeek + GPT-4o + Grok News, EA + Bridge)
+# Lifetime: Elite features permanently (one-time payment)
 PRICING = {
-    "donor": {
-        "tier": "donor", "price_idr": 0, "label": "Donatur",
-        "days": 9999, "features": "👑 Akses penuh • /analyze UNLIMITED • Auto-trade EA • Bridge sinyal • Dukung server AI",
+    "pro": {
+        "tier": "pro",
+        "price_idr": 50000,
+        "label": "Pro ⭐",
+        "days": 30,
+        "recurring": True,
+        "analyze_limit": 20,
+        "features": (
+            "✅ /analyze 20x/hari\n"
+            "✅ SL/TP full unlock\n"
+            "✅ /mtf unlimited\n"
+            "✅ /engines unlocked\n"
+            "✅ DeepSeek V4 AI analysis"
+        ),
+    },
+    "elite": {
+        "tier": "elite",
+        "price_idr": 150000,
+        "label": "Elite 👑",
+        "days": 30,
+        "recurring": True,
+        "analyze_limit": -1,  # unlimited
+        "features": (
+            "✅ /analyze UNLIMITED\n"
+            "✅ DeepSeek + GPT-4o AI\n"
+            "✅ Grok News market context\n"
+            "✅ EA Auto-Trade akses\n"
+            "✅ Bridge sinyal real-time\n"
+            "✅ SL/TP full unlock\n"
+            "✅ Prioritas support"
+        ),
+    },
+    "lifetime": {
+        "tier": "lifetime",
+        "price_idr": 500000,
+        "label": "Lifetime 💎",
+        "days": 9999,
+        "recurring": False,
+        "analyze_limit": -1,  # unlimited
+        "features": (
+            "✅ Semua fitur ELITE\n"
+            "✅ Akses PERMANEN selamanya\n"
+            "✅ Gak perlu bayar bulanan\n"
+            "✅ Limited slots — 5/bulan only"
+        ),
     },
 }
 
-MIN_DONATION = int(os.environ.get("TRIPAY_MIN_DONATION", "10000"))  # Minimum donasi Rp10.000
+# Free tier limit
+FREE_DAILY_LIMIT = 5
+# Backward compat: old donate callbacks use tier="donor" → maps to "lifetime" (grandfathered)
+PRICING["donor"] = dict(PRICING["lifetime"], tier="donor", label="Donatur 💚")
+
+MIN_DONATION = int(os.environ.get("TRIPAY_MIN_DONATION", "10000"))
 
 # ── Tripay Config ─────────────────────────────────────────
 _TRIPAY_KEY = os.environ.get("TRIPAY_API_KEY", "")
@@ -43,48 +94,79 @@ def get_pricing_info() -> dict:
     """Return full pricing info for display."""
     return {
         "packages": PRICING,
+        "free_limit": FREE_DAILY_LIMIT,
         "methods": ["QRIS", "BRIVA", "BCAVA", "MYBVA"],
         "gateways": ["Tripay"],
     }
 
 
+def get_tier(tier_key: str) -> dict | None:
+    """Get tier config by key. Returns None if invalid."""
+    return PRICING.get(tier_key)
+
+
 def get_pricing_table() -> str:
-    """Return formatted donation info."""
+    """Return formatted subscription pricing display."""
     return (
-        "🔥 <b>Dukung Server AI</b>\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "💰 <b>Dukung seikhlasnya</b> (min Rp10.000)\n"
-        "👑 Status <b>DONATUR VIP</b> — AKTIF PERMANEN\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "✅ /analyze UNLIMITED\n"
-        "✅ EA Auto-Trade\n"
-        "✅ Bridge Sinyal\n"
-        "━━━━━━━━━━━━━━━━\n"
+        "🔥 <b>Vilona Trade FX — Subscription</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "🆓 <b>FREE</b> — Rp0\n"
+        f"├ /analyze {FREE_DAILY_LIMIT}x/hari\n"
+        "├ SL/TP dikunci (Signal Tease)\n"
+        "└ DeepSeek AI analysis\n\n"
+        "⭐ <b>PRO</b> — Rp50.000/bulan\n"
+        "├ /analyze 20x/hari\n"
+        "├ SL/TP full unlock\n"
+        "├ /mtf + /engines unlocked\n"
+        "└ DeepSeek V4 AI\n\n"
+        "👑 <b>ELITE</b> — Rp150.000/bulan\n"
+        "├ /analyze UNLIMITED\n"
+        "├ DeepSeek + GPT-4o AI\n"
+        "├ Grok News market context\n"
+        "├ EA Auto-Trade akses\n"
+        "└ Bridge sinyal real-time\n\n"
+        "💎 <b>LIFETIME</b> — Rp500.000 (sekali bayar)\n"
+        "├ Semua fitur ELITE\n"
+        "├ Akses PERMANEN selamanya\n"
+        "└ Limited: 5 slot/bulan\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "💳 QRIS, VA, Retail — otomatis aktif!\n"
+        "Ketik /subscribe <tier> untuk mulai.\n"
+        "Contoh: /subscribe pro"
     )
 
 
-def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
+def create_tripay_payment(chat_id: str, username: str, tier: str = "pro",
                           method: str = "QRIS", amount: int = None) -> dict:
-    """Create Tripay donation transaction. Returns dict with payment_url.
-    
-    tier is now 'donor' by default. amount overrides the donation amount.
+    """Create Tripay subscription/donation transaction.
+
+    Args:
+        chat_id: Telegram chat ID
+        username: Telegram username
+        tier: 'pro', 'elite', or 'lifetime'
+        method: Payment method (QRIS, BRIVA, etc.)
+        amount: Override amount (uses tier default if None)
+
+    Returns dict with payment_url or error.
     """
     import hashlib, hmac
 
     if not TRIPAY_API_KEY or not TRIPAY_PRIVATE_KEY:
         return {"error": "Payment gateway belum dikonfigurasi. Hubungi admin."}
 
+    tier_config = PRICING.get(tier)
+    if not tier_config:
+        return {"error": f"Tier '{tier}' tidak valid. Pilih: pro, elite, lifetime"}
+
     if amount is None:
-        # Default donation amount (Rp50.000 suggested)
-        amount = int(os.environ.get("DONATION_DEFAULT_AMOUNT", "50000"))
+        amount = tier_config["price_idr"]
 
     if amount < MIN_DONATION:
-        return {"error": f"Minimum donasi Rp{MIN_DONATION:,}"}
+        return {"error": f"Minimum pembayaran Rp{MIN_DONATION:,}"}
 
     merchant_ref = f"VTFX-{chat_id}-{int(time.time())}"
 
-    # Build payload
+    # Build payload with tier metadata
     payload = {
         "method": method,
         "merchant_ref": merchant_ref,
@@ -93,12 +175,15 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
         "customer_email": f"{chat_id}@telegram.user",
         "customer_phone": "08123456789",
         "order_items": [{
-            "name": "Dukung Server AI - VilonaTradeFX",
+            "name": f"VilonaTradeFX - {tier_config['label']}",
             "price": amount,
             "quantity": 1,
         }],
         "callback_url": TRIPAY_CALLBACK,
-        "return_url": os.environ.get("TRIPAY_RETURN_URL", "https://t.me/berkahkaryaforexbotbot"),
+        "return_url": os.environ.get(
+            "TRIPAY_RETURN_URL",
+            "https://t.me/berkahkaryaforexbotbot"
+        ),
         "expired_time": int(time.time()) + 3600,
     }
 
@@ -128,12 +213,18 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
             try:
                 from members import insert_payment_order
                 insert_payment_order(
-                    merchant_ref=merchant_ref, chat_id=str(chat_id),
-                    amount=amount, product_key=tier, gateway="tripay",
+                    merchant_ref=merchant_ref,
+                    chat_id=str(chat_id),
+                    amount=amount,
+                    product_key=tier,
+                    gateway="tripay",
                     payload=result,
                 )
             except ImportError:
-                logger.warning("payment order tracking unavailable — import insert_payment_order failed")
+                logger.warning(
+                    "payment order tracking unavailable — "
+                    "import insert_payment_order failed"
+                )
 
             return {
                 "success": True,
@@ -144,6 +235,7 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
                 "qr_url": result.get("qr_url", ""),
                 "amount": amount,
                 "tier": tier,
+                "tier_label": tier_config["label"],
                 "expired": result.get("expired_time", int(time.time()) + 3600),
             }
         else:
@@ -152,9 +244,13 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "donor",
         body = e.read().decode()[:500]
         logger.error("Tripay HTTP %s: %s", e.code, body)
         if "Invalid signature" in body:
-            return {"error": "Tripay: Invalid signature — cek TRIPAY_PRIVATE_KEY di .env"}
+            return {
+                "error": "Tripay: Invalid signature — cek TRIPAY_PRIVATE_KEY di .env"
+            }
         elif "Sandbox credential" in body:
-            return {"error": "Tripay: Sandbox key tapi URL production — coba lagi"}
+            return {
+                "error": "Tripay: Sandbox key tapi URL production — coba lagi"
+            }
         return {"error": f"Tripay error ({e.code}). Cek API key di dashboard Tripay."}
     except Exception as e:
         logger.error("Tripay exception: %s", e)
@@ -173,8 +269,6 @@ def check_tripay_status(merchant_ref: str) -> dict:
     """Check Tripay transaction status by merchant_ref."""
     if not TRIPAY_API_KEY or not TRIPAY_PRIVATE_KEY:
         return {"success": False, "error": "Tripay API key not configured"}
-
-    import urllib.request, urllib.error
 
     payload = {"merchant_ref": merchant_ref}
     payload["signature"] = _sign(TRIPAY_MERCHANT + merchant_ref)
