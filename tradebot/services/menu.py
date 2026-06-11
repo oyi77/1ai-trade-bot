@@ -31,6 +31,7 @@ SIGNAL_MENU: list[list[tuple[str, str]]] = [
     [("cmd:mtf", "🧬 Matrix 5TF")],
     [("cmd:engines", "🔧 Engine Consensus")],
     [("cmd:structure", "🏗 Market Structure")],
+    [("cmd:pulse", "🔄 Market Pulse")],
     [("menu:main", "🔙 Back")],
 ]
 
@@ -53,13 +54,16 @@ ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("cmd:status", "📊 Status"), ("cmd:subscribe", "⭐ Subscribe")],
     [("menu:donate", "💚 Donate"), ("cmd:mykey", "🔑 My Key")],
     [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
+    [("cmd:myid", "🆔 My ID"), ("cmd:trailing", "🏃 Trailing Status")],
+    [("cmd:settings", "⚙️ Settings")],
     [("menu:main", "🔙 Back")],
 ]
 
 DONATE_MENU: list[list[tuple[str, str]]] = [
     [("donate:coffee", "☕️ Kopi (Rp 15K)")],
+    [("donate:learn", "🍱 Makan Siang (Rp 25K)")],
     [("donate:fuel", "🚀 Bensin Full (Rp 50K)")],
-    [("donate:custom", "💰 Nominal Bebas")],
+    [("donate:custom", "💰 Nominal Bebas"), ("cancel_input", "❌ Batal")],
     [("menu:main", "🔙 Back")],
 ]
 
@@ -79,7 +83,12 @@ ADMIN_PANEL_MENU: list[list[tuple[str, str]]] = [
 HELP_MENU: list[list[tuple[str, str]]] = [
     [("cmd:start", "📖 Start"), ("cmd:help", "📚 All Commands")],
     [("cmd:symbols", "📋 Symbols"), ("cmd:ea", "📥 Download EA")],
+    [("cmd:bridge_full_status", "🛡️ Bridge Status")],
     [("menu:main", "🔙 Back")],
+]
+
+TRADE_MENU: list[list[tuple[str, str]]] = [
+    [("trade:yes", "✅ Trade"), ("trade:no", "⏭ Skip")],
 ]
 
 
@@ -117,6 +126,7 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
         "stockity": STOCKITY_MENU,
         "admin_panel": ADMIN_PANEL_MENU,
         "help": HELP_MENU,
+        "trade": TRADE_MENU,
     }
     menu = menus.get(menu_name, MAIN_MENU)
     return {"inline_keyboard": build_keyboard(menu)}
@@ -186,6 +196,16 @@ def is_admin(chat_id: str, admin_ids: list[str] | None = None) -> bool:
 
 __all__ = [
     "ADMIN_MENU",
+    "MAIN_MENU",
+    "SIGNAL_MENU",
+    "MARKET_MENU",
+    "HISTORY_MENU",
+    "ACCOUNT_MENU",
+    "DONATE_MENU",
+    "STOCKITY_MENU",
+    "ADMIN_PANEL_MENU",
+    "HELP_MENU",
+    "TRADE_MENU",
     "get_inline_keyboard",
     "get_menu_text",
     "is_admin",

@@ -941,6 +941,600 @@ class CommandHandlersMixin(BaseBot):
         return None
 
 
+
+
+    async def _cmd_trade_yes(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if target not in self._pending_signals:
+            return "⏰ Tidak ada sinyal yang tertunda. /analyze dulu."
+        pending = self._pending_signals.pop(target, None)
+        self._save_pending_signals()
+        if not pending:
+            return "⏰ Sinyal tidak ditemukan."
+        sig = pending.get("sig", {})
+        price = pending.get("price", 0)
+        display = sig.get("symbol", sig.get("display", "XAUUSD"))
+        action = sig.get("action", "HOLD")
+        # Enrich with layers if LAYERING_ENGINE available
+        try:
+            if self._engines.get("layering"):
+                import layering
+                layers = getattr(layering, "enrich_signal", None)
+                if layers:
+                    sig = layers(sig, symbol=display)
+        except Exception:
+            pass
+        # Quality gate: confidence >= 65%, RR >= 1.5, SL direction check
+        confidence = sig.get("confidence", 0) or sig.get("score", 0)
+        if isinstance(confidence, float) and confidence < 1:
+            confidence = confidence * 100
+        rr = sig.get("rr", 0) or sig.get("risk_reward", 0)
+        sl_direction = sig.get("sl_direction") or sig.get("stop_loss_direction", "")
+        if confidence < 65:
+            return (
+                f"⛔ <b>Quality Gate: REJECTED</b>\n"
+                f"Confidence: {confidence:.0f}% (minimum 65%)\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Sinyal belum memenuhi standar kualitas.\n"
+                f"/analyze untuk coba lagi."
+            )
+        if rr < 1.5:
+            return (
+                f"⛔ <b>Quality Gate: REJECTED</b>\n"
+                f"Risk/Reward: {rr:.2f} (minimum 1.5)\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"RR terlalu rendah.\n"
+                f"/analyze untuk coba lagi."
+            )
+        if sl_direction and sl_direction.upper() == action.upper():
+            return (
+                f"⛔ <b>Quality Gate: REJECTED</b>\n"
+                f"SL direction ({sl_direction}) searah dengan aksi ({action}).\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Konflik SL — posisi tidak aman.\n"
+                f"/analyze untuk coba lagi."
+            )
+        sig["target_user"] = target
+        # Post to bridge
+        posted = False
+        if hasattr(self, 'bridge') and self.bridge:
+            try:
+                self.bridge.post_signal(sig, price)
+                posted = True
+            except Exception:
+                try:
+                    self.bridge.post(sig)
+                    posted = True
+                except Exception:
+                    pass
+        # Write to ea_signal.json
+        try:
+            ea_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
+                "data", "vilona_tradefx",
+            )
+            os.makedirs(ea_dir, exist_ok=True)
+            ea_path = os.path.join(ea_dir, "ea_signal.json")
+            ea_payload = {
+                "symbol": display,
+                "action": action,
+                "entry": price,
+                "sl": sig.get("sl", 0),
+                "tp": sig.get("tp", 0),
+                "timestamp": time.time(),
+                "source": "vilona_ai",
+                "target_user": target,
+            }
+            open(ea_path, "w").write(json.dumps(ea_payload))
+        except Exception:
+            pass
+        # Track trade
+        try:
+            from tradebot.services.trade_tracker_service import log_sent_signal
+            log_sent_signal(target, display, action, price, sig.get("sl", 0), sig.get("tp", 0))
+        except Exception:
+            try:
+                from trade_tracker import log_signal
+                log_signal(target, display, action, price, sig)
+            except Exception:
+                pass
+        bridge_status = "✅ TERKIRIM" if posted else "⚠️ Bridge offline — sinyal di-cache"
+        fomo_msg = (
+            "\n\n🔥 <b>JANGAN FOMO!</b>\n"
+            "Sinyal AI sudah dikirim. Jangan buka posisi"
+            " manual gegara liat sinyal ini."
+        )
+        return (
+            f"🔥 <b>TRADE EXECUTED</b>\n"
+            f"{action} {display} @ {price:.2f}\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"Bridge: {bridge_status}\n"
+            f"SL: {sig.get('sl', 'N/A')} | TP: {sig.get('tp', 'N/A')}\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🕐 {wib_fmt()}"
+            + fomo_msg
+        )
+
+    async def _cmd_trade_no(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        self._pending_signals.pop(target, None)
+        self._save_pending_signals()
+        skip_msg = (
+            "⏭ <b>Sinyal Dilewati</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "Sinyal ini tidak dikirim ke EA.\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "📊 /analyze — Analisa pair lain\n"
+            "📈 /recap — Lihat rekap harian"
+        )
+        return skip_msg
+
+    async def _cmd_trailing(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not self._is_donor(target):
+            return (
+                "🎯 <b>Smart Trailing</b> [🔒 LOCKED]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Auto-trailing SL saat profit jalan.\n"
+                "👑 Khusus Donatur.\n"
+                "⚡ /donate untuk unlock."
+            )
+        # Query trailing status from bridge
+        try:
+            import urllib.request
+            bridge_url = os.environ.get("BRIDGE_URL", "http://localhost:5001")
+            api_key = os.environ.get("BRIDGE_API_KEY", "default")
+            req = urllib.request.Request(
+                f"{bridge_url}/trailing?api_key={api_key}&account_id=MT5-{target}",
+            )
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = json.loads(r.read())
+                status = data.get("enabled", False)
+                mode = data.get("mode", "fixed")
+                status_text = "ON 🟢" if status else "OFF ⚪"
+                return (
+                    f"🎯 <b>Smart Trailing Status</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"Status: {status_text}\n"
+                    f"Mode: {mode}\n"
+                    f"Account: MT5-{target}\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"/settrailing on — Aktifkan\n"
+                    f"/settrailing off — Matikan\n"
+                    f"📐 Atur trailing jarak sendiri via menu Settings di EA."
+                )
+        except Exception:
+            # Fallback: show generic trailing info
+            return (
+                "🎯 <b>Smart Trailing</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "Status: Tidak dapat dijangkau (bridge offline?)\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "/settrailing on — Aktifkan trailing\n"
+                "/settrailing off — Matikan trailing\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "<i>Trailing SL otomatis setelah profit > breakeven.</i>"
+            )
+
+    async def _cmd_settrailing(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not self._is_admin(target):
+            return "⛔ Hanya admin yang dapat mengatur trailing."
+        if not args or args[0].lower() not in ("on", "off", "enable", "disable"):
+            return "❌ Gunakan: /settrailing on|off"
+        enabled = args[0].lower() in ("on", "enable")
+        try:
+            import urllib.request
+            bridge_url = os.environ.get("BRIDGE_URL", "http://localhost:5001")
+            api_key = os.environ.get("BRIDGE_API_KEY", "default")
+            payload = json.dumps({"enabled": enabled, "account_id": f"MT5-{target}"}).encode()
+            req = urllib.request.Request(
+                f"{bridge_url}/trailing",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=5) as r:
+                resp = json.loads(r.read())
+                status = "ON 🟢" if resp.get("enabled", enabled) else "OFF ⚪"
+                return (
+                    f"🎯 <b>Trailing: {status}</b>\n"
+                    f"Trailing telah {'diaktifkan' if enabled else 'dinonaktifkan'}.\n"
+                    f"Account: MT5-{target}"
+                )
+        except Exception as e:
+            return f"❌ Gagal mengatur trailing: {e}"
+
+    async def _cmd_autotrade(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not self._is_donor(target):
+            return "🔒 <b>Auto-Trade</b> khusus Donatur. /donate untuk unlock."
+        # Toggle EA autotrade via bridge autosync
+        self._autosync_enabled = not self._autosync_enabled
+        self._set_autosync(target, self._autosync_enabled)
+        state = "ON 🟢" if self._autosync_enabled else "OFF ⚪"
+        # Also post to bridge if available
+        try:
+            if self.bridge and hasattr(self.bridge, "set_autotrade"):
+                self.bridge.set_autotrade(target, self._autosync_enabled)
+        except Exception:
+            pass
+        return f"🤖 <b>Auto-Trade: {state}</b>\nSinyal akan auto-trade ke EA tanpa konfirmasi."
+
+    async def _cmd_pulse(self, args: list[str], chat_id: str | None = None) -> str:
+        target = chat_id or self.chat_id
+        try:
+            from tradebot.services.consensus_service import run_engine_consensus
+        except ImportError:
+            return "📡 Market pulse: Engine consensus tidak tersedia."
+        result = None
+        try:
+            result = run_engine_consensus(symbol="XAUUSD")
+        except Exception as e:
+            return f"📡 Market pulse: {e}"
+        if not result:
+            return "📡 Market pulse: Engine data unavailable."
+        # Format fmt_pulse() output
+        hier = result.get("hierarchical", {})
+        tfs = result.get("timeframes", {})
+        verdict = hier.get("verdict", "HOLD")
+        score = hier.get("consensus_score", 0) * 100
+        alignment = hier.get("mtf_alignment", "NONE")
+        macro = hier.get("macro_trend", "NEUTRAL")
+        lines = [
+            f"📡 <b>MARKET PULSE — XAUUSD</b>",
+            f"━━━━━━━━━━━━━━━━━━━━━",
+            f"Verdict: {verdict} ({score:.0f}%)",
+            f"Alignment: {alignment} | Macro: {macro}",
+            f"━━━━━━━━━━━━━━━━━━━━━",
+        ]
+        for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
+            tf = tfs.get(tf_name, {})
+            if tf:
+                v = tf.get("verdict", "?")
+                c = tf.get("consensus_pct", 0) * 100
+                lines.append(f"{tf_name}: {v} ({c:.0f}%)")
+        now = wib_now()
+        lkz, nykz = killzone_active()
+        bn, pn, nn = news_blackout_status()
+        lines.extend([
+            f"━━━━━━━━━━━━━━━━━━━━━",
+            f"🕐 {wib_fmt()} | {'🟢 KZ' if lkz or nykz else '🔴 No KZ'}",
+            f"📰 {'⛔ BLACKOUT' if bn else '✅ Clear'}",
+            f"━━━━━━━━━━━━━━━━━━━━━",
+            f"🧠 /engines — Detail engine readings",
+        ])
+        return "\n".join(lines)
+
+    async def _cmd_briefing(self, args: list[str], chat_id: str | None = None) -> str:
+        target = chat_id or self.chat_id
+        try:
+            # Fetch XAUUSD from gold-api.com
+            import urllib.request
+            gold_url = "https://www.gold-api.com/api/XAU/USD"
+            xau_price = None
+            try:
+                gold_resp = urllib.request.urlopen(gold_url, timeout=5)
+                gold_data = json.loads(gold_resp.read())
+                xau_price = float(gold_data.get("price", 0)) + self.xauusd_offset
+            except Exception:
+                xau_price = self._fetch_price("gold") or 0
+            # Fetch DXY from Yahoo
+            dxy = None
+            try:
+                dxy = self._fetch_price("dxy")
+            except Exception:
+                pass
+            # Compute H1 SMA bias
+            h1_bias = "NEUTRAL"
+            try:
+                import yfinance as yf
+                ticker = yf.Ticker("GC=F")
+                df = ticker.history(period="3d", interval="1h")
+                if not df.empty and len(df) >= 20:
+                    sma20 = float(df["Close"].rolling(20).mean().iloc[-1])
+                    close = float(df["Close"].iloc[-1])
+                    if close > sma20:
+                        h1_bias = "BULLISH 📈"
+                    elif close < sma20:
+                        h1_bias = "BEARISH 📉"
+                    else:
+                        h1_bias = "CHOPPY ↔️"
+            except Exception:
+                pass
+            now = wib_now()
+            lkz, nykz = killzone_active()
+            ses = session_label()
+            bn, pn, nn = news_blackout_status()
+            xau_str = f"${xau_price:,.2f}" if xau_price else "N/A"
+            dxy_str = f"{dxy:.2f}" if dxy else "N/A"
+            lines = [
+                f"📋 <b>PRE-MARKET BRIEFING</b>",
+                f"━━━━━━━━━━━━━━━━",
+                f"🕐 {wib_fmt()} | {now.strftime('%A')}",
+                f"━━━━━━━━━━━━━━━━",
+                f"",
+                f"💰 <b>MARKET PRICES</b>",
+                f"XAUUSD: {xau_str}",
+                f"DXY: {dxy_str}",
+                f"",
+                f"📊 <b>H1 SMA BIAS</b>",
+                f"{h1_bias}",
+                f"",
+                f"🕐 <b>SESSION</b>",
+                f"Active: {ses}",
+                f"London KZ: {'🟢' if lkz else '🔴'} | NY KZ: {'🟢' if nykz else '🔴'}",
+                f"News: {'⛔ BLACKOUT' if bn else '✅ Clear'}",
+                f"",
+                f"━━━━━━━━━━━━━━━━",
+                f"📌 <b>LOCKED — Donatur Only</b>",
+                f"👑 Full briefing dengan AI sentiment, key levels,",
+                f"   dan trade plan buka setiap pagi.",
+                f"   → /donate untuk unlock",
+                f"━━━━━━━━━━━━━━━━",
+                f"💡 Dashboard: /dashboard",
+                f"📊 Today's signal: /signal",
+            ]
+            return "\n".join(lines)
+        except Exception as e:
+            return f"❌ Briefing error: {e}"
+
+    async def _cmd_reminder(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not self._is_admin(target):
+            return "⛔ Hanya admin."
+        try:
+            from tradebot.services.members_service import get_stale_donors
+            stale = get_stale_donors()
+        except Exception:
+            return "🔧 Members service tidak tersedia."
+        if not stale:
+            return "✅ Semua donatur aktif."
+        lines = ["⏰ <b>STALE DONOR REMINDERS</b>", "━━━━━━━━━━━━━━━━"]
+        reminders_sent = 0
+        for donor in stale[:20]:
+            user_id = donor.get("chat_id") or donor.get("id", "")
+            days_since = donor.get("days_since_last", 0)
+            last_donation = donor.get("last_donation_date", "?")
+            lines.append(f"• <code>{user_id}</code> — {days_since} hari sejak donasi terakhir ({last_donation})")
+            # Send DM to stale donor
+            reminder_text = (
+                f"⏰ <b>Pengingat Trading!</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Hai Bro! Udah <b>{days_since} hari</b> sejak\n"
+                f"donasi terakhir kamu.\n\n"
+                f"Server AI masih jalan 24/7 buat kamu.\n"
+                f"Kalau ada waktu, mampir yuk! 🥂\n\n"
+                f"👉 /analyze — Cek market sekarang\n"
+                f"👉 /donate — Isi bahan bakar AI"
+            )
+            try:
+                if user_id:
+                    await self._tg_send(reminder_text, chat_id=user_id)
+                    reminders_sent += 1
+            except Exception:
+                pass
+        lines.append(f"━━━━━━━━━━━━━━━━")
+        lines.append(f"📨 Reminder terkirim ke {reminders_sent}/{len(stale)} donor")
+        return "\n".join(lines)
+
+    async def _cmd_donate_manual(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if target not in DONATION_INPUT_STATE:
+            return "❌ Gunakan /donate dulu untuk memulai."
+        DONATION_INPUT_STATE.pop(target, None)
+        amount_str = " ".join(args) if args else ""
+        if not amount_str:
+            return "❌ Masukkan nominal. Contoh: /donate_manual 50000"
+        try:
+            amount = int(amount_str.replace(".", "").replace(",", ""))
+        except ValueError:
+            return "❌ Nominal tidak valid. Contoh: /donate_manual 50000"
+        if amount < 10000:
+            return "💰 Minimal Rp10,000."
+        # Try Tripay payment
+        try:
+            from tradebot.services.payment_service import create_tripay_invoice
+            invoice = create_tripay_invoice(
+                target, amount, f"Donasi {target} - Rp{amount:,}"
+            )
+            if invoice and invoice.get("pay_url"):
+                DONATION_INPUT_STATE.pop(target, None)
+                return (
+                    f"💚 <b>Donasi Rp{amount:,}</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"🔗 <a href='{invoice['pay_url']}'>Klik bayar di sini</a>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"Terima kasih atas dukunganmu! 🙏"
+                )
+        except ImportError:
+            pass
+        except Exception:
+            pass
+        # PAYMENT_ENGINE offline — show manual transfer
+        return (
+            f"💚 <b>Donasi Rp{amount:,}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"<b>Manual Transfer</b>\n\n"
+            f"🏦 BCA: <b>8531425531</b>\n"
+            f"   a.n. <b>MOH SUHUD</b>\n\n"
+            f"📱 Dana/GoPay:\n"
+            f"Hubungi admin @codergaboets\n\n"
+            f"📸 Kirim bukti transfer ke admin.\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"Terima kasih atas dukunganmu! 🙏"
+        )
+
+    async def _cmd_listkeys(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not self._is_admin(target):
+            return "⛔ Hanya admin."
+        try:
+            from tradebot.services.license_service import cmd_listkeys
+            return cmd_listkeys(target)
+        except Exception:
+            return "🔧 License engine tidak tersedia."
+
+    async def _cmd_revokekey(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not self._is_admin(target):
+            return "⛔ Hanya admin."
+        try:
+            from tradebot.services.license_service import cmd_revokekey
+            return cmd_revokekey(args, target)
+        except Exception:
+            return "🔧 License engine tidak tersedia."
+
+    async def _cmd_bridge_full_status(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not self._is_admin(target):
+            return "⛔ Hanya admin."
+        try:
+            if self.bridge and hasattr(self.bridge, "format_full_status"):
+                return self.bridge.format_full_status()
+        except Exception:
+            pass
+        # Fallback formatting
+        lines = [
+            "🌉 <b>BRIDGE FULL STATUS</b>",
+            "━━━━━━━━━━━━━━━━",
+            f"Bridge: {'Connected' if self.bridge else 'Inactive'}",
+            f"Auto-scan: {'ON' if self._autosync_enabled else 'OFF'}",
+            f"Engines: {sum(1 for v in self._engines.values() if v)}/{len(self._engines)} aktif",
+            f"Pending signals: {len(self._pending_signals)}",
+            f"Autosync users: {len(self._autosync_data)}",
+            "━━━━━━━━━━━━━━━━",
+        ]
+        # Add bridge instance info if available
+        try:
+            if hasattr(self.bridge, 'instances'):
+                for inst_id, inst in self.bridge.instances.items():
+                    lines.append(f"Instance {inst_id}: {inst.get('status', '?')}")
+        except Exception:
+            pass
+        return "\n".join(lines)
+
+    async def _cmd_ultimatum(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if self._has_accepted_ultimatum(target):
+            return "✅ Kamu sudah menerima aturan main. Selamat trading!"
+        # Send ultimatum video from cached file_id or local path
+        try:
+            if self._cached_video_file_id:
+                await self._tg_send_video_file(target, self._cached_video_file_id)
+            elif os.path.exists(self._ultimatum_video_local):
+                await self._tg_send_video_file(target, self._ultimatum_video_local)
+        except Exception:
+            pass
+        # Check if ULTIMATUM_ACCEPTED_PATH exists
+        ultimatum_text = (
+            "🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Sebelum kamu akses seluruh kekuatan AI,\n"
+            "lu harus setuju dulu dengan aturan main:\n\n"
+            "1. Sinyal / analisa AI adalah ALAT BANTU,\n"
+            "   BUKAN JAMINAN PROFIT 100%.\n"
+            "2. Trading adalah HIGH RISK.\n"
+            "   Modal lo bisa HABIS.\n"
+            "3. Jangan FOMO. Selalu pake risk management.\n"
+            "4. Selalu backtest dulu sebelum real trading.\n"
+            "5. Gw, developer, atau AI ini TIDAK BERTANGGUNG\n"
+            "   JAWAB atas loss yang lo alami.\n"
+            "6. Dengan menggunakan bot ini, lo setuju\n"
+            "   bahwa lo trading atas RISIKO SENDIRI.\n\n"
+            "Kalau lo nggak setuju, jangan gunakan bot ini.\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Setuju? Klik tombol di bawah:\n"
+            "<i>Lo punya 24 jam untuk memutuskan.</i>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📞 Privat Investor: @codergaboets\n"
+        )
+        markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "✅ SETUJU — AKTIFKAN AKSES", "callback_data": "ultimatum:accept"},
+                    {"text": "❌ TOLAK", "callback_data": "ultimatum:decline"},
+                ]
+            ]
+        }
+        await self._tg_send(ultimatum_text, chat_id=target, reply_markup=markup)
+        return ""
+
+    async def _cmd_settings(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        is_donor = self._is_donor(target)
+        autosync = "ON 🟢" if self._is_autosync(target) else "OFF ⚪"
+        trailing_status = "ON ✅" if is_donor else "🔒 Locked"
+        risk = "1.0%"
+        tf = "H1"
+        try:
+            from tradebot.services.members_service import get_member
+            member = get_member(target)
+            if member:
+                risk = str(member.get("risk_percent", "1.0")) + "%"
+                tf = member.get("timeframe", "H1").upper()
+        except Exception:
+            pass
+        return (
+            f"⚙️ <b>Settings — {target}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"👑 Donatur: {'Yes ✅' if is_donor else 'No ❌'}\n"
+            f"📊 Risk: {risk}\n"
+            f"🕐 TF Default: {tf}\n"
+            f"🤖 Autosync: {autosync}\n"
+            f"🎯 Trailing: {trailing_status}\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"/donate — Upgrade ke Donatur\n"
+            f"/autosync — Toggle auto-trade\n"
+            f"/trailing — Konfigurasi trailing"
+        )
+
+    async def _cmd_elite_params(self, args: list[str], chat_id: str | None = None) -> str:
+        return (
+            "👑 <b>Elite Custom Parameters</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "Gunakan parameter khusus saat analisa:\n"
+            "/analyze xauusd risk=2.0 tf=h1\n\n"
+            "risk= — Risk percentage (1.0-5.0)\n"
+            "tf=   — Timeframe (m15, h1, h4)\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "👑 Khusus Donatur VIP."
+        )
+
+    async def _cmd_fvg(self, args: list[str], chat_id: str | None = None) -> str:
+        pair = args[0] if args else "xauusd"
+        display = pair.upper()
+        return (
+            f"📐 <b>FAIR VALUE GAPS — {display}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"FVG detection requires live OHLCV data.\n"
+            f"Gunakan /zones {pair} untuk OB + FVG + Supply/Demand.\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🧠 /analyze {pair} — Analisa AI lengkap"
+        )
+
+    async def _cmd_sweep(self, args: list[str], chat_id: str | None = None) -> str:
+        pair = args[0] if args else "xauusd"
+        display = pair.upper()
+        return (
+            f"🧹 <b>SWEEP DETECTION — {display}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"Sweep detection requires live session data.\n"
+            f"Gunakan /session {pair} untuk session levels.\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"🧠 /analyze {pair} — Analisa AI lengkap"
+        )
+
+    async def _cmd_donation_input(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        DONATION_INPUT_STATE[target] = True
+        return (
+            "💚 <b>Input Dukungan Nominal Bebas</b>\n"
+            "━━━━━━━━━━━━━━━━\n"
+            "Silakan ketik nominal dukungan yang kamu\n"
+            "inginkan (minimal Rp10,000).\n\n"
+            "<i>Contoh: ketik 50000 untuk Rp50.000</i>\n\n"
+            "Atau hubungi admin: @codergaboets"
+        )
 def register_vilona_commands(app, bot):
     """Register Vilona commands with the UnifiedBot application.
     Only essential text commands are registered — most features

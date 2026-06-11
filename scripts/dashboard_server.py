@@ -401,9 +401,19 @@ class Handler(BaseHTTPRequestHandler):
                 "macro_trend": "NEUTRAL",
             })
 
-    # ═══ API: LIVE SNAPSHOT (populated from real data) ═══
+    # ═══ API: LIVE SNAPSHOT (merged from worker live_status.json + DB trade stats) ═══
     def api_live_snapshot(self):
-        """Live dashboard snapshot — populated from real trade data when worker hasn't pushed."""
+        """Live dashboard snapshot — merges AutonomousWorker real-time status with DB trade stats."""
+        LIVE_STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'vilona_tradefx', 'live_status.json')
+        worker = {}
+        try:
+            p = os.path.abspath(LIVE_STATUS_PATH)
+            if os.path.exists(p):
+                with open(p) as f:
+                    worker = json.load(f) or {}
+        except Exception:
+            pass
+
         ts = _get_trade_stats()
         feeds = _get_all_signals()
         all_signals = feeds if isinstance(feeds, list) else []
@@ -411,14 +421,34 @@ class Handler(BaseHTTPRequestHandler):
         losses = ts.get("losses", 0)
         total = wins + losses
         wr = round(wins / max(total, 1), 2)
+
+        # Merge: worker uptime/state/price + DB performance/users
+        worker_uptime = worker.get("uptime_seconds", 0)
+        worker_cycles = worker.get("total_cycles", 0)
+        worker_state = worker.get("status", {}).get("state", "analyzing" if total > 0 else "idle")
+        worker_detail = worker.get("status", {}).get("detail", "") or f"AI aktif — {len(all_signals)} sinyal (WR {int(wr*100)}%)"
+        worker_pair = worker.get("status", {}).get("pair", "XAUUSD")
+        worker_price = worker.get("prices", {}).get("XAUUSD", None)
+        worker_bot_users = worker.get("users", {}).get("bot_users", 3)
+
         snapshot = {
             "type": "dashboard_snapshot",
-            "status": {"state": "analyzing" if total > 0 else "idle", "pair": "XAUUSD", "detail": f"AI aktif — {len(all_signals)} sinyal (WR {int(wr*100)}%)"},
-            "performance": {"win_rate": wr, "total_pnl": round(ts.get("total_pips", 0) * 10, 2)},
-            "users": {"active": len(all_signals), "bot_users": 3},
-            "prices": {"XAUUSD": None},
-            "uptime_seconds": int(time.time() - _start_time),
-            "total_cycles": total,
+            "status": {
+                "state": worker_state,
+                "pair": worker_pair,
+                "detail": worker_detail,
+            },
+            "performance": {
+                "win_rate": wr,
+                "total_pnl": round(ts.get("total_pips", 0) * 10, 2),
+            },
+            "users": {
+                "active": len(all_signals),
+                "bot_users": worker_bot_users,
+            },
+            "prices": {"XAUUSD": worker_price},
+            "uptime_seconds": int(worker_uptime if worker_uptime else (time.time() - _start_time)),
+            "total_cycles": total + worker_cycles,
         }
         self._json(snapshot)
 

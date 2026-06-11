@@ -118,9 +118,48 @@ class CallbackHandlersMixin(BaseBot):
             if amount < 10000:
                 return "💰 Minimal Rp10,000. Silakan ketik nominal lain."
             DONATION_INPUT_STATE.pop(chat_id, None)
+            # Try Tripay payment engine
+            from tradebot.services.payment_service import create_tripay_invoice
+            try:
+                invoice = create_tripay_invoice(
+                    chat_id, amount, f"Donasi {chat_id} - Rp{amount:,}"
+                )
+                if invoice and invoice.get("pay_url"):
+                    return (
+                        f"💚 <b>Dukungan Rp{amount:,}</b>\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"🔗 <a href='{invoice['pay_url']}'>Klik bayar di sini</a>\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"Terima kasih atas dukunganmu! 🙏"
+                    )
+            except Exception:
+                pass
+            # Payment engine offline — show manual transfer instructions
             return (
                 f"💚 <b>Dukungan Rp{amount:,}</b>\n"
-                f"Terima kasih! Hubungi admin @codergaboets untuk instruksi pembayaran."
+                f"━━━━━━━━━━━━━━━━\n"
+                f"<b>Manual Transfer</b>\n\n"
+                f"🏦 BCA: <b>8531425531</b>\n"
+                f"   a.n. <b>MOH SUHUD</b>\n\n"
+                f"📱 Dana/GoPay:\n"
+                f"Hubungi admin @codergaboets\n\n"
+                f"📸 Kirim bukti transfer ke admin.\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Terima kasih atas dukunganmu! 🙏"
+            )
+        except ImportError:
+            DONATION_INPUT_STATE.pop(chat_id, None)
+            return (
+                f"💚 <b>Dukungan Rp{amount:,}</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"<b>Manual Transfer</b>\n\n"
+                f"🏦 BCA: <b>8531425531</b>\n"
+                f"   a.n. <b>MOH SUHUD</b>\n\n"
+                f"📱 Dana/GoPay:\n"
+                f"Hubungi admin @codergaboets\n\n"
+                f"📸 Kirim bukti transfer ke admin.\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Terima kasih atas dukunganmu! 🙏"
             )
         except ValueError:
             return "❌ Nominal tidak valid. Ketik angka saja (contoh: 50000)."
