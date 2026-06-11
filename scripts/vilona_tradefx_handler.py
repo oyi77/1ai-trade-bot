@@ -856,7 +856,7 @@ def handle_payment_callback(callback_query):
             if is_tripay_paid(ref):
                 # Upgrade user!
                 from members import upgrade_tier, mark_payment_paid
-                upgrade_tier(str(chat_id), "donor", 9999, ref)
+                upgrade_tier(str(chat_id), "lifetime", 9999, ref)
                 mark_payment_paid(ref)
                 tg_send(
                     "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
@@ -1902,11 +1902,12 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     return sig
 
 
-def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None, levels=""):
+def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None, levels="", smc_text=""):
     """Format signal Telegram-style — quality-aware dual format.
     
     quality: tuple (passed: bool, reason: str) from _sig_quality_pass()
     levels: SnR/FIBO context string from _compute_levels()
+    smc_text: SMC/ICT analysis section from format_smc_analysis()
     
     If quality PASS → "SINYAL SELL/BUY" (actionable)
     If quality FAIL → "MARKET PULSE" (info only, no execution)
@@ -2219,6 +2220,10 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         lines.append(f"💡 {q_reason}")
         lines.append(f"🔍 Gunakan sebagai konfirmasi SnR/FIBO manual.")
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+
+    # ── SMC / ICT Analysis (actionable signals only) ──
+    if smc_text and is_actionable:
+        lines.append(smc_text)
 
     lines.append(f"⚠️ <i>NFA — Not Financial Advice. Sinyal hasil deteksi otomatis AI untuk edukasi. Keputusan & risiko trading sepenuhnya ada padamu. Selalu pakai manajemen risiko.</i>")
     if is_actionable:
@@ -2883,7 +2888,7 @@ def _is_donor(chat_id):
         if member:
             status = member.get("status", "")
             tier = member.get("tier", "")
-            return status in ("paid", "donor") or tier in ("pro", "elite", "paid", "donor")
+            return status in ("paid", "donor") or tier in ("pro", "elite", "lifetime", "paid", "donor")
     except Exception:
         pass
     return False
@@ -3174,6 +3179,18 @@ def handle_command(cmd, text, chat_id, msg):
         is_donor = _is_donor(chat_id)
         quota = _get_quota(chat_id)
 
+        # Get actual tier name for display
+        display_tier = "FREE"
+        try:
+            from members import get_member as _gm_status
+            m = _gm_status(str(chat_id))
+            if m:
+                t = m.get("tier", "")
+                tier_labels = {"pro": "PRO", "elite": "ELITE", "lifetime": "LIFETIME"}
+                display_tier = tier_labels.get(t, "SUBSCRIBER")
+        except Exception:
+            pass
+
         if is_donor:
             # Subscriber daily quota tracking
             today = wib_now().strftime("%Y-%m-%d")
@@ -3220,7 +3237,7 @@ def handle_command(cmd, text, chat_id, msg):
             fuel_text = "\n".join(fuel_lines) if fuel_lines else ""
 
             txt = (
-                f"👑 <b>STATUS: SUBSCRIBER ELITE</b>\n"
+                f"👑 <b>STATUS: SUBSCRIBER {display_tier}</b>\n"
                 f"⚡️ Kuota AI: {'UNLIMITED ♾️' if DONOR_DAILY_QUOTA < 0 else f'{remaining}/{DONOR_DAILY_QUOTA}x'} hari ini (Reset 00:00 WIB)\n"
                 f"⏱️ Cooldown: {MANUAL_THROTTLE_DONOR}s antar analisa\n"
                 f"{fuel_text}\n"
@@ -3293,12 +3310,24 @@ def handle_command(cmd, text, chat_id, msg):
             return
 
         # ── KILLZONE GATE (forex/metals outside London/NY) ──
-        # Allow analysis but show clear NO TRADE ZONE warning
         forex_metal_pairs = ("xauusd", "gold", "usd", "oil", "eurusd", "gbpusd", "usdjpy")
         if not is_crypto_pair(pair_check) and pair_check in forex_metal_pairs:
             lkz, nykz = killzone(wib_now().hour)
             if not (lkz or nykz):
                 logger.info(f"   [/analyze] {pair_check.upper()} outside killzone — NO TRADE ZONE")
+                next_session = "London (14:00 WIB)" if wib_now().hour < 14 else "New York (19:00 WIB)"
+                tg_send(
+                    f"🚫 <b>NO TRADE ZONE — {pair_check.upper()}</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"Forex & Metals hanya dianalisa saat:\n"
+                    f"🕐 London Killzone: 14:00-17:00 WIB\n"
+                    f"🕐 New York Killzone: 19:00-22:00 WIB\n\n"
+                    f"⏰ Sesi selanjutnya: <b>{next_session}</b>\n\n"
+                    f"💡 Untuk info killzone: /killzone\n"
+                    f"💡 Untuk crypto 24/7: /analyze btc",
+                    chat_id
+                )
+                return
 
         # ── ELITE CUSTOM PARAMS ──
         elite_params = {}
@@ -3357,12 +3386,6 @@ def handle_command(cmd, text, chat_id, msg):
                     return
                 if remaining >= 0 and remaining <= 5:
                     tg_send(f"⚠️ <b>Sisa {remaining}x analisa hari ini</b> — gunakan bijak!\n⏰ Reset jam 00:00 WIB", chat_id)
-            else:
-                # Free tier: enforce FREE_DAILY_LIMIT via _check_free_quota
-                ok, remaining, warn = _check_free_quota(str(chat_id))
-                if not ok:
-                    tg_send(warn, chat_id)
-                    return
 
             # ── Manual anti-flip + rate-limit guard ──
             blocked, reason = _is_manual_blocked(str(chat_id), pair=pair)
@@ -3377,7 +3400,7 @@ def handle_command(cmd, text, chat_id, msg):
             if not price:
                 tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
                 return
-            ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+            ohlcv_bars = _fetch_ohlcv_for_ai(pair, keep=60)
             # Detect user tier for AI model selection
             user_tier = "starter"
             if MEMBERS_ENABLED and chat_id:
@@ -3646,7 +3669,7 @@ def handle_command(cmd, text, chat_id, msg):
 
                     _touch_manual(str(chat_id), asset=sub.upper())
                     tg_send(f"🔍 Menganalisa {sub.upper()}... ~15 detik", chat_id)
-                    ohlcv_bars2 = _fetch_ohlcv_for_ai(sub)
+                    ohlcv_bars2 = _fetch_ohlcv_for_ai(sub, keep=60)
                     # Detect user tier for AI model selection
                     user_tier2 = "starter"
                     if MEMBERS_ENABLED and chat_id:
@@ -3904,8 +3927,13 @@ def handle_command(cmd, text, chat_id, msg):
         _send_donate_menu(chat_id, username)
 
     elif cmd == "/testpay":
-        """🧪 Test payment: subscribe minimal — verifikasi webhook Tripay."""
+        """🧪 Test payment: subscribe minimal — verifikasi webhook Tripay. ADMIN ONLY."""
         if not chat_id:
+            return
+        # Admin gate
+        admin_ids_tp = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
+        if str(chat_id) not in admin_ids_tp:
+            tg_send("⛔ Admin only.", chat_id)
             return
         if not PAYMENT_ENGINE:
             tg_send("💳 Payment gateway belum aktif.", chat_id)
@@ -3917,7 +3945,7 @@ def handle_command(cmd, text, chat_id, msg):
 
         tg_send("🧪 <b>Test Upgrade Tier — Rp10,000</b>\nMembuat invoice...", chat_id)
 
-        result = create_tripay_payment(str(chat_id), username, tier="donor", amount=10000)
+        result = create_tripay_payment(str(chat_id), username, tier="pro", amount=10000)
         if result.get("error"):
             tg_send(f"❌ Gagal: {result['error']}", chat_id)
             return
@@ -3971,23 +3999,23 @@ def handle_command(cmd, text, chat_id, msg):
 
             ref = f"VTFX-{target_id}-MANUAL"
             m_ensure(target_id)
-            m_upgrade(target_id, "donor", days, ref)
+            m_upgrade(target_id, "lifetime", days, ref)
 
             # Notify admin
             tg_send(
                 f"✅ <b>Manual Activation Berhasil</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"👤 User: <code>{target_id}</code>\n"
-                f"👑 Status: <b>SUBSCRIBER VIP — AKTIF PERMANEN</b>",
+                f"👑 Status: <b>SUBSCRIBER — LIFETIME</b>",
                 chat_id
             )
 
             # DM the activated user
             if BOT_TOKEN:
                 user_msg = (
-                    f"🔥 <b>BOOM! Kamu sekarang SUBSCRIBER VIP!</b>\n"
+                    f"🔥 <b>BOOM! Kamu sekarang SUBSCRIBER!</b>\n"
                     f"━━━━━━━━━━━━━━━━\n"
-                    f"👑 Status: <b>SUBSCRIBER VIP — AKTIF PERMANEN</b>\n"
+                    f"👑 Status: <b>SUBSCRIBER — LIFETIME</b>\n"
                     f"━━━━━━━━━━━━━━━━\n"
                     f"✅ /analyze UNLIMITED\n"
                     f"✅ EA Auto-Trade\n"
@@ -4916,7 +4944,7 @@ def handle_command(cmd, text, chat_id, msg):
         from signal_calculator import compute_signal, format_signal_telegram
         
         try:
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=disp)
         except Exception as e:
             tg_send(f"❌ Engine consensus error: {e}", chat_id)
             return
@@ -4997,11 +5025,16 @@ def handle_command(cmd, text, chat_id, msg):
 
     elif cmd == "/mtf":
         """Show MTF matrix (5TF × 9 engines)."""
+        sub_norm = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_mtf = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_mtf = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        disp_mtf = disp_map_mtf.get(pair_map_mtf.get(sub_norm, "gold"), "XAUUSD")
         tg_send("<i>🧬 Loading MTF engine readings...</i>", chat_id)
         try:
             from engine_consensus import run_engine_consensus
             
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=disp_mtf)
             if not result:
                 tg_send("❌ Engine data unavailable.", chat_id)
                 return
@@ -5014,7 +5047,7 @@ def handle_command(cmd, text, chat_id, msg):
             score = hier.get("consensus_score", 0) * 100
             
             msg = (
-                f"🧬 <b>MTF ENGINE MATRIX — XAUUSD</b>\n"
+                f"🧬 <b>MTF ENGINE MATRIX — {disp_mtf}</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🏛 {macro} | {align} | {verdict} ({score:.0f}%)\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -5046,11 +5079,16 @@ def handle_command(cmd, text, chat_id, msg):
 
     elif cmd == "/engines":
         """Show live engine readings for all 9 strategies."""
+        sub_norm_eng = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_eng = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_eng = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        disp_eng = disp_map_eng.get(pair_map_eng.get(sub_norm_eng, "gold"), "XAUUSD")
         tg_send("<i>🔧 Loading engine readings...</i>", chat_id)
         try:
             from engine_consensus import run_engine_consensus
             
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=disp_eng)
             if not result:
                 tg_send("❌ Engine data unavailable.", chat_id)
                 return
@@ -5074,7 +5112,7 @@ def handle_command(cmd, text, chat_id, msg):
             }
             
             msg = (
-                f"🔧 <b>ENGINE READINGS — XAUUSD</b>\n"
+                f"🔧 <b>ENGINE READINGS — {disp_eng}</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🏛 {hier.get('macro_trend','?')} | {hier.get('mtf_alignment','?')}\n"
                 f"Verdict: <b>{hier.get('verdict','HOLD')}</b> ({hier.get('consensus_score',0)*100:.0f}%)\n"
@@ -5891,7 +5929,17 @@ def auto_analyze_loop():
                     continue
                 # Channel posts always show full SL/TP (marketing)
                 mech_sig["_tier_capped"] = False
-                text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp")
+                # ── SMC/ICT Enrichment for channel signals ──
+                smc_text = ""
+                try:
+                    from smc_section import format_smc_analysis
+                    pip_s = 0.10 if disp in ("XAUUSD","GOLD") else 0.01 if disp == "USOIL" else 1.0
+                    ohlcv_smc = _fetch_ohlcv_for_ai(pair, keep=60)
+                    if ohlcv_smc:
+                        smc_text = format_smc_analysis(ohlcv_smc, disp, price, action, pip_s)
+                except Exception:
+                    pass
+                text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp", smc_text=smc_text)
                 _entry = mech_sig.get("entry", price) or 0
                 _sl = mech_sig.get("sl", 0) or 0
                 _tp = mech_sig.get("tp", 0) or 0
@@ -6010,7 +6058,17 @@ def auto_analyze_loop():
                 post_signal_to_bridge(sig, price, disp)
 
                 # ── Post to channel (with rate limiter) ──
-                text = fmt_signal(sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp")
+                # ── SMC/ICT Enrichment ──
+                smc_text2 = ""
+                try:
+                    from smc_section import format_smc_analysis
+                    pip_s2 = 0.10 if disp in ("XAUUSD","GOLD") else 0.01 if disp == "USOIL" else 1.0
+                    ohlcv_smc2 = _fetch_ohlcv_for_ai(pair, keep=60)
+                    if ohlcv_smc2:
+                        smc_text2 = format_smc_analysis(ohlcv_smc2, disp, price, action, pip_s2)
+                except Exception:
+                    pass
+                text = fmt_signal(sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp", smc_text=smc_text2)
                 _entry = sig.get("entry", price) or 0
                 _sl = sig.get("sl", 0) or 0
                 _tp = sig.get("tp", 0) or 0
