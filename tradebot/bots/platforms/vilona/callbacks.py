@@ -81,36 +81,44 @@ class CallbackHandlersMixin(BaseBot):
 
     def _handle_payment_callback(self, chat_id: str, data: str) -> str:
         if data == "sub:pro":
-            amount = 15000
             DONATION_INPUT_STATE.pop(chat_id, None)
             return (
-                "💚 <b>Dukungan Rp15,000 (Kopi)</b>\n"
+                "⭐ <b>PRO — Rp50.000/bulan</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
-                "Terima kasih! Hubungi admin @codergaboets\n"
-                "untuk instruksi pembayaran.\n\n"
-                "🔥 <i>Server AI butuh kopi biar makin ganas!</i>"
+                "✓ 20x /analyze per hari\n"
+                "✓ SL/TP unlocked\n"
+                "✓ EA Bridge gratis\n"
+                "✓ Nama di subscriber wall\n\n"
+                "💚 Subscribe via /subscribe atau\n"
+                "hubungi @codergaboets"
             )
         if data == "sub:elite":
-            amount = 50000
             DONATION_INPUT_STATE.pop(chat_id, None)
             return (
-                "💚 <b>Dukungan Rp50,000 (Bensin Full)</b>\n"
+                "👑 <b>ELITE — Rp150.000/bulan</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
-                "Terima kasih! Hubungi admin @codergaboets\n"
-                "untuk instruksi pembayaran.\n\n"
-                "🚀 <i>Bensin full! AI siap cetak profit!</i>"
+                "✓ Semua fitur PRO +\n"
+                "✓ /analyze UNLIMITED\n"
+                "✓ GPT-4o + Grok AI\n"
+                "✓ Priority EA Token\n"
+                "✓ Daily performance report\n\n"
+                "💚 Subscribe via /subscribe atau\n"
+                "hubungi @codergaboets"
             )
         if data == "sub:lifetime":
-            DONATION_INPUT_STATE[chat_id] = True
+            DONATION_INPUT_STATE.pop(chat_id, None)
             return (
-                "💚 <b>Dukung Server AI</b>\n"
+                "💎 <b>LIFETIME — Rp500.000 sekali</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
-                "Server AI 24/7 butuh biaya API & GPU.\n\n"
-                "💰 Ketik nominal subscribe:\n"
-                "Contoh: 50000 (Rp50.000)\n\n"
-                "Atau hubungi admin: @codergaboets"
+                "✓ Semua fitur ELITE\n"
+                "✓ Permanent — never expires\n"
+                "✓ Nama di homepage\n"
+                "✓ Elite API key\n"
+                "✓ 1-on-1 setup support\n\n"
+                "💚 Subscribe via /subscribe atau\n"
+                "hubungi @codergaboets"
             )
-        return "💳 Payment gateway: hubungi admin @codergaboets"
+        return "💳 Hubungi @codergaboets untuk subscribe"
 
     async def _handle_donation_input(self, chat_id: str, text: str) -> str:
         try:

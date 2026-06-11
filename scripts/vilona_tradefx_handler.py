@@ -907,36 +907,34 @@ def handle_payment_callback(callback_query):
         # Show donation info — no more old tiers
         txt = get_pricing_table() if PAYMENT_ENGINE else "💎 Info dukung server AI belum tersedia."
         markup = {"inline_keyboard": [
-            [{"text": "☕️ Subscribe PRO (Rp15k)", "callback_data": "sub:pro"},
-             {"text": "🚀 Nominal Bebas", "callback_data": "sub:elite"}],
+            [{"text": "⭐ PRO — Rp50K/bulan", "callback_data": "sub:pro"},
+             {"text": "👑 ELITE — Rp150K/bulan", "callback_data": "sub:elite"}],
             [{"text": "📞 Tanya Admin", "url": "https://t.me/codergaboets"}],
         ]}
         tg_send(txt, chat_id, reply_markup=markup)
 
     elif data.startswith("donate:"):
+        # Legacy backward-compat — map to tiered subscription
         donate_type = data.split(":", 1)[1] if ":" in data else "info"
         
+        # Map old amounts to new tiers
         if donate_type == "coffee":
-            # ── Fixed Rp15,000 ──
-            amount = 15000
-            label = "☕️ Kopi untuk Server AI"
-        elif donate_type == "fuel":
-            # ── Fixed Rp50,000 ──
             amount = 50000
-            label = "🚀 Bensin Full Server AI"
+            tier_label = "pro"
+        elif donate_type == "fuel":
+            amount = 150000
+            tier_label = "elite"
         elif donate_type == "learn":
-            # ── Fixed Rp25,000 ──
-            amount = 25000
-            label = "🍱 Makan Siang Server AI"
+            amount = 50000
+            tier_label = "pro"
         elif donate_type == "custom":
-            # ── Custom amount — wait for user to type ──
             DONATION_INPUT_STATE[str(chat_id)] = True
             tg_send(
                 "💰 <b>Input Nominal Bebas</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
-                "Silakan ketik nominal dukungan yang kamu\n"
-                "inginkan (minimal Rp10,000).\n\n"
-                "<i>Contoh: ketik 100000 untuk Rp100K</i>",
+                "Silakan ketik nominal subscribe yang kamu\n"
+                "inginkan (minimal Rp50.000).\n\n"
+                "<i>Contoh: ketik 150000 untuk Rp150K</i>",
                 chat_id,
                 reply_markup={"inline_keyboard": [[
                     {"text": "❌ Batal", "callback_data": "cancel_input"},
@@ -944,17 +942,8 @@ def handle_payment_callback(callback_query):
             )
             return
         else:
-            # Generic — show options
-            tg_send(
-                "⚡ <b>Upgrade Tier</b>\n"
-                "━━━━━━━━━━━━━━━━\n"
-                "Pilih nominal dukungan:\n\n"
-                "⭐ Subscribe PRO — Rp50K/bln\n"
-                "👑 Subscribe ELITE — Rp150K/bln\n"
-                "🚀 Nominal bebas — Upgrade tier\n\n"
-                "Semua dukungan = SUBSCRIBER VIP AKTIF PERMANEN.",
-                chat_id
-            )
+            # Generic — redirect to tiered /subscribe
+            _send_subscribe_menu(chat_id, username)
             return
 
         if not PAYMENT_ENGINE:
@@ -971,9 +960,10 @@ def handle_payment_callback(callback_query):
             )
             return
 
-        tg_send(f"⏳ <b>Membuat link pembayaran...</b>\n{label} — Rp{amount:,}", chat_id)
+        tier_label_text = {"pro": "⭐ PRO Rp50K", "elite": "👑 ELITE Rp150K"}
+        tg_send(f"⏳ <b>Membuat link pembayaran...</b>\n{tier_label_text.get(tier_label, tier_label)} — Rp{amount:,}", chat_id)
 
-        result = create_tripay_payment(str(chat_id), username, tier="donor", amount=amount)
+        result = create_tripay_payment(str(chat_id), username, tier=tier_label, amount=amount)
         if result.get("error"):
             tg_send(
                 f"❌ <b>Gagal membuat pembayaran otomatis</b>\n"
