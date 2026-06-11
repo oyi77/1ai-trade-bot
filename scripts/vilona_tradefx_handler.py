@@ -2831,6 +2831,55 @@ def handle_command(cmd, text, chat_id, msg):
     elif cmd == "/bridge_status":
         tg_send(format_bridge_status(), chat_id)
 
+    elif cmd == "/testbridge":
+        # ── Admin-only: fire dummy signal to test all connected MT5 instances ──
+        if str(chat_id) != str(ADMIN_CHAT_ID):
+            tg_send("⛔ Admin only.", chat_id)
+        else:
+            try:
+                now_ts = wib_now().strftime("%Y%m%d-%H%M%S")
+                live_price = fetch_price("gold")
+                if not live_price:
+                    tg_send("❌ Gagal fetch harga XAUUSD — coba lagi.", chat_id)
+                else:
+                    pip_s = 0.10
+                    sl_price = round(live_price - 50 * pip_s, 2)
+                    tp_price = round(live_price + 50 * pip_s, 2)
+                    dummy = {
+                        "action": "BUY",
+                        "symbol": "XAUUSD",
+                        "entry": 0,  # market execution
+                        "sl": sl_price,
+                        "tp": tp_price,
+                        "tp1": tp_price,
+                        "tp2": 0,
+                        "confidence": 99,
+                        "risk_percent": 1.0,
+                        "comment": f"TEST-BRIDGE-{now_ts}",
+                        "source": "testbridge",
+                        "rr_ratio": 1.0,
+                        "layers": [],
+                        "target_user": "",
+                        "telegram_message_id": None,
+                        "signal_id": f"TEST-BRIDGE-{now_ts}",
+                    }
+                    post_signal_to_bridge(dummy, live_price, "XAUUSD")
+                    tg_send(
+                        f"🚀 <b>DUMMY SIGNAL FIRED!</b>\n"
+                        f"Check all connected MT5 terminals for execution.\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"Signal ID: <code>TEST-BRIDGE-{now_ts}</code>\n"
+                        f"Entry: MARKET | SL: {sl_price} | TP: {tp_price}\n"
+                        f"Risk: 1.0% | Confidence: 99\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"<i>Ini sinyal uji — tidak untuk ditradingkan.</i>",
+                        chat_id
+                    )
+                    logger.info(f"🧪 /testbridge fired: TEST-BRIDGE-{now_ts} | XAUUSD @ MKT | SL={sl_price} TP={tp_price}")
+            except Exception as e:
+                logger.error(f"/testbridge error: {e}")
+                tg_send(f"❌ /testbridge gagal: {e}", chat_id)
+
     elif cmd == "/status":
         # Weekend indicator
         weekend_note = weekend_status_text()
@@ -5283,6 +5332,16 @@ def auto_analyze_loop():
                                 tg_send(alert_text, SIGNAL_CHANNEL_ID, reply_to=tg_msg_id)
                             else:
                                 send_to_channel(alert_text)  # graceful fallback
+                            # ── Update unified signal feed (dashboard) ──
+                            if SIGNAL_FEED:
+                                try:
+                                    _feed_update(
+                                        symbol=ct.get("symbol", disp),
+                                        entry_price=ct.get("entry", 0),
+                                        result=ct.get("outcome", "?"),
+                                        pips=ct.get("pips", 0)
+                                    )
+                                except Exception: pass
                         except Exception: pass
                 except Exception: pass
 
