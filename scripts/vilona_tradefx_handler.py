@@ -2932,7 +2932,20 @@ def handle_command(cmd, text, chat_id, msg):
                 tg_send(f"❌ /testbridge gagal: {e}", chat_id)
 
     elif cmd == "/trailing":
-        # ── Smart Trailing config (per user/account) ──
+        # ── Smart Trailing config (DONOR ONLY) ──
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "🎯 <b>Smart Trailing</b> [🔒 LOCKED]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Auto-trailing SL saat profit jalan.\n"
+                "Bridge update SL ke EA kamu real-time.\n"
+                "\n"
+                "👑 Khusus Donatur.\n"
+                "⚡ /donate — Rp 50k/bulan",
+                chat_id
+            )
+            return
+
         args_raw = text.strip()
         parts = args_raw.split()
         sub = parts[1] if len(parts) > 1 else ""
