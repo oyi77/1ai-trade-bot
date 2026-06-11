@@ -4721,7 +4721,7 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
             return
         
-        ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+        ohlcv_bars = _fetch_ohlcv_for_ai(pair, keep=60)  # need 60 bars for engine analysis
         if not ohlcv_bars or len(ohlcv_bars) < 20:
             tg_send(f"❌ Data OHLCV tidak cukup untuk analisa {disp}.", chat_id)
             return
@@ -4856,40 +4856,23 @@ def handle_command(cmd, text, chat_id, msg):
         # ── FVG ──
         try:
             if FVG_ENGINE:
-                fvg_result = detect_fvg(ohlcv_bars, price, disp)
-                if fvg_result and fvg_result.get("fvgs"):
+                from fvg_detector import detect_fvg_zones
+                raw_zones = detect_fvg_zones(ohlcv_bars, max_age=30)
+                if raw_zones:
                     lines.append("")
                     lines.append("📐 <b>FAIR VALUE GAPS</b>")
-                    for fvg in fvg_result["fvgs"][:3]:
-                        top = fvg.get("top", 0); bot = fvg.get("bottom", 0)
-                        fvg_type = fvg.get("type", "?").upper()
-                        filled = "✅ filled" if fvg.get("filled") else "⏳ open"
-                        lines.append(f"  {fvg_type} FVG: {bot:.2f} — {top:.2f} ({filled})")
+                    for z in raw_zones[:3]:
+                        mid = (z.top + z.bottom) / 2
+                        lines.append(f"  {z.top:.2f} — {z.bottom:.2f} ({z.size_pips:.0f} pip)")
         except: pass
-        
-        # ── Liquidity ──
-        try:
-            if HERMES_LIQUIDITY_ENGINE:
-                liq = detect_liquidity_zones(ohlcv_bars, price)
-                if liq:
-                    eqh = liq.get("equal_highs", [])
-                    eql = liq.get("equal_lows", [])
-                    if eqh or eql:
-                        lines.append("")
-                        lines.append("💧 <b>LIQUIDITY ZONES</b>")
-                        for h in eqh[:2]:
-                            lines.append(f"  🔼 EQL High: {h.get('level', 0):.2f} ({h.get('touches', 0)}x)")
-                        for l in eql[:2]:
-                            lines.append(f"  🔽 EQL Low: {l.get('level', 0):.2f} ({l.get('touches', 0)}x)")
-        except: pass
-        
+
         # ── Session ──
         try:
-            from session_levels import get_session_levels
-            sess = get_session_levels(disp)
+            from session_levels import calculate_all_levels
+            sess = calculate_all_levels(ohlcv_bars[-60:]) if len(ohlcv_bars) >= 30 else None
             if sess:
-                asia_h = sess.get("asia_high"); asia_l = sess.get("asia_low")
-                london_h = sess.get("london_high"); london_l = sess.get("london_low")
+                asia_h = sess.asia_high; asia_l = sess.asia_low
+                london_h = sess.london_high; london_l = sess.london_low
                 if asia_h or london_h:
                     lines.append("")
                     lines.append("🕐 <b>SESSION LEVELS</b>")
