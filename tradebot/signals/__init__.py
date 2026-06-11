@@ -20,6 +20,7 @@ from datetime import UTC
 
 from .base import BaseDataSource
 from .binance import BinanceSource
+from .firebase_listener import ExternalSignal, FirebaseSignalListener, listen_for_signals
 from .forex import ForexSource
 from .market import FallbackChain, MarketAggregator
 from .stockity import StockitySource

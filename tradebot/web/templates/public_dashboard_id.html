@@ -1005,7 +1005,7 @@ function fmtPip(n) {
 /* ═══ LOAD ALL DATA ═══ */
 async function loadAll() {
   try {
-    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes, fuelRes, snapRes] = await Promise.all([
+    const [feed, trade, userAct, transparency, backtestRes, donorsRes, dailyRes, recapRes, fuelRes, snapRes, engineRes] = await Promise.all([
       fetch('/api/feed').then(r => r.json()),
       fetch('/api/trade_stats').then(r => r.json()),
       fetch('/api/user_activity').then(r => r.json()),
