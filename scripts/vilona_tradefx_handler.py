@@ -251,11 +251,12 @@ def wib_fmt(d=None):
 
 def session(h=None):
     h = h if h is not None else wib_now().hour
-    if 3<=h<7: return "Asia"
-    if 7<=h<15: return "Asia+London"
-    if 15<=h<19: return "London"
-    if 19<=h<23: return "London+NY"
-    if h>=23 or h<3: return "NY"
+    if 3<=h<7: return "Asia 🇯🇵"
+    if 7<=h<14: return "Asia"
+    if 14<=h<17: return "London 🇬🇧"
+    if 17<=h<19: return "Pre-NY"
+    if 19<=h<23: return "New York 🇺🇸"
+    if h>=23 or h<3: return "Late NY / Early Asia"
     return "Asia"
 
 def killzone(h=None):
@@ -1846,10 +1847,13 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             zone_lo = entry - zone_half
             zone_hi = entry + zone_half
 
-    # Generate TP levels if only single TP provided
+    # Generate TP levels — ALWAYS recompute to enforce system TP rules
     # Dynamic: 1-4 levels based on total TP distance
     # XAUUSD: <45pip→1 level, 45-70→2, 70-100→3, >100→4
-    if not tp1 and tp > 0 and entry > 0:
+    # NOTE: Resets tp1-tp4 regardless of AI/Hermes input to prevent
+    # unclamped TP values (e.g., 370-pip TP1 from Hermes liquidity sweep)
+    tp1 = tp2 = tp3 = tp4 = 0
+    if tp > 0 and entry > 0:
         tp_dist = abs(tp - entry)
         # Asset-aware min TP1 and level thresholds (in points)
         if display in ("XAUUSD", "GOLD"):
@@ -5263,10 +5267,14 @@ def auto_analyze_loop():
                               price=price, grade=mech_sig.get("grade",""),
                               source_name=mech_sig.get("source","mech"))
                 else:
-                    # ⚠️ Trade will be opened — FORCE POST to channel
-                    logger.warning(f"🚨 FORCE POST [{disp}]: rate limited but trade opening — posting anyway")
-                    result = send_to_channel(text)
-                    _mark_channel_post(pair, action, _entry, _sl, _tp)
+                    # Rate limited — check if we can still force (trade already opened via bridge)
+                    state_force = _cs()
+                    if time.time() - state_force.get("global_last", 0) < _GLOBAL_CHANNEL_COOLDOWN:
+                        logger.info(f"⏱️ SKIP force post [{disp}]: global cooldown active ({int(time.time()-state_force['global_last'])}s ago)")
+                    else:
+                        logger.warning(f"🚨 FORCE POST [{disp}]: rate limited but trade opening — posting anyway")
+                        result = send_to_channel(text)
+                        _mark_channel_post(pair, action, _entry, _sl, _tp)
                     _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
                               confidence=conf, rr_ratio=mech_sig.get("rr_ratio","?"),
                               engines=mech_sig.get("engines",{}), source="channel-auto",
