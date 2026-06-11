@@ -21,11 +21,19 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 
 from tradebot.config import settings
-from tradebot.web.server import _check_auth
 
 LOG = logging.getLogger("tradebot.web.bridge_api")
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
+
+
+def _check_bridge_admin(request: Request) -> None:
+    """Check admin access for bridge management endpoints."""
+    from tradebot.bots.handlers import _default_admin_check
+
+    user_id = request.headers.get("X-Admin-ID", "")
+    if not _default_admin_check(user_id):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
 # ── Shared state (matches vilona_bridge.py) ──
 HISTORY: deque[dict[str, Any]] = deque(maxlen=500)
@@ -92,8 +100,7 @@ MASTER_INSTANCES: dict[str, dict[str, str]] = defaultdict(dict)
 
 
 @router.get("/health")
-async def bridge_health(request: Request):
-    _check_auth(request)
+async def bridge_health():
     return {
         "status": "ok",
         "uptime_seconds": int(time.time() - START_TIME),
@@ -102,8 +109,7 @@ async def bridge_health(request: Request):
 
 
 @router.get("/status")
-async def bridge_status(request: Request):
-    _check_auth(request)
+async def bridge_status():
     with LOCK:
         return {
             "pending": len(PENDING) > 0,
@@ -178,7 +184,8 @@ async def bridge_post_signal(request: Request):
 
 
 @router.get("/ack/{signal_id}")
-async def bridge_ack(signal_id: str, api_key: str = Query("")):
+async def bridge_ack(request: Request, signal_id: str, api_key: str = Query("")):
+    _check_auth(request)
     with LOCK:
         ACKED.add(signal_id)
         if api_key:
@@ -187,13 +194,15 @@ async def bridge_ack(signal_id: str, api_key: str = Query("")):
 
 
 @router.get("/history")
-async def bridge_history():
+async def bridge_history(request: Request):
+    _check_auth(request)
     with LOCK:
         return {"count": len(HISTORY), "signals": list(HISTORY)}
 
 
 @router.get("/accounts")
-async def bridge_accounts():
+async def bridge_accounts(request: Request):
+    _check_auth(request)
     with LOCK:
         now = time.time()
         active = {k: v for k, v in INSTANCES.items() if now - v.get("last_seen", 0) < 3600}
