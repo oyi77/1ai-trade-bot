@@ -9,5 +9,6 @@ Split into sub-modules:
 """
 
 from tradebot.bots.platforms.vilona.bot import VilonaBot
+from tradebot.bots.platforms.vilona.commands import register_vilona_commands
 
-__all__ = ["VilonaBot"]
+__all__ = ["VilonaBot", "register_vilona_commands"]

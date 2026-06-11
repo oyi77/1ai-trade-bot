@@ -756,3 +756,63 @@ class CommandHandlersMixin(BaseBot):
         except Exception:
             pass
         return None
+
+
+def register_vilona_commands(app, bot):
+    """Register all Vilona-specific commands with the UnifiedBot application.
+
+    Args:
+        app: The PTB Application instance
+        bot: The UnifiedBot instance (to access its command methods)
+    """
+    from telegram.ext import CommandHandler
+
+    vilona_commands = [
+        ("start", "_cmd_start"),
+        ("help", "_cmd_help"),
+        ("price", "_cmd_price"),
+        ("analyze", "_cmd_analyze"),
+        ("status", "_cmd_status"),
+        ("subscribe", "_cmd_subscribe"),
+        ("autosync", "_cmd_autosync"),
+        ("donate", "_cmd_donate"),
+        ("genkey", "_cmd_genkey"),
+        ("listkeys", "_cmd_genkey"),
+        ("mykey", "_cmd_mykey"),
+        ("ea", "_cmd_ea"),
+        ("download", "_cmd_ea"),
+        ("symbols", "_cmd_symbols"),
+        ("data", "_cmd_data"),
+        ("killzone", "_cmd_killzone"),
+        ("bridge_status", "_cmd_bridge_status"),
+        ("history", "_cmd_history"),
+        ("recap", "_cmd_recap"),
+        ("winrate", "_cmd_winrate"),
+        ("mapping", "_cmd_mapping"),
+        ("signal", "_cmd_signal"),
+        ("mtf", "_cmd_mtf"),
+        ("engines", "_cmd_engines"),
+        ("readings", "_cmd_engine_readings"),
+        ("dashboard", "_cmd_dashboard"),
+        ("restart_bot", "_cmd_restart_bot"),
+        ("activate", "_cmd_activate"),
+        ("stockity", "_cmd_stockity"),
+        ("symbols", "_cmd_symbols"),
+        ("tutorial_cex", "_cmd_tutorial_cex"),
+        ("tutorial_mt5", "_cmd_tutorial_mt5"),
+        ("tutorial_stockity", "_cmd_tutorial_stockity"),
+        ("tutorial_deriv", "_cmd_tutorial_deriv"),
+        ("upgrade_fomo", "_cmd_upgrade_fomo"),
+    ]
+
+    seen = set()
+    unique_commands = []
+    for cmd, handler in vilona_commands:
+        if cmd not in seen:
+            seen.add(cmd)
+            unique_commands.append((cmd, handler))
+
+    for cmd, handler_name in unique_commands:
+        handler = getattr(bot, handler_name)
+        app.add_handler(CommandHandler(cmd, handler))
+

@@ -27,6 +27,7 @@ from telegram.ext import (
 from tradebot.bots.handlers import register_standard_commands
 from tradebot.config import settings
 from tradebot.services.plans import get_user_plan
+from tradebot.bots.platforms.vilona.commands import register_vilona_commands
 
 LOG = logging.getLogger("tradebot.bots.telegram")
 
@@ -104,6 +105,9 @@ class UnifiedBot:
 
         # All shared commands (plans, signals, affiliate, whitelabel, admin)
         register_standard_commands(app)
+
+        # Register Vilona-specific commands (Signal system, Market data, Trading tools, Admin)
+        register_vilona_commands(app, self)
 
         # Referral deep link handler
         app.add_handler(CommandHandler("start", self._h_ref_start))
