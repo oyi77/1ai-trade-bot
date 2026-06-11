@@ -1,0 +1,16 @@
+[Unit]
+Description=Vilona Trade FX Telegram Bot Handler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openclaw
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
+ExecStart=/usr/bin/python3 /home/openclaw/projects/1ai-trade-bot/scripts/vilona_tradefx_handler.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target
