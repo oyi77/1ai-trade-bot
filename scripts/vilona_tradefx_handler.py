@@ -329,9 +329,10 @@ def set_autosync(chat_id, enabled=True):
     save_autosync(data)
 
 
-def _fetch_ohlcv_for_ai(pair="gold"):
+def _fetch_ohlcv_for_ai(pair="gold", keep=20):
     """Fetch OHLCV bars for AI analysis via UnifiedMarketData (single source of truth).
-    Falls back to FCS API if market data is unavailable."""
+    Falls back to FCS API if market data is unavailable.
+    keep: number of bars to return (default 20, min 20, max 80)."""
     pair = pair.lower().strip()
     
     # ── Primary: UnifiedMarketData (uses SYMBOL_MAP: gold→XAUUSD_SPOT, btc→BTC-USD, etc.) ──
@@ -340,8 +341,9 @@ def _fetch_ohlcv_for_ai(pair="gold"):
             interval = "15m"
             bars = MARKET_DATA.get_bars_dicts(pair, interval, 80)
             if bars:
+                keep = max(20, min(keep, 80))  # clamp 20-80
                 result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
-                         for b in bars[-20:]]
+                         for b in bars[-keep:]]
                 logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {pair} via MARKET_DATA ({MARKET_DATA._resolve(pair)})")
                 return result
             logger.warning(f"_fetch_ohlcv_for_ai: empty bars for {pair} via MARKET_DATA")
@@ -3908,7 +3910,7 @@ def handle_command(cmd, text, chat_id, msg):
         
         tg_send(f"🏗 <b>Analyzing {disp} structure @ {price}...</b>", chat_id)
         
-        ohlcv_h1 = _fetch_ohlcv_for_ai(pair)
+        ohlcv_h1 = _fetch_ohlcv_for_ai(pair, keep=60)
         if not ohlcv_h1 or len(ohlcv_h1) < 30:
             tg_send(f"❌ Data tidak cukup untuk analisa struktur {disp}.", chat_id)
             return
