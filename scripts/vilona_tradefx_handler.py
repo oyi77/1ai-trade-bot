@@ -1548,7 +1548,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     🔬 Tier-based model count:
        - starter:  DeepSeek only (solo, max 55% conf) — free tier
        - pro:      DeepSeek + GPT-4o (dual, max 85% conf) — donor
-       - elite:    All 3 models + Grok News (max 95% conf) — premium donor
+       - elite:    All 3 models + Grok News (max 95% conf) — premium subscriber
        - premium=True: All models (channel/auto — unlimited)
     ⭐ Models: DeepSeek V3 + GPT-4o + Claude-Sonnet + Grok News.
     """
@@ -3955,7 +3955,7 @@ def handle_command(cmd, text, chat_id, msg):
                     "Fitur auto-trade akan diaktifkan kembali di masa depan.", chat_id)
             return
 
-        # ── DONOR GATE: Only donors can auto-trade ──
+        # ── TIER GATE: Only donors can auto-trade ──
         if not _is_donor(str(chat_id)):
             tg_send(
                 "🔒 <b>Auto-Trade khusus Subscriber!</b>\n"
@@ -5051,7 +5051,7 @@ def handle_command(cmd, text, chat_id, msg):
 
     elif cmd == "/genkey":
         """Donor/Admin: Generate EA license key."""
-        # ── DONOR GATE: subscriber or admin can generate license keys ──
+        # ── TIER GATE: subscriber or admin can generate license keys ──
         admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
         if not _is_donor(str(chat_id)) and str(chat_id) not in admin_ids:
             _uname = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
