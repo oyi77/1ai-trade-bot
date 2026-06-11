@@ -2055,18 +2055,32 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
 
     zone_label = "🟢 BUY ZONE" if action == "BUY" else ("🔴 SELL ZONE" if action == "SELL" else "📍 Entry Zone")
 
+    # ── Tier gating: free users see Entry Zone only, SL/TP 🔒 locked ──
+    is_free = sig.get("_tier_capped", True)
+
     lines = [
         f"{header_emoji} <b>{header_label} — {display}</b>",
         f"━━━━━━━━━━━━━━━━━━━━━━",
         f"🕐 {now_wib.strftime('%Y.%m.%d %H:%M')} WIB | Session: {session(h)}",
         f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}",
-        f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}",
     ]
 
-    # TP levels
-    for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
-        if tp_val and tp_val > 0:
-            lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
+    if is_free and is_actionable:
+        # ── FREE TIER: lock SL/TP — teaser only ──
+        lines.append(f"🔴 SL: 🔒 <b>[DONOR ONLY]</b>")
+        for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+            if tp_val and tp_val > 0:
+                lines.append(f"🟢 {tp_label}: 🔒 <b>[DONOR ONLY]</b>")
+        lines.append(f"")
+        lines.append(f"💡 <b>Free tier cuma bisa liat Entry Zone.</b>")
+        lines.append(f"   SL/TP dikunci — gak bisa eksekusi dengan aman.")
+        lines.append(f"   👑 <b>/donate</b> — Unlock SL/TP + 2 AI + Grok News")
+    else:
+        lines.append(f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}")
+        # TP levels
+        for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+            if tp_val and tp_val > 0:
+                lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
 
     # SnR + FIBO context (only for actionable signals)
     if levels and is_actionable:
