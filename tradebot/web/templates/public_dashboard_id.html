@@ -105,6 +105,19 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   .bento-grid{grid-template-columns:1fr}
   .main{padding:16px}
 }
+
+/* ── AI Engine Visualization ── */
+.conf-bar{height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden;margin-top:4px}
+.conf-fill{height:100%;border-radius:3px;transition:width 0.6s ease,background 0.3s ease}
+.tf-tab{padding:6px 14px;font-size:11px;font-weight:600;border-radius:6px;cursor:pointer;transition:all 0.15s;border:1px solid transparent;color:#64748b}
+.tf-tab:hover{color:#e2e8f0;background:rgba(255,255,255,0.04)}
+.tf-tab.active{background:rgba(59,130,246,0.12);color:#60a5fa;border-color:rgba(59,130,246,0.2)}
+.engine-detail{display:none;padding:8px;margin-top:4px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:10px;line-height:1.5;color:#94a3b8;word-break:break-all}
+.engine-detail.show{display:block}
+@keyframes pulse-buy{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0.2)}50%{box-shadow:0 0 0 4px rgba(52,211,153,0)}}
+@keyframes pulse-sell{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0.2)}50%{box-shadow:0 0 0 4px rgba(248,113,113,0)}}
+.engine-active-buy{animation:pulse-buy 2s infinite}
+.engine-active-sell{animation:pulse-sell 2s infinite}
 </style>
 </head>
 
@@ -268,6 +281,14 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   <!-- AI Engine Performance — Live Visualization -->
   <div class="kpi-card mb-5">
     <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">🧠 AI Engine Consensus <span class="text-[10px] text-slate-500 font-normal">· Updated live every 30s</span></h3>
+    <div id="engine-consensus-bar" class="mb-3"></div>
+    <div id="tf-tabs" class="flex flex-wrap gap-1 mb-3 border-b border-white/5 pb-2">
+      <span class="tf-tab" data-tf="D1">Daily</span>
+      <span class="tf-tab" data-tf="H4">4H</span>
+      <span class="tf-tab active" data-tf="H1">1H</span>
+      <span class="tf-tab" data-tf="M15">15M</span>
+      <span class="tf-tab" data-tf="M5">5M</span>
+    </div>
     <div id="live-engines">
       <div class="text-center py-8 text-sm text-slate-500">⏳ Loading AI engine data...</div>
     </div>
@@ -1159,58 +1180,126 @@ function renderDonorWall(donors) {
 }
 
 /* ═══ RENDER ENGINE READINGS — LIVE AI PERFORMANCE ═══ */
+let _currentEngineData = {};
+let _activeTf = 'H1';
+
 function renderEngineReadings(data) {
+  _currentEngineData = data || {};
+  _renderEnginesForTf(_activeTf);
+}
+
+function _renderEnginesForTf(tfKey) {
   const el = document.getElementById('live-engines');
+  const consensusBar = document.getElementById('engine-consensus-bar');
   if (!el) return;
-  // Get the most granular timeframe (M15 > H1 > H4 > D1)
+
+  const data = _currentEngineData;
   const tfs = data.timeframes || {};
-  const tfOrder = ['M15','M5','H1','H4','D1'];
-  let tf = {};
-  for (const key of tfOrder) {
-    if (tfs[key]) { tf = tfs[key]; break; }
+  const tfOrder = ['D1','H4','H1','M15','M5'];
+  const tf = tfs[tfKey] || {};
+
+  // Find the snapshot-level consensus if available
+  const hier = data.hierarchical || {};
+  const verdict = hier.verdict || tf.verdict || 'HOLD';
+  const score = Math.round((hier.consensus_score || tf.consensus_pct || 0) * 100);
+  const trend = data.macro_trend || 'NEUTRAL';
+  const align = data.mtf_alignment || 'UNKNOWN';
+  const buyCount = tf.buy_count || 0;
+  const sellCount = tf.sell_count || 0;
+  const totalCount = tf.total || 0;
+
+  // ── Consensus Bar ──
+  const vCls = verdict === 'BUY' ? 'text-emerald-400' : verdict === 'SELL' ? 'text-red-400' : 'text-slate-400';
+  const vBg = verdict === 'BUY' ? '#34d399' : verdict === 'SELL' ? '#f87171' : '#64748b';
+  const aCls = align === 'ALIGNED' ? 'text-emerald-400' : align === 'CONFLICT' ? 'text-red-400' : 'text-amber-400';
+  const trendCls = trend === 'BULLISH' ? 'text-emerald-400' : trend === 'BEARISH' ? 'text-red-400' : 'text-slate-400';
+
+  let cbHtml = `<div class="flex flex-wrap items-center gap-3 p-3 rounded-lg" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05)">`;
+
+  // Verdict badge
+  cbHtml += `<div class="flex items-center gap-2">
+    <span class="text-[10px] text-slate-500 font-semibold uppercase">Verdict</span>
+    <span class="px-2.5 py-1 rounded-md text-xs font-bold" style="background:${vBg}20;color:${vBg};border:1px solid ${vBg}30">${verdict} ${score > 0 ? '· '+score+'%' : ''}</span>
+  </div>`;
+
+  // Vote breakdown
+  cbHtml += `<span class="text-xs text-slate-400">🔵 ${buyCount} BUY / 🔴 ${sellCount} SELL / ⚪ ${totalCount - buyCount - sellCount} HOLD</span>`;
+
+  // Engine count
+  const engines = tf.engines || {};
+  const engCount = Object.keys(engines).length;
+  cbHtml += `<span class="text-xs text-slate-500">⚙️ ${engCount} engines</span>`;
+
+  // Trend
+  cbHtml += `<span class="text-xs ${trendCls}">📈 ${trend}</span>`;
+
+  // Alignment
+  cbHtml += `<span class="text-xs ${aCls}">${align}</span>`;
+
+  // Price
+  if (data.price) {
+    cbHtml += `<span class="text-xs text-slate-500 font-mono ml-auto">${data.symbol || 'XAUUSD'} $${data.price.toFixed(1)}</span>`;
   }
-  const engines = tf.engines || data.engines || {};
+  cbHtml += '</div>';
+
+  if (consensusBar) consensusBar.innerHTML = cbHtml;
+
+  // ── Engine Grid ──
   const names = Object.keys(engines);
   if (!names.length) {
-    el.innerHTML = '<div class="col-span-full text-sm text-slate-500 text-center py-8">⏳ AI Engine Consensus belum tersedia — tunggu update berikutnya</div>';
+    el.innerHTML = '<div class="text-sm text-slate-500 text-center py-8">⏳ AI Engine Consensus belum tersedia — tunggu update berikutnya</div>';
     return;
   }
-  // Hierarchical verdict
-  const hier = data.hierarchical || {};
-  const verdict = hier.verdict || 'HOLD';
-  const score = hier.consensus_score ? Math.round(hier.consensus_score * 100) : 0;
-  const vCls = verdict === 'BUY' ? 'text-emerald-400' : verdict === 'SELL' ? 'text-red-400' : 'text-slate-400';
-  const align = data.mtf_alignment || 'UNKNOWN';
-  const aCls = align === 'ALIGNED' ? 'text-emerald-400' : align === 'CONFLICT' ? 'text-red-400' : 'text-amber-400';
-  const trend = data.macro_trend || 'NEUTRAL';
-  
-  // Consensus bar
-  let html = '<div class="flex flex-wrap items-center gap-3 mb-4 p-3 bg-slate-800/30 rounded-lg border border-white/5">';
-  html += `<span class="text-xs text-slate-400">🧠 MTF Verdict</span>`;
-  html += `<span class="text-sm font-bold ${vCls}">${verdict} (${score}%)</span>`;
-  html += `<span class="text-xs ${aCls}">${align}</span>`;
-  html += `<span class="text-xs text-slate-500">Trend: ${trend}</span>`;
-  html += `<span class="text-[10px] text-slate-600 ml-auto">${data.symbol || 'XAUUSD'}</span>`;
-  html += '</div>';
-  
-  // Engine grid
-  html += '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">';
-  names.sort().forEach(k => {
+
+  // Sort: BUY first, SELL second, HOLD last
+  names.sort((a, b) => {
+    const order = {BUY:0, SELL:1, HOLD:2};
+    const da = (engines[a].direction || 'HOLD').toUpperCase();
+    const db = (engines[b].direction || 'HOLD').toUpperCase();
+    return (order[da] || 2) - (order[db] || 2);
+  });
+
+  let html = '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">';
+  names.forEach(k => {
     const e = engines[k];
     const dir = (e.direction || 'HOLD').toUpperCase();
-    const conf = e.confidence ? (e.confidence > 1 ? Math.round(e.confidence) : Math.round(e.confidence * 100)) : '--';
+    const rawConf = parseFloat(e.confidence) || 0;
+    const confPct = rawConf > 1 ? Math.min(rawConf, 100) : Math.min(Math.round(rawConf * 100), 100);
     const dirColor = dir === 'BUY' ? '#34d399' : dir === 'SELL' ? '#f87171' : '#94a3b8';
-    const confColor = typeof conf === 'number' && conf >= 70 ? '#34d399' : typeof conf === 'number' && conf >= 50 ? '#fbbf24' : '#94a3b8';
-    html += `<div class="text-center bg-white/5 rounded-lg p-2.5 border border-white/5 hover:border-blue-500/30 transition-all">
-      <div class="text-[10px] font-bold text-blue-400 uppercase mb-1">${k}</div>
-      <div class="text-base font-mono font-bold" style="color:${dirColor}">${dir}</div>
-      <div class="text-[10px] font-mono" style="color:${confColor}">${conf}%</div>
+    const barColor = dir === 'BUY' ? '#34d399' : dir === 'SELL' ? '#f87171' : '#64748b';
+    const pulseCls = dir === 'BUY' ? 'engine-active-buy' : dir === 'SELL' ? 'engine-active-sell' : '';
+    const detail = e.details || '';
+    const detailId = `ed-${k}-${tfKey}`;
+
+    html += `<div class="rounded-lg p-2.5 border cursor-pointer transition-all hover:border-blue-500/40 ${pulseCls}" style="background:${dirColor}06;border-color:${dirColor}20" onclick="toggleDetail('${detailId}')">
+      <div class="text-[10px] font-bold uppercase tracking-wide" style="color:${dirColor}">${k}</div>
+      <div class="text-sm font-mono font-bold mt-0.5" style="color:${dirColor}">${dir}</div>
+      <div class="conf-bar"><div class="conf-fill" style="width:${confPct}%;background:${barColor}"></div></div>
+      <div class="text-[10px] font-mono mt-0.5" style="color:${dirColor}">${confPct}%</div>
+      ${detail ? `<div class="engine-detail" id="${detailId}">${detail}</div>` : ''}
     </div>`;
   });
   html += '</div>';
-  
+
   el.innerHTML = html;
 }
+
+function toggleDetail(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('show');
+}
+
+// ── Timeframe tab switching ──
+document.addEventListener('click', function(e) {
+  const tab = e.target.closest('.tf-tab');
+  if (!tab) return;
+  const tf = tab.dataset.tf;
+  if (!tf) return;
+  document.querySelectorAll('.tf-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  _activeTf = tf;
+  _renderEnginesForTf(tf);
+});
 
 function renderDailyAnalyze(daily, trans) {
   const el = document.getElementById('daily-analyze');
@@ -1382,10 +1471,10 @@ function renderLiveSnapshot(snap) {
     // ── AI Status Bar ──
     const status = snap.status || {};
     const state = status.state || 'connecting';
-    const detail = status.detail || 'Waiting for worker...';
-    const pair = status.pair || '---';
+    const detail = status.detail || (_engineHasData(_currentEngineData) ? 'Engine data loaded' : 'Waiting for worker...');
+    const pair = status.pair || (_currentEngineData.symbol || '---');
     const uptime = snap.uptime_seconds || 0;
-    const cycles = snap.total_cycles || 0;
+    const cycles = snap.total_cycles || (_engineHasData(_currentEngineData) ? Object.keys((_currentEngineData.timeframes || {})).length * (Object.keys((_currentEngineData.timeframes || {})[_activeTf]?.engines || {})).length : 0);
 
     const detailEl = document.getElementById('ai-status-detail');
     const pairEl = document.getElementById('ai-pair');
@@ -1428,6 +1517,12 @@ function formatUptime(sec) {
   const m = Math.floor((sec % 3600) / 60);
   if (h > 0) return h + 'h ' + m + 'm';
   return m + 'm';
+}
+
+function _engineHasData(data) {
+  if (!data || !data.timeframes) return false;
+  const tfs = data.timeframes;
+  return Object.keys(tfs).some(k => tfs[k] && tfs[k].engines && Object.keys(tfs[k].engines).length > 0);
 }
 
 /* ═══ TRADINGVIEW WIDGETS ═══ */
