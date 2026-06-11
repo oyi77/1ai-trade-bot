@@ -35,27 +35,32 @@ FIREBASE_SIGNAL_URL = (
 class ExternalSignal:
     """A trading signal from an external source (Firebase/TradingView/API)."""
     source: str                          # "firebase", "tradingview", "webhook"
-    symbol: str                          # "BTC", "ETH", "XAUUSD"
-    direction: str                       # "BUY" or "SELL"
+    symbol: str                          # "BTC", "ETH", "XAUUSD", "CRYPTO_IDX"
+    direction: str                       # "BUY", "SELL", "CALL", "PUT"
     entry_price: float
     stop_loss: float
     take_profit_1: float
     take_profit_2: float | None = None
     take_profit_3: float | None = None
     leverage: int | None = None
-    signal_type: str = "spot"           # "spot" or "futures"
+    signal_type: str = "spot"           # "spot", "futures", "binary"
     signal_id: str = ""
     is_premium: bool = False
     confidence: float = 0.5
     timestamp: str = ""
+    expiry_time: str = ""               # Binary options expiry (e.g. "12:58")
     raw: dict[str, Any] = field(default_factory=dict)
 
     @property
     def side(self) -> str:
+        if self.direction in ("CALL", "PUT"):
+            return self.direction
         return "BUY" if self.entry_price > self.stop_loss else "SELL"
 
     @property
     def is_valid(self) -> bool:
+        if self.signal_type == "binary":
+            return bool(self.symbol and self.entry_price > 0)
         return all([
             self.symbol, self.entry_price > 0,
             self.stop_loss > 0, self.take_profit_1 > 0,
@@ -66,6 +71,29 @@ class ExternalSignal:
         try:
             fields = doc.get("fields", doc)
             symbol = fields.get("symbol", fields.get("pair", ""))
+
+            # Binary options signal from Stockity
+            sig_type = fields.get("type", "spot")
+            direction = fields.get("direction", "")
+
+            if sig_type == "binary" or direction in ("CALL", "PUT"):
+                entry = float(fields.get("entry", fields.get("buy", 0)))
+                return cls(
+                    source="firebase",
+                    symbol=symbol.upper() if symbol else "CRYPTO_IDX",
+                    direction=direction or "CALL",
+                    entry_price=entry,
+                    stop_loss=0,
+                    take_profit_1=0,
+                    signal_type="binary",
+                    signal_id=doc.get("_id", doc.get("name", "")),
+                    is_premium=fields.get("isPremium", False),
+                    timestamp=fields.get("createdAt", ""),
+                    expiry_time=fields.get("expiry", fields.get("time", "")),
+                    raw=fields,
+                )
+
+            # Crypto signal (spot/futures)
             entry = float(fields.get("buy", fields.get("entry", 0)))
             stop = float(fields.get("stop", 0))
             tp1 = float(fields.get("tp1", 0))
@@ -82,7 +110,7 @@ class ExternalSignal:
                 take_profit_2=float(tp2) if tp2 else None,
                 take_profit_3=float(tp3) if tp3 else None,
                 leverage=int(lev) if lev else None,
-                signal_type=fields.get("type", "spot"),
+                signal_type=sig_type,
                 signal_id=doc.get("_id", doc.get("name", "")),
                 is_premium=fields.get("isPremium", False),
                 timestamp=fields.get("createdAt", ""),
@@ -91,6 +119,38 @@ class ExternalSignal:
         except (ValueError, TypeError, KeyError) as e:
             LOG.warning("Failed to parse Firebase signal: %s", e)
             return None
+
+    def format_telegram(self) -> str:
+        """Format signal as Telegram message using competitor's proven format."""
+        if self.signal_type == "binary":
+            icon = "🟩📈" if self.direction in ("BUY", "CALL") else "🔻📉"
+            arrow = "🔼" if self.direction in ("BUY", "CALL") else "🔽"
+            market_label = self.symbol
+            time_str = self.expiry_time or "NOW"
+            return (
+                f"{icon} {self.direction} NOW {arrow} |⌚ {self.timestamp[:10]}\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"👉 {time_str}  {'B' if self.direction in ('BUY','CALL') else 'S'}\n"
+                f"📊 MARKET: 𝗖𝗿𝘆𝗽𝘁𝗼𝗜𝗗𝗫\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ MAXIMAL K2 | KOMPENSASI SEARAH\n"
+                f"⚠️ LIHAT JAM DI GMT+7\n"
+                f"⚠️ -1 MENIT SEBELUM SIGNAL\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🔄 /start untuk Cek Signal Berikutnya"
+            )
+
+        # Crypto format
+        icon = "🟢" if self.direction in ("BUY", "CALL") else "🔴"
+        return (
+            f"{icon} <b>{self.direction} — {self.symbol}</b>\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"Entry: {self.entry_price:.2f}\n"
+            f"SL: {self.stop_loss:.2f} | TP: {self.take_profit_1:.2f}\n"
+            f"Confidence: {self.confidence:.0%}\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"⚡ /subscribe all — Dapat signal real-time!"
+        )
 
 
 class FirebaseSignalListener:
