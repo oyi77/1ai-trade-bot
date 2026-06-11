@@ -2458,7 +2458,8 @@ def append_quant_consensus_ui(sig, quant_result, disp="XAUUSD"):
         f"➖ Datar  {doji_pct:5.0f}%  {_bar(doji_pct)}\n"
         f"\n"
         f"🧠 <b>Kesimpulan:</b> {verdict_text}\n"
-        f"   Keyakinan: {confidence:.0%}"
+        f"   Keyakinan: {confidence:.0%}\n"
+        f"⏰ Data real-time — angka bisa geser tiap candle baru (1H)"
     )
 
     # Guardrail logic
@@ -3290,6 +3291,14 @@ def handle_command(cmd, text, chat_id, msg):
                 chat_id
             )
             return
+
+        # ── KILLZONE GATE (forex/metals outside London/NY) ──
+        # Allow analysis but show clear NO TRADE ZONE warning
+        forex_metal_pairs = ("xauusd", "gold", "usd", "oil", "eurusd", "gbpusd", "usdjpy")
+        if not is_crypto_pair(pair_check) and pair_check in forex_metal_pairs:
+            lkz, nykz = killzone(wib_now().hour)
+            if not (lkz or nykz):
+                logger.info(f"   [/analyze] {pair_check.upper()} outside killzone — NO TRADE ZONE")
 
         # ── ELITE CUSTOM PARAMS ──
         elite_params = {}
