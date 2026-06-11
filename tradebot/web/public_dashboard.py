@@ -398,6 +398,7 @@ def get_fuel_stats() -> dict:
             "monthly_cost": monthly_cost,
             "collected": collected,
             "donors": donors,
+            "donor_count": donors,  # backward compat — handler reads this key
             "percent": pct,
             "shortfall": shortfall,
             "status": (

@@ -611,7 +611,7 @@ FREE_DAILY_LIMIT = 5          # 🆕 free tier: 5x/hari (cost Rp25/hari)
 PRO_DAILY_LIMIT = 20          # 🆕 pro tier: 20x/hari
 ELITE_DAILY_LIMIT = -1        # 🆕 elite/lifetime: unlimited
 # Legacy (backwards compat)
-DONOR_DAILY_QUOTA = 60
+DONOR_DAILY_QUOTA = -1  # unlimited — TIER_LIMITS aligned
 MANUAL_THROTTLE_DONOR = 60     # legacy compat — maps to pro throttle
 FREE_DAILY_QUOTA = FREE_DAILY_LIMIT
 # Tier → daily limit mapping
