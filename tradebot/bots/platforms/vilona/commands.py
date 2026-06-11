@@ -248,6 +248,14 @@ class CommandHandlersMixin(BaseBot):
         from tradebot.services.license_service import cmd_mykey
         return cmd_mykey(str(chat_id or ""))
 
+    async def _cmd_myid(self, args: list[str], chat_id: str | None = None) -> str:
+        return (
+            f"🆔 <b>Telegram ID kamu:</b>\n"
+            f"<code>{chat_id}</code>\n\n"
+            f"Gunakan ID ini untuk donasi di website kami\n"
+            f"👉 <a href='https://phantomfx.aitradepulse.com'>phantomfx.aitradepulse.com</a>"
+        )
+
     async def _cmd_ea(self, args: list[str], chat_id: str | None = None) -> str:
         return (
             "📥 <b>DOWNLOAD EA BRIDGE</b>\n"

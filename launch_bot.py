@@ -9,6 +9,7 @@ import json, logging, os, sys, time, urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
 
 os.environ.setdefault("DATA_DIR", str(Path(__file__).resolve().parent / "data"))
 

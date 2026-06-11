@@ -188,11 +188,11 @@ class WebhookHandler(BaseHTTPRequestHandler):
             }
             pb_qs = "&".join(f"{k}={v}" for k, v in postback_params.items() if v)
             # 1) Postback URL (server-side callback)
-            pb_url = f"https://rr9u3.bemobtrcks.com/postback?{pb_qs}"
+            pb_url = f"https://rr9u3.bemobrcks.com/postback?{pb_qs}"
             log.info(f"📊 Firing Bemob postback: {pb_url[:120]}...")
             urllib.request.urlopen(pb_url, timeout=5)
             # 2) Conversion pixel (mirror as server-side GET)
-            px_url = f"https://rr9u3.bemobtrcks.com/conversion.gif?{pb_qs}"
+            px_url = f"https://rr9u3.bemobrcks.com/conversion.gif?{pb_qs}"
             urllib.request.urlopen(px_url, timeout=5)
         except Exception as e:
             log.warning(f"Bemob postback failed (non-critical): {e}")

@@ -121,6 +121,7 @@ class VilonaBot(
             "genkey": self._cmd_genkey,
             "listkeys": self._cmd_genkey,
             "mykey": self._cmd_mykey,
+            "myid": self._cmd_myid,
             "ea": self._cmd_ea,
             "download": self._cmd_ea,
             "symbols": self._cmd_symbols,
