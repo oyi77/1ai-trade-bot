@@ -207,9 +207,16 @@ XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 OMNIROUTE_MODELS = ["deepseek-chat", "gpt-4o", "claude-sonnet-4-20250514"]
-OMNIROUTE_FREE_MODELS = ["auto/best-free", "auto/free-chat", "auto/free-all",
-                         "mistral/mistral-large-2411", "cohere/command-a-03-2025",
-                         "google/gemini-2.5-flash", "af/moonshot/kimi-k2.6"]
+# 🔬 SMART-RANKED FALLBACK — rotate by model intelligence, not cost
+# DeepSeek primary → these tried in order when DeepSeek is down
+# Ranking: reasoning quality for SMC/ICT analysis (top = best)
+OMNIROUTE_FREE_MODELS = [
+    "mistral/mistral-large-2411",      # 🥇 Mistral Large — best reasoning, user's key
+    "cohere/command-a-03-2025",        # 🥈 Cohere Command-A — solid SMC analysis
+    "google/gemini-2.5-flash",         # 🥉 Gemini 2.5 Flash — fast + capable
+    "af/moonshot/kimi-k2.6",           # 4️⃣ Kimi K2 — decent Chinese reasoning
+    "auto/best-free",                  # 5️⃣ OmniRoute auto-pick (devstral/cogito) — last AI resort
+]
 
 # ── AI Token Usage Tracking ──
 # Per-analysis-cycle counter. Reset at start of each ask_ai_ensemble() call.
@@ -1525,13 +1532,13 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     # ── TIER-BASED MODEL SELECTION ──
     is_free_tier = (tier == "starter" and not premium)
 
-    # DeepSeek V3 — always called (even for free tier)
+    # DeepSeek V3 — always called first (best SMC analyst)
     deepseek = _call_deepseek(prompt)
     if not deepseek:
-        logger.info("DeepSeek unavailable — trying OmniRoute free models")
+        logger.info("🔬 DeepSeek down — rotating Smart-Ranked Fallbacks")
         deepseek = _call_omniroute(prompt, models=OMNIROUTE_FREE_MODELS)
         if deepseek:
-            logger.info(f"OmniRoute free signal: {deepseek.get('action','?')} "
+            logger.info(f"Smart Fallback hit: {deepseek.get('action','?')} "
                         f"conf={deepseek.get('confidence','?')}")
 
     # GPT-4o — only for donors, elite, or channel (premium)
