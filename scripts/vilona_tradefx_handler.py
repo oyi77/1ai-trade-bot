@@ -474,6 +474,7 @@ def tg_send(text, chat_id=None, reply_markup=None, reply_to=None):
             payload["reply_markup"] = reply_markup
         if reply_to:
             payload["reply_to_message_id"] = int(reply_to)
+        logger.info(f"📤 tg_send payload: chat_id={target} | reply_to_message_id={payload.get('reply_to_message_id')} (type={type(payload.get('reply_to_message_id')).__name__}) | text_len={len(text)}")
         req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
             data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -489,6 +490,7 @@ def tg_send(text, chat_id=None, reply_markup=None, reply_to=None):
                     payload["reply_markup"] = reply_markup
                 if reply_to:
                     payload["reply_to_message_id"] = int(reply_to)
+                logger.info(f"📤 tg_send FALLBACK payload: chat_id={target} | reply_to_message_id={payload.get('reply_to_message_id')} (type={type(payload.get('reply_to_message_id')).__name__}) | text_len={len(plain)}")
                 req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
                     data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=15) as r:
@@ -1013,7 +1015,8 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
     if TRADE_TRACKER:
         try:
             open_trade(sig, sig.get("entry", price), symbol, sig.get("source", "ai"),
-                       sig.get("target_user", ""))
+                       sig.get("target_user", ""),
+                       telegram_message_id=sig.get("telegram_message_id"))
         except Exception: pass
     # ── Post to bridge ──
     posted = False

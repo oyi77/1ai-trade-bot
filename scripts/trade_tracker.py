@@ -72,7 +72,8 @@ def _to_pips(price_diff: float, symbol: str) -> float:
 
 
 def open_trade(signal: dict, entry_price: float, symbol: str = "XAUUSD",
-               source: str = "ai", chat_id: str = "") -> str | None:
+               source: str = "ai", chat_id: str = "",
+               telegram_message_id: int | None = None) -> str | None:
     """
     Record a new trade when signal is sent to EA.
     Returns trade_id or None.
@@ -120,6 +121,7 @@ def open_trade(signal: dict, entry_price: float, symbol: str = "XAUUSD",
         "confidence": signal.get("confidence", 0),
         "grade": signal.get("grade", "?"),
         "chat_id": str(chat_id),
+        "telegram_message_id": telegram_message_id,  # reply chain
     }
     data["trades"].append(trade)
     _save(data)
