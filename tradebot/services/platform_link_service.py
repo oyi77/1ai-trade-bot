@@ -20,17 +20,13 @@ Architecture:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import re
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 
-from tradebot.config import settings
 from tradebot.storage.sqlite import SQLiteStorage
 
 LOG = logging.getLogger("tradebot.services.platform_link")

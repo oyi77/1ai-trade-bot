@@ -3324,29 +3324,39 @@ def _deduct_quota(chat_id):
 
 def _get_user_tier(chat_id):
     """Return tier info: {tier, limit (-1=unlimited), throttle, is_paid, label}.
-    Grandfather existing donors -> lifetime tier."""
+    Only donor/lifetime are treated as paid."""
     try:
         from members import get_member as m_get
         member = m_get(str(chat_id))
         if member:
-            tier = member.get("tier", "free")
-            status = member.get("status", "")
-            # Grandfather: old donors get lifetime
-            if status in ("paid", "donor") and tier in ("paid", "donor", "", None):
-                tier = "lifetime"
-            limit = TIER_LIMITS.get(tier, FREE_DAILY_LIMIT)
-            if tier in ("elite", "lifetime", "donor"):
-                throttle = MANUAL_THROTTLE_ELITE
-            elif tier == "pro":
+            tier = str(member.get("tier", "free")).lower()
+            status = str(member.get("status", "trial")).lower()
+            is_paid = status == "paid" or tier in ("donor", "lifetime")
+            if tier == "pro":
+                limit = TIER_LIMITS.get("pro", FREE_DAILY_LIMIT)
                 throttle = MANUAL_THROTTLE_PRO
+            elif is_paid:
+                limit = -1
+                throttle = MANUAL_THROTTLE_ELITE
             else:
+                limit = FREE_DAILY_LIMIT
                 throttle = MANUAL_THROTTLE_FREE
-            labels = {"pro": "⭐ Pro", "elite": "👑 Elite",
-                      "lifetime": "💎 Lifetime", "donor": "💎 Lifetime (GF)",
-                      "free": "🆓 Free"}
-            return {"tier": tier, "limit": limit, "throttle": throttle,
-                    "is_paid": tier != "free",
-                    "label": labels.get(tier, "🆓 Free")}
+            label = {
+                "pro": "⭐ Pro",
+                "elite": "👑 Elite",
+                "lifetime": "💎 Lifetime",
+                "donor": "💎 Lifetime (GF)",
+                "paid": "💎 Lifetime (GF)",
+                "free": "🆓 Free",
+                "starter": "🆓 Free",
+            }.get(tier, ("🆓 Free" if not is_paid else "💎 Lifetime (GF)"))
+            return {
+                "tier": ("donor" if is_paid else "free"),
+                "limit": limit,
+                "throttle": throttle,
+                "is_paid": is_paid,
+                "label": label,
+            }
     except Exception:
         pass
     return {"tier": "free", "limit": FREE_DAILY_LIMIT,
@@ -3359,13 +3369,15 @@ def _is_donor(chat_id):
     try:
         from members import get_member as m_get
         member = m_get(str(chat_id))
-        if member:
-            status = member.get("status", "")
-            tier = member.get("tier", "")
-            return status in ("paid", "donor") or tier in ("pro", "elite", "lifetime", "paid", "donor")
+        if not member:
+            return False
+        tier = str(member.get("tier", "free")).lower()
+        status = str(member.get("status", "trial")).lower()
+        if status == "paid" or tier in ("donor", "lifetime", "pro", "elite"):
+            return True
+        return False
     except Exception:
-        pass
-    return False
+        return False
 
 
 # ── Reusable donate menu ──
@@ -7111,7 +7123,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/download"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:

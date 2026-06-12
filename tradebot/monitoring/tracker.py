@@ -229,7 +229,7 @@ class TradeTracker:
         return record
 
     def check_outcomes(
-        self, current_prices: dict[str, float] | None = None
+        self, current_prices: dict[str, float] | None = None, user_id: str = ""
     ) -> list[TradeRecord]:
         """Check all open trades against current prices, close any hit TP/SL.
 
@@ -242,7 +242,7 @@ class TradeTracker:
         if not current_prices:
             return []
 
-        open_trades = self._get_open_trades()
+        open_trades = self._get_open_trades(user_id)
         closed: list[TradeRecord] = []
 
         for trade in open_trades:
@@ -312,6 +312,9 @@ class TradeTracker:
                 source=trade["source"],
                 confidence=trade["confidence"],
                 grade=trade["grade"],
+                user_id=trade.get("user_id", ""),
+                currency=trade.get("currency", "USD"),
+                platform=trade.get("platform", ""),
             )
             closed.append(record)
 
