@@ -5406,6 +5406,12 @@ def handle_command(cmd, text, chat_id, msg):
                 from signal_calculator import log_signal
                 log_signal(sig)
             except: pass
+            # ── Auto-execute: post to bridge for EA pickup ──
+            try:
+                post_signal_to_bridge(sig, 0, disp)
+                logger.info(f"🤖 Auto-executed {disp} {sig['action']} via /signal")
+            except Exception as ex:
+                logger.warning(f"Bridge post failed: {ex}")
         elif verdict == "HOLD" and score == 0 and active_count == 0:
             msg += (
                 f"📭 <b>Tidak ada setup valid untuk {disp}</b>\n"
