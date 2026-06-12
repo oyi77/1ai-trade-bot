@@ -1978,6 +1978,13 @@ def _call_openai(prompt, model="gpt-4o-mini"):
             return _extract_json(content)
     except Exception as e:
         logger.warning(f"OpenAI/{model} error: {e}")
+        # Admin alert on rate limit (429 = quota exhausted)
+        if hasattr(e, "code") and getattr(e, "code", 0) == 429:
+            try:
+                from members.admin_alert import send_admin_alert
+                send_admin_alert("OpenAI", f"Rate Limit 429 — model={model} — semua GPT-4o call blocked")
+            except Exception:
+                pass
         return None
 
 
@@ -2061,6 +2068,12 @@ def _call_grok_news(display: str, price: float) -> str | None:
             except:
                 body = ''
             logger.warning(f"Grok News HTTP {e.code}: {body}")
+            # Admin alert on Grok failure
+            try:
+                from members.admin_alert import send_admin_alert
+                send_admin_alert("Grok News", f"HTTP {e.code} — {body[:100]}")
+            except Exception:
+                pass
         else:
             logger.warning(f"Grok News error: {e}")
         return None

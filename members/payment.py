@@ -474,4 +474,10 @@ def fire_capi_purchase(
         return events_received > 0
     except Exception as e:
         logger.warning("Meta CAPI Purchase failed (non-critical): %s", e)
+        # Admin alert on CAPI failure
+        try:
+            from members.admin_alert import send_admin_alert
+            send_admin_alert("Meta CAPI", str(e)[:150])
+        except Exception:
+            pass
         return False

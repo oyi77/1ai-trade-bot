@@ -380,6 +380,14 @@ def main():
     except KeyboardInterrupt:
         log.info("Shutting down...")
         server.shutdown()
+    except Exception as e:
+        log.critical("Payment webhook CRASH: %s", e)
+        try:
+            from members.admin_alert import send_admin_alert
+            send_admin_alert("Tripay Webhook", f"Server crash — {str(e)[:200]}")
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":
