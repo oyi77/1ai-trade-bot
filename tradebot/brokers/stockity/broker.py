@@ -20,6 +20,8 @@ import asyncio
 import json
 import logging
 from contextlib import suppress
+from dataclasses import field
+
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any
@@ -126,11 +128,9 @@ class StockityBroker:
         headers = {
             "Cookie": self._cookie,
             "Origin": "https://stockity.com",
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/125.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/125.0.0.0 Safari/537.36"),
         }
         LOG.info("Connecting to %s", STOCKITY_PHOENIX_WS)
         self._ws = await websockets.connect(STOCKITY_PHOENIX_WS, additional_headers=headers)
@@ -140,34 +140,35 @@ class StockityBroker:
         for topic in ["connection", "bo", "account"]:
             await self._join_topic(topic)
 
-        # Select the active balance type (demo or real)
-        await self._send_event("account", "change_type", {"type": self._deal_type})
+        # Start listener NOW — catch ALL events from here on
+        self._listener_task = asyncio.create_task(self._listen())
 
-        # Fetch initial balances from REST API to seed the WebSocket state
+        # Select account type via direct WS send (listener already reading)
+        ref = self._next_ref()
+        msg = {"topic": "account", "event": "change_type",
+               "payload": {"type": self._deal_type},
+               "ref": ref, "join_ref": self._ref_counter}
+        await self._ws.send(json.dumps(msg))
+
+        # Fetch initial balances (listener captures phx_reply)
         try:
             from tradebot.brokers.stockity.rest import StockityREST
             rest = StockityREST()
-            balances_data = await rest.get_balances()
-            if balances_data and balances_data.get("data"):
-                for acc in balances_data["data"]:
-                    if acc.get("account_type") == self._deal_type:
-                        self._balance_raw = acc.get("balance", 0)
-                        self._balance_currency = acc.get("currency", settings.STOCKITY_CURRENCY)
-                        self._account_type = acc.get("account_type", "")
-                        LOG.info(
-                            "Initial Balance (REST): %.0f %s (%s)",
-                            self._balance_raw,
-                            self._balance_currency,
-                            self._account_type,
-                        )
+            bls = await rest.get_balances()
+            if bls and bls.get("data"):
+                for ac in bls["data"]:
+                    if ac.get("account_type") == self._deal_type:
+                        self._balance_raw = ac.get("balance", 0)
+                        self._balance_currency = ac.get("currency", settings.STOCKITY_CURRENCY)
+                        self._account_type = ac.get("account_type", "")
+                        LOG.info("Initial Balance: %.0f %s (%s)",
+                                 self._balance_raw, self._balance_currency, self._account_type)
             await rest.close()
         except Exception as e:
-            LOG.error("Failed to fetch initial balance from REST API: %s", e)
+            LOG.error("Failed to fetch balance: %s", e)
 
-        # Join asset topic (gives majority_opinion + social_trading)
         await self._join_topic("asset:Z-CRY/IDX")
-
-        self._listener_task = asyncio.create_task(self._listen())
+        await asyncio.sleep(0)
 
         self._connected = True
         LOG.info("✓ StockityBroker ready")

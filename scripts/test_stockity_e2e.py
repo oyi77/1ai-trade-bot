@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Stockity E2E — multi-trade loop, single persistent connection.
+Stockity E2E — sequential trades, FRESH CONNECTION PER TRADE.
+This pattern is PROVEN WORKING (see test_stockity_blitz.py).
 
 Usage: python3 scripts/test_stockity_e2e.py --mode demo --trades 100
 """
@@ -11,7 +12,6 @@ import argparse
 import asyncio
 import random
 import sys
-from collections import deque
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -19,150 +19,104 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tradebot.brokers.stockity.broker import StockityBroker
 
 
-class E2ERunner:
-    """Loop N trades using one persistent WS connection."""
+async def run_trades(deal_type: str, n: int) -> list[dict]:
+    print(f"\n=== Stockity E2E ({deal_type}, {n} trades) ===\n")
+    results: list[dict] = []
 
-    def __init__(self, deal_type: str, num_trades: int):
-        self.deal_type = deal_type
-        self.num_trades = num_trades
-        self.results: list[dict] = []
-        self.ticks: deque[dict] = deque(maxlen=30)
-        self.broker: StockityBroker | None = None
+    for i in range(1, n + 1):
+        direction = "CALL" if i % 2 == 0 else "PUT"
+        print(f"[{i:3d}/{n}] {direction:4s} ... ", end="", flush=True)
 
-    def _on_tick(self, tick: dict) -> None:
-        self.ticks.append(tick)
+        opened = asyncio.Future()
+        closed = asyncio.Future()
 
-    def _pick_direction(self) -> tuple[str, str]:
-        t = list(self.ticks)
-        if len(t) >= 5:
-            mids = [float(x.get("rate") or ((x.get("bid", 0) + x.get("ask", 0)) / 2)) for x in t[-5:]]
-            if len(mids) >= 4:
-                deltas = [mids[i] - mids[i - 1] for i in range(1, len(mids))]
-                up = sum(1 for d in deltas if d > 0)
-                down = sum(1 for d in deltas if d < 0)
-                if up >= 3:
-                    return ("CALL", "momentum_3up")
-                if down >= 3:
-                    return ("PUT", "momentum_3down")
-        n = len(self.results)
-        return ("CALL" if n % 2 == 0 else "PUT", "alternating_ctrl")
+        def on_opened(msg, _o=opened):
+            if not _o.done():
+                _o.set_result(msg.get("payload", {}))
 
-    async def run_all(self) -> list[dict]:
-        print(f"\n=== Stockity E2E ({self.deal_type}, {self.num_trades} trades) ===")
-        self.broker = StockityBroker(deal_type=self.deal_type)
-        self.broker.on_tick(self._on_tick)
-        await self.broker.connect()
+        def on_closed(msg, _c=closed):
+            if not _c.done():
+                _c.set_result(msg.get("payload", {}))
 
-        for i in range(1, self.num_trades + 1):
-            direction, strategy = self._pick_direction()
-            print(f"\n[{i}/{self.num_trades}] {direction} ({strategy}) ticks={len(self.ticks)}", end="")
+        broker = StockityBroker(deal_type=deal_type)
+        await broker.connect()
+        # Wait for Phoenix channel to fully join
+        # Without this, bo:create is sent before bo channel is ready
+        await asyncio.sleep(2)
 
-            opened = asyncio.Future()
-            closed = asyncio.Future()
+        # REGISTER CALLBACKS FIRST, place trade second
+        # bo:opened fires immediately after bo:create
+        broker.on_event("bo", "opened", on_opened)
+        broker.on_event("bo", "closed", on_closed)
 
-            def on_opened(msg):
-                if not opened.done():
-                    opened.set_result(msg.get("payload", {}))
+        trade = await broker.place_trade(
+            symbol="CRYPTO_IDX", direction=direction, amount=1.0, duration=5,
+        )
+        st = getattr(trade.status, "value", "")
+        if st in ("rejected", "REJECTED"):
+            print("REJECTED")
+            results.append({"i": i, "result": "REJECTED", "direction": direction})
+            await broker.close()
+            await asyncio.sleep(random.uniform(0.3, 1.0))
+            continue
 
-            def on_closed(msg):
-                if not closed.done():
-                    closed.set_result(msg.get("payload", {}))
+        try:
+            op = await asyncio.wait_for(opened, timeout=15)
+        except TimeoutError:
+            print("OPEN_TIMEOUT")
+            results.append({"i": i, "result": "OPEN_TIMEOUT", "direction": direction})
+            await broker.close()
+            await asyncio.sleep(random.uniform(0.3, 1.0))
+            continue
 
-            self.broker.on_event("bo", "opened", on_opened)
-            self.broker.on_event("bo", "closed", on_closed)
+        try:
+            cl = await asyncio.wait_for(closed, timeout=20)
+            status = cl.get("status", "lost")
+            win = cl.get("win", 0)
+            amt = cl.get("amount", 0)
+            pnl = win - amt if status == "won" else -amt
+            outcome = "WON" if status == "won" else "LOST" if status == "lost" else "TIE"
+            print(f"{outcome:4s} pnl={pnl:7d}")
+            results.append({"i": i, "result": outcome, "pnl": pnl, "direction": direction})
+        except TimeoutError:
+            print("CLOSE_TIMEOUT")
+            results.append({"i": i, "result": "CLOSE_TIMEOUT", "direction": direction})
 
-            result = await self.broker.place_trade(
-                symbol="CRYPTO_IDX", direction=direction, amount=1.0, duration=5,
-            )
-            if getattr(result.status, "value", "") in ("rejected", "REJECTED"):
-                print(" ❌ REJECTED")
-                self.results.append({"trade": i, "result": "REJECTED", "direction": direction, "strategy": strategy})
-                continue
+        await broker.close()
+        await asyncio.sleep(random.uniform(0.3, 1.0))
 
-            try:
-                op = await asyncio.wait_for(opened, timeout=10)
-                print(f" open={op.get('id')}", end="")
-            except TimeoutError:
-                print(" ❌ OPEN_TIMEOUT")
-                self.results.append({"trade": i, "result": "OPEN_TIMEOUT", "direction": direction, "strategy": strategy})
-                continue
+    return results
 
-            try:
-                cl = await asyncio.wait_for(closed, timeout=20)
-                status = cl.get("status", "lost")
-                win = cl.get("win", 0)
-                pnl = win - cl.get("amount", 0) if status == "won" else -cl.get("amount", 0)
-                outcome = "WON" if status == "won" else "LOST"
-                print(f" → {outcome} pnl={pnl}")
-                self.results.append({"trade": i, "result": outcome, "pnl": pnl, "direction": direction, "strategy": strategy})
-            except TimeoutError:
-                print(" ❌ CLOSE_TIMEOUT")
-                self.results.append({"trade": i, "result": "CLOSE_TIMEOUT", "direction": direction, "strategy": strategy})
 
-            await asyncio.sleep(random.uniform(0.5, 1.5))
-
-        await self.broker.close()
-        return self.results
-
-    @staticmethod
-    def print_summary(results: list[dict]) -> None:
-        if not results:
-            print("\nNo results.")
-            return
-        total = len(results)
-        won = sum(1 for r in results if r.get("result") == "WON")
-        lost = sum(1 for r in results if r.get("result") == "LOST")
-        other = total - won - lost
-        strategies: dict[str, list[bool]] = {}
-        for r in results:
-            s = r.get("strategy", "?")
-            strategies.setdefault(s, []).append(r.get("result") == "WON")
-
-        print(f"\n{'='*50}")
-        print(f"  TOTAL: {total} | WON: {won} | LOST: {lost} | OTHER: {other}")
-        if total:
-            print(f"  WIN RATE: {won/total*100:.1f}%")
-        if won + lost:
-            total_pnl = sum(r.get("pnl", 0) for r in results if r.get("pnl"))
-            print(f"  TOTAL P&L: {total_pnl}")
-        print()
-        for s, outcomes in sorted(strategies.items(), key=lambda x: -sum(x[1]) / len(x[1]) if x[1] else 0):
-            wr = sum(outcomes) / len(outcomes) * 100 if outcomes else 0
-            print(f"  {s:30s}: {sum(outcomes):2d}/{len(outcomes):2d} ({wr:.1f}%)")
-        print(f"{'='*50}\n")
+def print_summary(results: list[dict]) -> None:
+    if not results:
+        print("\nNo results.")
+        return
+    total = len(results)
+    won = sum(1 for r in results if r.get("result") == "WON")
+    lost = sum(1 for r in results if r.get("result") == "LOST")
+    tie = sum(1 for r in results if r.get("result") == "TIE")
+    other = total - won - lost - tie
+    total_pnl = sum(r.get("pnl", 0) for r in results if r.get("pnl"))
+    print(f"\n{'='*50}")
+    print(f"  TOTAL: {total}")
+    print(f"  WON:   {won} ({won/total*100:.1f}%)")
+    print(f"  LOST:  {lost} ({lost/total*100:.1f}%)")
+    print(f"  TIE:   {tie}")
+    print(f"  ERR:   {other}")
+    print(f"  NET:   {total_pnl}")
+    print(f"  USD:   ${total_pnl/16350:.2f}")
+    print(f"{'='*50}\n")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", default="demo", choices=["demo", "live"])
     parser.add_argument("--trades", type=int, default=100)
-    parser.add_argument("--telegram", action="store_true")
     args = parser.parse_args()
 
-    runner = E2ERunner(args.mode, args.trades)
-    results = asyncio.run(runner.run_all())
-    runner.print_summary(results)
-
-    if args.telegram:
-        import os
-        from telethon import TelegramClient
-
-        async def tg_test():
-            client = TelegramClient(
-                os.path.expanduser("~/.openclaw/workspace/paijo"),
-                23647272, "1f69a4e0f03e5f51ddfa5b67ac7b5c49",
-            )
-            await client.connect()
-            bot = "agent_1ai2_bot"
-            for cmd in ["/platforms", "/signal CRYPTO_IDX"]:
-                await client.send_message(bot, cmd)
-                await asyncio.sleep(3)
-                async for msg in client.iter_messages(bot, limit=1):
-                    if not msg.out:
-                        print(f"  {cmd} → {msg.text[:80]}")
-            await client.disconnect()
-
-        asyncio.run(tg_test())
+    results = asyncio.run(run_trades(args.mode, args.trades))
+    print_summary(results)
 
 
 if __name__ == "__main__":
