@@ -175,18 +175,18 @@ class PhantomSync:
     # ═══════════════════════════════════════════════════════════
 
     def _refresh_user_counts(self):
-        """Count active members from SQLite DB."""
+        """Count ALL members (trial + paid) as active community size."""
         try:
             if not MEMBERS_DB.exists():
                 return
             conn = sqlite3.connect(str(MEMBERS_DB))
             cur = conn.cursor()
-            # Total active users (status='active' or subscribed)
-            cur.execute("SELECT COUNT(*) FROM members WHERE status='active'")
+            # Count all registered members (trial + paid)
+            cur.execute("SELECT COUNT(*) FROM members")
             self.active_users = cur.fetchone()[0] or 0
-            # Bot users (have telegram_id)
+            # Bot users = paid members with active bot usage
             cur.execute(
-                "SELECT COUNT(*) FROM members WHERE status='active' AND telegram_id IS NOT NULL"
+                "SELECT COUNT(*) FROM members WHERE status='paid'"
             )
             self.bot_users = cur.fetchone()[0] or 0
             conn.close()

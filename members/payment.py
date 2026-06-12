@@ -4,7 +4,7 @@ Vilona Trade FX — Tiered Subscription + Payment Integration
 Tripay pricing info + transaction creation.
 Model: Monthly recurring tiers (Pro/Elite) + Lifetime one-time.
 """
-import json, logging, os, sys, time, urllib.request, urllib.error
+import json, logging, os, sys, time, urllib.request, urllib.error, urllib.parse
 from pathlib import Path
 
 logger = logging.getLogger("vtfx-payment")
@@ -328,21 +328,37 @@ def _sign(raw: str) -> str:
 
 
 def check_tripay_status(merchant_ref: str) -> dict:
-    """Check Tripay transaction status by merchant_ref."""
+    """Check Tripay transaction status by merchant_ref.
+
+    Tripay /transaction/detail uses GET with ``reference`` (Tripay's
+    internal reference, e.g. T2340934225639DR6YP), not the merchant's
+    ``merchant_ref``.  We look up the Tripay ref from our payment_orders
+    table first.
+    """
     if not TRIPAY_API_KEY or not TRIPAY_PRIVATE_KEY:
         return {"success": False, "error": "Tripay API key not configured"}
 
-    payload = {"merchant_ref": merchant_ref}
-    payload["signature"] = _sign(TRIPAY_MERCHANT + merchant_ref)
+    # Resolve merchant_ref → Tripay internal reference from stored order
+    tripay_ref = merchant_ref  # fallback: try merchant_ref itself
+    try:
+        from members import get_payment_order_by_ref
+        order = get_payment_order_by_ref(merchant_ref)
+        if order and order.get("payload"):
+            stored = json.loads(order["payload"]) if isinstance(order["payload"], str) else order["payload"]
+            tripay_ref = stored.get("reference", merchant_ref)
+    except Exception:
+        pass
+
+    signature = _sign(TRIPAY_MERCHANT + tripay_ref)
+    params = urllib.parse.urlencode(
+        {"reference": tripay_ref, "signature": signature}
+    )
+    url = f"{TRIPAY_BASE}/transaction/detail?{params}"
 
     try:
         req = urllib.request.Request(
-            f"{TRIPAY_BASE}/transaction/detail",
-            data=json.dumps(payload).encode(),
-            headers={
-                "Authorization": f"Bearer {TRIPAY_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            url,
+            headers={"Authorization": f"Bearer {TRIPAY_API_KEY}"},
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read())

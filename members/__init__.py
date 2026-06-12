@@ -137,6 +137,16 @@ def get_pending_order(chat_id: str, tier: str = None) -> dict | None:
         return dict(row) if row else None
 
 
+def get_payment_order_by_ref(merchant_ref: str) -> dict | None:
+    """Get a payment order by merchant_ref (any status)."""
+    with _conn() as db:
+        row = db.execute(
+            "SELECT * FROM payment_orders WHERE merchant_ref=? ORDER BY id DESC LIMIT 1",
+            (merchant_ref,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def expire_old_pending_orders(hours: int = 24):
     """Mark pending orders older than N hours as expired."""
     cutoff = (datetime.now(WIB) - timedelta(hours=hours)).isoformat()

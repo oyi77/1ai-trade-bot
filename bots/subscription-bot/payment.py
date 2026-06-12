@@ -13,6 +13,7 @@ import os
 import sys
 import time
 import urllib.request
+import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from collections.abc import Callable
@@ -138,18 +139,16 @@ def create_invoice(
 # ── Check payment status ────────────────────────────────────────────────
 
 def check_status(merchant_ref: str) -> dict:
-    """Check payment status via Tripay API."""
-    payload = {"merchant_ref": merchant_ref}
-    payload["signature"] = _sign(merchant_ref + TRIPAY_MERCHANT_CODE)
-
-    url = f"{TRIPAY_BASE_URL}/transaction/detail"
+    """Check payment status via Tripay API.  Uses GET (not POST — POST
+    on /transaction/detail returns HTTP 405)."""
+    sig = _sign(merchant_ref + TRIPAY_MERCHANT_CODE)
+    params = urllib.parse.urlencode(
+        {"reference": merchant_ref, "signature": sig}
+    )
+    url = f"{TRIPAY_BASE_URL}/transaction/detail?{params}"
     req = urllib.request.Request(
         url,
-        data=json.dumps(payload).encode(),
-        headers={
-            "Authorization": f"Bearer {TRIPAY_API_KEY}",
-            "Content-Type": "application/json",
-        },
+        headers={"Authorization": f"Bearer {TRIPAY_API_KEY}"},
     )
     try:
         resp = urllib.request.urlopen(req, timeout=15)
