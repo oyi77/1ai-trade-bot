@@ -111,6 +111,15 @@ class StockityBroker:
         if self._connected and self._ws is not None and self._ws.state == State.OPEN:
             return
 
+        # Cancel old listener before reconnecting
+        if self._listener_task is not None and not self._listener_task.done():
+            self._listener_task.cancel()
+            try:
+                await self._listener_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._listener_task = None
+
         if not self._cookie:
             raise RuntimeError("STOCKITY_FULL_COOKIE not set in .env")
 
@@ -163,22 +172,13 @@ class StockityBroker:
         self._connected = True
         LOG.info("✓ StockityBroker ready")
 
-    async def subscribe_ticks(self, ric: str) -> bool:
-        """Subscribe to real-time price ticks (HAR format: action=subscribe)."""
-        if not self._ws:
-            return False
-        msg = json.dumps({"action": "subscribe", "rics": [ric]})
-        await self._ws.send(msg)
-        self._subscribed_rics.add(ric)
-        LOG.info("Subscribed: %s", ric)
-        return True
 
     async def subscribe_asset(self, asset: str) -> None:
         """Subscribe to asset topic for majority_opinion + social_trading."""
         if not self._ws:
             return
         topic = f"asset:{asset}"
-        await self._send_phoenix_join(topic)
+        await self._join_topic(topic)
         LOG.info("Subscribed to asset: %s", topic)
 
     def on_tick(self, callback) -> None:

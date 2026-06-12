@@ -162,11 +162,12 @@ class UnifiedBot(VilonaBot):
         # Register Vilona-specific commands (Signal system, Market data, Trading tools, Admin)
         register_vilona_commands(app, self)
 
-        # Referral deep link handler
-        app.add_handler(CommandHandler("start", self._h_ref_start))
-
-        # Callback queries
-        app.add_handler(CallbackQueryHandler(self._h_callback))
+        # Callback queries — only handle unified-bot-specific prefixes
+        # (onboarding cmd:analyze_xauusd/cmd:guide/cmd:subscribe handled by legacy handler)
+        app.add_handler(CallbackQueryHandler(
+            self._h_callback,
+            pattern=r'^(plans|link|signal_now|stats|check_|cmd:settings|menu:settings|pref_|flow:|pay:|check:|pricing:|donate:|sub:|cancel_input|trade:|skip:|menu:|ultimatum:)'
+        ))
 
         LOG.info("UnifiedBot built with all handlers")
         return app
