@@ -451,16 +451,30 @@ class TradeTracker:
 
         # Pair breakdown
         pairs: dict[str, dict[str, Any]] = {}
+        total_stake = 0.0
         for t in trades:
             sym = t.symbol
             if sym not in pairs:
-                pairs[sym] = {"total": 0, "wins": 0, "losses": 0, "pips": 0.0}
+                pairs[sym] = {"total": 0, "wins": 0, "losses": 0, "pips": 0.0, "profit_usd": 0.0, "stake": 0.0}
             pairs[sym]["total"] += 1
             if t.outcome in ("TP_HIT", "WIN", "WON"):
                 pairs[sym]["wins"] += 1
             elif t.outcome in ("SL_HIT", "LOSS", "LOST"):
                 pairs[sym]["losses"] += 1
             pairs[sym]["pips"] += t.pips
+            pairs[sym]["profit_usd"] += t.profit_usd
+            if t.outcome != "OPEN":
+                pairs[sym]["stake"] += t.stake
+                total_stake += t.stake
+
+        total_profit = sum(t.profit_usd for t in trades if t.outcome not in ("OPEN",))
+        total_profit_idr = sum(t.profit_idr for t in trades if t.outcome not in ("OPEN",))
+
+        # Calculate return % based on actual stake (not fixed $100)
+        if total_stake > 0:
+            return_pct = total_profit / total_stake * 100
+        else:
+            return_pct = 0.0
 
         return {
             "date": date_str,
@@ -471,8 +485,10 @@ class TradeTracker:
             "open": len(open_pos),
             "total_pips": round(total_pips, 1),
             "win_rate": round(len(wins) / max(len(wins) + len(losses), 1) * 100, 1),
-            "micro_profit": round(sum(t.profit_usd for t in trades if t.outcome not in ("OPEN",)), 2),
-            "micro_profit_idr": sum(t.profit_idr for t in trades if t.outcome not in ("OPEN",)),
+            "micro_profit": round(total_profit, 2),
+            "micro_profit_idr": total_profit_idr,
+            "total_stake": round(total_stake, 2),
+            "return_pct": round(return_pct, 1),
             "pairs": pairs,
         }
 

@@ -1,0 +1,13 @@
+def get_daily_trades(date_str: str = "") -> dict[str, Any]:
+    """Get daily trades from SQLite database (unified source of truth).
+
+    Args:
+        date_str: Date in YYYY-MM-DD format (defaults to today WIB).
+
+    Returns:
+        Dict with trades, counts, pair breakdown, and actual profit.
+    """
+    from tradebot.monitoring.tracker import TradeTracker
+
+    tracker = TradeTracker()
+    return tracker.get_daily_trades(date_str)

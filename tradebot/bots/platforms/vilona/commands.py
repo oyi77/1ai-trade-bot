@@ -22,6 +22,7 @@ from tradebot.bots.platforms.vilona.helpers import (
     wib_fmt,
     wib_now,
 )
+from tradebot.services.trade_tracker_service import USD_IDR
 
 LOG = logging.getLogger("tradebot.bots.vilona.commands")
 
@@ -367,11 +368,20 @@ class CommandHandlersMixin(BaseBot):
             is_loss = outcome in ("SL_HIT", "LOST")
             emoji = "✅" if is_win else "❌" if is_loss else "⚪"
             close_t_str = str(close_t)[:16].replace("T", " ")
-            lines.append(
-                f"{emoji} {action} {sym} | {outcome}\n"
-                f"   Pips: {pips:+.1f} | ${usd:+.2f} (Rp {idr:+,})\n"
-                f"   {close_t_str}"
-            )
+            # For binary options, show stake instead of pips
+            stake_val = t.stake if hasattr(t, "stake") else t.get("stake", 0)
+            if stake_val > 1:
+                lines.append(
+                    f"{emoji} {action} {sym} | {outcome}\n"
+                    f"   Stake: ${stake_val:,.0f} | P&L: ${usd:+.2f} (Rp {idr:+,})\n"
+                    f"   {close_t_str}"
+                )
+            else:
+                lines.append(
+                    f"{emoji} {action} {sym} | {outcome}\n"
+                    f"   Pips: {pips:+.1f} | ${usd:+.2f} (Rp {idr:+,})\n"
+                    f"   {close_t_str}"
+                )
         return "\n".join(lines)
 
     async def _cmd_recap(self, args: list[str], chat_id: str | None = None) -> str:
@@ -401,10 +411,10 @@ class CommandHandlersMixin(BaseBot):
         wins = recap.get("wins", 0)
         losses = recap.get("losses", 0)
         wr = recap.get("win_rate", 0)
-        pips = recap.get("total_pips", 0)
         micro = recap.get("micro_profit", 0)
-        micro_pct = recap.get("micro_profit_pct", 0)
         micro_idr = recap.get("micro_profit_idr", 0)
+        return_pct = recap.get("return_pct", 0)
+        total_stake = recap.get("total_stake", 0)
         perf = "🟢 PROFIT" if micro > 0 else "🔴 LOSS" if micro < 0 else "⚪ FLAT"
 
         lines = [
@@ -414,23 +424,41 @@ class CommandHandlersMixin(BaseBot):
             f"📡 <b>Total Sinyal:</b> {total}",
             f"✅ Win: {wins} | ❌ Loss: {losses} | 📊 WR: {wr:.1f}%", "",
             "━━━━━━━━━━━━━━━━",
-            f"📐 <b>Total Pips:</b> {pips:+.1f}", "",
         ]
+
+        # For binary options, show stake and profit instead of pips
+        if total_stake > 0:
+            lines.extend([
+                f"💰 <b>Total Stake:</b> ${total_stake:,.2f} (Rp {int(total_stake * USD_IDR):,})",
+                f"📈 <b>Net Profit:</b> ${micro:+.2f} (Rp {micro_idr:+,})",
+                f"📊 <b>Return:</b> {return_pct:+.1f}%", "",
+            ])
+        else:
+            lines.extend([
+                f"📐 <b>Total Pips:</b> {recap.get('total_pips', 0):+.1f}", "",
+            ])
 
         pairs = recap.get("pairs", {})
         if pairs:
             lines.append("💱 <b>Pair yang Di-trade:</b>")
             for sym, stats in sorted(pairs.items()):
-                p_emoji = "✅" if stats.get("pips", 0) >= 0 else "❌"
-                lines.append(f"   {p_emoji} {sym}: {stats.get('total', 0)} sinyal | "
-                             f"{stats.get('pips', 0):+.1f} pips | "
-                             f"{stats.get('wins', 0)}W/{stats.get('losses', 0)}L")
+                is_profit = stats.get("profit_usd", 0) >= 0
+                p_emoji = "✅" if is_profit else "❌"
+                if stats.get("stake", 0) > 0:
+                    # Binary option display
+                    lines.append(f"   {p_emoji} {sym}: {stats.get('total', 0)} sinyal | "
+                                 f"Stake: ${stats.get('stake', 0):,.0f} | "
+                                 f"Net: ${stats.get('profit_usd', 0):+.2f}")
+                else:
+                    # Forex display
+                    lines.append(f"   {p_emoji} {sym}: {stats.get('total', 0)} sinyal | "
+                                 f"{stats.get('pips', 0):+.1f} pips | "
+                                 f"{stats.get('wins', 0)}W/{stats.get('losses', 0)}L")
 
         lines.extend([
             "", "━━━━━━━━━━━━━━━━",
-            "💵 <b>PERFORMANCE SUMMARY</b>", "",
             f"{perf}: <b>${micro:+.2f}</b> (Rp {micro_idr:+,})",
-            f"Return: <b>{micro_pct:+.1f}%</b> dalam 1 hari", "",
+            f"Return: <b>{return_pct:+.1f}%</b> dalam 1 hari", "",
             "━━━━━━━━━━━━━━━━", "",
             "📱 Trading real: /analyze xauusd", "",
             "<i>#VilonaTradeFX #AITrading</i>",
@@ -1234,11 +1262,11 @@ class CommandHandlersMixin(BaseBot):
         alignment = hier.get("mtf_alignment", "NONE")
         macro = hier.get("macro_trend", "NEUTRAL")
         lines = [
-            f"📡 <b>MARKET PULSE — XAUUSD</b>",
-            f"━━━━━━━━━━━━━━━━━━━━━",
+            "📡 <b>MARKET PULSE — XAUUSD</b>",
+            "━━━━━━━━━━━━━━━━━━━━━",
             f"Verdict: {verdict} ({score:.0f}%)",
             f"Alignment: {alignment} | Macro: {macro}",
-            f"━━━━━━━━━━━━━━━━━━━━━",
+            "━━━━━━━━━━━━━━━━━━━━━",
         ]
         for tf_name in ["D1", "H4", "H1", "M15", "M5"]:
             tf = tfs.get(tf_name, {})
@@ -1250,11 +1278,11 @@ class CommandHandlersMixin(BaseBot):
         lkz, nykz = killzone_active()
         bn, pn, nn = news_blackout_status()
         lines.extend([
-            f"━━━━━━━━━━━━━━━━━━━━━",
+            "━━━━━━━━━━━━━━━━━━━━━",
             f"🕐 {wib_fmt()} | {'🟢 KZ' if lkz or nykz else '🔴 No KZ'}",
             f"📰 {'⛔ BLACKOUT' if bn else '✅ Clear'}",
-            f"━━━━━━━━━━━━━━━━━━━━━",
-            f"🧠 /engines — Detail engine readings",
+            "━━━━━━━━━━━━━━━━━━━━━",
+            "🧠 /engines — Detail engine readings",
         ])
         return "\n".join(lines)
 
@@ -1301,31 +1329,31 @@ class CommandHandlersMixin(BaseBot):
             xau_str = f"${xau_price:,.2f}" if xau_price else "N/A"
             dxy_str = f"{dxy:.2f}" if dxy else "N/A"
             lines = [
-                f"📋 <b>PRE-MARKET BRIEFING</b>",
-                f"━━━━━━━━━━━━━━━━",
+                "📋 <b>PRE-MARKET BRIEFING</b>",
+                "━━━━━━━━━━━━━━━━",
                 f"🕐 {wib_fmt()} | {now.strftime('%A')}",
-                f"━━━━━━━━━━━━━━━━",
-                f"",
-                f"💰 <b>MARKET PRICES</b>",
+                "━━━━━━━━━━━━━━━━",
+                "",
+                "💰 <b>MARKET PRICES</b>",
                 f"XAUUSD: {xau_str}",
                 f"DXY: {dxy_str}",
-                f"",
-                f"📊 <b>H1 SMA BIAS</b>",
+                "",
+                "📊 <b>H1 SMA BIAS</b>",
                 f"{h1_bias}",
-                f"",
-                f"🕐 <b>SESSION</b>",
+                "",
+                "🕐 <b>SESSION</b>",
                 f"Active: {ses}",
                 f"London KZ: {'🟢' if lkz else '🔴'} | NY KZ: {'🟢' if nykz else '🔴'}",
                 f"News: {'⛔ BLACKOUT' if bn else '✅ Clear'}",
-                f"",
-                f"━━━━━━━━━━━━━━━━",
-                f"📌 <b>LOCKED — Subscriber Only</b>",
-                f"👑 Full briefing dengan AI sentiment, key levels,",
-                f"   dan trade plan buka setiap pagi.",
-                f"   → /subscribe untuk unlock",
-                f"━━━━━━━━━━━━━━━━",
-                f"💡 Dashboard: /dashboard",
-                f"📊 Today's signal: /signal",
+                "",
+                "━━━━━━━━━━━━━━━━",
+                "📌 <b>LOCKED — Subscriber Only</b>",
+                "👑 Full briefing dengan AI sentiment, key levels,",
+                "   dan trade plan buka setiap pagi.",
+                "   → /subscribe untuk unlock",
+                "━━━━━━━━━━━━━━━━",
+                "💡 Dashboard: /dashboard",
+                "📊 Today's signal: /signal",
             ]
             return "\n".join(lines)
         except Exception as e:
@@ -1366,7 +1394,7 @@ class CommandHandlersMixin(BaseBot):
                     reminders_sent += 1
             except Exception:
                 pass
-        lines.append(f"━━━━━━━━━━━━━━━━")
+        lines.append("━━━━━━━━━━━━━━━━")
         lines.append(f"📨 Reminder terkirim ke {reminders_sent}/{len(stale)} subscriber")
         return "\n".join(lines)
 
