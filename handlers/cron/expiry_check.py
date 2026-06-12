@@ -24,8 +24,8 @@ logger = logging.getLogger("vtfx-expiry-check")
 WIB = timezone(timedelta(hours=7))
 
 BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
-PREMIUM_GROUP_ID = os.environ.get("PREMIUM_GROUP_ID", "")
-PREMIUM_CHANNEL_ID = os.environ.get("PREMIUM_CHANNEL_ID", "")
+PREMIUM_GROUP_ID = os.environ.get("PREMIUM_GROUP_ID", "") or os.environ.get("GROUP_CHAT_ID", "")
+PREMIUM_CHANNEL_ID = os.environ.get("PREMIUM_CHANNEL_ID", os.environ.get("SIGNAL_CHANNEL_ID", ""))
 
 DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "vilona_tradefx"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -85,13 +85,14 @@ def _send_dm(chat_id: str, text: str) -> bool:
 
 
 def _update_status(chat_id: str, status: str = "expired"):
-    """Update member status in DB."""
+    """Update member status AND reset tier to 'free' in DB."""
     try:
         with _conn() as db:
             db.execute(
-                "UPDATE members SET status=? WHERE chat_id=?",
+                "UPDATE members SET status=?, tier='free' WHERE chat_id=?",
                 (status, str(chat_id)),
             )
+        logger.info("Downgraded %s: status=%s tier=free", chat_id, status)
     except Exception as e:
         logger.error("Failed to update status for %s: %s", chat_id, e)
 

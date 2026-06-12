@@ -3416,14 +3416,28 @@ def _deduct_quota(chat_id):
 
 def _get_user_tier(chat_id):
     """Return tier info: {tier, limit (-1=unlimited), throttle, is_paid, label}.
-    Only donor/lifetime are treated as paid."""
+    Only donor/lifetime are treated as paid. Checks expiry date."""
     try:
         from members import get_member as m_get
         member = m_get(str(chat_id))
         if member:
             tier = str(member.get("tier", "free")).lower()
             status = str(member.get("status", "trial")).lower()
-            is_paid = status == "paid" or tier in ("donor", "lifetime", "pro", "elite")
+            # ── Expiry gate: check if subscription has expired ──
+            expiry_str = member.get("expiry", "")
+            expiry_past = False
+            if expiry_str and status == "paid":
+                try:
+                    exp = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
+                    if exp.tzinfo is None:
+                        WIB_TZ = timezone(timedelta(hours=7))
+                        exp = exp.replace(tzinfo=WIB_TZ)
+                    if exp < wib_now():
+                        expiry_past = True
+                except Exception:
+                    pass
+            # ── is_paid: status="paid" AND expiry not past, OR grandfathered lifetime ──
+            is_paid = (status == "paid" and not expiry_past) or tier in ("donor", "lifetime")
             if tier == "pro":
                 limit = TIER_LIMITS.get("pro", FREE_DAILY_LIMIT)
                 throttle = MANUAL_THROTTLE_PRO
@@ -3457,7 +3471,8 @@ def _get_user_tier(chat_id):
 
 
 def _is_donor(chat_id):
-    """Check if user has donor/paid status in members DB."""
+    """Check if user has donor/paid status in members DB.
+    Also checks expiry date — if expired, user is NOT donor."""
     try:
         from members import get_member as m_get
         member = m_get(str(chat_id))
@@ -3465,7 +3480,23 @@ def _is_donor(chat_id):
             return False
         tier = str(member.get("tier", "free")).lower()
         status = str(member.get("status", "trial")).lower()
-        if status == "paid" or tier in ("donor", "lifetime", "pro", "elite"):
+        # ── Status check: must be "paid" AND not expired ──
+        if status != "paid":
+            return False
+        # ── Expiry gate: if expiry < NOW, user is NOT donor ──
+        expiry_str = member.get("expiry", "")
+        if expiry_str:
+            try:
+                from datetime import datetime, timezone, timedelta
+                exp = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
+                if exp.tzinfo is None:
+                    WIB = timezone(timedelta(hours=7))
+                    exp = exp.replace(tzinfo=WIB)
+                if exp < wib_now():
+                    return False  # expired — no longer donor
+            except Exception:
+                pass
+        if tier in ("donor", "lifetime", "pro", "elite"):
             return True
         return False
     except Exception:

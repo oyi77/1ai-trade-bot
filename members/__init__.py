@@ -208,8 +208,24 @@ def get_due_members() -> list:
 
 
 def is_premium(chat_id: str) -> bool:
+    """Check if member has active paid subscription (not expired)."""
     member = get_member(str(chat_id))
-    return member is not None and member.get("status") == "paid"
+    if member is None:
+        return False
+    if member.get("status") != "paid":
+        return False
+    # ── Expiry gate: subscription must not be past expiry ──
+    expiry_str = member.get("expiry", "")
+    if expiry_str:
+        try:
+            exp = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=WIB)
+            if exp < datetime.now(WIB):
+                return False
+        except Exception:
+            pass
+    return True
 
 
 def check_quota(chat_id: str) -> dict:
