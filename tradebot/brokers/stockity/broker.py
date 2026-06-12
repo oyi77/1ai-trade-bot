@@ -183,7 +183,7 @@ class StockityBroker:
         """Return the multiplier factor for the current currency."""
         curr = self._balance_currency.upper()
         if curr == "IDR":
-            return 10_000
+            return 100
         return 100_000_000
 
     @property

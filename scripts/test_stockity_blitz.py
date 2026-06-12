@@ -77,7 +77,7 @@ async def main():
         print(f"💰 Initial Demo Balance: {initial_balance} {currency}")
 
         # Set stake dynamically based on currency
-        stake = 10000.0 if currency.upper() == "IDR" else 1.0
+        stake = 14000.0 if currency.upper() == "IDR" else 1.0
         symbol = "CRYPTO_IDX"
         direction = "CALL"
         confidence = 0.85
