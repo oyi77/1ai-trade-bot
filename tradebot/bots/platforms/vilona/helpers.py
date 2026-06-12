@@ -154,6 +154,35 @@ FOMO_SL: list[str] = [
     "⚡ <b>AI udah belajar. Sinyal berikutnya lebih akurat!</b>",
 ]
 
+# ── Fake Stats FOMO Messages ──────────────────────────────────────
+# These are generated dynamically by fomo_fake_stats engine.
+# Provides fake whitelabel claims, fake TP notifications, and
+# fake robot user counts that are CONSISTENT and MONOTONICALLY INCREASING.
+
+FOMO_FAKE_CLAIM: list[str] = []
+FOMO_FAKE_TP: list[str] = []
+FOMO_FAKE_ROBOT: list[str] = []
+
+def refresh_fake_fomo() -> None:
+    """Refresh fake FOMO message lists from the fomo_fake_stats engine.
+
+    Called periodically (every hour) to regenerate consistent fake
+    statistics that monotonically increase over time.
+    """
+    from tradebot.services.fomo_fake_stats import (
+        get_fomo_claim_message,
+        get_fomo_tp_message,
+        get_fomo_robot_message,
+    )
+    global FOMO_FAKE_CLAIM, FOMO_FAKE_TP, FOMO_FAKE_ROBOT
+    FOMO_FAKE_CLAIM[:] = [get_fomo_claim_message()]
+    FOMO_FAKE_TP[:] = [get_fomo_tp_message()]
+    FOMO_FAKE_ROBOT[:] = [get_fomo_robot_message()]
+
+
+# Refresh on import
+refresh_fake_fomo()
+
 _last_offset = 0.0
 _last_offset_time = 0.0
 
