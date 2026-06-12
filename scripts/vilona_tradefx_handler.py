@@ -157,7 +157,14 @@ try:
     TRADE_TRACKER = True
 except Exception as e:
     TRADE_TRACKER = False
-    print(f"Trade tracker unavailable: {e}")
+
+# ── Learning Loop (autonomous SL/TP learning) ──
+try:
+    from learning_loop import learn_from_sl, learn_from_tp
+    LEARNING_LOOP = True
+except Exception as e:
+    LEARNING_LOOP = False
+    print(f"Learning loop unavailable: {e}")
 
 # ── Unified Signal Feed ──
 try:
@@ -6281,6 +6288,16 @@ def auto_analyze_loop():
                                         pips=ct.get("pips", 0)
                                     )
                                 except Exception: pass
+                            # ── LEARNING LOOP: Auto-analyze every trade outcome ──
+                            if LEARNING_LOOP:
+                                try:
+                                    outcome = ct.get("outcome", "")
+                                    if outcome == "SL_HIT":
+                                        learn_from_sl(ct, price)
+                                    elif outcome == "TP_HIT":
+                                        learn_from_tp(ct)
+                                except Exception as lle:
+                                    logger.debug("Learning loop error: %s", lle)
                         except Exception: pass
                 except Exception: pass
 
