@@ -143,6 +143,30 @@ class UnifiedBot(VilonaBot):
         LOG.info("🤖 UnifiedBot starting...")
         await self._app.initialize()
         await self._app.start()
+        try:
+            from telegram import BotCommand
+            commands = [
+                BotCommand("signal", "🧠 Generate sinyal MTF + 9 engines"),
+                BotCommand("mtf", "🧬 Matrix 5TF × 9 engines (top-down)"),
+                BotCommand("engines", "🔧 Engine readings per strategi"),
+                BotCommand("dashboard", "📊 Buka live dashboard web"),
+                BotCommand("analyze", "🧠 Perintahkan AI Scan Market"),
+                BotCommand("price", "💰 Cek harga real-time"),
+                BotCommand("mapping", "📐 Mapping harian + level S/R"),
+                BotCommand("levels", "🏛 SnR + FIBO + Engine (Subscriber)"),
+                BotCommand("news", "📰 Grok News — X/Twitter intel (Subscriber)"),
+                BotCommand("killzone", "🎯 Radar sesi market aktif"),
+                BotCommand("zones", "🧲 Order Blocks + FVG Scanner"),
+                BotCommand("structure", "🏗 BOS/CHoCH + MTF Alignment"),
+                BotCommand("stier", "💀 S-TIER Zone — Triple Confluence GOD TIER"),
+                BotCommand("subscribe", "⭐ Upgrade ke PRO/ELITE/LIFETIME"),
+                BotCommand("status", "🛡 Cek Kuota & Status"),
+                BotCommand("mykey", "🔑 Cek License EA Kamu"),
+            ]
+            await self._app.bot.set_my_commands(commands)
+            LOG.info("✅ Telegram commands menu updated successfully via set_my_commands")
+        except Exception as exc:
+            LOG.warning("Failed to set bot commands: %s", exc)
         await self._app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         LOG.info("✅ UnifiedBot running")
 
