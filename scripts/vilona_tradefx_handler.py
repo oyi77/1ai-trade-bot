@@ -5,7 +5,7 @@ Grab forex data + generate signals even without MT5/EA.
 
 Commands: /start /help /price /analyze /data /killzone /status /subscribe /autosync /genkey /listkeys /mykey /myid
 """
-import hashlib, json, logging, os, re, sys, threading, time, urllib.request
+import hashlib, json, logging, os, re, sys, threading, time, urllib.parse, urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -230,9 +230,22 @@ OMNIROUTE_FREE_MODELS = [
 # { "deepseek": {"prompt": N, "completion": N, "total": N}, ... }
 _AI_TOKEN_USAGE: dict[str, dict[str, int]] = {}
 
-# ── Grok (xAI) ──
+# ── Grok (xAI — dead) ── (DEPRECATED Jun 2026 — all v2 models removed by xAI)
 GROK_KEY = os.environ.get("GROK_API_KEY", "")
 GROK_URL = "https://api.x.ai/v1/chat/completions"
+
+# ── Alpha Vantage (Market News replacement for Grok) ──
+ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY", "FR1LCR1YW51V0TIE")
+ALPHA_VANTAGE_NEWS_URL = "https://www.alphavantage.co/query"
+
+# ── Ticker mapping for Alpha Vantage NEWS_SENTIMENT ──
+AV_TICKER_MAP = {
+    "xauusd": "FOREX:USD", "gold": "FOREX:USD",
+    "btc": "CRYPTO:BTC", "btcusd": "CRYPTO:BTC",
+    "eth": "CRYPTO:ETH", "ethusd": "CRYPTO:ETH",
+    "usoil": "FOREX:USD", "oil": "FOREX:USD",
+    "eurusd": "FOREX:EUR", "gbpusd": "FOREX:GBP", "usdjpy": "FOREX:JPY",
+}
 
 
 def load_env():
@@ -836,7 +849,7 @@ def handle_onboarding_callback(callback_query):
             "🧠 <b>AI Engines:</b>\n"
             "• DeepSeek V3 — SMC/ICT specialist\n"
             "• GPT-4o — Pattern & structure recognition\n"
-            "• Grok — Real-time X/Twitter market context\n\n"
+            "• Market Intel — Real-time sentiment from Alpha Vantage\n\n"
             "⚡ <b>PRO TIPS:</b>\n"
             "• Entry selalu pakai pending limit order, bukan market\n"
             "• SL jangan diubah — AI udah kalkulasi risk\n"
@@ -2114,70 +2127,98 @@ def _call_omniroute(prompt, models=None):
     return None
 
 
-def _call_grok_news(display: str, price: float) -> str | None:
-    """Call Grok (xAI) for real-time market news/context.
+def _call_alphavantage_news(display: str, price: float, pair: str = "gold") -> dict | None:
+    """Fetch real-time market news from Alpha Vantage NEWS_SENTIMENT.
     
-    Grok has X/Twitter real-time access — uniquely positioned for breaking news.
-    Returns a concise news summary string, or None on failure.
-    Only called for donor/channel tiers (expensive: ~$0.002/call).
+    Returns aggregated sentiment + top headlines, or None on failure.
+    Only called for donor/channel tiers (25 calls/day free tier).
     """
-    if not GROK_KEY:
+    if not ALPHA_VANTAGE_KEY:
         return None
     try:
-        news_prompt = (
-            f"Search X/Twitter for the LATEST breaking news, macro events, or market-moving "
-            f"headlines about {display} (currently ${price:.2f}). "
-            f"Focus on: FOMC/Fed speakers, NFP/CPI/economic data, geopolitical events, "
-            f"major institutional moves, or sentiment shifts in the last 2 hours.\n\n"
-            f"Return ONLY a structured JSON with these fields:\n"
-            f'{{"headline": "1 most impactful headline", '
-            f'"sentiment": "BULLISH/BEARISH/NEUTRAL", '
-            f'"impact": "HIGH/MED/LOW", '
-            f'"detail": "2-3 sentence context explaining WHY this matters for {display}"}}\n\n'
-            f"Be CONCISE. Max 150 words total. If no significant news, headline='No major catalysts'."
-        )
-        req = urllib.request.Request(GROK_URL,
-            data=json.dumps({
-                "model": "grok-2-latest",
-                "max_tokens": 300,
-                "temperature": 0.3,
-                "messages": [{"role": "user", "content": news_prompt}]
-            }).encode(),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {GROK_KEY}"})
-        with urllib.request.urlopen(req, timeout=25) as r:
+        ticker = AV_TICKER_MAP.get(pair, "FOREX:USD")
+        params = urllib.parse.urlencode({
+            "function": "NEWS_SENTIMENT",
+            "tickers": ticker,
+            "limit": 10,
+            "apikey": ALPHA_VANTAGE_KEY,
+        })
+        url = f"{ALPHA_VANTAGE_NEWS_URL}?{params}"
+        with urllib.request.urlopen(url, timeout=15) as r:
             data = json.loads(r.read())
-            content = data["choices"][0]["message"]["content"]
-            usage = data.get("usage", {})
-            _AI_TOKEN_USAGE["grok"] = {
-                "prompt": usage.get("prompt_tokens", 0),
-                "completion": usage.get("completion_tokens", 0),
-                "total": usage.get("total_tokens", 0),
-            }
-            logger.info(f"Grok News: {len(content)} chars, {_AI_TOKEN_USAGE['grok']['total']} tokens")
-            news = _extract_json(content)
-            if news and isinstance(news, dict):
-                return news
-            return {"headline": content[:200], "sentiment": "NEUTRAL", "impact": "LOW", "detail": ""}
-    except Exception as e:
-        if hasattr(e, 'code'):
-            try:
-                body = e.read().decode()[:300] if hasattr(e, 'read') else ''
-            except:
-                body = ''
-            logger.warning(f"Grok News HTTP {e.code}: {body}")
-            # Admin alert on Grok failure
-            try:
-                from members.admin_alert import send_admin_alert
-                send_admin_alert("Grok News", f"HTTP {e.code} — {body[:100]}")
-            except Exception:
-                pass
+
+        if "feed" not in data or not data["feed"]:
+            return {"headline": "No major catalysts", "sentiment": "NEUTRAL", "impact": "LOW", "detail": ""}
+
+        articles = data["feed"][:5]
+        if not articles:
+            return {"headline": "No major catalysts", "sentiment": "NEUTRAL", "impact": "LOW", "detail": ""}
+
+        # Aggregate sentiment from articles
+        scores = []
+        headlines = []
+        for a in articles:
+            score = float(a.get("overall_sentiment_score", 0))
+            label = a.get("overall_sentiment_label", "Neutral")
+            scores.append(score)
+            headlines.append(a.get("title", "")[:120])
+
+        avg_score = sum(scores) / len(scores)
+        if avg_score >= 0.35:
+            sentiment = "BULLISH"
+        elif avg_score <= -0.35:
+            sentiment = "BEARISH"
+        elif avg_score >= 0.15:
+            sentiment = "SOMEWHAT-BULLISH"
+        elif avg_score <= -0.15:
+            sentiment = "SOMEWHAT-BEARISH"
         else:
-            logger.warning(f"Grok News error: {e}")
+            sentiment = "NEUTRAL"
+
+        # Impact based on score magnitude + article count
+        magnitude = abs(avg_score)
+        article_boost = min(len(articles) / 3, 1.0)
+        impact_score = magnitude * (0.7 + 0.3 * article_boost)
+        if impact_score >= 0.30:
+            impact = "HIGH"
+        elif impact_score >= 0.15:
+            impact = "MED"
+        else:
+            impact = "LOW"
+
+        # Top headline + detail from articles
+        best = max(articles, key=lambda a: abs(float(a.get("overall_sentiment_score", 0))))
+        headline = best.get("title", "No major catalysts")[:150]
+        source = best.get("source", "Alpha Vantage")
+        detail_lines = []
+        for i, a in enumerate(articles[:3]):
+            title = a.get("title", "")[:100]
+            s_label = a.get("overall_sentiment_label", "Neutral")
+            s_emoji = {"Bullish": "🟢", "Somewhat-Bullish": "🟢", "Neutral": "⚪️",
+                        "Somewhat-Bearish": "🔴", "Bearish": "🔴"}.get(s_label, "⚪️")
+            detail_lines.append(f"{s_emoji} {title}")
+        detail = "\n".join(detail_lines)
+
+        logger.info(
+            "AlphaVantage News: %d articles, avg=%.3f sentiment=%s impact=%s (pair=%s)",
+            len(articles), avg_score, sentiment, impact, pair,
+        )
+        return {
+            "headline": headline,
+            "sentiment": sentiment,
+            "impact": impact,
+            "detail": detail,
+            "source": source,
+            "article_count": len(articles),
+            "avg_score": round(avg_score, 3),
+        }
+    except Exception as e:
+        logger.warning(f"AlphaVantage News error: {e}")
         return None
 
 
 def _format_news_context(news: dict | None) -> str:
-    """Format Grok news context for signal display."""
+    """Format Market Intel context for signal display."""
     if not news:
         return ""
     if isinstance(news, str):
@@ -2194,7 +2235,7 @@ def _format_news_context(news: dict | None) -> str:
     i_emoji = {"HIGH": "🔥", "MED": "📊", "LOW": "📎"}.get(impact, "")
     
     lines = [
-        f"📰 <b>Grok Market Context</b>",
+        f"📰 <b>Market Intel</b>",
         f"{s_emoji} {headline}",
     ]
     if detail:
@@ -2209,9 +2250,9 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     🔬 Tier-based model count:
        - starter:  DeepSeek only (solo, max 55% conf) — free tier
        - pro:      DeepSeek + GPT-4o (dual, max 85% conf) — donor
-       - elite:    All 3 models + Grok News (max 95% conf) — premium subscriber
+       - elite:    All 3 models + Market Intel (max 95% conf) — premium subscriber
        - premium=True: All models (channel/auto — unlimited)
-    ⭐ Models: DeepSeek V3 + GPT-4o + Claude-Sonnet + Grok News.
+    ⭐ Models: DeepSeek V3 + GPT-4o + Claude-Sonnet + Market Intel.
     """
     # Reset token counter for this analysis cycle
     global _AI_TOKEN_USAGE
@@ -2276,10 +2317,11 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     #     omniroute = _call_omniroute(prompt)
     omniroute = None  # OmniRoute disabled — DeepSeek + GPT-4o direct calls sufficient
 
-    # Grok News — real-time X/Twitter market context (donors only)
-    grok_news = None
+    # Alpha Vantage News — real-time market sentiment (donors only)
+    market_news = None
     if not is_free_tier:
-        grok_news = _call_grok_news(display, price)
+        pair_key = display.lower().replace("usd", "").replace("xau", "gold") if display else "gold"
+        market_news = _call_alphavantage_news(display, price, pair=pair_key)
 
     # Calculate total tokens used
     token_total = sum(v.get("total", 0) for v in _AI_TOKEN_USAGE.values())
@@ -2323,7 +2365,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["_token_total"] = token_total
         sig["_token_prompt"] = token_prompt
         sig["_token_completion"] = token_completion
-        sig["_grok_news"] = grok_news
+        sig["_market_news"] = market_news
         logger.info(f"AI CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%} tier={tier} tokens={token_total}")
         return sig
 
@@ -2341,7 +2383,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["_token_total"] = token_total
         sig["_token_prompt"] = token_prompt
         sig["_token_completion"] = token_completion
-        sig["_grok_news"] = grok_news
+        sig["_market_news"] = market_news
         logger.info(f"SOLO [{best['name']}]: {sig['action']} conf={sig['confidence']:.0%} tier={tier} tokens={token_total}")
         return sig
 
@@ -2356,7 +2398,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
             s["_token_total"] = token_total
             s["_token_prompt"] = token_prompt
             s["_token_completion"] = token_completion
-            s["_grok_news"] = grok_news
+            s["_market_news"] = market_news
             return s
 
     return None
@@ -2867,7 +2909,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         lines.append(f"")
         lines.append(f"💡 <b>Free tier cuma bisa liat Entry Zone.</b>")
         lines.append(f"   SL/TP dikunci — gak bisa eksekusi dengan aman.")
-        lines.append(f"   👑 <b>/subscribe</b> — Unlock SL/TP + 2 AI + Grok News")
+        lines.append(f"   👑 <b>/subscribe</b> — Unlock SL/TP + 2 AI + Market Intel")
     else:
         lines.append(f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}")
         # TP levels
@@ -2915,7 +2957,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     is_free = sig.get("_tier_capped", True)
     model_names = sig.get("_model", "AI")
     model_count = sig.get("voters", 1) or 1
-    grok_news = sig.get("_grok_news")
+    market_news = sig.get("_market_news")
     tier_label = sig.get("_tier", "🆓 Free")
 
     lines.append(f"")
@@ -2930,29 +2972,29 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         token_k = f"{token_total/1000:.1f}k" if token_total >= 1000 else str(token_total)
         cost_rp = int(token_total * 1.5 / 1000)
         cost_rp = max(cost_rp, 1)
-        # Dynamic battery based on actual AI models + Grok
-        has_grok = bool(grok_news)
-        battery_pct = min(100, model_count * 33 + (33 if has_grok else 0))
-        bar_count = min(3, model_count + (1 if has_grok else 0))
+        # Dynamic battery based on actual AI models + Market Intel
+        has_news = bool(market_news)
+        battery_pct = min(100, model_count * 33 + (33 if has_news else 0))
+        bar_count = min(3, model_count + (1 if has_news else 0))
         bars = "■" * max(1, bar_count) + "□" * (3 - max(1, bar_count))
 
         if is_free:
-            # ── FREE TIER: Dynamic battery + kelaparan + Grok tease preview ──
+            # ── FREE TIER: Dynamic battery + kelaparan + Market Intel tease preview ──
             lines.append(f"🔋 <b>AI Power: {bars} {battery_pct}%</b> — {model_count}/3 AI yang kerja buat lu")
             lines.append(f"")
             lines.append(f"🤖 Cuma <b>{model_names}</b> doang yang mikir.")
             lines.append(f"   AI lu kelaparan bro... cuma dikasih 1 model 😤")
-            lines.append(f"   Bayangin kalo 3 AI + Grok News analisa bareng:")
+            lines.append(f"   Bayangin kalo 3 AI + Market Intel analisa bareng:")
             lines.append(f"   → Entry lebih presisi, SL lebih ketat, TP lebih akurat")
             lines.append(f"")
-            # Grok News tease with preview snippet
-            lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
-            lines.append(f"   🔍 <i>Preview: Market-moving headlines dari X/Twitter...</i>")
-            lines.append(f"   🗞️  Breaking news, FOMC, NFP, CPI, geopolitics — all real-time")
+            # Market Intel tease with preview snippet
+            lines.append(f"📰 <b>Market Intel</b> [🔒 LOCKED]")
+            lines.append(f"   🔍 <i>Preview: Real-time market sentiment dari Alpha Vantage...</i>")
+            lines.append(f"   🗞️  Breaking news, FOMC, NFP, CPI, geopolitics — real-time news")
             lines.append(f"   🔓 <b>Unlock → /news {display.lower()}</b> atau /subscribe")
             lines.append(f"")
             lines.append(f"⚡ <b>Rp 50K/bln (PRO)</b> — lebih murah dari 1x loss SL")
-            lines.append(f"   Dapet 2 AI + Grok News + /levels + /news")
+            lines.append(f"   Dapet 2 AI + Market Intel + /levels + /news")
             lines.append(f"   <b>/subscribe</b> sekarang — jangan biarin AI lu kerja sendirian")
 
         else:
@@ -2961,20 +3003,20 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
             lines.append(f"")
             lines.append(f"🤖 <b>{model_count} AI Partner</b> kerja bareng: {model_names}")
 
-            if grok_news:
-                news_str = _format_news_context(grok_news)
+            if market_news:
+                news_str = _format_news_context(market_news)
                 if news_str:
-                    lines.append(f"📰 <b>Grok News Active</b> ✅ — real-time X/Twitter intel")
+                    lines.append(f"📰 <b>Market Intel Active</b> ✅ — real-time sentiment")
                     lines.append(f"   💡 Detail: /news {display.lower()}")
             else:
-                lines.append(f"📰 Grok News [🔒 LOCKED] — <b>/news {display.lower()}</b> buat unlock")
+                lines.append(f"📰 Market Intel [🔒 LOCKED] — <b>/news {display.lower()}</b> buat unlock")
 
             lines.append(f"")
             lines.append(f"🤝 <b>AI Partner lu makin cerdas.</b>")
             lines.append(f"   Makin banyak AI = makin akurat sinyal = makin cuan.")
             lines.append(f"   Jangan stop disini — upgrade ke tier tertinggi:")
             if tier_label in ("⭐ Pro",):
-                lines.append(f"   👑 <b>/subscribe</b> → Elite Tier: 3 AI + Grok News real-time")
+                lines.append(f"   👑 <b>/subscribe</b> → Elite Tier: 3 AI + Market Intel real-time")
             else:
                 lines.append(f"   💎 <b>Elite Intelligence Active</b> — your edge is real")
     else:
@@ -2985,7 +3027,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     return "\n".join(lines)
 
 
-# ── Grok News section (for signals that include it) ──
+# ── Market Intel section (for signals that include it) ──
 # Moved inside the token section above for natural flow
 # The _format_news_context() function remains available for external use
 
@@ -3084,14 +3126,14 @@ def fmt_pulse(pulse_data: dict) -> str:
     lines.append(f"")
     lines.append(f"🤖 AI lu masih <b>idle</b> bro...")
     lines.append(f"   Engine cuma kasih arah, AI yang kasih Entry/SL/TP presisi.")
-    lines.append(f"   Bayangin 3 AI + Grok News analisa bareng:")
+    lines.append(f"   Bayangin 3 AI + Market Intel analisa bareng:")
     lines.append(f"   → Entry level, SL placement, TP target — all calculated.")
     lines.append(f"")
-    lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
+    lines.append(f"📰 <b>Market Intel</b> [🔒 LOCKED]")
     lines.append(f"   <i>Real-time X/Twitter market context...</i>")
     lines.append(f"")
     lines.append(f"⚡ <b>/subscribe</b> — Rp 50K/bln (PRO)")
-    lines.append(f"   Unlock AI Signal + Grok News + /levels + SnR/FIBO")
+    lines.append(f"   Unlock AI Signal + Market Intel + /levels + SnR/FIBO")
     lines.append(f"   Jangan cuma liat engine doang — kasih AI lu kerjaan beneran")
 
     return "\n".join(lines)
@@ -3772,7 +3814,7 @@ def handle_command(cmd, text, chat_id, msg):
                     f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
                     f"💀 /stier — S-TIER Zone GOD TIER 👑\n"
                     f"🕐 /session — Killzone + Session Level 🆕\n"
-                    f"📰 /news — Grok News X/Twitter intel 👑\n"
+                    f"📰 /news — Market Intel: macro catalyst analysis 👑\n"
                     f"📊 /dashboard — Live dashboard web\n"
                     f"📱 /help — Semua command\n"
                     f"⚡️ Perpanjang/Upgrade Tier → /subscribe"
@@ -3931,7 +3973,7 @@ def handle_command(cmd, text, chat_id, msg):
             "",
             "📊 <b>TRADING TOOLS & DATA</b>",
             "/levels — SnR + FIBO + Engine Deep Dive 👑",
-            "/news — Grok News — X/Twitter intel 👑",
+            "/news — Market Intel — X/Twitter intel 👑",
             "/killzone — Radar sesi market aktif",
             "/recap — Rekap & riwayat performa trade",
             "",
@@ -5084,14 +5126,14 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"❌ Mapping error: {e}", chat_id)
 
     elif cmd == "/news":
-        """Grok News — real-time X/Twitter market intelligence. Subscriber only."""
+        """Market Intel — DeepSeek macro context & catalyst analysis. Subscriber only."""
         if not _is_donor(str(chat_id)):
             tg_send(
-                f"📰 <b>Grok News</b> [🔒 LOCKED]\n"
+                f"📰 <b>Market Intel</b> [🔒 LOCKED]\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"Grok News adalah <b>real-time market intelligence</b>\n"
-                f"dari X/Twitter — kasih tau apa yang bikin market\n"
-                f"gerak SEBELUM lu entry.\n"
+                f"Market Intel adalah <b>macro catalyst analysis</b>\n"
+                f"yang kasih tau konteks ekonomi di balik pergerakan\n"
+                f"market SEBELUM lu entry.\n"
                 f"\n"
                 f"🔥 <b>Contoh output:</b>\n"
                 f"   \"Fed Waller暗示 delay rate cut — DXY +0.3%\"\n"
@@ -5103,19 +5145,19 @@ def handle_command(cmd, text, chat_id, msg):
                 f"   → Hindarin entry pas news bom\n"
                 f"   → Dapetin edge sebelum orang lain\n"
                 f"\n"
-                f"🔋 <b>AI Power: ■□□□□ 33%</b> — Grok idle\n"
+                f"🔋 <b>AI Power: ■■■□□ 75%</b> — Market Intel idle\n"
                 f"   AI lu cuma bisa liat chart doang...\n"
-                f"   Bayangin kalo bisa baca X/Twitter juga 😤\n"
+                f"   Bayangin kalo bisa baca konteks makro juga 😤\n"
                 f"\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"⚡ <b>/subscribe</b> — Rp 50K/bln (PRO)\n"
-                f"   Unlock Grok News + 2 AI + /levels\n"
-                f"   Kasih AI lu mata buat liat berita 🗞️",
+                f"   Unlock Market Intel + 2 AI + /levels\n"
+                f"   Kasih AI lu konteks makro 📊",
                 chat_id
             )
             return
 
-        # Donor: call Grok for the requested asset
+        # Donor: call DeepSeek for market context
         sub_norm = _normalize_broker_symbol(sub or "xauusd")
         pair_map_n = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth",
                       "oil":"oil","usoil":"oil","eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
@@ -5124,14 +5166,14 @@ def handle_command(cmd, text, chat_id, msg):
         pair = pair_map_n.get(sub_norm, "gold")
         disp = disp_map_n.get(pair, "XAUUSD")
 
-        tg_send(f"📰 <b>Grok is scanning X/Twitter for {disp}...</b>\n<i>This takes ~5-10 seconds</i>", chat_id)
+        tg_send(f"📰 <b>Analyzing market context for {disp}...</b>\n<i>This takes ~3-5 seconds</i>", chat_id)
 
         try:
             price = fetch_price(pair) or 0
-            news = _call_grok_news(disp, price)
+            news = _call_market_news(disp, price)
 
             if not news:
-                tg_send(f"❌ Grok gagal fetch news untuk {disp}. Coba lagi nanti.", chat_id)
+                tg_send(f"❌ Gagal fetch market context untuk {disp}. Coba lagi nanti.", chat_id)
                 return
 
             headline = news.get("headline", "No major catalysts")
@@ -5144,24 +5186,24 @@ def handle_command(cmd, text, chat_id, msg):
 
             if headline == "No major catalysts":
                 msg = (
-                    f"📰 <b>Grok News — {disp}</b>\n"
+                    f"📰 <b>Market Intel — {disp}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"⚪️ <b>No major catalysts detected</b>\n"
                     f"\n"
-                    f"Market currently quiet — no breaking news\n"
-                    f"or macro events affecting {disp} right now.\n"
+                    f"Market currently quiet — no significant macro\n"
+                    f"events or catalysts affecting {disp} right now.\n"
                     f"\n"
                     f"💡 Fokus ke analisa teknikal — chart is king.\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📰 Grok News Active ✅ — real-time X/Twitter intel\n"
+                    f"📰 Market Intel Active ✅ — DeepSeek macro analysis\n"
                     f"🤝 <b>Your AI Partner keeps watching.</b>"
                 )
             else:
-                token_used = _AI_TOKEN_USAGE.get("grok", {}).get("total", 0)
+                token_used = _AI_TOKEN_USAGE.get("deepseek_news", {}).get("total", 0)
                 token_k = f"{token_used/1000:.1f}k" if token_used >= 1000 else str(token_used)
 
                 msg = (
-                    f"📰 <b>Grok News — {disp}</b>\n"
+                    f"📰 <b>Market Intel — {disp}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"{s_emoji} <b>{headline}</b>\n"
                     f"\n"
@@ -5171,8 +5213,8 @@ def handle_command(cmd, text, chat_id, msg):
                 msg += (
                     f"Sentiment: <b>{sentiment}</b> | Impact: {i_emoji} <b>{impact}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🧠 {token_k} token dipakai — real-time analysis\n"
-                    f"📰 Grok News Active ✅ — X/Twitter intelligence\n"
+                    f"🧠 {token_k} token dipakai — macro analysis\n"
+                    f"📰 Market Intel Active ✅ — DeepSeek-powered\n"
                     f"🤝 <b>AI Partner kasih lu edge.</b>\n"
                     f"\n"
                     f"💡 Combine dengan /signal untuk konfirmasi teknikal"
@@ -5182,7 +5224,7 @@ def handle_command(cmd, text, chat_id, msg):
 
         except Exception as e:
             logger.warning(f"/news error: {e}")
-            tg_send(f"❌ Gagal fetch Grok News: {e}", chat_id)
+            tg_send(f"❌ Gagal fetch Market Intel: {e}", chat_id)
 
     # ── NEW: Technical Analysis Commands ──
     elif cmd == "/stier":
@@ -7720,7 +7762,7 @@ def main():
             {"command": "price",    "description": "💰 Cek harga real-time"},
             {"command": "mapping",  "description": "📐 Mapping harian + level S/R"},
             {"command": "levels",   "description": "🏛 SnR + FIBO + Engine (Subscriber)"},
-            {"command": "news",     "description": "📰 Grok News — X/Twitter intel (Subscriber)"},
+            {"command": "news",     "description": "📰 Market Intel — X/Twitter intel (Subscriber)"},
             {"command": "killzone", "description": "🎯 Radar sesi market aktif"},
             {"command": "zones", "description": "🧲 Order Blocks + FVG Scanner"},
             {"command": "structure", "description": "🏗 BOS/CHoCH + MTF Alignment"},
