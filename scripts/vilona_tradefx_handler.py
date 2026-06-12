@@ -1073,6 +1073,11 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
     entry_from_sig = sig.get("entry", 0) or 0
     sl = sig.get("sl", 0)
     tp = sig.get("tp", 0)
+    # If tp is 0 but tp1 is set, use tp1 as primary TP
+    tp1 = sig.get("tp1", 0) or 0
+    if (not tp or tp == 0) and tp1 > 0:
+        tp = tp1
+        sig["tp"] = tp
     confidence = sig.get("confidence", 0)
     rr = sig.get("rr_ratio", 0)
     action = sig.get("action", "HOLD")
@@ -3466,6 +3471,7 @@ def handle_command(cmd, text, chat_id, msg):
             "/levels — SnR + FIBO + Engine Deep Dive 👑",
             "/news — Grok News — X/Twitter intel 👑",
             "/killzone — Radar sesi market aktif",
+            "/trailing — Smart Trailing SL 👑",
             "/winrate — Statistik performa",
             "/history — Riwayat trade terakhir",
             "/recap — Rekap harian\n",

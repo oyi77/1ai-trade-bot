@@ -421,8 +421,11 @@ class TradeTracker:
         )
         return [self._row_to_record(r) for r in rows]
 
-    def get_open_trades(self) -> list[TradeRecord]:
+    def get_open_trades(self, user_id: str = "") -> list[TradeRecord]:
         """Get all currently open trades.
+
+        Args:
+            user_id: Filter by user. Empty means admin (all trades).
 
         Returns:
             List of TradeRecord objects with outcome='OPEN'.
@@ -430,18 +433,21 @@ class TradeTracker:
         rows = self._storage.fetchall(
             """SELECT trade_id, symbol, action, entry_price, exit_price, sl, tp, stake,
                       outcome, pips, profit_usd, profit_idr, open_time, close_time,
-                      source, confidence, grade
+                      source, confidence, grade, user_id, currency, platform
                FROM trades
                WHERE outcome='OPEN'
-               ORDER BY open_time DESC"""
+               """ + ("AND (user_id=? OR user_id='') " if user_id else "") + """
+               ORDER BY open_time DESC""",
+            (user_id,) if user_id else (),
         )
         return [self._row_to_record(r) for r in rows]
 
-    def get_daily_trades(self, date_str: str = "") -> dict[str, Any]:
+    def get_daily_trades(self, date_str: str = "", user_id: str = "") -> dict[str, Any]:
         """Get all trades for a specific date (YYYY-MM-DD, WIB).
 
         Args:
             date_str: Date in YYYY-MM-DD format (defaults to today WIB).
+            user_id: Filter by user. Empty means admin (all trades).
 
         Returns:
             Dict with trades, counts, and pair breakdown.
@@ -452,10 +458,11 @@ class TradeTracker:
         rows = self._storage.fetchall(
             """SELECT trade_id, symbol, action, entry_price, exit_price, sl, tp, stake,
                       outcome, pips, profit_usd, profit_idr, open_time, close_time,
-                      source, confidence, grade
+                      source, confidence, grade, user_id, currency, platform
                FROM trades
-               WHERE open_time LIKE ?""",
-            (f"{date_str}%",),
+               WHERE open_time LIKE ?
+               """ + ("AND (user_id=? OR user_id='')" if user_id else ""),
+            (f"{date_str}%", user_id) if user_id else (f"{date_str}%",),
         )
 
         trades = [self._row_to_record(r) for r in rows]
@@ -548,16 +555,17 @@ class TradeTracker:
 
         return "\n".join(lines)
 
-    def format_history(self, limit: int = 10) -> str:
+    def format_history(self, limit: int = 10, user_id: str = "") -> str:
         """Format recent trade history for Telegram.
 
         Args:
             limit: Number of trades to show.
+            user_id: Filter by user. Empty means admin (all trades).
 
         Returns:
             HTML-formatted string.
         """
-        trades = self.get_recent_trades(limit)
+        trades = self.get_recent_trades(limit, user_id)
         if not trades:
             return "📭 No trade history yet."
 
@@ -675,18 +683,20 @@ class TradeTracker:
             "platform": row[13],
         }
 
-    def _get_open_trades(self) -> list[dict]:
+    def _get_open_trades(self, user_id: str = "") -> list[dict]:
         rows = self._storage.fetchall(
             """SELECT trade_id, symbol, action, entry_price, sl, tp, stake,
-                      open_time, source, confidence, grade
-               FROM trades WHERE outcome='OPEN'"""
+                      open_time, source, confidence, grade, user_id, currency, platform
+               FROM trades WHERE outcome='OPEN'
+               """ + ("AND (user_id=? OR user_id='')" if user_id else ""),
+            (user_id,) if user_id else (),
         )
         return [
             {
                 "trade_id": r[0], "symbol": r[1], "action": r[2],
                 "entry_price": r[3], "sl": r[4], "tp": r[5], "stake": r[6],
                 "open_time": r[7], "source": r[8], "confidence": r[9],
-                "grade": r[10],
+                "grade": r[10], "user_id": r[11], "currency": r[12], "platform": r[13],
             }
             for r in rows
         ]
