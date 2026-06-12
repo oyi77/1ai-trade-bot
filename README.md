@@ -265,6 +265,15 @@ All configuration is via environment variables / `.env`. See `.env.example` for 
 | `TELEGRAM_*` | Telegram notifications |
 | `ADMIN_*` | Admin panel config |
 
+
+---
+
+## Developer & AI Guidelines
+
+For developers and AI/LLM engineering agents:
+* **`AGENTS.md`**: Master guidelines, styling, code requirements, and git commit guidelines.
+* **`llms.txt`**: High-level context file for LLM system context priming.
+* **`docs/CODEBASE_MEMORY.md`**: Comprehensive memory detailing SQLite schemas, table structures, external API integration payloads (Tripay, Meta CAPI, Grok News), and anti-hallucination rules.
 ---
 
 ## License

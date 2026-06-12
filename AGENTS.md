@@ -14,6 +14,9 @@ TradeBot (`tradebot` v0.2.0) is a modular, async Python trading framework for mu
 
 These rules are non-negotiable. They exist because prior AI runs left the codebase messy. Future AIs MUST comply.
 
+### 🧠 Comprehensive Codebase Memory & Schemas
+- Future agents **MUST** read **`docs/CODEBASE_MEMORY.md`** first before attempting any database schema modifications, external API integrations (Tripay, Meta CAPI, Grok, etc.), or structural changes. It serves as the ultimate developer manual and anti-hallucination reference.
+
 ### Never suppress type errors
 - **Forbidden:** `as any`, `# type: ignore` (without explicit justification), `cast(Any, ...)`, dynamic monkey-patches that defeat the type checker.
 - **Fix root causes.** If mypy fails, change the code or the type — don't silence it.

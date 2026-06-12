@@ -8,6 +8,8 @@ TradeBot (`tradebot` v0.2.0) is a modular, async Python trading framework for mu
 **Install:** `pip install -e ".[dev]"` (setuptools backend, no Poetry).
 **Lint:** `ruff check tradebot/` — 0 errors enforced. `ruff format tradebot/` for formatting.
 
+**Comprehensive Memory:** Refer to `docs/CODEBASE_MEMORY.md` for exact SQLite database schemas, database table definitions, external API payloads (Tripay, Meta CAPI, Grok News), and anti-hallucination guidelines.
+
 ## Directory Structure
 
 ```
