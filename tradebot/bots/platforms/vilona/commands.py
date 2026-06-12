@@ -425,6 +425,14 @@ class CommandHandlersMixin(BaseBot):
         total_stake = recap.get("total_stake", 0)
         perf = "🟢 PROFIT" if micro > 0 else "🔴 LOSS" if micro < 0 else "⚪ FLAT"
 
+        lines = [
+            "📊 <b>REKAP SINYAL HARIAN</b>",
+            f"🗓 {date_display}",
+            "━━━━━━━━━━━━━━━━", "",
+            f"📡 <b>Total Sinyal:</b> {total}",
+            f"✅ Win: {wins} | ❌ Loss: {losses} | 📊 WR: {wr:.1f}%", "",
+            "━━━━━━━━━━━━━━━━",
+        ]
         # For binary options, show stake and profit instead of pips
         if total_stake > 0:
             lines.extend([
