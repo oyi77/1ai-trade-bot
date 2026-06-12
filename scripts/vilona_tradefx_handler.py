@@ -2401,9 +2401,12 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     else:
         sig["tp"] = round(entry - tp_dist, 2)
     
-    # NOTE: tp1/tp2/tp3/tp4 NOT set here — dynamic distribution happens
-    # in fmt_signal() based on actual TP distance. This prevents forced
-    # 2-level TP with unrealistic spacing (e.g., 12-pip TP1 on XAUUSD).
+    # NOTE: tp1/tp2/tp3/tp4 NOW populated here — signal publisher + trade tracker
+    # both read these fields. Without this, RR=1:0.0 because tp1 stays 0.
+    sig["tp1"] = sig["tp"]
+    sig["tp2"] = round(sig["tp"] * 1.0, 2)  # same as tp for tracker
+    sig["tp3"] = 0.0
+    sig["tp4"] = 0.0
     
     sig["rr_ratio"] = f"1:{rr:.1f}"
     logger.info(f"_clamp_sltp result: sl={sig['sl']} tp={sig['tp']:.2f}")
@@ -6413,6 +6416,79 @@ def _can_post_tpsl_alert(trade_id: str) -> bool:
     _save_tpsl_state()
     return True
 
+
+# ── Auto-DM Upsell / Donasi Trigger ───────────────────────────────
+def broadcast_tp_hit_and_upsell(pair: str, profit_pips: float):
+    """Auto-DM users when a signal hits TP. Tier-aware CTA.
+    
+    Called from the trade outcome loop after learn_from_tp().
+    - FREE tier: upgrade CTA (SL/TP locked)
+    - PAID tier: donation CTA (support server)
+    Runs async via background thread to avoid blocking the scan loop.
+    """
+    import threading
+    
+    def _dm_worker():
+        try:
+            # Get recent active users (last 48h) from subscriber_activity
+            from members import _conn
+            with _conn() as db:
+                rows = db.execute("""
+                    SELECT DISTINCT sa.chat_id, sa.tier, m.status 
+                    FROM subscriber_activity sa
+                    LEFT JOIN members m ON m.chat_id = sa.chat_id
+                    WHERE sa.created_at > datetime('now', '-2 days')
+                    ORDER BY sa.created_at DESC
+                    LIMIT 20
+                """).fetchall()
+            
+            free_ct, paid_ct = 0, 0
+            for row in rows:
+                chat_id = row["chat_id"]
+                tier = row["tier"] or "free"
+                status = row["status"] or ""
+                is_paid = status == "paid" or tier in ("pro", "elite", "lifetime", "donor")
+                
+                if is_paid:
+                    msg = (
+                        f"🎉 <b>BOOM! Profit +{profit_pips:.1f} pips diamankan dari {pair}!</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Enjoy cuannya! Biar rezekinya makin berkah\n"
+                        f"dan server kita tetap ngebut, yuk sisihkan\n"
+                        f"sebagian profitmu. Dukung kita via /donate ☕️\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📢 Channel: @vilonaaichanel"
+                    )
+                    paid_ct += 1
+                else:
+                    msg = (
+                        f"🎉 <b>BOOM! Sinyal {pair} barusan sukses HIT TP</b>\n"
+                        f"<b>(Cuan +{profit_pips:.1f} pips)!</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Sayang banget SL/TP kamu masih dikunci.\n"
+                        f"Waktunya upgrade ke PRO untuk buka\n"
+                        f"full SL/TP dan sinyal VIP lainnya.\n"
+                        f"\n"
+                        f"⭐ Ketik /subscribe sekarang!\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📢 Channel: @vilonaaichanel"
+                    )
+                    free_ct += 1
+                
+                try:
+                    tg_send(msg, str(chat_id))
+                    time.sleep(1.5)  # rate limit: Telegram allows ~30 msg/sec
+                except Exception:
+                    pass
+            
+            logger.info(f"TP upsell DMs sent: {free_ct} free + {paid_ct} paid")
+        except Exception as e:
+            logger.debug(f"TP upsell broadcast error (non-critical): {e}")
+    
+    # Run in background thread — don't block the main scan loop
+    t = threading.Thread(target=_dm_worker, daemon=True)
+    t.start()
+
 AUTO_SCAN_ASSETS = [
     # (internal_pair, display_name, _, is_forex_metal)  — yahoo_sym removed; MARKET_DATA resolves via SYMBOL_MAP
     # Channel auto-post: XAUUSD ONLY. Other pairs via /analyze di bot.
@@ -6645,6 +6721,10 @@ def auto_analyze_loop():
                                         learn_from_sl(ct, price)
                                     elif outcome == "TP_HIT":
                                         learn_from_tp(ct)
+                                        # ── Auto-DM Upsell / Donasi ──
+                                        symbol = ct.get("symbol", disp)
+                                        pips = ct.get("pips", 0)
+                                        broadcast_tp_hit_and_upsell(symbol, pips)
                                 except Exception as lle:
                                     logger.debug("Learning loop error: %s", lle)
                         except Exception: pass

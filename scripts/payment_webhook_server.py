@@ -227,13 +227,19 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 "status": status.lower(),
             }
             pb_qs = "&".join(f"{k}={v}" for k, v in postback_params.items() if v)
-            # 1) Postback URL (server-side callback)
+            # 1) Postback URL (server-side callback) — Bemob domain is dead (NXDOMAIN), fail gracefully
             pb_url = f"https://rr9u3.bemobrcks.com/postback?{pb_qs}"
             log.info(f"📊 Firing Bemob postback: {pb_url[:120]}...")
-            urllib.request.urlopen(pb_url, timeout=5)
+            try:
+                urllib.request.urlopen(pb_url, timeout=5)
+            except Exception:
+                log.debug("Bemob postback skipped (domain unreachable) — non-critical")
             # 2) Conversion pixel (mirror as server-side GET)
             px_url = f"https://rr9u3.bemobrcks.com/conversion.gif?{pb_qs}"
-            urllib.request.urlopen(px_url, timeout=5)
+            try:
+                urllib.request.urlopen(px_url, timeout=5)
+            except Exception:
+                pass
         except Exception as e:
             log.warning(f"Bemob postback failed (non-critical): {e}")
 
