@@ -88,8 +88,10 @@ except Exception as e:
 
 # ── Learning engine ──
 try:
-    from learning_engine import track_signal, get_adaptation_context, start_learning_engine, run_reflection
+    from learning_loop import learn_from_sl, learn_from_tp, get_learning_summary
     LEARNING_ENGINE = True
+    logger = logging.getLogger("init")
+    logger.info("🧠 Learning engine loaded (learning_loop)")
 except Exception as e:
     LEARNING_ENGINE = False
     print(f"Learning engine unavailable: {e}")
@@ -1953,7 +1955,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
 
     learning_context = ""
     if LEARNING_ENGINE:
-        try: learning_context = get_adaptation_context()
+        try: learning_context = get_learning_summary()
         except: pass
 
     prompt = (
@@ -6459,8 +6461,7 @@ def auto_analyze_loop():
                     mech_sig = enrich_signal_with_layers(mech_sig)
 
                 if LEARNING_ENGINE:
-                    try: track_signal(mech_sig, price, disp, session(h), mech_sig.get("source","mech"))
-                    except: pass
+                    pass  # learning happens on trade outcome (check_outcomes)
 
                 log["signals_sent"] += 1
                 log["last_signal_time"] = wib_now().isoformat()
@@ -6579,8 +6580,7 @@ def auto_analyze_loop():
                 post_signal_to_bridge(sig, price, disp)
 
                 if LEARNING_ENGINE:
-                    try: track_signal(sig, price, disp, session(h), "ai")
-                    except: pass
+                    pass  # learning happens on trade outcome (check_outcomes)
 
                 log["signals_sent"] += 1
                 log["last_signal_time"] = wib_now().isoformat()
@@ -6794,8 +6794,7 @@ def main():
 
     # Start background threads
     if LEARNING_ENGINE:
-        try: start_learning_engine()
-        except Exception: pass
+        pass  # learning loop runs via cron + check_outcomes
 
     # Initialize subscription state from disk
     if SUBSCRIPTION_ENGINE:
