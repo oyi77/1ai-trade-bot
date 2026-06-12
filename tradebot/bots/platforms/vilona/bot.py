@@ -587,10 +587,15 @@ class VilonaBot(
 
         handler = self._command_handlers.get(cmd.lstrip("/"))
         if handler:
-            response = await handler(args, chat_id=chat_id)
-            if response:
-                await self._tg_send(response, chat_id=chat_id)
-            return response
+            try:
+                response = await handler(args, chat_id=chat_id)
+                if response:
+                    await self._tg_send(response, chat_id=chat_id)
+                return response
+            except (ValueError, TypeError) as e:
+                LOG.warning("Command format error [%s]: %s", cmd, e)
+                await self._tg_send("⚠️ Format error — coba lagi nanti.", chat_id=chat_id)
+                return None
 
         if chat_id in DONATION_INPUT_STATE:
             return await self._handle_donation_input(chat_id, text)

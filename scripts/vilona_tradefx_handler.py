@@ -490,6 +490,22 @@ def tg_send(text, chat_id=None, reply_markup=None, reply_to=None):
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read())
     except Exception as e:
+        err_str = str(e)
+        # 429 Too Many Requests / Connection reset → retry with backoff
+        if "429" in err_str or "Too Many Requests" in err_str or "Connection reset" in err_str or "Errno 104" in err_str:
+            for attempt in range(3):
+                wait = (attempt + 1) * 3  # 3s, 6s, 9s
+                logger.warning(f"tg_send rate-limited (attempt {attempt+1}/3), waiting {wait}s...")
+                time.sleep(wait)
+                try:
+                    req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
+                        data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+                    with urllib.request.urlopen(req, timeout=15) as r:
+                        return json.loads(r.read())
+                except Exception:
+                    continue
+            logger.error(f"tg_send failed after 3 retries: {e}")
+            return None
         # Fallback: retry without parse_mode if HTML parse failed
         if "Bad Request" in str(e) or "can't parse" in str(e):
             try:
