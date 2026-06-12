@@ -3716,15 +3716,20 @@ def handle_command(cmd, text, chat_id, msg):
 
             # ── 1. HEADER (semua user) ──
             welcome = (
-                f"🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"Selamat datang di markas besar Vilona Trade FX.\n"
-                f"Seluruh infrastruktur di sini — dari analisa teknikal\n"
-                f"hingga eksekusi sinyal — dijalankan oleh\n"
-                f"<b>FULL AI AGENTS 24/7.</b>\n"
+                f"🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT!</b> 🔥\n"
                 f"\n"
-                f"Mesin ini mengonsumsi resource besar untuk\n"
-                f"satu tujuan: <b>MENCETAK PROFIT.</b>\n"
+                f"Selamat datang di <b>Vilona AI Trading Ecosystem.</b>\n"
+                f"Kami tidak berjualan ludah atau grup VIP abal-abal.\n"
+                f"Seluruh ekosistem ini (Analisa SMC, Liquidity, Quant)\n"
+                f"dieksekusi murni oleh <b>FULL AI AGENTS</b> yang bekerja 24/7.\n"
+                f"\n"
+                f"<b>Aturan Main Kami:</b>\n"
+                f"✅ AKSES GRATIS: Buktikan tajamnya sinyal AI kami\n"
+                f"   tanpa bayar di depan.\n"
+                f"🤝 GOTONG ROYONG: Jika AI kami berhasil mencetak\n"
+                f"   hijau di portofolio Anda, sisihkan sedikit profit\n"
+                f"   Anda untuk \"menyiram bensin\" server AI kami\n"
+                f"   agar makin buas!\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
             )
 
