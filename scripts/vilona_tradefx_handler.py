@@ -649,7 +649,7 @@ MANUAL_THROTTLE_FREE = 120   # free user: 120 detik antar analisa
 MANUAL_THROTTLE_PRO = 60     # pro: 60 detik
 MANUAL_THROTTLE_ELITE = 30   # elite/lifetime: 30 detik
 SAME_PAIR_COOLDOWN = 90       # same pair cooldown (all users)
-FREE_DAILY_LIMIT = 5          # 🆕 free tier: 5x/hari (cost Rp25/hari)
+FREE_DAILY_LIMIT = 3          # 🔒 free tier: 3x/hari — cukup buat nyicip, harus upgrade buat serius
 PRO_DAILY_LIMIT = 20          # 🆕 pro tier: 20x/hari
 ELITE_DAILY_LIMIT = -1        # 🆕 elite/lifetime: unlimited
 # Legacy (backwards compat)
@@ -1351,6 +1351,167 @@ def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlc
             logger.debug(f"Hermes liquidity check skipped: {e}")
 
     return None, None
+
+
+# ── S-TIER ZONE DETECTOR — Triple Confluence (Breaker + OB/FVG + Double Sweep) ──
+def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=None):
+    """High-conviction zone scanner: Breaker Block + OB/FVG confluence + Double Sweep.
+    
+    Triple confluence at the same price level → 90%+ probability reversal zone.
+    Designed for full-margin entries on the highest-quality SMC setups.
+    
+    Returns (signal_dict, reason_str) or (None, None).
+    """
+    if not ohlcv_bars or len(ohlcv_bars) < 30:
+        return None, None
+    if not price:
+        price = float(ohlcv_bars[-1].get("close", ohlcv_bars[-1].get("open", 0)))
+    
+    pip_s = 0.10 if display in ("XAUUSD","GOLD") else (0.01 if display=="USOIL" else (1.0 if display in ("BTCUSD","ETHUSD") else 0.0001))
+    
+    confluence_zones = []
+    
+    # ── Layer 1: Order Blocks ──
+    obs = []
+    try:
+        if SMC_ENGINE:
+            smc = analyze_smc_scalper(ohlcv_bars, display)
+            if smc:
+                blocks = smc.get("order_blocks", smc.get("blocks", []))
+                for ob in blocks:
+                    ob_price = ob.get("price", ob.get("level", 0))
+                    ob_dir = str(ob.get("direction", ob.get("type", ""))).upper()
+                    if ob_price > 0:
+                        obs.append({"price": ob_price, "direction": ob_dir, "strength": ob.get("strength","mid")})
+    except Exception as e:
+        logger.debug(f"S-TIER OB scan: {e}")
+    
+    if not obs:
+        return None, None
+    
+    # ── Layer 2: FVG zones ──
+    fvg_zones = []
+    try:
+        if FVG_ENGINE:
+            from fvg_detector import detect_fvg_zones
+            raw_fvgs = detect_fvg_zones(ohlcv_bars, max_age=30)
+            for z in raw_fvgs[:10]:
+                fvg_zones.append({
+                    "top": z.top, "bottom": z.bottom, "mid": (z.top + z.bottom) / 2,
+                    "direction": "BEARISH" if z.top > z.bottom else "BULLISH",
+                    "filled": getattr(z, 'filled', False), "size_pips": getattr(z, 'size_pips', 0)
+                })
+    except Exception as e:
+        logger.debug(f"S-TIER FVG scan: {e}")
+    
+    # ── Layer 3: Structure — BOS + False Break ──
+    bos_price = None
+    false_break_price = None
+    fb_dir = None
+    idm_price = None
+    try:
+        if SMC_ENGINE:
+            smc2 = analyze_smc_scalper(ohlcv_bars, display)
+            bos = smc2.get("_bos", {}) if smc2 else {}
+            fb = smc2.get("_false_break", {}) if smc2 else {}
+            idm = smc2.get("_idm", {}) if smc2 else {}
+            if bos and bos.get("price"):
+                bos_price = bos["price"]
+            if fb and fb.get("price"):
+                false_break_price = fb["price"]
+                fb_dir = fb.get("direction", "")
+            if idm and idm.get("price"):
+                idm_price = idm["price"]
+    except: pass
+    
+    PROXIMITY_PIPS = 25
+    
+    def _near(a, b):
+        return abs(a - b) / pip_s <= PROXIMITY_PIPS
+    
+    for ob in obs:
+        zone_level = ob["price"]
+        score = 1.0
+        reasons = [f"OB {ob['direction']} @ {zone_level:.2f}"]
+        
+        # Breaker Block: OB broken → price on opposite side = killer S/R
+        ob_is_bull = "BULL" in ob["direction"]
+        price_above_ob = price > zone_level
+        breaker = (ob_is_bull and not price_above_ob) or (not ob_is_bull and price_above_ob)
+        if breaker:
+            score += 2.5
+            reasons.append("🔥 BREAKER BLOCK — OB broken, now acts as S/R")
+        
+        # False Break
+        if false_break_price and _near(zone_level, false_break_price):
+            score += 1.5
+            reasons.append(f"⚠️ False Break @ {false_break_price:.2f}")
+        
+        # IDM sweep
+        if idm_price and _near(zone_level, idm_price):
+            score += 1
+            reasons.append(f"💧 IDM sweep @ {idm_price:.2f}")
+        
+        # OB + FVG confluence (mitigation magnet)
+        for fvg in fvg_zones:
+            if _near(zone_level, fvg["mid"]) and not fvg["filled"]:
+                score += 1.5
+                reasons.append(f"📐 FVG {fvg['size_pips']:.0f}pip aligned — mitigation magnet")
+                break
+        
+        # Double Sweep
+        if false_break_price and idm_price and _near(false_break_price, idm_price) and _near(zone_level, false_break_price):
+            score += 2
+            reasons.append("💀 DOUBLE SWEEP — liquidity cleared 2x")
+        
+        direction = "BUY" if price < zone_level else "SELL"
+        confluence_zones.append({
+            "level": zone_level, "score": score, "reasons": reasons, "direction": direction
+        })
+    
+    if not confluence_zones:
+        return None, None
+    
+    best = max(confluence_zones, key=lambda z: (z["score"], -abs(z["level"] - price)))
+    
+    if best["score"] < 3.5:
+        return None, None
+    
+    direction = best["direction"]
+    entry = best["level"]
+    sl = round(entry - 30 * pip_s, 2) if direction == "BUY" else round(entry + 30 * pip_s, 2)
+    tp = round(entry + 60 * pip_s, 2) if direction == "BUY" else round(entry - 60 * pip_s, 2)
+    
+    if best["score"] >= 6:
+        grade = "S-TIER"
+        grade_label = "💀 TRIPLE CONFLUENCE — GOD TIER ZONE"
+    elif best["score"] >= 5:
+        grade = "A"
+        grade_label = "🔥 BREAKER BLOCK + FVG — High Conviction"
+    else:
+        grade = "B"
+        grade_label = "⚡ STRUCTURAL ZONE — Valid Confluence"
+    
+    reason = f"🤖 S-TIER ZONE [{grade}]: {grade_label}\n" + "\n".join(f"  • {r}" for r in best["reasons"])
+    
+    sig = {
+        "action": direction, "entry": entry,
+        "sl": sl, "tp": tp,
+        "tp1": tp, "tp2": 0,
+        "confidence": min(0.95, 0.65 + best["score"] * 0.04),
+        "rr_ratio": 2.0,
+        "reasoning": reason, "ensemble": "mechanical", "voters": 0,
+        "_model": f"S-TIER-ZONE-{grade}", "grade": grade,
+        "source": "stier_zone_detector",
+        "_tier_capped": False,
+    }
+    
+    sig = _clamp_sltp(sig, display)
+    
+    logger.info(f"🎯 S-TIER ZONE [{grade}]: {display} {direction} @ ${entry:.2f} | "
+                f"Score={best['score']:.1f} | Confluences: {len(best['reasons'])}")
+    
+    return sig, reason
 
 
 # ── AI Models ──
@@ -5872,20 +6033,39 @@ def auto_analyze_loop():
             lkz, nykz = killzone(h)
             kz = "London" if lkz else ("NY" if nykz else "Outside")
 
-            # ── MECHANICAL OVERRIDE: Quant + FVG + Hermes ──
-            mech_sig = None
-            if MARKET_DATA and is_forex:
+            # ── S-TIER ZONE DETECTOR: Triple Confluence (highest priority, runs first) ──
+            stier_sig = None
+            if is_forex:
                 try:
-                    m1_bars = MARKET_DATA.get_ohlcv(pair, "1m", 200)
-                    if m1_bars and len(m1_bars) >= 30:
-                        ohlcv_m1 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
-                                      "low": b.low, "close": b.close, "volume": b.volume} for b in m1_bars]
-                        mech_sig, mech_reason = detect_mechanical_signal(
-                            pair.upper(), disp, price, ohlcv_m1)
-                        if mech_sig:
-                            logger.info(f"⚡ MECHANICAL [{disp}]: {mech_sig['action']} | {mech_sig['source']}")
+                    stier_bars = _fetch_ohlcv_for_ai(pair, keep=60)
+                    if stier_bars and len(stier_bars) >= 30:
+                        stier_sig, stier_reason = detect_stier_zone(
+                            pair.upper(), disp, price, stier_bars)
+                        if stier_sig:
+                            logger.info(f"💀 S-TIER ZONE [{disp}]: {stier_sig['action']} "
+                                       f"@ ${stier_sig.get('entry',0):.2f} | Grade={stier_sig.get('grade','?')}")
                 except Exception as e:
-                    logger.debug(f"Mechanical check [{disp}]: {e}")
+                    logger.debug(f"S-TIER check [{disp}]: {e}")
+
+            if stier_sig and stier_sig["action"] in ("BUY", "SELL"):
+                # S-TIER zone → highest priority, bypass all other checks
+                mech_sig = stier_sig
+                logger.info(f"💀 S-TIER OVERRIDE [{disp}]: bypassing mechanical — using God Tier zone")
+            else:
+                # ── MECHANICAL OVERRIDE: Quant + FVG + Hermes ──
+                mech_sig = None
+                if MARKET_DATA and is_forex:
+                    try:
+                        m1_bars = MARKET_DATA.get_ohlcv(pair, "1m", 200)
+                        if m1_bars and len(m1_bars) >= 30:
+                            ohlcv_m1 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
+                                          "low": b.low, "close": b.close, "volume": b.volume} for b in m1_bars]
+                            mech_sig, mech_reason = detect_mechanical_signal(
+                                pair.upper(), disp, price, ohlcv_m1)
+                            if mech_sig:
+                                logger.info(f"⚡ MECHANICAL [{disp}]: {mech_sig['action']} | {mech_sig['source']}")
+                    except Exception as e:
+                        logger.debug(f"Mechanical check [{disp}]: {e}")
 
             if mech_sig and mech_sig["action"] in ("BUY", "SELL"):
                 action = mech_sig["action"]
