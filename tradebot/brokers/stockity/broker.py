@@ -280,7 +280,14 @@ class StockityBroker:
             self._balance_version = payload.get("balance_version", 0)
             self._account_type = payload.get("account_type", "")
             LOG.info("Balance: %.0f %s (v%d)", self._balance_raw, self._balance_currency, self._balance_version)
-
+        elif topic == "account" and event == "phx_reply":
+            resp_data = payload.get("response", {})
+            if "balance" in resp_data:
+                self._balance_raw = resp_data.get("balance", 0)
+                self._balance_currency = resp_data.get("currency", "")
+                self._balance_version = resp_data.get("balance_version", 0)
+                self._account_type = resp_data.get("account_type", "")
+                LOG.info("Initial Balance: %.0f %s (v%d)", self._balance_raw, self._balance_currency, self._balance_version)
         # Real-time tick data
         if not topic and "data" in msg:
             for item in msg.get("data", []):
@@ -355,7 +362,7 @@ class StockityBroker:
 
     async def get_balance(self) -> float | None:
         """Return current account balance in USD."""
-        return self._balance if self._balance > 0 else None
+        return self.balance_usd if self.balance_usd > 0 else None
 
     async def place_trade(
         self,
