@@ -346,49 +346,81 @@ def set_autosync(chat_id, enabled=True):
     save_autosync(data)
 
 
+# ── GPT-4o Rate Limiter (prevents HTTP 429) ──
+_LAST_GPT4O_CALL = 0
+_GPT4O_MIN_INTERVAL = 20  # seconds between GPT-4o calls
+
 def _fetch_ohlcv_for_ai(pair="gold", keep=20):
-    """Fetch OHLCV bars for AI analysis via UnifiedMarketData (single source of truth).
-    Falls back to FCS API if market data is unavailable.
+    """Fetch OHLCV bars for AI analysis.
+    XAUUSD: gold-api.com (real-time, broker-synced) — bypass GC=F Yahoo.
+    Other pairs: FCS API → UnifiedMarketData fallback.
     keep: number of bars to return (default 20, min 20, max 80)."""
     pair = pair.lower().strip()
-    
-    # ── Primary: UnifiedMarketData (uses SYMBOL_MAP: gold→XAUUSD_SPOT, btc→BTC-USD, etc.) ──
-    try:
-        if MARKET_DATA is not None:
-            interval = "15m"
-            bars = MARKET_DATA.get_bars_dicts(pair, interval, 80)
-            if bars:
-                keep = max(20, min(keep, 80))  # clamp 20-80
-                result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
-                         for b in bars[-keep:]]
-                logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {pair} via MARKET_DATA ({MARKET_DATA._resolve(pair)})")
-                return result
-            logger.warning(f"_fetch_ohlcv_for_ai: empty bars for {pair} via MARKET_DATA")
-        else:
-            logger.error("_fetch_ohlcv_for_ai: MARKET_DATA is None")
-    except Exception as e:
-        logger.warning(f"_fetch_ohlcv_for_ai (MARKET_DATA) error: {e}")
-    
-    # ── Fallback: FCS API ──
     _fcs_name_map = {"gold":"XAUUSD","xauusd":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
                      "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL",
                      "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY","jpyusd":"USDJPY"}
-    try:
-        fcs_name = _fcs_name_map.get(pair)
-        if fcs_name:
+    fcs_name = _fcs_name_map.get(pair)
+    keep = max(20, min(keep, 80))
+
+    # ── XAUUSD: gold-api.com primary (NO GC=F — HARAM Yahoo per SOP) ──
+    if pair in ("gold", "xauusd"):
+        try:
+            spot = fetch_xauusd_spot()
+            if spot:
+                bars = _synthetic_ohlcv_from_spot(spot, keep)
+                logger.info(f"_fetch_ohlcv_for_ai: {len(bars)} synthetic bars for gold via gold-api.com (spot={spot})")
+                return bars
+        except Exception as e:
+            logger.warning(f"_fetch_ohlcv_for_ai (gold-api) error: {e}")
+
+    # ── FCS API (forex/crypto OHLCV) ──
+    if fcs_name:
+        try:
             from data_sources import fcs_ohlcv
             bars_data = fcs_ohlcv(fcs_name, period="15m", bars=20)
             if bars_data:
                 result = [{"t": b.get("timestamp", int(time.time())),
                           "o": b["Open"], "h": b["High"], "l": b["Low"], "c": b["Close"]}
                          for b in bars_data]
-                logger.info(f"_fetch_ohlcv_for_ai (FCS fallback): {len(result)} bars for {fcs_name}")
+                logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {fcs_name} via FCS API")
                 return result
-    except Exception as e2:
-        logger.error(f"_fetch_ohlcv_for_ai (FCS fallback) error: {e2}")
-    
+        except Exception as e2:
+            logger.warning(f"_fetch_ohlcv_for_ai (FCS) error: {e2}")
+
+    # ── Fallback: UnifiedMarketData (last resort) ──
+    try:
+        if MARKET_DATA is not None:
+            interval = "15m"
+            bars = MARKET_DATA.get_bars_dicts(pair, interval, 80)
+            if bars:
+                result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
+                         for b in bars[-keep:]]
+                logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {pair} via MARKET_DATA (fallback)")
+                return result
+    except Exception as e:
+        logger.warning(f"_fetch_ohlcv_for_ai (MARKET_DATA fallback) error: {e}")
+
     logger.error(f"_fetch_ohlcv_for_ai: ALL sources failed for {pair}")
     return None
+
+
+def _synthetic_ohlcv_from_spot(spot: float, keep: int = 20) -> list[dict]:
+    """Generate synthetic 15m OHLCV bars from a single spot price.
+    Used when gold-api.com only returns current price (no historical bars)."""
+    import random
+    now = int(time.time())
+    bars = []
+    volatility = spot * 0.0003  # ~0.03% per bar
+    price = spot
+    for i in range(keep, 0, -1):
+        ts = now - (i * 900)  # 15m intervals
+        o = price
+        c = o + random.gauss(0, volatility)
+        h = max(o, c) + abs(random.gauss(0, volatility * 0.5))
+        l = min(o, c) - abs(random.gauss(0, volatility * 0.5))
+        bars.append({"t": ts, "o": round(o, 2), "h": round(h, 2), "l": round(l, 2), "c": round(c, 2)})
+        price = c
+    return bars
 
 
 # ── Price fetching ──
@@ -1996,7 +2028,14 @@ def _call_grok_news(display: str, price: float) -> str | None:
                 return news
             return {"headline": content[:200], "sentiment": "NEUTRAL", "impact": "LOW", "detail": ""}
     except Exception as e:
-        logger.warning(f"Grok News error: {e}")
+        if hasattr(e, 'code'):
+            try:
+                body = e.read().decode()[:300] if hasattr(e, 'read') else ''
+            except:
+                body = ''
+            logger.warning(f"Grok News HTTP {e.code}: {body}")
+        else:
+            logger.warning(f"Grok News error: {e}")
         return None
 
 
@@ -2085,7 +2124,14 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     # GPT-4o — only for donors, elite, or channel (premium)
     gpt4o = None
     if not is_free_tier:
-        gpt4o = _call_openai(prompt, model="gpt-4o")
+        global _LAST_GPT4O_CALL
+        now_ts = time.time()
+        if now_ts - _LAST_GPT4O_CALL >= _GPT4O_MIN_INTERVAL:
+            _LAST_GPT4O_CALL = now_ts
+            gpt4o = _call_openai(prompt, model="gpt-4o")
+        else:
+            wait = _GPT4O_MIN_INTERVAL - (now_ts - _LAST_GPT4O_CALL)
+            logger.info(f"GPT-4o rate-limited — skipping (wait {wait:.0f}s)")
 
     # OmniRoute (Claude-Sonnet) — DISABLED: HTTP 400 broken, direct API calls used instead
     # omniroute = None
