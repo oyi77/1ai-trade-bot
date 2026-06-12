@@ -6477,6 +6477,30 @@ def auto_analyze_loop():
                               price=price, grade=mech_sig.get("grade",""),
                               source_name=mech_sig.get("source","mech"))
                     post_signal_to_bridge(mech_sig, price, disp)
+                    # ── ENTRY EXECUTED notification ──
+                    if disp == "XAUUSD" and action in ("BUY", "SELL"):
+                        _m_entry = mech_sig.get("entry", price) or price
+                        _m_zl = mech_sig.get("zone_lo", _m_entry)
+                        _m_zh = mech_sig.get("zone_hi", _m_entry)
+                        if mech_sig.get("entry_mode") == "zone" and _m_zl < _m_zh:
+                            _m_label = f"{_m_zl:.2f} — {_m_zh:.2f}"
+                            _m_hint = "⏳ EA menunggu harga masuk zone..."
+                        else:
+                            _m_label = f"{_m_entry:.2f}"
+                            _m_hint = ""
+                        _m_exec = (
+                            f"⚡ <b>ENTRY EXECUTED — {'Zone Pending' if _m_hint else 'Market'}</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 {action} {disp} | 🕐 {wib_now().strftime('%H:%M')} WIB\n"
+                            f"📍 {'Zone' if _m_hint else 'Entry'}: ${_m_label}\n"
+                            + (f"{_m_hint}\n" if _m_hint else "") +
+                            f"━━━━━━━━━━━━━━━━━━━━━━"
+                        )
+                        try:
+                            send_to_channel(_m_exec)
+                            logger.info(f"📤 ENTRY EXECUTED [mech]: {action} {disp} @ {_m_label}")
+                        except Exception as e:
+                            logger.warning(f"Failed to post ENTRY EXECUTED [mech]: {e}")
                 else:
                     # Rate limited — check if we can still force (trade already opened via bridge)
                     state_force = _cs()
@@ -6614,6 +6638,40 @@ def auto_analyze_loop():
                 if tg_msg_id:
                     sig["telegram_message_id"] = tg_msg_id
                 post_signal_to_bridge(sig, price, disp)
+
+                # ── ENTRY EXECUTED notification to channel ──
+                if disp == "XAUUSD" and action in ("BUY", "SELL"):
+                    actual_entry = sig.get("entry", price) or price
+                    actual_zone_lo = sig.get("zone_lo", actual_entry)
+                    actual_zone_hi = sig.get("zone_hi", actual_entry)
+                    emode = sig.get("entry_mode", "market")
+                    if emode == "zone" and actual_zone_lo < actual_zone_hi:
+                        entry_label = f"{actual_zone_lo:.2f} — {actual_zone_hi:.2f}"
+                        exec_text = (
+                            f"⚡ <b>ENTRY EXECUTED — Zone Pending</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 {action} {disp} | 🕐 {wib_now().strftime('%H:%M')} WIB\n"
+                            f"📍 Zone: ${entry_label}\n"
+                            f"⏳ EA menunggu harga masuk zone...\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🆔 Signal: #{tg_msg_id or 'N/A'}\n"
+                            f"⚠️ <i>Ini pending order — EA eksekusi otomatis saat harga masuk zone.</i>"
+                        )
+                    else:
+                        entry_label = f"{actual_entry:.2f}"
+                        exec_text = (
+                            f"⚡ <b>ENTRY EXECUTED — Market</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 {action} {disp} @ ${entry_label}\n"
+                            f"🕐 {wib_now().strftime('%H:%M')} WIB\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🆔 Signal: #{tg_msg_id or 'N/A'}"
+                        )
+                    try:
+                        send_to_channel(exec_text)
+                        logger.info(f"📤 ENTRY EXECUTED posted: {action} {disp} @ {entry_label}")
+                    except Exception as e:
+                        logger.warning(f"Failed to post ENTRY EXECUTED: {e}")
 
                 if LEARNING_ENGINE:
                     pass  # learning happens on trade outcome (check_outcomes)
