@@ -133,8 +133,9 @@ class TradeTracker:
         self._storage.execute(
             """INSERT INTO trades
                (trade_id, symbol, action, entry_price, sl, tp, stake,
-                outcome, open_time, source, confidence, grade, chat_id)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                outcome, open_time, source, confidence, grade, chat_id,
+                user_id, currency, platform)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 trade_id,
                 symbol,
@@ -149,6 +150,9 @@ class TradeTracker:
                 float(signal.get("confidence", 0)),
                 str(signal.get("grade", "")),
                 str(chat_id),
+                str(user_id),
+                str(currency),
+                str(platform),
             ),
         )
 
@@ -216,6 +220,9 @@ class TradeTracker:
             source=trade["source"],
             confidence=trade["confidence"],
             grade=trade["grade"],
+            user_id=trade.get("user_id", ""),
+            currency=trade.get("currency", "USD"),
+            platform=trade.get("platform", ""),
         )
 
         LOG.info("📝 Trade closed: %s %s | %.1f pips | $%.2f", trade_id, outcome, pips, profit_usd)
@@ -316,7 +323,7 @@ class TradeTracker:
 
         return closed
 
-    def get_stats(self) -> TradeStats:
+    def get_stats(self, user_id: str = "") -> TradeStats:
         """Get aggregated trade statistics from the database.
 
         Returns:
@@ -330,11 +337,15 @@ class TradeTracker:
                SUM(CASE WHEN outcome='BREAKEVEN' THEN 1 ELSE 0 END) as breakeven,
                COALESCE(SUM(pips), 0) as total_pips,
                COALESCE(SUM(profit_usd), 0) as total_profit_usd
-               FROM trades WHERE outcome != 'OPEN'"""
+               FROM trades WHERE outcome != 'OPEN'
+               """ + (" AND (user_id=? OR user_id='')" if user_id else ""),
+            (user_id,) if user_id else (),
         )
 
         open_count = self._storage.fetchone(
             "SELECT COUNT(*) FROM trades WHERE outcome='OPEN'"
+            + (" AND (user_id=? OR user_id='')" if user_id else ""),
+            (user_id,) if user_id else (),
         )
 
         stats = TradeStats()
@@ -388,7 +399,7 @@ class TradeTracker:
 
         return stats
 
-    def get_recent_trades(self, limit: int = 10) -> list[TradeRecord]:
+    def get_recent_trades(self, limit: int = 10, user_id: str = "") -> list[TradeRecord]:
         """Get most recent closed trades.
 
         Args:
@@ -400,12 +411,13 @@ class TradeTracker:
         rows = self._storage.fetchall(
             """SELECT trade_id, symbol, action, entry_price, exit_price, sl, tp, stake,
                       outcome, pips, profit_usd, profit_idr, open_time, close_time,
-                      source, confidence, grade
+                      source, confidence, grade, user_id, currency, platform
                FROM trades
                WHERE outcome != 'OPEN'
+               """ + ("AND (user_id=? OR user_id='') " if user_id else "") + """
                ORDER BY close_time DESC
                LIMIT ?""",
-            (limit,),
+            (user_id, limit) if user_id else (limit,),
         )
         return [self._row_to_record(r) for r in rows]
 
@@ -638,7 +650,8 @@ class TradeTracker:
     def _get_open_trade(self, trade_id: str) -> dict | None:
         row = self._storage.fetchone(
             """SELECT trade_id, symbol, action, entry_price, sl, tp, stake,
-                      open_time, source, confidence, grade
+                      open_time, source, confidence, grade,
+                      user_id, currency, platform
                FROM trades WHERE trade_id=? AND outcome='OPEN'""",
             (trade_id,),
         )
@@ -657,6 +670,9 @@ class TradeTracker:
             "source": row[8],
             "confidence": row[9],
             "grade": row[10],
+            "user_id": row[11],
+            "currency": row[12],
+            "platform": row[13],
         }
 
     def _get_open_trades(self) -> list[dict]:
