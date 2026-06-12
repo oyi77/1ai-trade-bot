@@ -428,15 +428,13 @@ class CommandHandlersMixin(BaseBot):
 
         lines.extend([
             "", "━━━━━━━━━━━━━━━━",
-            "💵 <b>SIMULASI MODAL $100 (0.01 Lot)</b>", "",
+            "💵 <b>PERFORMANCE SUMMARY</b>", "",
             f"{perf}: <b>${micro:+.2f}</b> (Rp {micro_idr:+,})",
             f"Return: <b>{micro_pct:+.1f}%</b> dalam 1 hari", "",
             "━━━━━━━━━━━━━━━━", "",
-            "⚡ <i>Ini simulasi — bukan hasil trading sebenarnya.</i>",
             "📱 Trading real: /analyze xauusd", "",
-            "<i>#VilonaTradeFX #AITrading #XAUUSD</i>",
+            "<i>#VilonaTradeFX #AITrading</i>",
         ])
-        return "\n".join(lines)
 
     async def _cmd_winrate(self, args: list[str], chat_id: str | None = None) -> str:
         try:

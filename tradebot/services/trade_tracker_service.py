@@ -531,31 +531,28 @@ def get_daily_trades(date_str: str = "") -> dict[str, Any]:
 
     daily = [t for t in trades if t.get("open_time", "").startswith(date_str)]
 
-    wins = [t for t in daily if t.get("outcome") == "TP_HIT"]
-    losses = [t for t in daily if t.get("outcome") == "SL_HIT"]
+    wins = [t for t in daily if t.get("outcome") in ("TP_HIT", "WON")]
+    losses = [t for t in daily if t.get("outcome") in ("SL_HIT", "LOST")]
     open_pos = [t for t in daily if t.get("outcome") == "OPEN"]
 
     total_pips = sum(t.get("pips", 0) for t in daily if t.get("outcome") not in ("OPEN", None))
 
-    micro_profit = 0.0
-    for t in daily:
-        if t.get("outcome") in ("OPEN", None):
-            continue
-        sym = t.get("symbol", "XAUUSD").upper()
-        pip_val = MICRO_LOT_PIP_VALUE.get(sym, DEFAULT_MICRO_PIP)
-        micro_profit += t.get("pips", 0) * pip_val
+    # For binary options, use actual profit instead of pips-based simulation
+    total_profit_usd = sum(t.get("profit_usd", 0) for t in daily if t.get("outcome") not in ("OPEN", None))
+    total_profit_idr = sum(t.get("profit_idr", 0) for t in daily if t.get("outcome") not in ("OPEN", None))
 
     pairs: dict[str, dict[str, Any]] = {}
     for t in daily:
         sym = t.get("symbol", "?")
         if sym not in pairs:
-            pairs[sym] = {"total": 0, "wins": 0, "losses": 0, "pips": 0.0}
+            pairs[sym] = {"total": 0, "wins": 0, "losses": 0, "pips": 0.0, "profit_usd": 0.0}
         pairs[sym]["total"] += 1
-        if t.get("outcome") == "TP_HIT":
+        if t.get("outcome") in ("TP_HIT", "WON"):
             pairs[sym]["wins"] += 1
-        elif t.get("outcome") == "SL_HIT":
+        elif t.get("outcome") in ("SL_HIT", "LOST"):
             pairs[sym]["losses"] += 1
         pairs[sym]["pips"] += t.get("pips", 0)
+        pairs[sym]["profit_usd"] += t.get("profit_usd", 0)
 
     return {
         "date": date_str,
@@ -566,11 +563,12 @@ def get_daily_trades(date_str: str = "") -> dict[str, Any]:
         "open": len(open_pos),
         "total_pips": round(total_pips, 1),
         "win_rate": round(len(wins) / max(len(wins) + len(losses), 1) * 100, 1),
-        "micro_profit": round(micro_profit, 2),
-        "micro_profit_pct": round(micro_profit / MODAL_USD * 100, 1),
-        "micro_profit_idr": round(micro_profit * USD_IDR),
+        "micro_profit": round(total_profit_usd, 2),
+        "micro_profit_pct": round(total_profit_usd / MODAL_USD * 100, 1),
+        "micro_profit_idr": total_profit_idr,
         "pairs": pairs,
     }
+
 
 
 def format_daily_recap(date_str: str = "") -> str:

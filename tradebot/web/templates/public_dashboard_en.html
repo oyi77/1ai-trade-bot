@@ -34,6 +34,18 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 .page{display:none}
 .page.active{display:block}
 
+/* Mobile hamburger */
+.hamburger{display:none;position:fixed;top:12px;left:12px;z-index:9999;background:rgba(10,10,20,0.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.1);border-radius:10px;width:40px;height:40px;align-items:center;justify-content:center;cursor:pointer;color:#e2e8f0;font-size:20px;transition:all 0.2s}.hamburger:hover{background:#1e293b}
+.sidebar-overlay{display:none}
+@media(max-width:640px){
+  .hamburger{display:flex}
+  .sidebar{transform:translateX(-100%);transition:transform 0.3s ease;width:260px;z-index:9998}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9997}
+  .sidebar-overlay.show{display:block}
+  .main{margin-left:0;padding:14px}
+}
+
 /* Live pulse dot */
 .live-dot{width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block;animation:ping-live 2s infinite}
 @keyframes ping-live{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,0.4)}50%{opacity:0.7;box-shadow:0 0 0 6px rgba(34,197,94,0)}}
@@ -116,9 +128,11 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 </div>
 
 <body>
+<button class="hamburger" id="hamburger-btn" onclick="toggleSidebar()">☰</button>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <!-- ═══ SIDEBAR ═══ -->
-<nav class="sidebar">
+<nav class="sidebar" id="sidebar">
   <div class="sidebar-brand" style="padding:24px 20px;border-bottom:1px solid rgba(255,255,255,0.05)">
     <h1 class="text-lg font-extrabold" style="background:linear-gradient(135deg,#60a5fa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent">VILONA</h1>
     <div class="text-xs text-slate-500 font-semibold tracking-wider mt-0.5">AI TRADE FX</div>
@@ -170,7 +184,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
   <div class="relative overflow-hidden rounded-2xl mb-8" style="background:#151924;border:1px solid rgba(255,255,255,0.05)">
     <!-- BG image placeholder -->
     <div class="absolute inset-0 opacity-30" style="background:radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.15) 0%, transparent 70%), radial-gradient(ellipse at 80% 20%, rgba(6,182,212,0.1) 0%, transparent 50%)"></div>
-    <div class="relative p-10">
+    <div class="relative p-6 sm:p-10">
       <div class="flex items-start justify-between gap-8 flex-wrap">
         <div class="max-w-xl">
           <h2 class="text-3xl font-extrabold leading-tight mb-3">
@@ -369,7 +383,7 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 
 <!-- ==================== PAGE: LIVE SIGNALS ==================== -->
 <div class="page" id="page-signals">
-  <div class="flex items-center justify-between mb-6">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
     <div>
       <h2 class="text-2xl font-extrabold text-white">📡 Live Signal Feed</h2>
       <p class="text-sm text-slate-400 mt-1">All signals — AI auto-scanner + user generated. Transparent, verifiable.</p>
@@ -379,8 +393,8 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     </div>
   </div>
 
-  <!-- Signal Stats Row -->
-  <div class="grid grid-cols-3 gap-4 mb-6">
+  <!-- Signal Stats Row (mobile: stacked, tablet+: 3 cols) -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
     <div class="kpi-card text-center">
       <div class="text-2xl font-mono font-bold text-white" id="sig-total">0</div>
       <div class="text-xs text-slate-500 mt-1">Total Signals</div>
@@ -572,8 +586,8 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
     </div>
   </div>
 
-  <!-- Main Backtest Stats -->
-  <div class="grid grid-cols-4 gap-4 mb-5">
+  <!-- Main Backtest Stats (mobile: 2×2, tablet+: 4 cols) -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
     <div class="kpi-card text-center">
       <div class="text-2xl font-mono font-bold text-white" id="bt-total">0</div>
       <div class="text-xs text-slate-500 mt-1">Total Signals</div>
@@ -1008,6 +1022,12 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#0B
 </div><!-- /main -->
 
 <script>
+/* ═══ MOBILE SIDEBAR ═══ */
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
+}
+
 /* ═══ NAVIGATION ═══ */
 const pages = {
   'home': 'page-home',
@@ -1023,6 +1043,9 @@ document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', function(e) {
     e.preventDefault();
     switchPage(this.dataset.page);
+    // Close mobile sidebar after navigation
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('show');
   });
 });
 
@@ -1213,7 +1236,7 @@ function renderSignals(signals) {
           <span class="text-xs text-slate-500">${outcome}</span>
           <span class="text-xs text-slate-600 ml-auto">${ts}</span>
         </div>
-        <div class="flex items-center gap-4 text-xs text-slate-400 font-mono">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400 font-mono">
           <span>E: <span class="signal-premium-blur">${s.entry}</span></span>
           <span>SL: <span class="signal-premium-blur">${s.sl}</span></span>
           <span>TP: <span class="signal-premium-blur">${s.tp}</span></span>
@@ -1285,7 +1308,7 @@ function renderDailyAnalyze(daily, trans) {
 function renderDailyRecap(recap) {
   const el = document.getElementById('daily-recap-content');
   if (!recap || !recap.trades || !recap.trades.length) {
-    el.innerHTML = '<div class="grid grid-cols-3 gap-3 mb-3">' +
+    el.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">' +
       '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-slate-400">0</div><div class="text-[10px] text-slate-600">Today</div></div>' +
       '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-emerald-400">0</div><div class="text-[10px] text-slate-600">Wins</div></div>' +
       '<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-red-400">0</div><div class="text-[10px] text-slate-600">Losses</div></div>' +
@@ -1300,7 +1323,7 @@ function renderDailyRecap(recap) {
   const micro = recap.micro_profit_idr || 0;
   const trades = recap.trades || [];
 
-  let html = '<div class="grid grid-cols-4 gap-3 mb-3">';
+  let html = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">';
   html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-white">${total}</div><div class="text-[10px] text-slate-600">Signals</div></div>`;
   html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-emerald-400">${wins}</div><div class="text-[10px] text-slate-600">Wins (${wr}%)</div></div>`;
   html += `<div class="text-center bg-white/5 rounded-lg p-3"><div class="text-lg font-mono font-bold text-red-400">${losses}</div><div class="text-[10px] text-slate-600">Losses</div></div>`;

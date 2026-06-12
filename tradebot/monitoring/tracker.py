@@ -441,8 +441,8 @@ class TradeTracker:
         )
 
         trades = [self._row_to_record(r) for r in rows]
-        wins = [t for t in trades if t.outcome in ("TP_HIT", "WIN")]
-        losses = [t for t in trades if t.outcome in ("SL_HIT", "LOSS")]
+        wins = [t for t in trades if t.outcome in ("TP_HIT", "WIN", "WON")]
+        losses = [t for t in trades if t.outcome in ("SL_HIT", "LOSS", "LOST")]
         open_pos = [t for t in trades if t.outcome == "OPEN"]
 
         total_pips = sum(
@@ -456,9 +456,9 @@ class TradeTracker:
             if sym not in pairs:
                 pairs[sym] = {"total": 0, "wins": 0, "losses": 0, "pips": 0.0}
             pairs[sym]["total"] += 1
-            if t.outcome in ("TP_HIT", "WIN"):
+            if t.outcome in ("TP_HIT", "WIN", "WON"):
                 pairs[sym]["wins"] += 1
-            elif t.outcome in ("SL_HIT", "LOSS"):
+            elif t.outcome in ("SL_HIT", "LOSS", "LOST"):
                 pairs[sym]["losses"] += 1
             pairs[sym]["pips"] += t.pips
 
@@ -471,6 +471,8 @@ class TradeTracker:
             "open": len(open_pos),
             "total_pips": round(total_pips, 1),
             "win_rate": round(len(wins) / max(len(wins) + len(losses), 1) * 100, 1),
+            "micro_profit": round(sum(t.profit_usd for t in trades if t.outcome not in ("OPEN",)), 2),
+            "micro_profit_idr": sum(t.profit_idr for t in trades if t.outcome not in ("OPEN",)),
             "pairs": pairs,
         }
 
