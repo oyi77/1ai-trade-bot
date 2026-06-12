@@ -200,12 +200,6 @@ class Handler(BaseHTTPRequestHandler):
         transformed = [_transform_signal(s) for s in all_signals[-20:]]
         self._json({"signals": transformed})
 
-    # ═══ API: LIVE SNAPSHOT — from autonomous worker ═══
-    def api_live_snapshot(self):
-        """Serve latest dashboard_snapshot cached from worker webhook push."""
-        snap = dict(_live_snapshot) if _live_snapshot else dict(SNAPSHOT_FALLBACK)
-        self._json(snap)
-
     # ═══ API: TRANSPARENCY ═══
     def api_transparency(self):
         """Platform stats for transparency page + community section."""
@@ -403,7 +397,15 @@ class Handler(BaseHTTPRequestHandler):
 
     # ═══ API: LIVE SNAPSHOT (merged from worker live_status.json + DB trade stats) ═══
     def api_live_snapshot(self):
-        """Live dashboard snapshot — merges AutonomousWorker real-time status with DB trade stats."""
+        """Live dashboard snapshot — webhook priority, then file + DB merge fallback."""
+        # Priority: use webhook-pushed _live_snapshot if available
+        global _live_snapshot
+        if _live_snapshot:
+            snap = dict(_live_snapshot)
+            if snap.get("uptime_seconds") or snap.get("status"):
+                self._json(snap)
+                return
+
         LIVE_STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'vilona_tradefx', 'live_status.json')
         worker = {}
         try:

@@ -268,9 +268,11 @@ class AutonomousWorker:
         log.info("   Assets: %s", ", ".join(d for _, d, _, _ in self.assets))
         self.sync.push_status("starting", {"detail": "Worker initializing"})
 
-        self._running = True
+        self._consecutive_failures = 0
+
         while self._running:
             cycle_start = time.time()
+            self._consecutive_failures = 0  # reset on successful cycle entry
             try:
                 now = datetime.now(WIB)
                 hour = now.hour
@@ -371,7 +373,10 @@ class AutonomousWorker:
                 self.sync.push_error("worker_cycle", str(e))
                 _get_resilience().REPORT.record_failure(e)
                 self._pulse({"state": "error", "error": str(e)})
-                time.sleep(30)  # recover and continue
+                self._consecutive_failures += 1
+                backoff = min(30 * (2 ** (self._consecutive_failures - 1)), 300)
+                log.warning("Backing off for %ds (consecutive failures: %d)", backoff, self._consecutive_failures)
+                time.sleep(backoff)
 
         log.info("AutonomousWorker stopped after %d cycles", self.sync.total_cycles)
 
@@ -449,7 +454,11 @@ class AutonomousWorker:
         # Push to bridge
         try:
             import urllib.request
-            url = "http://localhost:8765/signal?api_key=VT-MASTER-734AD731F5FB"
+            bridge_key = os.environ.get("BRIDGE_MASTER_KEY", "")
+            if not bridge_key:
+                log.error("BRIDGE_MASTER_KEY is not set — cannot push signal to bridge")
+                return
+            url = f"http://localhost:8765/signal?api_key={bridge_key}"
             data = json.dumps(signal).encode()
             req = urllib.request.Request(url, data=data,
                                          headers={"Content-Type": "application/json"})

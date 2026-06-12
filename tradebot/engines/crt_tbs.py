@@ -155,11 +155,12 @@ def _ticks_to_ohlcv(ticks: list[Tick]) -> list[dict]:
 
 
 def get_current_killzone(utc_hour: int) -> Killzone:
-    if 7 <= utc_hour < 9:
+    wib_hour = (utc_hour + 7) % 24
+    if 7 <= wib_hour < 9:
         return Killzone.LONDON
-    if 13 <= utc_hour < 15:
+    if 13 <= wib_hour < 15:
         return Killzone.NEW_YORK
-    if 15 <= utc_hour < 17:
+    if 15 <= wib_hour < 17:
         return Killzone.LONDON_CLOSE
     return Killzone.NONE
 

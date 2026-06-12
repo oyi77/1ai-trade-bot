@@ -77,15 +77,17 @@ class PhantomSync:
                        'analyzing', 'waiting_fvg', 'signal_generated',
                        'blocked', 'stopped'
         """
-        self.current_status = status
-        if detail:
-            self.current_pair = detail.get("pair", self.current_pair)
-            self.current_detail = detail.get("detail", "")
+        with self._lock:
+            self.current_status = status
+            if detail:
+                self.current_pair = detail.get("pair", self.current_pair)
+                self.current_detail = detail.get("detail", "")
         self._write()
 
     def push_signal(self, signal: dict):
         """Record a generated signal to the feed and push to webhook."""
-        self.total_signals += 1
+        with self._lock:
+            self.total_signals += 1
         entry = {
             "signal_id": signal.get("signal_id", ""),
             "symbol": signal.get("symbol", "XAUUSD"),
@@ -115,15 +117,17 @@ class PhantomSync:
 
     def push_health(self, **overrides):
         """Push system health snapshot — called every cycle."""
-        self.total_cycles += 1
-        for k, v in overrides.items():
-            if hasattr(self, k):
-                setattr(self, k, v)
+        with self._lock:
+            self.total_cycles += 1
+            for k, v in overrides.items():
+                if hasattr(self, k):
+                    setattr(self, k, v)
         self._write()
 
     def push_error(self, source: str, error: str):
         """Record an error for dashboard visibility."""
-        self.total_errors += 1
+        with self._lock:
+            self.total_errors += 1
         log.warning("PhantomSync error [%s]: %s", source, error)
         self._write()
 
@@ -190,8 +194,8 @@ class PhantomSync:
             )
             self.bot_users = cur.fetchone()[0] or 0
             conn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("Operation failed: %s", e)
 
     # ═══════════════════════════════════════════════════════════
     #  TRADE OUTCOME
@@ -214,8 +218,8 @@ class PhantomSync:
                     if res in ("WIN", "LOSS", "TP", "SL", "TP_HIT", "SL_HIT"):
                         total += 1
                         total_pnl += float(t.get("pnl", t.get("pnl_usd", 0)))
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("Operation failed: %s", e)
 
         self.win_rate = round(wins / max(total, 1), 4)
         self.total_pnl = round(total_pnl, 2)

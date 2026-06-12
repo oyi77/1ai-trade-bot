@@ -383,7 +383,7 @@ async def webhook_tripay(request: Request):
         else:
             tier = "pro"
             chat_id = ""
-        db_path = _Path(__file__).resolve().parent.parent / "members.db"
+        db_path = _Path(__file__).resolve().parent.parent.parent / "data" / "vilona_tradefx" / "members.db"
 
         # deduplicate: skip if already paid
         try:

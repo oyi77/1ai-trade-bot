@@ -61,17 +61,19 @@ def _mark_processed(merchant_ref: str) -> None:
     _save_processed(refs)
 
 
-def _verify_tripay_signature(data: dict) -> bool:
-    """Verify Tripay callback HMAC-SHA256 signature."""
-    if not TRIPAY_PRIVATE_KEY:
-        LOG.warning("TRIPAY_PRIVATE_KEY not set — skipping signature verification")
-        return True
+def _verify_tripay_signature(raw_body: bytes, callback_signature: str) -> bool:
+    """Verify Tripay callback HMAC-SHA256 signature.
 
-    callback_signature = data.get("signature", "")
-    payload = data.get("merchant_ref", "")
+    Tripay signs the raw request body and sends the signature in the
+    X-Callback-Signature HTTP header.
+    """
+    if not TRIPAY_PRIVATE_KEY:
+        LOG.warning("TRIPAY_PRIVATE_KEY not set — rejecting callback")
+        return False
+
     expected = hmac.new(
         TRIPAY_PRIVATE_KEY.encode(),
-        payload.encode(),
+        raw_body,
         hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(expected, callback_signature)
@@ -277,8 +279,9 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"success": False, "error": "Missing merchant_ref"})
             return
 
-        # Verify signature
-        if not _verify_tripay_signature(data):
+        # Verify signature — Tripay signs raw body, sends signature in header
+        callback_signature = self.headers.get("X-Callback-Signature", "")
+        if not _verify_tripay_signature(body, callback_signature):
             LOG.warning("Tripay callback invalid signature for ref=%s", merchant_ref)
             self._send_json(200, {"success": False, "error": "Invalid signature"})
             return

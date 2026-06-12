@@ -521,7 +521,7 @@ class CommandHandlersMixin(BaseBot):
         _target = chat_id or self.chat_id
         try:
             import yfinance as yf
-            ticker = yf.Ticker("GC=F")
+            ticker = yf.Ticker("XAUUSD=X")
             df = ticker.history(period="1mo", interval="1d")
             if df.empty:
                 return "❌ Data mapping tidak tersedia."
@@ -818,7 +818,7 @@ class CommandHandlersMixin(BaseBot):
         display = pair.upper()
         try:
             import yfinance as yf
-            ticker = yf.Ticker("GC=F")
+            ticker = yf.Ticker("XAUUSD=X")
             df = ticker.history(period="1mo", interval="1d")
             if df.empty:
                 return "❌ Data tidak tersedia."
@@ -1316,7 +1316,7 @@ class CommandHandlersMixin(BaseBot):
             h1_bias = "NEUTRAL"
             try:
                 import yfinance as yf
-                ticker = yf.Ticker("GC=F")
+                ticker = yf.Ticker("XAUUSD=X")
                 df = ticker.history(period="3d", interval="1h")
                 if not df.empty and len(df) >= 20:
                     sma20 = float(df["Close"].rolling(20).mean().iloc[-1])

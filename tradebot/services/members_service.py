@@ -25,7 +25,7 @@ def _resolve_db() -> Path:
     global _MEMBERS_DB
     if _MEMBERS_DB is None:
         root = Path(__file__).resolve().parent.parent.parent
-        _MEMBERS_DB = root / "members.db"
+        _MEMBERS_DB = root / "data" / "vilona_tradefx" / "members.db"
     return _MEMBERS_DB
 
 

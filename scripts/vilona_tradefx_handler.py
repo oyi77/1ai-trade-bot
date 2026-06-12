@@ -537,7 +537,7 @@ def tg_send(text, chat_id=None, reply_markup=None, reply_to=None):
 
 # ── Signal bridge ──
 BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
-MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "VT-MASTER-734AD731F5FB")
+MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "")
 
 
 def _fetch_json_url(url, timeout=5):
@@ -997,7 +997,7 @@ def handle_payment_callback(callback_query):
             return
         else:
             # Generic — redirect to tiered /subscribe
-            _send_subscribe_menu(chat_id, username)
+            _send_donate_menu(chat_id, username)
             return
 
         if not PAYMENT_ENGINE:
@@ -1179,7 +1179,8 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
             open_trade(sig, sig.get("entry", price), symbol, sig.get("source", "ai"),
                        sig.get("target_user", ""),
                        telegram_message_id=sig.get("telegram_message_id"))
-        except Exception: pass
+        except Exception as e:
+            logger.debug("Trade tracker open_trade failed: %s", e)
     # ── Post to bridge ──
     posted = False
     for url in BRIDGE_URLS:
@@ -1193,7 +1194,8 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
             urllib.request.urlopen(req, timeout=5)
             posted = True
             break  # success, stop
-        except Exception:
+        except Exception as e:
+            logger.warning("Bridge post failed for %s: %s", url, e)
             continue
     if not posted:
         logger.warning("Failed to post signal to any bridge URL")
@@ -3263,7 +3265,7 @@ def handle_ultimatum_callback(cb):
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📊 XAUUSD · BTC · EURUSD · GBPUSD · USOIL\n"
             "📐 Mapping harian: 10:00 WIB\n"
-            "⚡️ Kuota AI: 3x analisa/hari\n"
+            f"⚡️ Kuota AI: {FREE_DAILY_LIMIT}x analisa/hari\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📱 /help — Semua command\n"
             "📊 /analyze xauusd — Mulai analisa\n"
@@ -3304,7 +3306,7 @@ def auto_capture_video_file_id(chat_id, message):
 
 
 # ── Quota System ──
-FREE_QUOTA_PER_DAY = 5  # same as FREE_DAILY_LIMIT
+FREE_QUOTA_PER_DAY = FREE_DAILY_LIMIT  # references FREE_DAILY_LIMIT for consistency
 QUOTA_DIR = DATA_DIR / "quota_cache"
 QUOTA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -3345,7 +3347,7 @@ def _get_user_tier(chat_id):
         if member:
             tier = str(member.get("tier", "free")).lower()
             status = str(member.get("status", "trial")).lower()
-            is_paid = status == "paid" or tier in ("donor", "lifetime")
+            is_paid = status == "paid" or tier in ("donor", "lifetime", "pro", "elite")
             if tier == "pro":
                 limit = TIER_LIMITS.get("pro", FREE_DAILY_LIMIT)
                 throttle = MANUAL_THROTTLE_PRO
@@ -4384,7 +4386,7 @@ def handle_command(cmd, text, chat_id, msg):
         txt += f"━━━━━━━━━━━━━━━━\n🕐 {wib_fmt()}"
         tg_send(txt, chat_id)
 
-    elif cmd == "/bill" or cmd == "/subscribe":
+    elif cmd == "/bill" or cmd == "/subscribe" or cmd == "/upgrade":
         # ── TIERED SUBSCRIPTION ──
         if not chat_id:
             return
@@ -5873,7 +5875,8 @@ def load_signal_log(asset="default"):
     path = DATA_DIR / f"signal_log_{asset}.json"
     try:
         if path.exists(): return json.loads(path.read_text())
-    except Exception: pass
+    except Exception as e:
+        logger.warning("Signal log load failed (%s): %s", asset, e)
     return {"signals_sent":0,"last_signal_time":None,"last_action":None,"last_price":0,"loss_count":0}
 
 def save_signal_log(log, asset="default"):
@@ -6410,6 +6413,7 @@ def auto_analyze_loop():
 
     while True:
         try:
+            action = ''  # pre-initialize to avoid BUG-9 'action' in dir() scope issue
             now = wib_now()
             h = now.hour
             weekday = now.weekday()
@@ -7137,7 +7141,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:

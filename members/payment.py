@@ -396,10 +396,13 @@ def fire_capi_purchase(
 
     Returns True if the event was successfully received by Meta.
     """
-    fb_pixel = os.environ.get("FB_PIXEL_ID", "771021905629860")
+    fb_pixel = os.environ.get("FB_PIXEL_ID", "")
     fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
     if not fb_token:
         logger.info("Meta CAPI skipped: FB_ACCESS_TOKEN not configured")
+        return False
+    if not fb_pixel:
+        logger.warning("Meta CAPI skipped: FB_PIXEL_ID not configured")
         return False
 
     tier_labels = {"pro": "PRO Subscription", "elite": "ELITE Subscription",
@@ -428,7 +431,7 @@ def fire_capi_purchase(
             }]
         }).encode()
 
-        url = f"https://graph.facebook.com/v21.0/{fb_pixel}/events?access_token={fb_token}"
+        url = f"https://graph.facebook.com/v19.0/{fb_pixel}/events?access_token={fb_token}"
         req = urllib.request.Request(url, data=payload,
                                      headers={"Content-Type": "application/json"})
         resp = json.loads(urllib.request.urlopen(req, timeout=5).read())

@@ -126,19 +126,22 @@ class PaymentService:
             return []
 
     async def get_tripay_transaction(self, reference: str) -> dict:
-        """Check Tripay transaction status by reference."""
-        payload = {
-            "merchant_ref": reference,
-            "signature": self._tripay_sign(settings.TRIPAY_MERCHANT_CODE + reference),
-        }
-        url = f"{settings.TRIPAY_BASE_URL}/transaction/detail"
-        headers = {
-            "Authorization": f"Bearer {settings.TRIPAY_API_KEY}",
-            "Content-Type": "application/json",
-        }
+        """Check Tripay transaction status by reference.
+
+        Tripay /transaction/detail uses GET with query params
+        ``reference`` + ``signature`` (POST returns HTTP 405).
+        """
+        import urllib.parse
+
+        sig = self._tripay_sign(settings.TRIPAY_MERCHANT_CODE + reference)
+        params = urllib.parse.urlencode(
+            {"reference": reference, "signature": sig}
+        )
+        url = f"{settings.TRIPAY_BASE_URL}/transaction/detail?{params}"
+        headers = {"Authorization": f"Bearer {settings.TRIPAY_API_KEY}"}
         try:
             async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.post(url, json=payload, headers=headers)
+                resp = await client.get(url, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
         except Exception as exc:

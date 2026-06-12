@@ -72,8 +72,8 @@ def _sign(payload: str) -> str:
 def verify_callback(body: bytes, callback_sig: str) -> bool:
     """Verify Tripay webhook HMAC-SHA256 signature."""
     if not TRIPAY_PRIVATE_KEY:
-        LOG.warning("TRIPAY_PRIVATE_KEY not set — skipping signature check")
-        return True
+        LOG.warning("TRIPAY_PRIVATE_KEY not set — rejecting callback")
+        return False
     expected = hmac.new(
         TRIPAY_PRIVATE_KEY.encode(), body, hashlib.sha256,
     ).hexdigest()
@@ -141,7 +141,7 @@ def create_invoice(
 def check_status(merchant_ref: str) -> dict:
     """Check payment status via Tripay API.  Uses GET (not POST — POST
     on /transaction/detail returns HTTP 405)."""
-    sig = _sign(merchant_ref + TRIPAY_MERCHANT_CODE)
+    sig = _sign(TRIPAY_MERCHANT_CODE + merchant_ref)
     params = urllib.parse.urlencode(
         {"reference": merchant_ref, "signature": sig}
     )

@@ -22,8 +22,8 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "vilo
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_SYMBOL_MAP: dict[str, str] = {
-    "gold": "GC=F",
-    "xauusd": "GC=F",
+    "gold": "XAUUSD=X",
+    "xauusd": "XAUUSD=X",
     "btc": "BTC-USD",
     "btcusd": "BTC-USD",
     "eth": "ETH-USD",
@@ -88,7 +88,7 @@ _pip_sizes = {
 }
 
 BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
-MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "VT-MASTER-734AD731F5FB")
+MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "")
 
 # Donor / Premium constants
 DONOR_DAYS = 9999

@@ -597,7 +597,11 @@ class SignalHandler(BaseHTTPRequestHandler):
             if client_ip not in ("127.0.0.1", "::1", "localhost"):
                 self._text("Forbidden", 403)
                 return
-            self._json({"api_key": "VT-MASTER-734AD731F5FB"})
+            master_key = os.environ.get("BRIDGE_MASTER_KEY", "")
+            if not master_key:
+                self._text("Not configured", 503)
+                return
+            self._json({"api_key": master_key})
         elif path == "/trailing":
             # GET: view trailing config | POST: update trailing config
             instance_id = f"{api_key}:{account_id}" if (api_key and account_id) else None
@@ -747,14 +751,17 @@ class SignalHandler(BaseHTTPRequestHandler):
                 return
             event_name = body.get("event_name", "PageView")
             event_data = body.get("event_data", {})
-            fb_pixel = os.environ.get("FB_PIXEL_ID", "771021905629860")
+            fb_pixel = os.environ.get("FB_PIXEL_ID", "")
             fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
             if not fb_token:
                 self._json({"status": "skipped", "reason": "no FB_ACCESS_TOKEN configured"}, 200)
                 return
+            if not fb_pixel:
+                self._json({"status": "skipped", "reason": "no FB_PIXEL_ID configured"}, 200)
+                return
             try:
                 import urllib.request as ureq
-                capi_url = f"https://graph.facebook.com/v21.0/{fb_pixel}/events?access_token={fb_token}"
+                capi_url = f"https://graph.facebook.com/v19.0/{fb_pixel}/events?access_token={fb_token}"
                 capi_payload = json.dumps({
                     "data": [{
                         "event_name": event_name,
