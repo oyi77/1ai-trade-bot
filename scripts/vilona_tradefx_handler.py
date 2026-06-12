@@ -1437,45 +1437,105 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     except Exception:
         pass
     
-    PROXIMITY_PIPS = 25
+    PROXIMITY_PIPS = 15  # tighter: 15 pip = $1.50 on XAUUSD — reduces false grouping
     
     def _near(a, b):
         return abs(a - b) / pip_s <= PROXIMITY_PIPS
     
+    # ── Layer 4: Trend context from OHLCV (H1 20-bar EMA slope) ──
+    trend_bias = "NEUTRAL"
+    try:
+        closes = [float(b.get("close", b.get("c", 0))) for b in ohlcv_bars[-30:]]
+        if len(closes) >= 20:
+            ema20 = sum(closes[-20:]) / 20
+            ema10 = sum(closes[-10:]) / 10
+            if ema10 > ema20 * 1.002:
+                trend_bias = "BULLISH"
+            elif ema10 < ema20 * 0.998:
+                trend_bias = "BEARISH"
+    except Exception:
+        pass
+    
     for ob in obs:
         zone_level = ob["price"]
-        score = 1.0
-        reasons = [f"OB {ob['direction']} @ {zone_level:.2f}"]
+        ob_dir = ob["direction"]
+        ob_strength = ob.get("strength", 3)
         
-        # Breaker Block: OB broken → price on opposite side = killer S/R
-        ob_is_bull = "BULL" in ob["direction"]
+        # ── GATE 0: Minimum OB strength — weak OB = weak breaker ──
+        if ob_strength < 3:
+            continue
+        
+        score = 1.0
+        reasons = [f"OB {ob_dir} [{ob_strength}/5] @ {zone_level:.2f}"]
+        
+        # ── GATE 1: Breaker Block — strict candle-close validation ──
+        ob_is_bull = "BULL" in ob_dir
         price_above_ob = price > zone_level
         breaker = (ob_is_bull and not price_above_ob) or (not ob_is_bull and price_above_ob)
+        
         if breaker:
-            score += 2.5
-            reasons.append("🔥 BREAKER BLOCK — OB broken, now acts as S/R")
+            # Require: OB was tested at least once BEFORE breaking (mitigation confirm)
+            # Check last 10 bars for a test of this OB level
+            ob_tested = False
+            recent_bars = ohlcv_bars[-10:]
+            for b in recent_bars:
+                b_low = float(b.get("low", b.get("l", 0)))
+                b_high = float(b.get("high", b.get("h", 0)))
+                if _near(zone_level, b_low) or _near(zone_level, b_high):
+                    ob_tested = True
+                    break
+            
+            if ob_tested:
+                score += 2.5
+                reasons.append("🔥 BREAKER BLOCK — OB broken after test, now acts as S/R")
+            else:
+                score += 1.0
+                reasons.append("⚠️ Breaker unconfirmed — OB not recently tested")
         
-        # False Break
+        # ── GATE 2: False Break — must be at same zone, same direction ──
         if false_break_price and _near(zone_level, false_break_price):
-            score += 1.5
-            reasons.append(f"⚠️ False Break @ {false_break_price:.2f}")
+            fb_dir_match = not fb_dir or fb_dir == ob_dir
+            if fb_dir_match:
+                score += 1.5
+                reasons.append(f"⚠️ False Break confirmed @ {false_break_price:.2f}")
         
-        # IDM sweep
+        # ── GATE 3: IDM sweep — liquidity grab at zone ──
         if idm_price and _near(zone_level, idm_price):
             score += 1
             reasons.append(f"💧 IDM sweep @ {idm_price:.2f}")
         
-        # OB + FVG confluence (mitigation magnet)
+        # ── GATE 4: OB + FVG confluence — strict direction match + age filter ──
         for fvg in fvg_zones:
             if _near(zone_level, fvg["mid"]) and not fvg["filled"]:
-                score += 1.5
-                reasons.append(f"📐 FVG {fvg['size_pips']:.0f}pip aligned — mitigation magnet")
-                break
+                # FVG direction MUST match OB direction (bullish OB → bullish FVG)
+                fvg_dir = fvg["direction"]
+                ob_is_bull_dir = "BULL" in ob_dir
+                fvg_is_bull = fvg_dir == "BULLISH"
+                direction_match = ob_is_bull_dir == fvg_is_bull
+                
+                # FVG must be decent size (>3 pip on XAUUSD)
+                min_fvg_size = 3 if display in ("XAUUSD","GOLD") else 2
+                fvg_good_size = fvg["size_pips"] >= min_fvg_size
+                
+                if direction_match and fvg_good_size:
+                    score += 1.5
+                    reasons.append(f"📐 FVG {fvg['size_pips']:.0f}pip aligned — direction match, mitigation magnet")
+                elif direction_match:
+                    score += 0.75
+                    reasons.append(f"📐 FVG {fvg['size_pips']:.0f}pip aligned — small FVG")
+                break  # only count best match
         
-        # Double Sweep
+        # ── GATE 5: Double Sweep — FB + IDM at same zone, same direction ──
         if false_break_price and idm_price and _near(false_break_price, idm_price) and _near(zone_level, false_break_price):
             score += 2
-            reasons.append("💀 DOUBLE SWEEP — liquidity cleared 2x")
+            reasons.append("💀 DOUBLE SWEEP — liquidity cleared 2x at same level")
+        
+        # ── GATE 6: Trend filter — trend-aligned breakers get bonus ──
+        if breaker and trend_bias != "NEUTRAL":
+            breaker_with_trend = (ob_is_bull and trend_bias == "BULLISH") or (not ob_is_bull and trend_bias == "BEARISH")
+            if breaker_with_trend:
+                score += 0.5
+                reasons.append(f"📈 Trend-aligned ({trend_bias}) — higher probability")
         
         direction = "BUY" if price < zone_level else "SELL"
         confluence_zones.append({
