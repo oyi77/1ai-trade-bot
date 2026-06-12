@@ -1299,6 +1299,22 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
 
     # ── Write to EA signal file (for ea_executor.py to pick up) ──
     try:
+        # ── Apply learned weights to total_score if component scores available ──
+        if sig.get("score_smc") or sig.get("score_liquidity") or sig.get("score_macro"):
+            try:
+                from members.weight_manager import apply_weights
+                regime = sig.get("regime", "") or str(sig.get("market_regime", "") or "unknown")
+                weighted = apply_weights(
+                    float(sig.get("score_smc", 0) or 0),
+                    float(sig.get("score_liquidity", 0) or 0),
+                    float(sig.get("score_macro", 0) or 0),
+                    regime,
+                )
+                payload["weighted_score"] = weighted
+                logger.debug("Applied learned weights: regime=%s score=%.3f", regime, weighted)
+            except Exception:
+                pass  # weight manager unavailable — use raw consensus_score
+
         ea_file = DATA_DIR / "ea_signal.json"
         ea_file.write_text(json.dumps(payload, indent=2))
         rr_display = float(str(rr).replace("1:", "")) if isinstance(rr, str) and rr.startswith("1:") else float(rr) if rr else 0
@@ -3832,6 +3848,52 @@ def handle_command(cmd, text, chat_id, msg):
                 f"counter lu naik. 3 referral = tier PRO gratis!"
             )
         tg_send(msg, chat_id)
+
+    elif cmd == "/learn_report":
+        # ── ASYNC PATTERN EXTRACTION — runs in thread, doesn't block handler ──
+        tg_send("🧠 <b>Learning Engine aktif...</b>\nMenganalisa data TP/SL dari database.\nIni butuh beberapa detik.", chat_id)
+        def _run_learning():
+            try:
+                from scripts.pattern_extractor import run_learning_pipeline
+                DB = str(DATA_DIR / "members.db")
+                result = run_learning_pipeline(DB, lookback_days=14)
+                if result["total_signals"] == 0:
+                    tg_send("📭 <b>Data belum cukup.</b>\nBelum ada sinyal closed (TP/SL) dalam 14 hari.\nGunakan /analyze xauusd untuk generate sinyal.", chat_id)
+                    return
+                # Build report
+                lines = [
+                    "🧠 <b>HERMES LEARNING REPORT</b>",
+                    "━━━━━━━━━━━━━━━━━━━━━",
+                ]
+                tp = result.get("tp_stats", {})
+                sl = result.get("sl_stats", {})
+                weights = result.get("suggested_weights", {})
+                for regime in sorted(set(list(tp.keys()) + list(sl.keys()))):
+                    if regime == "_empty": continue
+                    t = tp.get(regime, {})
+                    s = sl.get(regime, {})
+                    w = weights.get(regime, {}) if not isinstance(weights.get(regime), bool) else {}
+                    n_tp = t.get("count", 0)
+                    n_sl = s.get("count", 0)
+                    wr = round(n_tp / max(n_tp + n_sl, 1) * 100, 1)
+                    eff = t.get("mfe_efficiency", 0)
+                    lines.append(f"\n📊 <b>{regime.upper()}</b>")
+                    lines.append(f"   Win Rate: {wr}% | MFE Eff: {eff:.2f}")
+                    if t.get("tp_too_conservative"):
+                        lines.append("   ⚠️ Flag: TP Too Conservative")
+                    if s.get("need_trailing_stop"):
+                        lines.append("   ⚠️ Flag: Need Trailing Stop")
+                    if w:
+                        lines.append(f"   ⚖️ Weights: SMC={w.get('smc',0):.2f} LIQ={w.get('liq',0):.2f} MACRO={w.get('macro',0):.2f}")
+                lines.append("\n━━━━━━━━━━━━━━━━━━━━━")
+                lines.append("⚙️ Weights auto-injected via weight_manager")
+                lines.append("📅 Weekly refresh: Sabtu 02:00 WIB")
+                tg_send("\n".join(lines), chat_id)
+                logger.info("Learning report generated for %s", chat_id)
+            except Exception as exc:
+                logger.error("Learn report failed: %s", exc)
+                tg_send(f"❌ Gagal generate learning report: {exc}", chat_id)
+        threading.Thread(target=_run_learning, daemon=True).start()
 
     elif cmd == "/myid":
         text = (
@@ -7586,6 +7648,54 @@ def main():
     except Exception as exc:
         logger.warning("ML Feedback Loop unavailable: %s", exc)
 
+    # ── Weekly Walk-Forward Scheduler — Sabtu 02:00 WIB ──
+    def _weekly_learning_scheduler():
+        """Auto-run pattern extraction every Saturday at 02:00 WIB."""
+        import datetime as _dt
+        while True:
+            try:
+                now = _dt.datetime.now(WIB)
+                # Target: next Saturday 02:00 WIB
+                days_until_sat = (5 - now.weekday()) % 7  # Monday=0, Saturday=5
+                if days_until_sat == 0 and now.hour >= 2:
+                    days_until_sat = 7  # already past Saturday 2AM, wait for next
+                next_run = now.replace(hour=2, minute=0, second=0, microsecond=0) + _dt.timedelta(days=days_until_sat)
+                wait = (next_run - now).total_seconds()
+                if wait > 0:
+                    time.sleep(min(wait, 3600))  # sleep max 1h chunks
+                    continue
+                # ── Run extraction ──
+                logger.info("📅 Weekly walk-forward analysis starting...")
+                try:
+                    from scripts.pattern_extractor import run_learning_pipeline
+                    DB = str(DATA_DIR / "members.db")
+                    result = run_learning_pipeline(DB, lookback_days=14)
+                    n = result.get("total_signals", 0)
+                    if n > 0:
+                        tg_send(
+                            f"📅 <b>Weekly Walk-Forward Analysis Completed</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 {n} signal dianalisa\n"
+                            f"⚖️ New weights injected ke weight_manager\n"
+                            f"🧠 Ketik /learn_report untuk lihat detail.",
+                            str(CHANNEL_ID or ADMIN_CHAT_ID or '')
+                        )
+                        logger.info("Weekly WFA done: %d signals, weights updated", n)
+                    else:
+                        logger.info("Weekly WFA skipped: no closed signals")
+                except Exception as exc:
+                    logger.error("Weekly WFA failed: %s", exc)
+                time.sleep(3600)  # sleep 1h after completion to avoid re-trigger
+            except Exception as exc:
+                logger.error("Weekly scheduler error: %s", exc)
+                time.sleep(3600)
+    try:
+        _weekly_thread = threading.Thread(target=_weekly_learning_scheduler, daemon=True, name="weekly-wfa")
+        _weekly_thread.start()
+        logger.info("Weekly WFA scheduler started (Sat 02:00 WIB)")
+    except Exception as exc:
+        logger.warning("Weekly WFA scheduler unavailable: %s", exc)
+
     # Start daily recap + weekly report thread
     recap_thread = threading.Thread(target=_recap_report_loop, daemon=True)
     recap_thread.start()
@@ -7673,7 +7783,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download","/referral"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download","/referral","/learn_report"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
