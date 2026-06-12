@@ -3682,6 +3682,12 @@ def handle_command(cmd, text, chat_id, msg):
             # ── REFERRAL FUNNEL: /start ref_<referrer_chat_id> ──
             try:
                 referrer_id = sub[4:]  # strip "ref_"
+
+                # ── Anti-self-referral guard ──
+                if str(referrer_id) == str(chat_id):
+                    tg_send("😅 Gak bisa referral diri sendiri bro. Share link lu ke temen!", chat_id)
+                    return
+
                 from members.tags import add_tag as _add_tag
                 # Register new user with referrer
                 from members import _conn, register_member, get_member
@@ -3711,7 +3717,7 @@ def handle_command(cmd, text, chat_id, msg):
                     ).fetchone()
                     ref_count = row["ref_count"] if row else 0
                 # ── MILESTONE REWARD: 3 referrals → PRO 7 hari gratis ──
-                if ref_count >= 3:
+                if ref_count == 3:
                     try:
                         from members import upgrade_tier
                         from datetime import datetime, timezone, timedelta
@@ -3719,13 +3725,11 @@ def handle_command(cmd, text, chat_id, msg):
                         expiry = (datetime.now(WIB) + timedelta(days=7)).isoformat()
                         upgrade_tier(str(referrer_id), "pro", 7,
                                      f"REF-MILESTONE-{referrer_id}")
-                        # Update expiry explicitly
                         with _conn() as db:
                             db.execute(
                                 "UPDATE members SET expiry=?, status='paid' WHERE chat_id=?",
                                 (expiry, str(referrer_id))
                             )
-                        # DM reward
                         dm = (
                             "🎉 <b>BOOM! 3 Teman udah daftar pakai link lu!</b>\n"
                             "━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -3740,7 +3744,37 @@ def handle_command(cmd, text, chat_id, msg):
                         logger.info("REF MILESTONE: %s → PRO 7 hari (ref_count=%d)",
                                     referrer_id, ref_count)
                     except Exception as e:
-                        logger.warning("Ref milestone upgrade failed: %s", e)
+                        logger.warning("Ref milestone PRO upgrade failed: %s", e)
+
+                # ── MILESTONE REWARD: 10 referrals → ELITE 30 hari gratis ──
+                elif ref_count == 10:
+                    try:
+                        from members import upgrade_tier
+                        from datetime import datetime, timezone, timedelta
+                        WIB = timezone(timedelta(hours=7))
+                        expiry = (datetime.now(WIB) + timedelta(days=30)).isoformat()
+                        upgrade_tier(str(referrer_id), "elite", 30,
+                                     f"REF-ELITE-{referrer_id}")
+                        with _conn() as db:
+                            db.execute(
+                                "UPDATE members SET expiry=?, status='paid' WHERE chat_id=?",
+                                (expiry, str(referrer_id))
+                            )
+                        dm = (
+                            "🏆 <b>LEGEND! 10 Teman udah daftar pakai link lu!</b>\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "Sebagai reward MAXIMUM, tier lu otomatis naik ke\n"
+                            "<b>👑 ELITE selama 30 hari!</b>\n\n"
+                            "3 AI + Market Intel + EA Auto-Trade — FULL POWER.\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "🔑 /mykey — Cek license EA kamu\n"
+                            "📊 /analyze — Gas analisa elite!"
+                        )
+                        tg_send(dm, str(referrer_id))
+                        logger.info("REF ELITE MILESTONE: %s → ELITE 30 hari (ref_count=%d)",
+                                    referrer_id, ref_count)
+                    except Exception as e:
+                        logger.warning("Ref milestone ELITE upgrade failed: %s", e)
                 _add_tag(str(referrer_id), "affiliate")
                 logger.info("🔗 Referral: %s invited by %s (ref_count=%d)",
                             chat_id, referrer_id, ref_count)
@@ -3874,14 +3908,25 @@ def handle_command(cmd, text, chat_id, msg):
                 f"<code>{ref_link}</code>\n\n"
                 f"📊 Statistik:\n"
                 f"  • Teman diajak: <b>0</b>\n"
-                f"  • Reward berikutnya: <b>3 referral → PRO 7 hari GRATIS!</b>\n\n"
+                f"  • Reward #1: 3 referral → <b>PRO 7 hari GRATIS!</b>\n"
+                f"  • Reward #2: 10 referral → <b>ELITE 30 hari GRATIS!</b>\n\n"
                 f"💡 Share link ini ke temen-temen trader!\n"
                 f"Setiap yang daftar lewat link lu, referral\n"
-                f"counter lu naik. 3 referral = tier PRO gratis!"
+                f"counter lu naik."
             )
         else:
-            remaining = max(0, 3 - ref_count)
-            tier_reward = "PRO 7 hari GRATIS" if ref_count < 3 else "SUDAH DIKLAIM ✅"
+            if ref_count < 3:
+                remaining_3 = 3 - ref_count
+                next_reward = f"⭐ PRO 7 Hari (butuh {remaining_3} lagi)"
+                remaining_10 = 10 - ref_count
+                next_elite = f"👑 ELITE 30 Hari (butuh {remaining_10} lagi)"
+            elif ref_count < 10:
+                next_reward = "⭐ PRO 7 Hari — SUDAH DIKLAIM ✅"
+                remaining_10 = 10 - ref_count
+                next_elite = f"👑 ELITE 30 Hari (butuh {remaining_10} lagi)"
+            else:
+                next_reward = "⭐ PRO 7 Hari — SUDAH DIKLAIM ✅"
+                next_elite = "👑 ELITE 30 Hari — SUDAH DIKLAIM ✅"
             msg = (
                 f"👥 <b>REFERRAL PROGRAM</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
@@ -3889,11 +3934,11 @@ def handle_command(cmd, text, chat_id, msg):
                 f"<code>{ref_link}</code>\n\n"
                 f"📊 Statistik:\n"
                 f"  • Teman diajak: <b>{ref_count}</b>\n"
-                f"  • Reward: <b>{tier_reward}</b>\n"
-                f"  • Butuh <b>{remaining}</b> lagi untuk PRO 7 hari!\n\n"
+                f"  • {next_reward}\n"
+                f"  • {next_elite}\n\n"
                 f"💡 Share link ini ke temen-temen trader!\n"
                 f"Setiap yang daftar lewat link lu, referral\n"
-                f"counter lu naik. 3 referral = tier PRO gratis!"
+                f"counter lu naik."
             )
         tg_send(msg, chat_id)
 
