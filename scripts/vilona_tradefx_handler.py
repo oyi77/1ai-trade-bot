@@ -1327,6 +1327,12 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
                 })
             urllib.request.urlopen(req, timeout=5)
             posted = True
+            # ── ML Feedback Loop: log signal anatomy for autonomous learning ──
+            try:
+                from members.ml_feedback import log_from_handler
+                log_from_handler(sig, is_broadcasted=True)
+            except Exception:
+                pass
             break  # success, stop
         except Exception as e:
             logger.warning("Bridge post failed for %s: %s", url, e)
@@ -7571,6 +7577,14 @@ def main():
     auto_thread = threading.Thread(target=auto_analyze_loop, daemon=True)
     auto_thread.start()
     logger.info("Auto-analyze thread started")
+
+    # ── ML Feedback Loop — autonomous signal tracking (Shadow Mode) ──
+    try:
+        from members.ml_feedback import start_loop
+        start_loop(interval=60)  # check OPEN signals every 60s
+        logger.info("ML Feedback Loop background worker started")
+    except Exception as exc:
+        logger.warning("ML Feedback Loop unavailable: %s", exc)
 
     # Start daily recap + weekly report thread
     recap_thread = threading.Thread(target=_recap_report_loop, daemon=True)

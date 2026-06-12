@@ -58,6 +58,31 @@ def init_db():
                 payload TEXT DEFAULT ''
             )
         """)
+        # ── ML Feedback Loop — autonomous learning signal tracker ──
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS ml_feedback_loop (
+                signal_id TEXT PRIMARY KEY,
+                timestamp TEXT DEFAULT '',
+                pair TEXT DEFAULT '',
+                market_regime TEXT DEFAULT '',
+                score_smc REAL DEFAULT 0,
+                score_liquidity REAL DEFAULT 0,
+                score_macro REAL DEFAULT 0,
+                total_score REAL DEFAULT 0,
+                is_broadcasted INTEGER DEFAULT 0,
+                entry_price REAL DEFAULT 0,
+                sl_price REAL DEFAULT 0,
+                tp_target REAL DEFAULT 0,
+                mfe REAL DEFAULT 0,
+                mae REAL DEFAULT 0,
+                status TEXT DEFAULT 'OPEN'
+            )
+        """)
+        # Migration: add status column if missing from older versions
+        try:
+            db.execute("ALTER TABLE ml_feedback_loop ADD COLUMN status TEXT DEFAULT 'OPEN'")
+        except sqlite3.OperationalError:
+            pass
 
 
 def ensure_member(chat_id: str, nama: str = "", username: str = "") -> dict:
