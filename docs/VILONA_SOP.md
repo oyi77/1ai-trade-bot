@@ -310,10 +310,35 @@ Bridge punya quality gate sendiri sebelum eksekusi:
 | Mechanical signal (scan loop) | ✅ Auto-post ke bridge + open_trade |
 | AI signal (premium) | ✅ Auto-post ke bridge + open_trade |
 
-### 12.4 Git & Brain
+### 12.5 Solo AI Bypass (Auto Scan Loop)
 
-- Commit: `031b110` — `feat: auto-execute /signal to bridge`
-- Brain: auto-execution SOP
+Auto scan loop pake `ask_ai()` — bisa cuma dapet 1 model provider (solo). Quality gate:
+
+| Kondisi | Aksi |
+|---|---|
+| Solo model + conf < 80% | ❌ BLOCKED |
+| Solo model + conf ≥ 80% | ✅ SOLO PUSH (bypass voters gate) |
+| 2+ model + conf ≥ 70% + RR 1:1.5-5 | ✅ PUSH normal |
+| 2+ model + conf < 70% | ❌ BLOCKED |
+
+Bridge quality gate tetap safety net (conf ≥ 65%, RR ≥ 1:1.5, SL on correct side).
+
+### 12.6 Signal Tidak Sampai Channel?
+
+Jika channel kosong, cek log:
+```bash
+journalctl -u vilona-tradefx-bot --since "30 min ago" | grep -E "AI PUSH|CHANNEL POST|SOLO PUSH|BLOCKED|MECHANICAL|bridge|send_to_channel"
+```
+
+Penyebab paling umum:
+1. **Solo model + conf < 80%** — cuma 1 provider sukses, conf kurang tinggi
+2. **News blackout** — High-Impact news aktif
+3. **Circuit breaker** — 3 kali SL dalam sehari
+
+### 12.7 Git & Brain (updated)
+
+- Commit: `74cd03c` — `feat: quality gate solo AI bypass when conf ≥ 80%`
+- Brain: `drawer_trading_general_b539a40706425989c2a3226f`
 
 > **PELANGGARAN**: Jangan hapus `post_signal_to_bridge()` dari command handler.
 > Signal yg lolos quality gate WAJIB dieksekusi — display-only = buang kesempatan.
