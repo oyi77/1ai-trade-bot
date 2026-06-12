@@ -3817,7 +3817,13 @@ def handle_command(cmd, text, chat_id, msg):
                     f"📰 /news — Market Intel: macro catalyst analysis 👑\n"
                     f"📊 /dashboard — Live dashboard web\n"
                     f"📱 /help — Semua command\n"
-                    f"⚡️ Perpanjang/Upgrade Tier → /subscribe"
+                    f"⚡️ Perpanjang/Upgrade Tier → /subscribe\n"
+                    f"\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🤝 <b>GOTONG ROYONG:</b>\n"
+                    f"Ajak teman trader lu — setiap 3 orang yang\n"
+                    f"gabung lewat link referral lu, dapet <b>PRO 7 hari GRATIS!</b>\n"
+                    f"🔗 Cek link lu: /referral"
                 )
             else:
                 # ── 2b. DYNAMIC CONTENT: FREE ──
@@ -3831,7 +3837,7 @@ def handle_command(cmd, text, chat_id, msg):
                     f"Akses kamu sangat dibatasi. Upgrade sekarang\n"
                     f"untuk membuka full SL/TP, kuota unlimited, dan\n"
                     f"akses rahasia ke EA Auto-Trade!\n"
-                    f"Ketik /subscribe atau klik tombol di bawah."
+                    f"Ketik /subscribe atau klik tombol di bawah.\n\n💡 <b>Gak mau bayar? Ajak teman!</b>\n3 referral = <b>PRO 7 hari GRATIS</b> → /referral"
                 )
 
             # ── 3. Interactive onboarding buttons (tetap 3 tombol) ──
@@ -3959,6 +3965,12 @@ def handle_command(cmd, text, chat_id, msg):
             "/referral — Link Referral (Bawa 3 Teman = PRO Gratis!)",
             "/price — Cek harga market real-time",
             "/help — Buka menu panduan ini",
+            "",
+            "🤝 <b>GOTONG ROYONG (REFERRAL)</b>",
+            "/referral — Lihat Link & Statistik Referral",
+            "💰 3 Teman Gabung = PRO 7 Hari GRATIS!",
+            "💰 10 Teman Gabung = ELITE 30 Hari GRATIS!",
+            "📢 Share link lu ke grup trader, sosmed, dll",
             "",
             "🧠 <b>AI SIGNAL GENERATOR</b>",
             "/analyze — Perintahkan AI Scan Market (FREE: 3x/hari)",

@@ -247,10 +247,11 @@ def main():
     ap.add_argument("--weekly", action="store_true", help="Post weekly P&L + DM free users")
     ap.add_argument("--flash", action="store_true", help="Flash sale blast to free users")
     ap.add_argument("--freetier", action="store_true", help="Send free teaser to trial users")
+    ap.add_argument("--referral", action="store_true", help="Post referral program to channel + DM free users")
     ap.add_argument("--dry-run", action="store_true", help="Print only, don't send")
     args = ap.parse_args()
 
-    if not any([args.weekly, args.flash, args.freetier]):
+    if not any([args.weekly, args.flash, args.freetier, args.referral]):
         ap.print_help()
         return
 
@@ -328,7 +329,57 @@ def main():
                     time.sleep(0.35)
                 except Exception as e:
                     logger.warning(f"Teaser DM failed for {cid}: {e}")
-            logger.info(f"✅ Free teaser DM'd to {sent}/{len(free_users)} free users")
+            logger.info(f"Free teaser DM'd to {sent}/{len(free_users)} free users")
+
+    # ── Referral Program ──
+    if args.referral:
+        text = (
+            "🤝 <b>GOTONG ROYONG — VILONA REFERRAL PROGRAM</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Udah ngerasain tajamnya sinyal AI Vilona?\n"
+            "Ajak temen-temen trader lu gabung!\n\n"
+            "💰 <b>REWARD REFERRAL:</b>\n"
+            "  • 3 Teman Gabung → <b>PRO 7 Hari GRATIS!</b>\n"
+            "  • 10 Teman Gabung → <b>ELITE 30 Hari GRATIS!</b>\n\n"
+            "📋 <b>Cara dapetin link:</b>\n"
+            "  1. Ketik /referral di bot\n"
+            "  2. Copy link referral kamu\n"
+            "  3. Share ke grup WA, Telegram, sosmed\n\n"
+            "🎯 Semakin banyak trader pakai Vilona,\n"
+            "   semakin besar data loop AI kita →\n"
+            "   sinyal makin tajam buat semua member.\n\n"
+            "<b>WIN-WIN. GOTONG ROYONG.</b> 🇮🇩\n\n"
+            "🔗 @berkahkaryaforexbotbot → /referral"
+        )
+        if args.dry_run:
+            print("\n=== REFERRAL ===")
+            print(text)
+        else:
+            if CHANNEL_ID:
+                result = tg_send(text, CHANNEL_ID)
+                if result and result.get("ok"):
+                    logger.info("Referral gimmick posted to channel")
+                else:
+                    logger.error("Referral gimmick post FAILED")
+            sent = 0
+            for u in free_users:
+                cid = str(u.get("chat_id", ""))
+                if not cid or cid.startswith("test"):
+                    continue
+                try:
+                    r = tg_send(
+                        f"💡 <b>Gak perlu bayar buat upgrade!</b>\n\n"
+                        f"Ajak 3 teman trader join Vilona →\n"
+                        f"lu dapet <b>PRO 7 hari GRATIS!</b>\n\n"
+                        f"🔗 Cek link lu: /referral",
+                        cid
+                    )
+                    if r and r.get("ok"):
+                        sent += 1
+                    time.sleep(0.35)
+                except Exception as e:
+                    logger.warning(f"Referral DM failed for {cid}: {e}")
+            logger.info(f"Referral DM'd to {sent}/{len(free_users)} free users")
 
 
 if __name__ == "__main__":
