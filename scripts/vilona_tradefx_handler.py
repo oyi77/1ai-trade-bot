@@ -472,9 +472,13 @@ def fetch_xauusd_spot() -> float | None:
         except Exception as e:
             logger.debug(f"GoldAPI.io failed: {e}")
     
-    # ── Fallback: gold-api.com (free, no key needed) ──
+    # ── Fallback: gold-api.com (free, optional API key for higher rate limits) ──
     try:
-        req = urllib.request.Request("https://api.gold-api.com/price/XAU", headers={"User-Agent": "Vilona/1.0"})
+        headers = {"User-Agent": "Vilona/1.0"}
+        goldapi_com_key = os.environ.get("GOLDAPI_COM_KEY", "")
+        if goldapi_com_key:
+            headers["x-access-token"] = goldapi_com_key
+        req = urllib.request.Request("https://api.gold-api.com/price/XAU", headers=headers)
         with urllib.request.urlopen(req, timeout=5) as r:
             data = json.loads(r.read())
         price = float(data.get("price", 0))
