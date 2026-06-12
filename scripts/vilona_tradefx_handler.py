@@ -1070,12 +1070,40 @@ def answer_callback(cb_id, text=""):
 
 def post_signal_to_bridge(sig, price, display="XAUUSD"):
     symbol = sig.get("symbol", sig.get("display", display))
-    entry = sig.get("entry", price) or price
+    entry_from_sig = sig.get("entry", 0) or 0
     sl = sig.get("sl", 0)
     tp = sig.get("tp", 0)
     confidence = sig.get("confidence", 0)
     rr = sig.get("rr_ratio", 0)
     action = sig.get("action", "HOLD")
+
+    # ── ZONE MODE AUTO-DETECT ──
+    # If AI set specific entry (not 0) and it differs from live price → use pending order
+    entry_mode = sig.get("entry_mode", "market")
+    zone_lo = sig.get("zone_lo", 0) or 0
+    zone_hi = sig.get("zone_hi", 0) or 0
+    if entry_mode == "market" and entry_from_sig and entry_from_sig != price:
+        entry_mode = "zone"
+        entry = entry_from_sig
+        sig["entry"] = entry
+        sig["entry_mode"] = "zone"
+        logger.info(f"🔄 AUTO-ZONE: entry=${entry:.2f} ≠ live=${price:.2f} — switching to zone mode")
+        # Derive zone from entry ± radius based on SL distance
+        if sl and entry_from_sig:
+            sl_dist = abs(sl - entry_from_sig)
+            zone_radius = sl_dist * 0.3
+            sig["zone_lo"] = round(min(entry_from_sig, entry_from_sig) - zone_radius, 2)
+            sig["zone_hi"] = round(max(entry_from_sig, entry_from_sig) + zone_radius, 2)
+        else:
+            zone_half = entry_from_sig * 0.0005
+            sig["zone_lo"] = round(entry_from_sig - zone_half, 2)
+            sig["zone_hi"] = round(entry_from_sig + zone_half, 2)
+    elif not entry_from_sig:
+        # AI didn't set entry — fallback to live price (market only, no zone possible)
+        entry = price
+        entry_mode = "market"
+    else:
+        entry = entry_from_sig
 
     # ── QUALITY GATE ──
     if action in ("BUY", "SELL"):
@@ -1697,6 +1725,7 @@ Return exactly this JSON structure:
 {
  "action":"BUY|SELL|HOLD",
  "entry":0.0, "sl":0.0, "tp":0.0,
+ "zone_lo":0.0, "zone_hi":0.0,
  "sl_pips":0, "tp_pips":0,
  "rr_ratio":"1:X.XX",
  "confidence":0.0, "grade":"A|B|C|D",
@@ -1708,7 +1737,10 @@ Return exactly this JSON structure:
  "layer_2":"CONFIRMED|PENDING|FAILED",
  "confluences":["factor1","factor2"],
  "reasoning":"6-8 kalimat ANALISA LENGKAP..."
-}"""
+}" 
+IMPORTANT — ZONE RULE: zone_lo & zone_hi adalah Supply/Demand zone nyata (20-40 pip range).
+Jika entry=4334, zone_lo=4332.50 zone_hi=4335.50 (30 pip zone). JANGAN pake ±0.05%.
+zone_lo HARUS < zone_hi. GUNAKAN zone_lo/zone_hi untuk pending order — JANGAN market order."""
 
 
 def _extract_json(content):
@@ -2249,10 +2281,9 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     if isinstance(rr, str) and rr.startswith("1:"):
         rr = rr[2:]
     entry = sig.get("entry") or price or 0
-    # ── Entry Zone: ±0.05% range dari entry price ──
-    zone_half = entry * 0.0005 if entry > 0 else 0
-    zone_lo = entry - zone_half if zone_half else entry
-    zone_hi = entry + zone_half if zone_half else entry
+    # ── Entry Zone: prefer sig zone_lo/zone_hi, fallback ±0.05% dari entry ──
+    zone_lo = sig.get("zone_lo") or (entry - entry * 0.0005 if entry > 0 else entry)
+    zone_hi = sig.get("zone_hi") or (entry + entry * 0.0005 if entry > 0 else entry)
     sl = sig.get("sl") or 0
     tp = sig.get("tp") or 0
     tp1 = sig.get("tp1", 0)
