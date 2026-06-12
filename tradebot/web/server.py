@@ -63,9 +63,8 @@ from tradebot.services.plans import (
     get_total_revenue,
     set_plan_price,
 )
-from tradebot.web.monitoring_api import router as monitoring_router
 from tradebot.web.bridge_api import router as bridge_router
-from tradebot.web.tracking_api import router as tracking_router
+from tradebot.web.monitoring_api import router as monitoring_router
 from tradebot.web.public_dashboard import (
     get_backtest_data as _get_backtest_data,
 )
@@ -93,6 +92,7 @@ from tradebot.web.public_dashboard import (
 from tradebot.web.public_dashboard import (
     save_fuel_report as _save_fuel_report,
 )
+from tradebot.web.tracking_api import router as tracking_router
 
 LOG = logging.getLogger("tradebot.web")
 
@@ -273,6 +273,67 @@ async def landing_page():
         media_type="text/html",
     )
 
+# ── EA Download (key-prefilled .set bundle) ──
+EA_BINARY_PATH = Path(__file__).resolve().parent.parent.parent / "ea" / "VilonaTradeFX_EA.ex5"
+
+
+@app.get("/download/ea")
+async def download_ea_static():
+    """Static EA binary download (no key — for anonymous visitors)."""
+    if not EA_BINARY_PATH.exists():
+        return FileResponse(status_code=404)
+    return FileResponse(
+        path=str(EA_BINARY_PATH),
+        media_type="application/octet-stream",
+        filename="VilonaTradeFX_EA.ex5",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+    )
+
+
+@app.get("/ea/download/{key}")
+async def download_ea_with_key(key: str):
+    """EA download with prefilled license key.
+
+    Returns ZIP with EA binary + .set file containing the key.
+    User extracts both to MQL5/Experts/ → Load preset → key auto-filled.
+
+    Usage:
+        /ea/download/VT-A1B2C3D4E5F6
+    """
+    from tradebot.web.bridge_api import EA_BINARY_PATH, _validate_key
+
+    is_valid, _ = _validate_key(key)
+    if not is_valid:
+        return {"error": "invalid_api_key"}
+
+    if not EA_BINARY_PATH.exists():
+        return {"error": "EA binary not found"}
+
+    binary_data = EA_BINARY_PATH.read_bytes()
+    set_content = (
+        "[Experts]\n"
+        f"API_Key={key}\n"
+    )
+
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("VilonaTradeFX_EA.ex5", binary_data)
+        zf.writestr("VilonaTradeFX_EA.set", set_content)
+
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="VilonaTradeFX_EA_{key[:8]}.zip"',
+        },
+    )
+
 
 @app.get("/signals", response_class=HTMLResponse)
 async def signals_page(request: Request):
@@ -370,9 +431,10 @@ async def webhook_tripay(request: Request):
         if not merchant_ref or status != "PAID":
             return {"success": True, "skipped": True}
 
-        from tradebot.services.members_service import upgrade_tier
         import sqlite3
         from pathlib import Path as _Path
+
+        from tradebot.services.members_service import upgrade_tier
 
         # Parse merchant_ref: new=VTFX-pro-12345678-ts, old=VTFX-12345678-ts
         parts = merchant_ref.split("-")

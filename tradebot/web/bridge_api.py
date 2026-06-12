@@ -6,8 +6,8 @@ but integrated into the main FastAPI app on port 9090.
 
 from __future__ import annotations
 
-import hmac
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -299,3 +299,52 @@ def _broadcast_signal(signal: dict[str, Any], api_key: str) -> int:
         return 1
     PENDING.append(signal)
     return 0
+
+
+# ── EA Download with Prefilled Key ────────────────────────────────
+
+EA_BINARY_PATH = Path(__file__).resolve().parent.parent.parent / "ea" / "VilonaTradeFX_EA.ex5"
+
+
+@router.get("/ea/download/{key}")
+async def download_ea_with_key(key: str):
+    """Download EA binary + prefilled .set file with user's license key.
+
+    Returns a ZIP bundle containing:
+    - VilonaTradeFX_EA.ex5 (compiled EA binary)
+    - VilonaTradeFX_EA.set (MT5 input preset with API_Key pre-filled)
+
+    User just extracts both files to MQL5/Experts/ directory.
+    When attaching EA to chart, click 'Load' → key already filled.
+    """
+    is_valid, _ = _validate_key(key)
+    if not is_valid:
+        return JSONResponse({"error": "invalid_api_key"}, status_code=403)
+
+    if not EA_BINARY_PATH.exists():
+        return JSONResponse({"error": "EA binary not found"}, status_code=500)
+
+    binary_data = EA_BINARY_PATH.read_bytes()
+
+    # Generate .set file with prefilled key
+    set_content = (
+        "[Experts]\n"
+        f"API_Key={key}\n"
+    )
+
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("VilonaTradeFX_EA.ex5", binary_data)
+        zf.writestr("VilonaTradeFX_EA.set", set_content)
+
+    buf.seek(0)
+    return Response(
+        content=buf.read(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="VilonaTradeFX_EA-{key[:8]}.zip"',
+        },
+    )

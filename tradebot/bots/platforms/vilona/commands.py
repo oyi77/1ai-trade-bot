@@ -260,10 +260,48 @@ class CommandHandlersMixin(BaseBot):
         )
 
     async def _cmd_ea(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        keys = []
+        try:
+            from tradebot.services.ea_license_service import get_user_keys
+            keys = get_user_keys(target)
+        except Exception:
+            pass
+
+        # Cek apakah user punya key aktif
+        active_key = None
+        for k in keys:
+            if k.get("status") == "active":
+                active_key = k.get("key", "")
+                break
+
+        if active_key:
+            download_url = f'https://phantomfx.aitradepulse.com/ea/download/{active_key}'
+            return (
+                "📥 <b>DOWNLOAD EA MT5</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                f"🔑 Key: <code>{active_key[:16]}...</code>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"⬇️ <a href='{download_url}'>Download EA + Key</a>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "📋 <b>Cara Install:</b>\n"
+                "1. Download file .zip dari link di atas\n"
+                "2. Extract: <code>VilonaTradeFX_EA.ex5</code>"
+                " + <code>VilonaTradeFX_EA.set</code>\n"
+                "3. Copy kedua file ke folder MT5 "
+                "<code>MQL5/Experts/</code>\n"
+                "4. Attach EA ke chart, klik <b>Load</b> → "
+                "key sudah terisi otomatis!\n"
+                "5. Klik OK dan EA siap berjalan\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "📱 Cek key lain: /mykey"
+            )
+
         return (
             "📥 <b>DOWNLOAD EA BRIDGE</b>\n"
             "━━━━━━━━━━━━━━━━\n"
-            "🔗 <a href='https://phantomfx.aitradepulse.com/ea/download/'>Klik di sini untuk download EA MT5</a>\n"
+            "🔗 <a href='https://phantomfx.aitradepulse.com/ea/download/'>"
+            "Download EA MT5 (tanpa key)</a>\n"
             "━━━━━━━━━━━━━━━━\n"
             "📋 <b>Cara Install:</b>\n"
             "1. Download file .ex5\n"
@@ -1713,7 +1751,7 @@ class CommandHandlersMixin(BaseBot):
     async def _cmd_buykey(self, args: list[str], chat_id: str | None = None) -> str:
         """Buy an EA license key (Rp25.000/month)."""
         target = str(chat_id or "")
-        from tradebot.services.ea_license_service import create_key, EA_KEY_PRICE_IDR
+        from tradebot.services.ea_license_service import EA_KEY_PRICE_IDR, create_key
         result = create_key(target)
         if result.get("success"):
             return (
@@ -1738,7 +1776,7 @@ class CommandHandlersMixin(BaseBot):
     async def _cmd_claim(self, args: list[str], chat_id: str | None = None) -> str:
         """Request a claim for available earnings."""
         target = str(chat_id or "")
-        from tradebot.services.mlm_service import create_claim, get_balance, MIN_CLAIM_AMOUNT
+        from tradebot.services.mlm_service import MIN_CLAIM_AMOUNT, create_claim, get_balance
         if not args:
             bal = get_balance(target)
             if bal["can_claim"]:
