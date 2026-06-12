@@ -6559,7 +6559,7 @@ def _compute_daily_recap() -> str | None:
     except Exception:
         pass
     
-    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD"), ("oil","USOIL")]:
+    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD")]:
         log = load_signal_log(pair_key)
         sigs = log.get("signals_sent", 0)
         if sigs == 0 and not any(t.get("symbol","").upper() == disp for t in today_trades):
@@ -6629,7 +6629,7 @@ def _compute_weekly_report() -> str | None:
     
     total_signals = 0; total_wins = 0; total_losses = 0; total_pips = 0.0
     
-    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD"), ("oil","USOIL")]:
+    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD")]:
         log = load_signal_log(pair_key)
         sigs = log.get("signals_sent", 0)
         if sigs == 0 and not any(t.get("symbol","").upper() == disp for t in week_trades):

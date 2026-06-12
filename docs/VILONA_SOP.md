@@ -15,12 +15,11 @@ Vilona adalah **deterministic SMC engine**, bukan AI probabilistic.
 
 ## 2. QUALITY GATE — ASSET ROUTING
 
-| Asset Class | Examples | Killzone Rule | SL/TP |
+| Asset Class | Examples | Killzone Rule | Data Source |
 |---|---|---|---|
-| Forex | EURUSD, GBPUSD | **London + NY ONLY** | ATR-based |
-| Metals | XAUUSD, XAGUSD | **London + NY ONLY** | ATR-based (min 30 pip) |
-| Crypto | BTCUSD, ETHUSD | **24/7 — BYPASS time gates** | ATR-based |
-| Oil | USOIL, WTI | **Timezone-aware (NY session)** | ATR-based (fallback live price) |
+| Forex | EURUSD, GBPUSD | **London + NY ONLY** | No live API (broker only) |
+| Metals | XAUUSD, XAGUSD | **London + NY ONLY** | gold-api.com |
+| Crypto | BTCUSD, ETHUSD | **24/7 — BYPASS time gates** | Binance public API |
 
 ### LARANGAN DATA:
 - 🔴 **JANGAN PAKE YAHOO FINANCE** — harga beda. Udah dibuktikan berkali-kali.
