@@ -6,7 +6,7 @@ from telethon import TelegramClient
 
 api_id = 23647272
 api_hash = "1f69a4e0f03e5f51ddfa5b67ac7b5c49"
-session_path = os.path.expanduser("~/.openclaw/workspace/vilona_session")
+session_path = os.path.expanduser("~/.openclaw/workspace/paijo")
 bot_username = "agent_1ai2_bot"
 
 
