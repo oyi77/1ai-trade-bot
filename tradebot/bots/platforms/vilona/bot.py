@@ -320,12 +320,11 @@ class VilonaBot(
 
     def _is_donor(self, chat_id: str) -> bool:
         try:
-            from members import get_member as m_get
-            member = m_get(str(chat_id))
+            from tradebot.services.members_service import get_member
+            member = get_member(str(chat_id))
             if member:
-                status = member.get("status", "")
                 tier = member.get("tier", "")
-                return status in ("paid",) or tier in ("pro", "elite", "lifetime", "paid")
+                return tier in ("pro", "elite", "lifetime")
         except Exception:
             pass
         return False

@@ -214,9 +214,11 @@ class CommandHandlersMixin(BaseBot):
         )
 
     async def _cmd_autosync(self, args: list[str], chat_id: str | None = None) -> str:
-        self._autosync_enabled = not self._autosync_enabled
-        status = "ON" if self._autosync_enabled else "OFF"
-        return f"🔄 Auto-sync: {status}"
+        return (
+            "⏸️ <b>Auto Sync dinonaktifkan sementara.</b>\n"
+            "Gunakan tombol Trade Auto / Skip pada setiap analisa.\n"
+            "Fitur auto-trade akan diaktifkan kembali di masa depan."
+        )
 
     async def _cmd_donate(self, args: list[str], chat_id: str | None = None) -> str:
         target = chat_id or ""
