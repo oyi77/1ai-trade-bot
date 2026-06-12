@@ -3550,6 +3550,32 @@ def handle_command(cmd, text, chat_id, msg):
                 tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
                 return
             ohlcv_bars = _fetch_ohlcv_for_ai(pair, keep=60)
+            # ── S-TIER ZONE SCAN: Run mechanical zone detection for premium users ──
+            stier_zones_text = ""
+            if ohlcv_bars and len(ohlcv_bars) >= 30:
+                try:
+                    stier_sig, stier_reason = detect_stier_zone(pair.upper(), disp, price, ohlcv_bars)
+                    if stier_sig and stier_sig["action"] in ("BUY", "SELL"):
+                        st_grade = stier_sig.get("grade", "B")
+                        st_entry = stier_sig.get("entry", 0)
+                        st_sl = stier_sig.get("sl", 0)
+                        st_tp = stier_sig.get("tp", 0)
+                        dist_pips = abs(price - st_entry) / (0.10 if disp in ("XAUUSD","GOLD") else 0.01 if disp=="USOIL" else 1.0)
+                        near_zone = "🎯 IN ZONE" if dist_pips <= 10 else f"📡 {dist_pips:.0f} pip away"
+                        stier_zones_text = (
+                            f"\\n━━━━━━━━━━━━━━━━━━━━━━\\n"
+                            f"💀 <b>S-TIER ZONE [{st_grade}] — {near_zone}</b>\\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\\n"
+                            f"{stier_reason}\\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\\n"
+                            f"📍 Zone Entry: ${st_entry:.2f}\\n"
+                            f"🔴 SL: ${st_sl:.2f} | 🟢 TP: ${st_tp:.2f}\\n"
+                            f"📐 RR 1:2.0 | 💀 GOD TIER — Full Margin Ready"
+                        )
+                        logger.info(f"💀 S-TIER ZONE injected into /analyze [{disp}]: "
+                                   f"{stier_sig['action']} @ ${st_entry:.2f} | Grade={st_grade}")
+                except Exception as e:
+                    logger.debug(f"S-TIER analyze injection [{disp}]: {e}")
             # Detect user tier for AI model selection
             user_tier = "starter"
             if MEMBERS_ENABLED and chat_id:
@@ -3692,6 +3718,9 @@ def handle_command(cmd, text, chat_id, msg):
                             if crt_block:
                                 text += crt_block
                         except: pass
+                    # 💀 S-TIER ZONE Injection (premium mechanical confluence)
+                    if stier_zones_text:
+                        text += stier_zones_text
                     # 🏦 SMC Scalper + 📈 Trend Break
                     if SMC_ENGINE and ohlcv_bars:
                         try:
@@ -6086,11 +6115,7 @@ def auto_analyze_loop():
                     except: pass
                 
                 logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
-                # Killzone gate for forex/commodity
-                if pair in ("gold","oil","eurusd","gbpusd") and kz == "Outside":
-                    logger.info(f"⛔ MECH KILLZONE REJECT [{disp}]: outside London/NY (hour={h})")
-                    time.sleep(60)
-                    continue
+                # ── Killzone gate DISABLED — mechanical signals push 24/7 ──
                 # ── BTC 2-bar confirmation (gate channel + bridge) ──
                 if disp == "BTCUSD" and not _consec_2bar_confirm("BTCUSD", action):
                     logger.info(f"⏳ BTC 2-BAR WAIT: {action} — waiting for next bar confirm")
