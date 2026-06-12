@@ -67,12 +67,19 @@ class AnalysisHandlersMixin(BaseBot):
             await asyncio.sleep(self._scan_interval_sec)
 
     async def _broadcast_signal(self, sig: dict[str, Any], display: str, price: float) -> None:
-        """Broadcast signal to subscribers with proven FOMO format from @vilonaaichanel."""
+        """Broadcast signal to subscribers — throttled, deduped, Telegram-safe."""
         try:
             from tradebot.signals.subscriptions import get_all_active_subscribers
 
             subscribers = get_all_active_subscribers()
             if not subscribers:
+                return
+
+            # Deduplicate — one user can sub to multiple categories
+            all_uids: set[str] = set()
+            for uids in subscribers.values():
+                all_uids.update(uids)
+            if not all_uids:
                 return
 
             action = sig.get("action", "HOLD")
@@ -90,33 +97,27 @@ class AnalysisHandlersMixin(BaseBot):
             msg = (
                 f"{icon} <b>SINYAL {action} — {display}</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"📍 <b>BUY ZONE:</b> ${entry:.2f}\n"
+                f"📍 <b>ENTRY:</b> ${entry:.2f}\n"
                 f"🔴 <b>SL:</b> ${sl:.2f} ({sl_pips:.0f} pip)\n"
                 f"🟢 <b>TP:</b> ${tp:.2f} ({tp_pips:.0f} pip)\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"Grade {grade}\n"
                 f"📐 RR 1:{rr:.1f} | <b>Confidence:</b> {confidence:.0%}\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"✅ Quality Gate PASS\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"⚡ Mau signal REAL-TIME langsung ke HP?\n"
-                f"   /subscribe all — Subscribe sekarang!\n\n"
-                f"💚 Atau dukung server AI biar makin akurat:\n"
-                f"   /donate — Isi Bahan Bakar AI\n\n"
                 f"⚠️ NFA — Not Financial Advice"
             )
 
             sent = 0
-            for category, user_ids in subscribers.items():
-                for uid in user_ids:
-                    try:
-                        await self._tg_send(msg, chat_id=uid)
-                        sent += 1
-                    except Exception:
-                        LOG.debug("Broadcast failed to %s", uid)
-                    await asyncio.sleep(0.05)
+            for uid in all_uids:
+                try:
+                    await self._tg_send(msg, chat_id=uid)
+                    sent += 1
+                except Exception:
+                    LOG.debug("Broadcast failed to %s", uid)
+                # Telegram limit: ~20 msgs/min to same chat — 3s per send is safe
+                await asyncio.sleep(3.0)
 
-            LOG.info("Signal broadcast to %d subscribers for %s", sent, display)
+            LOG.info("Signal broadcast to %d unique subscribers for %s", sent, display)
         except Exception as e:
             LOG.warning("Broadcast failed: %s", e)
 
