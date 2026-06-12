@@ -1194,7 +1194,7 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
             logger.info(f"⛔ Signal rejected: SL on wrong side (entry={entry}, sl={sl})")
             return
 
-    # --- XAUUSD: no offset needed (single source: UnifiedMarketData GC=F) ---
+    # --- XAUUSD: goldapi.io premium API (bid/ask from FOREXCOM exchange) ---
 
     payload = {
         "action": action,
