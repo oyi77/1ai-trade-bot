@@ -1091,6 +1091,9 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
         "action": action,
         "symbol": symbol,
         "entry": entry,
+        "zone_lo": sig.get("zone_lo", entry),
+        "zone_hi": sig.get("zone_hi", entry),
+        "entry_mode": sig.get("entry_mode", "market"),
         "sl": sl,
         "tp": tp,
         "tp1": sig.get("tp1", sig.get("tp", 0)),
@@ -1597,14 +1600,16 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
         sl_distance = round(30 * pip_s, 2)
         tp_distance = round(60 * pip_s, 2)
     
-    # ── Entry distance check: skip if price too far from zone ──
+    # ── Entry distance check: if price too far, still return as zone-wait signal ──
     price_distance = abs(price - entry)
     if price_distance > sl_distance * 0.5:
         logger.info(
-            "S-TIER zone [%s] skip: price %.2f too far from zone %.2f (%.1f > %.1f sl_half)",
+            "S-TIER zone [%s] price %.2f too far from zone %.2f (%.1f > %.1f sl_half) — ZONE WAIT mode, "
+            "EA will enter when price reaches zone",
             display, price, entry, price_distance, sl_distance * 0.5,
         )
-        return None, None
+        # Don't return None — pass through as zone signal for EA to wait
+        # SL/TP are still valid since zone IS the intended entry price
     
     if direction == "BUY":
         sl = round(entry - sl_distance, 2)
@@ -1628,8 +1633,12 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     
     reason = f"🤖 S-TIER ZONE [{grade}]: {grade_label}\n" + "\n".join(f"  • {r}" for r in best["reasons"])
     
+    zone_half = entry * 0.0005 if entry > 0 else 0
     sig = {
         "action": direction, "entry": entry,
+        "zone_lo": entry - zone_half if zone_half else entry,
+        "zone_hi": entry + zone_half if zone_half else entry,
+        "entry_mode": "zone",
         "sl": sl, "tp": tp,
         "tp1": tp, "tp2": 0,
         "confidence": min(0.95, 0.65 + best["score"] * 0.04),

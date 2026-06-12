@@ -82,7 +82,8 @@ def load_state():
     except Exception as e:
         logger.warning("load_state failed: %s", e)
     return {"positions": [], "closed": [], "total_pnl": 0.0,
-            "signals_processed": 0, "last_signal_id": None}
+            "signals_processed": 0, "last_signal_id": None,
+            "pending_zone_signals": []}
 
 def save_state(s):
     STATE_FILE.write_text(json.dumps(s, indent=2, default=str))
@@ -277,6 +278,76 @@ def main():
             state["positions"] = new_positions
             save_state(state)
 
+            # ── 1.5. Check pending zone signals (zone-wait mode) ──
+            ZONE_TIMEOUT = 1800  # 30 min max wait for zone
+            new_pending = []
+            for pending in state.get("pending_zone_signals", []):
+                sym = pending.get("symbol", "XAUUSD")
+                p = fetch_price(sym)
+                if not p:
+                    new_pending.append(pending)
+                    continue
+
+                zone_lo = pending.get("zone_lo", 0)
+                zone_hi = pending.get("zone_hi", 0)
+                now_ts = time.time()
+                created_ts = pending.get("created_ts", now_ts)
+                elapsed = now_ts - created_ts
+                timeout = pending.get("entry_timeout", ZONE_TIMEOUT)
+
+                if elapsed > timeout:
+                    logger.info(
+                        f"⏰ ZONE TIMEOUT: {pending['action']} {sym} | "
+                        f"zone=[${zone_lo:.2f}-${zone_hi:.2f}] never reached in {timeout/60:.0f} min — CANCELLED"
+                    )
+                    continue
+
+                in_zone = (zone_lo <= p <= zone_hi) if zone_lo < zone_hi else abs(p - pending.get("entry", 0)) < 0.5
+                if in_zone:
+                    # Don't exceed max positions
+                    if len(state["positions"]) >= 1:
+                        logger.info(f"⏭️ ZONE: price entered zone=[${zone_lo:.2f}-${zone_hi:.2f}] but max position already open — skipping {pending['action']}")
+                        continue
+                    sig = pending["signal"]
+                    pos = {
+                        "id": f"ea_{int(time.time()*1000)}",
+                        "action": sig.get("action", "HOLD"),
+                        "symbol": sig.get("symbol", sym),
+                        "entry": p,
+                        "sl": sig.get("sl", 0) or pending.get("sl", 0),
+                        "tp": sig.get("tp", 0) or pending.get("tp", 0),
+                        "tp1": sig.get("tp1", sig.get("tp", 0)),
+                        "tp2": sig.get("tp2", 0),
+                        "confidence": sig.get("confidence", 0),
+                        "source": sig.get("source", "zone_wait"),
+                        "telegram_message_id": sig.get("telegram_message_id"),
+                        "open_time": wib_now().isoformat(),
+                        "status": "OPEN",
+                    }
+                    state["positions"].append(pos)
+                    state["signals_processed"] += 1
+                    sig_fp = f"{pos['action']}_{pos['entry']:.2f}_{pos['sl']:.2f}_{pos['tp']:.2f}"
+                    state["last_signal_id"] = sig_fp
+                    state["pending_zone_signals"] = state.get("pending_zone_signals", [])
+                    state["pending_zone_signals"] = [x for x in state["pending_zone_signals"] if x.get("created_ts") != created_ts or id(x) == id(pending)]
+                    save_state(state)
+                    rr_str = f"RR=1:{sig.get('rr_ratio', '?'):.1f}" if isinstance(sig.get('rr_ratio'), (int,float)) and sig.get('rr_ratio',0) > 0 else ""
+                    logger.info(
+                        f"🎯 ZONE ENTRY: {pos['action']} {pos['symbol']} @ ${pos['entry']:.2f} | "
+                        f"zone=[${zone_lo:.2f}-${zone_hi:.2f}] | "
+                        f"SL=${pos['sl']:.2f} TP=${pos['tp']:.2f} | waited {elapsed:.0f}s {rr_str}"
+                    )
+                    # Don't re-add to new_pending — executed
+                else:
+                    new_pending.append(pending)
+                    if int(elapsed) % 30 == 0 or elapsed < 5:
+                        logger.info(
+                            f"⏳ ZONE WAIT: {pending['action']} {sym} | "
+                            f"price=${p:.2f} outside zone=[${zone_lo:.2f}-${zone_hi:.2f}] | "
+                            f"waited {elapsed:.0f}s/{timeout:.0f}s"
+                        )
+            state["pending_zone_signals"] = new_pending
+
             # ── 2. Check for new signals ──
             if SIGNAL_FILE.exists():
                 mtime = SIGNAL_FILE.stat().st_mtime
@@ -293,9 +364,20 @@ def main():
                             logger.info(f"⏭️ Max positions — skip {sig['action']}")
                             continue
 
-                        # ── Quality check ──
+                        # ── Quality check (safe type conversion) ──
                         conf = sig.get("confidence", 0)
+                        if isinstance(conf, str):
+                            try: conf = float(conf)
+                            except: conf = 0
                         rr = sig.get("rr_ratio", 0)
+                        if isinstance(rr, str):
+                            # Handle "1:X" format
+                            if ":" in rr:
+                                try: rr = float(rr.split(":")[-1])
+                                except: rr = 0
+                            else:
+                                try: rr = float(rr)
+                                except: rr = 0
                         if conf < 0.65:
                             logger.info(f"⛔ Signal rejected: confidence {conf:.0%} < 65%")
                             continue
@@ -307,7 +389,8 @@ def main():
                         sig_entry = sig.get("entry", 0) or 0
                         sig_symbol = sig.get("symbol", "XAUUSD")
                         live_check = fetch_price(sig_symbol) if sig_symbol else None
-                        if live_check and sig_entry:
+                        entry_mode = sig.get("entry_mode", "market")
+                        if live_check and sig_entry and entry_mode != "zone":
                             pip_s = _pip_size(sig_symbol)
                             drift_pips = abs(live_check - sig_entry) / pip_s
                             if drift_pips > 15:
@@ -316,6 +399,43 @@ def main():
                                     f"{drift_pips:.0f} pip > 15 pip — CANCELLED DUE TO SLIPPAGE")
                                 continue
                             logger.info(f"✅ SLIPPAGE OK: drift={drift_pips:.1f} pip (max 15)")
+                        elif entry_mode == "zone":
+                            logger.info(f"⏭️ SLIPPAGE SKIP (zone mode): entry=${sig_entry:.2f} live=${live_check} — drift expected, EA will wait for zone")
+
+                        # ── ZONE MODE: wait for price to enter zone instead of immediate entry ──
+                        entry_mode = sig.get("entry_mode", "market")
+                        if entry_mode == "zone":
+                            zone_lo = sig.get("zone_lo", 0)
+                            zone_hi = sig.get("zone_hi", 0)
+                            live_check = live_check or fetch_price(sig_symbol)
+                            if live_check and zone_lo < zone_hi and (zone_lo <= live_check <= zone_hi):
+                                # Price already in zone — execute immediately (fall through)
+                                logger.info(f"🎯 ZONE MODE: price=${live_check:.2f} already inside zone=[${zone_lo:.2f}-${zone_hi:.2f}] — executing now")
+                            else:
+                                # Price outside zone — queue for zone-wait
+                                pending_entry = {
+                                    "created_ts": time.time(),
+                                    "symbol": sig_symbol,
+                                    "entry": sig_entry,
+                                    "zone_lo": zone_lo,
+                                    "zone_hi": zone_hi,
+                                    "sl": sig.get("sl", 0),
+                                    "tp": sig.get("tp", 0),
+                                    "signal": dict(sig),
+                                    "action": sig.get("action", "HOLD"),
+                                    "entry_timeout": sig.get("entry_timeout", 1800),
+                                }
+                                state.setdefault("pending_zone_signals", []).append(pending_entry)
+                                state["signals_processed"] += 1
+                                state["last_signal_id"] = sig_fp
+                                save_state(state)
+                                live_str = f"${live_check:.2f}" if live_check else "N/A"
+                                logger.info(
+                                    f"⏳ ZONE PENDING: {sig['action']} {sig_symbol} | "
+                                    f"zone=[${zone_lo:.2f}-${zone_hi:.2f}] | live={live_str} | "
+                                    f"waiting for price to reach zone (timeout=30m)"
+                                )
+                                continue  # skip position creation — zone monitor will handle it
 
                         pos = {
                             "id": f"ea_{int(time.time()*1000)}",
