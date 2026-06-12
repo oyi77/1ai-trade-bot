@@ -402,9 +402,12 @@ class Handler(BaseHTTPRequestHandler):
         global _live_snapshot
         if _live_snapshot:
             snap = dict(_live_snapshot)
-            if snap.get("uptime_seconds") or snap.get("status"):
-                self._json(snap)
-                return
+            # Only use webhook snapshot if it has performance data (dashboard_snapshot format)
+            # Skip heartbeats — they're worker status pings without trade data
+            if snap.get("type") == "dashboard_snapshot" and snap.get("performance") and snap.get("users"):
+                if snap.get("uptime_seconds") or snap.get("status"):
+                    self._json(snap)
+                    return
 
         LIVE_STATUS_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'vilona_tradefx', 'live_status.json')
         worker = {}
