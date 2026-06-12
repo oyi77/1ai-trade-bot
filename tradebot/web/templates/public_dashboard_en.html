@@ -1067,7 +1067,7 @@ async function loadAll() {
       fetch('/api/user_activity').then(r => r.json()),
       fetch('/api/transparency').then(r => r.json()),
       fetch('/api/backtest').then(r => r.json()),
-      fetch('/api/subscribers').then(r => r.json()),
+      fetch('/api/donors').then(r => r.json()).catch(() => null),
       fetch('/api/daily_analyze').then(r => r.json()),
       fetch('/api/daily_recap').then(r => r.json()),
       fetch('/api/fuel/stats').then(r => r.json()),
@@ -1080,7 +1080,7 @@ async function loadAll() {
     const trans = transparency || {};
     const userSigs = userAct.signals || [];
     const backtest = backtestRes || {};
-    const subscribers = subRes.subscribers || [];
+    const donors = (subRes && subRes.donors) || [];
     const daily = dailyRes || {};
     const recap = recapRes || {};
     const snapshot = snapRes || {};
@@ -1153,7 +1153,7 @@ async function loadAll() {
     const analysesEl = document.getElementById('comm-analyses');
     if (analysesEl) analysesEl.textContent = daily.total_all_time || 0;
 
-    renderSubWall(subscribers);
+    renderSubWall(donors);
     renderDailyAnalyze(daily, trans);
     renderBacktest(backtest);
     renderDailyRecap(recap);

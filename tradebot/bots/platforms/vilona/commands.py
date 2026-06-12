@@ -1608,6 +1608,10 @@ def register_vilona_commands(app, bot):
         ("analyze", "_cmd_analyze"),
         ("signal", "_cmd_signal"),
         ("stockity", "_cmd_stockity"),
+        ("winrate", "_cmd_winrate"),
+        ("history", "_cmd_history"),
+        ("recap", "_cmd_recap"),
+        ("mapping", "_cmd_mapping"),
     ]
 
     def make_handler(handler_name):

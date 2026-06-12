@@ -90,8 +90,6 @@ except Exception as e:
 try:
     from learning_loop import learn_from_sl, learn_from_tp, get_learning_summary
     LEARNING_ENGINE = True
-    logger = logging.getLogger("init")
-    logger.info("🧠 Learning engine loaded (learning_loop)")
 except Exception as e:
     LEARNING_ENGINE = False
     print(f"Learning engine unavailable: {e}")
@@ -6400,153 +6398,10 @@ def auto_analyze_loop():
                 mech_sig = stier_sig
                 logger.info(f"💀 S-TIER OVERRIDE [{disp}]: bypassing mechanical — using God Tier zone")
             else:
-                # ── MECHANICAL OVERRIDE: Quant + FVG + Hermes ──
+                # ── AI-ONLY MODE: skip mechanical, langsung ke AI consensus ──
                 mech_sig = None
-                if MARKET_DATA and is_forex:
-                    try:
-                        m1_bars = MARKET_DATA.get_ohlcv(pair, "1m", 200)
-                        if m1_bars and len(m1_bars) >= 30:
-                            ohlcv_m1 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
-                                          "low": b.low, "close": b.close, "volume": b.volume} for b in m1_bars]
-                            mech_sig, mech_reason = detect_mechanical_signal(
-                                pair.upper(), disp, price, ohlcv_m1)
-                            if mech_sig:
-                                logger.info(f"⚡ MECHANICAL [{disp}]: {mech_sig['action']} | {mech_sig['source']}")
-                    except Exception as e:
-                        logger.debug(f"Mechanical check [{disp}]: {e}")
 
-            if mech_sig and mech_sig["action"] in ("BUY", "SELL"):
-                action = mech_sig["action"]
-                mech_sig = _clamp_sltp(mech_sig, disp)  # enforce SL direction + bounds
-                conf = mech_sig["confidence"]
-                
-                # Direction stability guard — block opposite direction within 10 min
-                last_time = log.get("last_signal_time")
-                last_action = log.get("last_action")
-                if last_time and last_action:
-                    try:
-                        last_dt = datetime.fromisoformat(last_time)
-                        elapsed = (wib_now() - last_dt).total_seconds()
-                        if elapsed < 600 and last_action != action:
-                            logger.info(f"BLOCKED [{disp}]: {action} after {last_action} ({elapsed:.0f}s ago)")
-                            time.sleep(30)
-                            continue
-                    except: pass
-                
-                logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
-                # ── Killzone gate: forex/metals only London/NY ──
-                if disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
-                    lkz, nykz = killzone(h)
-                    if not lkz and not nykz:
-                        logger.info(f"   [{disp}] BLOCKED: outside killzone (London/NY only)")
-                        time.sleep(30)
-                        continue
-                # ── BTC 2-bar confirmation (gate channel + bridge) ──
-                if disp == "BTCUSD" and not _consec_2bar_confirm("BTCUSD", action):
-                    logger.info(f"⏳ BTC 2-BAR WAIT: {action} — waiting for next bar confirm")
-                    continue
-                # Channel posts always show full SL/TP (marketing)
-                mech_sig["_tier_capped"] = False
-                # ── SMC/ICT Enrichment for channel signals ──
-                smc_text = ""
-                try:
-                    from smc_section import format_smc_analysis
-                    pip_s = 0.10 if disp in ("XAUUSD","GOLD") else 0.01 if disp == "USOIL" else 1.0
-                    ohlcv_smc = _fetch_ohlcv_for_ai(pair, keep=60)
-                    if ohlcv_smc:
-                        smc_text = format_smc_analysis(ohlcv_smc, disp, price, action, pip_s)
-                except Exception:
-                    pass
-                text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp", smc_text=smc_text)
-                _entry = mech_sig.get("entry", price) or 0
-                _sl = mech_sig.get("sl", 0) or 0
-                _tp = mech_sig.get("tp", 0) or 0
-                # ── SLIPPAGE GUARD: re-fetch live price before posting ──
-                slip_ok, live_now, drift = _slippage_guard(disp, _entry, action)
-                if not slip_ok:
-                    logger.warning(f"⛔ SLIPPAGE ABORT [{disp}]: drift={drift:.0f} pip — signal cancelled")
-                    time.sleep(30)
-                    continue
-                if _can_post_to_channel(pair, action, _entry, _sl, _tp):
-                    logger.info(f"CHANNEL POST [mechanical]: {pair} {action}")
-                    result = send_to_channel(text)
-                    if result:
-                        logger.info(f"CHANNEL POST OK [mechanical]: message_id={result.get('result',{}).get('message_id')}")
-                        # ── Capture message_id for reply chain ──
-                        mech_sig['telegram_message_id'] = result.get('result', {}).get('message_id')
-                    else:
-                        logger.warning(f"CHANNEL POST FAILED [mechanical]: tg_send returned None")
-                    _mark_channel_post(pair, action, _entry, _sl, _tp)
-                    # ── Save to unified feed ──
-                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
-                              confidence=conf, rr_ratio=mech_sig.get("rr_ratio","?"),
-                              engines=mech_sig.get("engines",{}), source="channel-auto",
-                              price=price, grade=mech_sig.get("grade",""),
-                              source_name=mech_sig.get("source","mech"))
-                    post_signal_to_bridge(mech_sig, price, disp)
-                    # ── ENTRY EXECUTED notification ──
-                    if disp == "XAUUSD" and action in ("BUY", "SELL"):
-                        _m_entry = mech_sig.get("entry", price) or price
-                        _m_zl = mech_sig.get("zone_lo", _m_entry)
-                        _m_zh = mech_sig.get("zone_hi", _m_entry)
-                        if mech_sig.get("entry_mode") == "zone" and _m_zl < _m_zh:
-                            _m_label = f"{_m_zl:.2f} — {_m_zh:.2f}"
-                            _m_hint = "⏳ EA menunggu harga masuk zone..."
-                        else:
-                            _m_label = f"{_m_entry:.2f}"
-                            _m_hint = ""
-                        _m_exec = (
-                            f"⚡ <b>ENTRY EXECUTED — {'Zone Pending' if _m_hint else 'Market'}</b>\n"
-                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"📊 {action} {disp} | 🕐 {wib_now().strftime('%H:%M')} WIB\n"
-                            f"📍 {'Zone' if _m_hint else 'Entry'}: ${_m_label}\n"
-                            + (f"{_m_hint}\n" if _m_hint else "") +
-                            f"━━━━━━━━━━━━━━━━━━━━━━"
-                        )
-                        try:
-                            send_to_channel(_m_exec)
-                            logger.info(f"📤 ENTRY EXECUTED [mech]: {action} {disp} @ {_m_label}")
-                        except Exception as e:
-                            logger.warning(f"Failed to post ENTRY EXECUTED [mech]: {e}")
-                else:
-                    # Rate limited — check if we can still force (trade already opened via bridge)
-                    state_force = _cs()
-                    if time.time() - state_force.get("global_last", 0) < _GLOBAL_CHANNEL_COOLDOWN:
-                        logger.info(f"⏱️ SKIP force post [{disp}]: global cooldown active ({int(time.time()-state_force['global_last'])}s ago)")
-                    else:
-                        logger.warning(f"🚨 FORCE POST [{disp}]: rate limited but trade opening — posting anyway")
-                        result = send_to_channel(text)
-                        if result:
-                            mech_sig['telegram_message_id'] = result.get('result', {}).get('message_id')
-                        _mark_channel_post(pair, action, _entry, _sl, _tp)
-                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
-                              confidence=conf, rr_ratio=mech_sig.get("rr_ratio","?"),
-                              engines=mech_sig.get("engines",{}), source="channel-auto",
-                              price=price, grade=mech_sig.get("grade",""),
-                              source_name=mech_sig.get("source","mech"))
-                if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
-                    mech_sig = enrich_signal_with_layers(mech_sig)
-
-                if LEARNING_ENGINE:
-                    pass  # learning happens on trade outcome (check_outcomes)
-
-                log["signals_sent"] += 1
-                log["last_signal_time"] = wib_now().isoformat()
-                log["last_action"] = action
-                log["last_price"] = price
-                log["last_signal"] = {
-                    "action": action, "entry": mech_sig.get("entry", price),
-                    "sl": mech_sig.get("sl", 0), "tp": mech_sig.get("tp", 0),
-                    "tp1": mech_sig.get("tp1", 0), "tp2": mech_sig.get("tp2", 0),
-                    "confidence": conf, "source": mech_sig.get("source", "mech"),
-                    "rr_ratio": mech_sig.get("rr_ratio", 0),
-                }
-                _eaq = DATA_DIR / f"ea_signal_{pair}.json"
-                _eaq.write_text(json.dumps(log["last_signal"]))
-                save_signal_log(log, pair)
-                asset_logs[log_key] = log
-                time.sleep(120)  # 2 min cooldown after mechanical
-            # ── AI Consensus — always run (killzone gate DISABLED) ──
+            # ── AI Consensus — ONLY source of signals ──
             sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=True,
                           ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
             if not sig:
