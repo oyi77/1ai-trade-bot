@@ -725,9 +725,15 @@ class SignalHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length) if length else b""
             import urllib.request as ur
+            # Forward ALL relevant headers, especially X-Callback-Signature for HMAC
+            fwd_headers = {"Content-Type": self.headers.get("Content-Type", "application/json")}
+            for hdr in ("X-Callback-Signature", "X-Callback-Event", "User-Agent"):
+                val = self.headers.get(hdr)
+                if val:
+                    fwd_headers[hdr] = val
             req = ur.Request(f"http://127.0.0.1:8787{path}",
                              data=body or None,
-                             headers={"Content-Type": self.headers.get("Content-Type", "application/json")})
+                             headers=fwd_headers)
             resp = ur.urlopen(req, timeout=30)
             result = resp.read()
             self._json(json.loads(result) if result else {"status": "forwarded"})
