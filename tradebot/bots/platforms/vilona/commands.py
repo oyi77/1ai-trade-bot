@@ -1709,6 +1709,69 @@ class CommandHandlersMixin(BaseBot):
         if sub["active"]:
             text += f"\nSubscription: {sub['tier_type']} ({sub['plan']})"
         return text
+
+    async def _cmd_buykey(self, args: list[str], chat_id: str | None = None) -> str:
+        """Buy an EA license key (Rp25.000/month)."""
+        target = str(chat_id or "")
+        from tradebot.services.ea_license_service import create_key, EA_KEY_PRICE_IDR
+        result = create_key(target)
+        if result.get("success"):
+            return (
+                "🔑 <b>EA KEY BERHASIL DIBUAT</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                f"Key: <code>{result['key']}</code>\n"
+                f"Harga: <b>Rp{EA_KEY_PRICE_IDR:,}/bulan</b>\n"
+                f"Expires: 30 hari\n\n"
+                "💳 Pembayaran akan diproses via admin.\n"
+                "Gunakan /mykey untuk lihat semua key."
+            )
+        return f"Gagal membuat key: {result.get('error', 'unknown')}"
+
+    async def _cmd_earnings(self, args: list[str], chat_id: str | None = None) -> str:
+        """Show earnings balance and transaction history."""
+        target = str(chat_id or "")
+        from tradebot.services.mlm_service import format_balance, format_ledger
+        bal = format_balance(target)
+        ledger = format_ledger(target)
+        return bal + "\n\n" + ledger
+
+    async def _cmd_claim(self, args: list[str], chat_id: str | None = None) -> str:
+        """Request a claim for available earnings."""
+        target = str(chat_id or "")
+        from tradebot.services.mlm_service import create_claim, get_balance, MIN_CLAIM_AMOUNT
+        if not args:
+            bal = get_balance(target)
+            if bal["can_claim"]:
+                return (
+                    "💰 <b>CLAIM EARNINGS</b>\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    f"Saldo tersedia: <b>Rp{bal['available']:,}</b>\n"
+                    f"Minimal claim: Rp{MIN_CLAIM_AMOUNT:,}\n\n"
+                    "Gunakan: /claim &lt;amount&gt;\n"
+                    "Contoh: /claim 100000"
+                )
+            return (
+                "💰 <b>CLAIM EARNINGS</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                f"Saldo tersedia: Rp{bal['available']:,}\n"
+                f"Minimal claim: Rp{MIN_CLAIM_AMOUNT:,}\n\n"
+                "⏳ Saldo belum mencukupi untuk claim."
+            )
+        try:
+            amount = int(args[0])
+        except ValueError:
+            return "Gunakan: /claim &lt;amount&gt; (angka, tanpa titik)"
+        result = create_claim(target, amount)
+        if result.get("success"):
+            return (
+                "✅ <b>CLAIM DIKIRIM</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                f"Amount: <b>Rp{amount:,}</b>\n"
+                f"Claim ID: <code>{result['claim_id']}</code>\n\n"
+                "⏳ Menunggu persetujuan admin.\n"
+                "Admin akan memproses dalam 1x24 jam."
+            )
+        return f"Gagal: {result.get('error', 'unknown')}"
 def register_vilona_commands(app, bot):
     """Register Vilona commands with the UnifiedBot application.
     Only essential text commands are registered — most features
@@ -1731,6 +1794,9 @@ def register_vilona_commands(app, bot):
         ("history", "_cmd_history"),
         ("recap", "_cmd_recap"),
         ("mapping", "_cmd_mapping"),
+        ("buykey", "_cmd_buykey"),
+        ("earnings", "_cmd_earnings"),
+        ("claim", "_cmd_claim"),
         ("link", "_cmd_link"),
         ("unlink", "_cmd_unlink"),
         ("platforms", "_cmd_platforms"),

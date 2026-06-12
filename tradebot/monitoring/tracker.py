@@ -690,6 +690,14 @@ class TradeTracker:
             )
         """)
 
+        # EA License tables
+        from tradebot.services.ea_license_service import init_tables as init_ea
+        init_ea()
+
+        # MLM tables
+        from tradebot.services.mlm_service import init_tables as init_mlm
+        init_mlm()
+
     def _get_open_trade(self, trade_id: str) -> dict | None:
         row = self._storage.fetchone(
             """SELECT trade_id, symbol, action, entry_price, sl, tp, stake,

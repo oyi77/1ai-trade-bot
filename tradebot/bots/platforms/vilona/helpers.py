@@ -100,7 +100,8 @@ DONOR_DAILY_QUOTA = 60
 FREE_DAILY_QUOTA = 3
 DIRECTION_LOCK_SECONDS = 60
 
-FOMO_PHRASES = [
+FOMO_PHRASES: list[str] = [
+    # Signal urgency
     "🔥 Sinyal ini cuma untuk yang FAST RESPONSE!",
     "⚡ 9 engines udah konsensus — tinggal kamu yang belum action!",
     "💰 Orang lain udah cuan, kamu masih tunggu apa?",
@@ -111,6 +112,46 @@ FOMO_PHRASES = [
     "🔥 90% orang yang subscribe cuan tiap hari. Kamu kapan?",
     "💰 Udah 15 member lain yg eksekusi signal ini. Lo ketinggalan!",
     "🎯 Sinyal akurasi tinggi — cuma buat subscriber PREMIUM.",
+    # Win FOMO
+    "🎉 CUAN! Profit secured! AI strikes again!",
+    "🔥 ANOTHER ONE! AI partner lu makin tajem!",
+    "💰 Profit is profit. Take it and run.",
+    "🚀 AI lu makin pinter tiap hari. Cuan terus!",
+    "💪 Ini baru permulaan. Masih banyak profit menyusul!",
+    # Loss FOMO
+    "💪 Loss is part of the game. Market wins this round.",
+    "📉 Market wins this round. Kita belajar dan balas nanti.",
+    "🛡️ SL hit = capital protected. Nyawa trading masih panjang.",
+    "🎯 Kalah battle, not war. Next trade kita balas!",
+    "⚡ AI udah belajar dari kesalahan. Sinyal berikutnya lebih akurat!",
+    # Subscription FOMO
+    "💎 Fitur premium cuma Rp50k/bulan. Lebih murah dari 1x makan!",
+    "🚀 9 AI engines kerja 24/7 buat lo. Masih gratis? Upgrade sekarang!",
+    "💰 Rata-rata subscriber cuan 3x lipat dari biaya subscription.",
+    "⚡ Signal+Execute: biarin AI yang trading, lo tinggal terima profit!",
+    "🔥 Limited offer! Harga bisa naik kapan aja. Subscribe sekarang!",
+    # EA Key FOMO
+    "🔑 EA key cuma Rp25k/bulan. 1 key = 1 EA. Auto-trading 24/7!",
+    "⚡ Koneksi EA langsung ke MT5. Lo tinggal nonton profit masuk!",
+    "💰 Bayar Rp25k, profit bisa jutaan. Hitung sendiri untungnya!",
+    "🚀 Udah 50+ trader pake EA ini. Lo ketinggalan!",
+    "🎯 Jangan manual trading terus. Biarin AI + EA yang kerja!",
+]
+
+FOMO_TP: list[str] = [
+    "🎉 <b>CUAN! Profit secured!</b>",
+    "🔥 <b>ANOTHER ONE! AI strikes again!</b>",
+    "💰 <b>Profit is profit. Take it and run.</b>",
+    "🚀 <b>AI Partner lu makin tajem!</b>",
+    "💎 <b>Diamond hands paid off! Profit locked!</b>",
+]
+
+FOMO_SL: list[str] = [
+    "💪 <b>Loss is part of the game.</b>",
+    "📉 <b>Market wins this round. We learn.</b>",
+    "🛡️ <b>SL hit = capital protected.</b>",
+    "🎯 <b>Kalah battle, not war. Next trade kita balas!</b>",
+    "⚡ <b>AI udah belajar. Sinyal berikutnya lebih akurat!</b>",
 ]
 
 _last_offset = 0.0

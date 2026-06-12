@@ -55,6 +55,7 @@ HISTORY_MENU: list[list[tuple[str, str]]] = [
 ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("cmd:status", "📊 Status"), ("cmd:subscribe", "⭐ Subscribe")],
     [("menu:donate", "💚 Donate"), ("cmd:mykey", "🔑 My Key")],
+    [("cmd:earnings", "💰 Earnings"), ("cmd:buykey", "🔑 Buy EA Key")],
     [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
     [("cmd:myid", "🆔 My ID"), ("cmd:trailing", "🏃 Trailing Status")],
     [("cmd:settrailing", "⚡ Set Trailing"), ("cmd:settings", "⚙️ Settings")],
