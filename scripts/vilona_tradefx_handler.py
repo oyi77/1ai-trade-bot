@@ -2152,7 +2152,7 @@ def _sig_quality_pass(sig: dict, quant_result: dict | None = None, display: str 
         if qv == "RED" and action == "BUY":
             return False, f"Quant says SELL but signal BUY — conflict"
 
-    # Gate 5: Session (soft — downgrade to B for Asia on forex/metals)
+    # Gate 5: Session — BLOCK forex/metals outside London/NY killzone
     is_crypto = display.upper() in ("BTCUSD", "ETHUSD", "BTC", "ETH")
     if not is_crypto:
         try:
@@ -2160,7 +2160,7 @@ def _sig_quality_pass(sig: dict, quant_result: dict | None = None, display: str 
         except Exception:
             london_kz, ny_kz = False, False
         if not london_kz and not ny_kz:
-            return True, "Asia session — lower volatility"
+            return False, "Outside killzone — London/NY only for forex/metals"
 
     return True, "Quality Gate PASS"
 
@@ -2325,12 +2325,13 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     
     is_actionable = q_passed and action in ("BUY", "SELL")
 
-    # ── Killzone gate: DISABLED — analyze all sessions 24/7 ──
+    # ── Killzone gate: enforce London/NY for forex/metals, bypass for crypto ──
     forex_metal = display in ("XAUUSD", "GOLD", "USOIL", "EURUSD", "GBPUSD", "USDJPY")
+    is_crypto = display.upper() in ("BTCUSD", "ETHUSD", "BTC", "ETH")
     in_kz = True
-    if forex_metal:
+    if forex_metal and not is_crypto:
         lkz, nykz = killzone(h)
-        in_kz = True  # gate bypassed — always allow
+        in_kz = lkz or nykz
 
     header_emoji = emoji if is_actionable else "⚪️"
     header_label = f"SINYAL {order_type}" if is_actionable else "MARKET PULSE"
@@ -6433,7 +6434,13 @@ def auto_analyze_loop():
                     except: pass
                 
                 logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
-                # ── Killzone gate DISABLED — mechanical signals push 24/7 ──
+                # ── Killzone gate: forex/metals only London/NY ──
+                if disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
+                    lkz, nykz = killzone(h)
+                    if not lkz and not nykz:
+                        logger.info(f"   [{disp}] BLOCKED: outside killzone (London/NY only)")
+                        time.sleep(30)
+                        continue
                 # ── BTC 2-bar confirmation (gate channel + bridge) ──
                 if disp == "BTCUSD" and not _consec_2bar_confirm("BTCUSD", action):
                     logger.info(f"⏳ BTC 2-BAR WAIT: {action} — waiting for next bar confirm")
@@ -6577,6 +6584,13 @@ def auto_analyze_loop():
                     logger.info(f"   [{disp}] BLOCKED: RR 1:{rr_val:.1f} outside 1:1.5-5")
                 else:
                     should_push = True
+
+                # ── Killzone gate: forex/metals outside London/NY = BLOCK ──
+                if should_push and disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
+                    lkz, nykz = killzone(h)
+                    if not lkz and not nykz:
+                        logger.info(f"   [{disp}] BLOCKED: outside killzone (London/NY only)")
+                        should_push = False
 
             if should_push:
                 logger.info(f"AI PUSH [{disp}]: {action} | conf={conf:.0%} | model={sig.get('_model','?')}")
