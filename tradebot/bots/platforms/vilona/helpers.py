@@ -28,8 +28,6 @@ DEFAULT_SYMBOL_MAP: dict[str, str] = {
     "btcusd": "BTC-USD",
     "eth": "ETH-USD",
     "ethusd": "ETH-USD",
-    "oil": "CL=F",
-    "usoil": "CL=F",
     "eurusd": "EURUSD=X",
     "gbpusd": "GBPUSD=X",
     "usdjpy": "JPY=X",
@@ -73,7 +71,6 @@ SUPPORTED_PAIRS: list[str] = [
 AUTO_SCAN_ASSETS: list[tuple[str, str, str, bool]] = [
     ("gold", "XAUUSD", "GC=F", True),
     ("btc", "BTCUSD", "BTC-USD", False),
-    ("oil", "USOIL", "CL=F", True),
 ]
 
 DONATION_INPUT_STATE: dict[str, bool] = {}
@@ -83,7 +80,6 @@ XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
 _pip_sizes = {
     "XAUUSD": 0.10,
     "GOLD": 0.10,
-    "USOIL": 0.01,
     "BTCUSD": 1.0,
     "ETHUSD": 0.01,
     "EURUSD": 0.00010,
@@ -699,7 +695,7 @@ def fmt_signal(
 
     if action in ("BUY", "SELL") and entry and sl and price:
         sl_dist = abs(sl - entry)
-        min_sl_map = {"XAUUSD": 3.0, "GOLD": 3.0, "USOIL": 0.15, "BTCUSD": 600, "ETHUSD": 50}
+        min_sl_map = {"XAUUSD": 3.0, "GOLD": 3.0, "BTCUSD": 600, "ETHUSD": 50}
         min_sl = min_sl_map.get(display.upper(), 0)
         if min_sl > 0 and 0 < sl_dist < min_sl:
             sl = 0

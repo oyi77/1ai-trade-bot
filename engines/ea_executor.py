@@ -57,7 +57,6 @@ def _pip_size(symbol: str) -> float:
     if s in ("BTCUSD", "BTC"):    return 1.0
     if s in ("ETHUSD", "ETH"):    return 0.01
     if s.endswith("JPY"):         return 0.01
-    if s in ("USOIL", "OIL", "CL"): return 0.01
     return 0.0001
 
 def _pip_value(symbol: str) -> float:
@@ -111,11 +110,6 @@ def fetch_price(symbol="XAUUSD"):
             r = urllib.request.urlopen("https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT", timeout=10)
             price = float(json.loads(r.read())["price"])
             return round(price, 2)
-        elif sym in ("USOIL", "OIL", "WTI"):
-            # No reliable free API for oil — return None to skip slippage check
-            # Price from OHLCV last close is used as reference in caller
-            logger.debug("fetch_price(%s): no live price API available", sym)
-            return None
         else:
             logger.warning("fetch_price(%s): unknown symbol", sym)
     except Exception as e:

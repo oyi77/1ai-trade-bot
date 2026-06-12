@@ -147,7 +147,7 @@ class AnalysisHandlersMixin(BaseBot):
         symbol = resolve_yahoo_symbol(pair)
         display = pair.upper()
 
-        is_forex_metal = display in ("XAUUSD", "USOIL")
+        is_forex_metal = display == "XAUUSD"
         if is_forex_metal:
             lkz, nykz = killzone()
             if not (lkz or nykz):
