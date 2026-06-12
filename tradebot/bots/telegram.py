@@ -49,6 +49,42 @@ PRICE_MAP: dict[str, int] = {
 
 VALID_SYMBOLS: list[str] = ["CRYPTO_IDX", "BTC_IDX", "ETH_IDX", "GOLD_IDX"]
 
+PLATFORM_PAIRS = {
+    "deriv": ["R_10", "R_25", "R_50", "R_75", "R_100"],
+    "binance": ["BTCUSDT", "ETHUSDT"],
+    "forex": ["XAUUSD", "EURUSD", "GBPUSD"],
+    "stockity": ["CRYPTO_IDX", "EUR_USD_OTC", "GBP_USD_OTC"],
+}
+
+PLATFORM_LABELS = {
+    "deriv": "Deriv (Binary Options)",
+    "binance": "CCXT (Binance Crypto)",
+    "forex": "Forex (Yahoo Finance)",
+    "stockity": "Stockity (OTC Markets)",
+}
+
+def get_platform_keyboard(flow_type: str) -> InlineKeyboardMarkup:
+    keyboard = [
+        [InlineKeyboardButton(PLATFORM_LABELS["deriv"], callback_data=f"flow:{flow_type}_platform:deriv")],
+        [InlineKeyboardButton(PLATFORM_LABELS["binance"], callback_data=f"flow:{flow_type}_platform:binance")],
+        [InlineKeyboardButton(PLATFORM_LABELS["forex"], callback_data=f"flow:{flow_type}_platform:forex")],
+        [InlineKeyboardButton(PLATFORM_LABELS["stockity"], callback_data=f"flow:{flow_type}_platform:stockity")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+def get_pair_keyboard(flow_type: str, platform: str) -> InlineKeyboardMarkup:
+    pairs = PLATFORM_PAIRS.get(platform, [])
+    keyboard = []
+    row = []
+    for pair in pairs:
+        row.append(InlineKeyboardButton(pair, callback_data=f"flow:{flow_type}_pair:{platform}:{pair}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton("🔙 Back", callback_data=f"flow:{flow_type}_back")])
+    return InlineKeyboardMarkup(keyboard)
 
 def _expires_at(plan: str) -> int:
     delta = _DURATION_SECONDS.get(plan, 86400)
@@ -109,6 +145,10 @@ class UnifiedBot(VilonaBot):
         app.add_handler(CommandHandler(["start", "help"], self._h_start))
         app.add_handler(CommandHandler("symbols", self._h_symbols))
         app.add_handler(CommandHandler("signal", self._h_signal))
+        app.add_handler(CommandHandler("price", self._h_price))
+        app.add_handler(CommandHandler("donate", self._h_donate))
+        app.add_handler(CommandHandler("subscribe", self._h_subscribe_cmd))
+        app.add_handler(CommandHandler("settings", self._h_settings))
         app.add_handler(CommandHandler("scan", self._h_scan))
         app.add_handler(CommandHandler("stats", self._h_stats))
 
@@ -249,56 +289,233 @@ class UnifiedBot(VilonaBot):
         await update.message.reply_markdown("\n".join(lines))
 
     async def _h_signal(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """/signal <symbol> — generate signal for a symbol."""
+        """/signal <symbol> — generate signal for a symbol (or start flow)."""
         args = context.args or []
-        syms = getattr(settings, "SYMBOLS", "CRYPTO_IDX")
-        symbol_list = [s.strip() for s in syms.split(",") if s.strip()]
-        symbol = args[0].strip().upper() if args else (symbol_list[0] if symbol_list else "CRYPTO_IDX")
+        if not args:
+            reply_markup = get_platform_keyboard("sig")
+            await update.message.reply_html(
+                "🎯 <b>SIGNAL GENERATOR</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                "Pilih platform pasar di bawah ini:",
+                reply_markup=reply_markup
+            )
+            return
 
-        msg = await update.message.reply_text(f"🔍 Analyzing `{symbol}`...")
+        symbol = args[0].strip().upper()
+        from tradebot.signals.market import MarketAggregator
+        symbol = MarketAggregator._resolve_alias(symbol)
+        msg = await update.message.reply_html(f"🔍 Analyzing <code>{symbol}</code>...")
+        resp = await self._cmd_signal([symbol])
+        await msg.edit_text(resp, parse_mode="HTML")
 
+    async def _h_price(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/price <symbol> — get real-time price (or start flow)."""
+        args = context.args or []
+        if not args:
+            reply_markup = get_platform_keyboard("prc")
+            await update.message.reply_html(
+                "💰 <b>CEK HARGA REAL-TIME</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                "Pilih platform pasar di bawah ini:",
+                reply_markup=reply_markup
+            )
+            return
+
+        symbol = args[0].strip().upper()
+        from tradebot.signals.market import MarketAggregator
+        symbol = MarketAggregator._resolve_alias(symbol)
+        msg = await update.message.reply_html(f"💰 Fetching price for <code>{symbol}</code>...")
+        resp = await self._get_generic_price(symbol)
+        await msg.edit_text(resp, parse_mode="HTML")
+
+    async def _get_generic_price(self, symbol: str) -> str:
+        from tradebot.signals.market import MarketAggregator
         try:
-            from tradebot.brokers.stockity.broker import StockityBroker
-            from tradebot.signals.stockity import StockitySource
-
-            async with StockitySource() as src:
-                ticks = await src.fetch_ticks(symbol.split("_")[0] if "_" in symbol else symbol)
-                if not ticks:
-                    await msg.edit_text(f"❌ No data for `{symbol}`", parse_mode="Markdown")
-                    return
-
-            broker = StockityBroker()
-            async with broker:
-                balance = await broker.get_balance()
-                pos = broker.open_positions
-
-            # Run engines
-            from tradebot.engines.registry import Registry
-            reg = Registry()
-            engines = reg.discover()
-            signals_found = []
-
-            for name, engine in engines.items():
-                try:
-                    result = engine.analyze(ticks)
-                    if result:
-                        signals_found.append(f"  • {name}: {result.direction} ({result.confidence:.0%})")
-                except Exception:
-                    pass
-
-            lines = [f"📡 *Signal — {symbol}*\n"]
-            if signals_found:
-                lines.append("*Engines:*")
-                lines.extend(signals_found[:10])
-            else:
-                lines.append("_No strong signals detected_")
-            lines.append(f"\n💰 Balance: {balance or 'N/A'}")
-            if pos:
-                lines.append(f"📊 Open positions: {len(pos)}")
-
-            await msg.edit_text("\n".join(lines), parse_mode="Markdown")
+            agg = MarketAggregator()
+            candles = await agg.fetch(symbol, interval="1m", count=5)
+            if not candles:
+                return f"❌ Data harga untuk <b>{symbol}</b> tidak ditemukan."
+            
+            candle = candles[-1]
+            close = candle.close
+            high = candle.high
+            low = candle.low
+            open_val = candle.open
+            change = close - open_val
+            pct = (change / open_val) * 100 if open_val > 0 else 0
+            emoji = "🟢" if change >= 0 else "🔴"
+            
+            from tradebot.bots.platforms.vilona.helpers import wib_fmt
+            return (
+                f"{emoji} <b>{symbol}</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"Price: <b>{close:.4f}</b>\n"
+                f"High: {high:.4f} | Low: {low:.4f}\n"
+                f"Change: {change:+.4f} ({pct:+.2f}%)\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🕐 {wib_fmt()}"
+            )
         except Exception as e:
-            await msg.edit_text(f"❌ Error: {e}", parse_mode="Markdown")
+            return f"❌ Gagal mengambil harga {symbol}: {str(e)}"
+
+    async def _h_donate(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/donate — public donation menu."""
+        chat_id = str(update.effective_chat.id)
+        await self._handle_menu_nav("donate", chat_id=chat_id)
+
+    async def _h_subscribe_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/subscribe — premium subscription packages menu."""
+        chat_id = str(update.effective_chat.id)
+        await self._handle_menu_nav("subscribe", chat_id=chat_id)
+
+    async def _h_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/settings — pro-active signal settings menu."""
+        user_id = str(update.effective_chat.id)
+        text = self.get_settings_text(user_id)
+        reply_markup = self.get_settings_keyboard(user_id)
+        await update.message.reply_html(text, reply_markup=reply_markup)
+
+    def _get_or_create_sig_pref(self, user_id: str | int) -> dict[str, Any]:
+        uid = int(user_id)
+        prefs = self.db.get_user_signal_preferences(uid)
+        if prefs:
+            return prefs[0]
+        # Create default
+        self.db.set_user_signal_preference(uid, "ALL", 0.6, "BOTH", 1)
+        return {"user_id": uid, "symbol": "ALL", "min_confidence": 0.6, "direction": "BOTH", "enabled": 1}
+
+    def get_settings_keyboard(self, user_id: str | int) -> InlineKeyboardMarkup:
+        pref = self._get_or_create_sig_pref(user_id)
+        enabled_label = "🔔 Pro-active Signals: ON" if pref["enabled"] else "🔕 Pro-active Signals: OFF"
+        symbol_label = f"🎯 Asset: {pref['symbol']}"
+        dir_label = f"📈 Arah: {pref['direction']}"
+        conf_label = f"⭐ Min Confidence: {int(pref['min_confidence'] * 100)}%"
+        
+        keyboard = [
+            [InlineKeyboardButton(enabled_label, callback_data="pref_toggle:enabled")],
+            [InlineKeyboardButton(symbol_label, callback_data="pref_cycle:symbol")],
+            [InlineKeyboardButton(dir_label, callback_data="pref_cycle:direction")],
+            [InlineKeyboardButton(conf_label, callback_data="pref_cycle:min_confidence")],
+            [InlineKeyboardButton("🔙 Back", callback_data="menu:account")],
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    def get_settings_text(self, user_id: str | int) -> str:
+        pref = self._get_or_create_sig_pref(user_id)
+        status = "AKTIF 🟢" if pref["enabled"] else "NONAKTIF ⚪"
+        return (
+            f"⚙️ <b>PENGATURAN NOTIFIKASI PROAKTIF</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Konfigurasikan notifikasi sinyal otomatis yang ingin Anda terima:\n\n"
+            f"• Status Notifikasi: <b>{status}</b>\n"
+            f"• Filter Aset/Pair: <b>{pref['symbol']}</b>\n"
+            f"• Kriteria Arah: <b>{pref['direction']}</b>\n"
+            f"• Min. Confidence: <b>{int(pref['min_confidence'] * 100)}%</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Klik tombol di bawah untuk mengubah nilai:"
+        )
+
+    async def _handle_pref_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE, data: str) -> None:
+        query = update.callback_query
+        user_id = str(query.from_user.id)
+        
+        parts = data.split(":")
+        field = parts[1]
+        
+        pref = self._get_or_create_sig_pref(user_id)
+        
+        if field == "enabled":
+            pref["enabled"] = 0 if pref["enabled"] else 1
+        elif field == "symbol":
+            symbols = ["ALL", "XAUUSD", "BTCUSD", "R_75", "CRYPTO_IDX"]
+            current = pref["symbol"]
+            next_idx = (symbols.index(current) + 1) % len(symbols) if current in symbols else 0
+            pref["symbol"] = symbols[next_idx]
+        elif field == "direction":
+            dirs = ["BOTH", "BUY", "SELL"]
+            current = pref["direction"]
+            next_idx = (dirs.index(current) + 1) % len(dirs) if current in dirs else 0
+            pref["direction"] = dirs[next_idx]
+        elif field == "min_confidence":
+            confs = [0.6, 0.7, 0.8, 0.9]
+            current = pref["min_confidence"]
+            next_idx = (confs.index(current) + 1) % len(confs) if current in confs else 0
+            pref["min_confidence"] = confs[next_idx]
+            
+        # Save to DB
+        self.db.set_user_signal_preference(
+            int(user_id),
+            pref["symbol"],
+            pref["min_confidence"],
+            pref["direction"],
+            pref["enabled"]
+        )
+        
+        text = self.get_settings_text(user_id)
+        reply_markup = self.get_settings_keyboard(user_id)
+        await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=reply_markup)
+
+    async def _handle_flow_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE, data: str) -> None:
+        query = update.callback_query
+        parts = data.split(":")
+        action = parts[1]
+        
+        if action == "sig_back":
+            reply_markup = get_platform_keyboard("sig")
+            await query.edit_message_text(
+                "🎯 <b>SIGNAL GENERATOR</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                "Pilih platform pasar di bawah ini:",
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
+        elif action == "prc_back":
+            reply_markup = get_platform_keyboard("prc")
+            await query.edit_message_text(
+                "💰 <b>CEK HARGA REAL-TIME</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n"
+                "Pilih platform pasar di bawah ini:",
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
+        elif action == "sig_platform":
+            platform = parts[2]
+            reply_markup = get_pair_keyboard("sig", platform)
+            await query.edit_message_text(
+                f"🧠 <b>ANALISIS {PLATFORM_LABELS[platform].upper()}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Pilih pair/aset di bawah ini:",
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
+        elif action == "prc_platform":
+            platform = parts[2]
+            reply_markup = get_pair_keyboard("prc", platform)
+            await query.edit_message_text(
+                f"💰 <b>HARGA {PLATFORM_LABELS[platform].upper()}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Pilih pair/aset di bawah ini:",
+                parse_mode="HTML",
+                reply_markup=reply_markup
+            )
+        elif action == "sig_pair":
+            platform = parts[2]
+            pair = parts[3]
+            await query.edit_message_text(f"🔍 Analyzing <code>{pair}</code> on {PLATFORM_LABELS[platform]}...", parse_mode="HTML")
+            resp = await self._cmd_signal([pair])
+            try:
+                await query.edit_message_text(resp, parse_mode="HTML")
+            except Exception:
+                await query.message.reply_html(resp)
+        elif action == "prc_pair":
+            platform = parts[2]
+            pair = parts[3]
+            await query.edit_message_text(f"💰 Fetching price for <code>{pair}</code> on {PLATFORM_LABELS[platform]}...", parse_mode="HTML")
+            resp = await self._get_generic_price(pair)
+            try:
+                await query.edit_message_text(resp, parse_mode="HTML")
+            except Exception:
+                await query.message.reply_html(resp)
 
     async def _h_scan(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/scan — scan all symbols for signals."""
@@ -487,13 +704,40 @@ class UnifiedBot(VilonaBot):
     # ── Signal dispatch ──────────────────────────────────────────────────
 
     async def _dispatch_signal_to_subscribers(self, sig: Any) -> None:
-        """Send a signal to all active subscribers (category dispatch)."""
+        """Send a signal to all active subscribers with pro-active filter settings."""
         subscribers = self.db.get_active_subscribers()
         if not subscribers:
             return
+
+        sig_symbol = getattr(sig, "symbol", "").strip().upper()
+        sig_direction = getattr(sig, "direction", "").strip().upper()
+        sig_confidence = getattr(sig, "confidence", 1.0)
+        if hasattr(sig, "metadata") and isinstance(sig.metadata, dict):
+            sig_confidence = sig.metadata.get("confidence", sig_confidence)
+
         text = f"📡 *Signal Alert*\n\n{self._signal_to_text(sig)}"
         sent = 0
+
         for user in subscribers:
+            user_id = user["user_id"]
+            try:
+                prefs = self.db.get_user_signal_preferences(user_id)
+                if prefs:
+                    pref = prefs[0]
+                    if not pref.get("enabled", 1):
+                        continue
+                    pref_symbol = pref.get("symbol", "ALL").strip().upper()
+                    if pref_symbol != "ALL" and pref_symbol != sig_symbol:
+                        continue
+                    pref_dir = pref.get("direction", "BOTH").strip().upper()
+                    if pref_dir != "BOTH" and pref_dir != sig_direction:
+                        continue
+                    pref_conf = pref.get("min_confidence", 0.6)
+                    if sig_confidence < pref_conf:
+                        continue
+            except Exception as e:
+                LOG.warning("Failed to load/apply preferences for user %d: %s", user_id, e)
+
             try:
                 await self._app.bot.send_message(
                     chat_id=user["chat_id"], text=text, parse_mode="Markdown",
@@ -503,7 +747,6 @@ class UnifiedBot(VilonaBot):
                 LOG.warning("Signal dispatch fail to %d: %s", user["user_id"], exc)
             await asyncio.sleep(0.03)
         LOG.info("Signal dispatched to %d/%d subscribers", sent, len(subscribers))
-
     @staticmethod
     def _signal_to_text(sig: Any) -> str:
         """Format a signal object to human-readable text."""
@@ -572,6 +815,15 @@ class UnifiedBot(VilonaBot):
                     from tradebot.bots.handlers import _h_confirm
                     context.args = [merchant_ref]
                     await _h_confirm(update, context)
+            elif data == "cmd:settings" or data == "menu:settings":
+                user_id = str(query.from_user.id)
+                text = self.get_settings_text(user_id)
+                reply_markup = self.get_settings_keyboard(user_id)
+                await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=reply_markup)
+            elif data.startswith("pref_"):
+                await self._handle_pref_callback(update, context, data)
+            elif data.startswith("flow:"):
+                await self._handle_flow_callback(update, context, data)
             else:
                 cb_dict = {
                     "id": query.id,

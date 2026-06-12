@@ -25,13 +25,16 @@ ADMIN_MENU: list[list[tuple[str, str]]] = [
 ]
 
 SIGNAL_MENU: list[list[tuple[str, str]]] = [
-    [("cmd:signal", "🎯 Signal MTF+9 Engines")],
-    [("cmd:mtf", "🧬 Matrix 5TF")],
-    [("cmd:engines", "🔧 Engine Consensus")],
-    [("cmd:structure", "🏗 Market Structure")],
-    [("cmd:pulse", "🔄 Market Pulse")],
+    [("cmd:signal", "🎯 Live Signal (Multi-Market)")],
+    [("menu:analysis", "🔬 Technical Analysis Tools")],
     [("menu:stockity", "💰 STOCKITY INSIDER")],
     [("menu:main", "🔙 Back")],
+]
+
+ANALYSIS_MENU: list[list[tuple[str, str]]] = [
+    [("cmd:mtf", "🧬 Matrix 5TF (MTF)"), ("cmd:engines", "🔧 Engine Consensus")],
+    [("cmd:structure", "🏗 Market Structure"), ("cmd:pulse", "🔄 Market Pulse")],
+    [("menu:signals", "🔙 Back")],
 ]
 
 MARKET_MENU: list[list[tuple[str, str]]] = [
@@ -51,7 +54,7 @@ HISTORY_MENU: list[list[tuple[str, str]]] = [
 
 ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("cmd:status", "📊 Status"), ("cmd:subscribe", "⭐ Subscribe")],
-    [("menu:donate", "💚 Subscribe"), ("cmd:mykey", "🔑 My Key")],
+    [("menu:donate", "💚 Donate"), ("cmd:mykey", "🔑 My Key")],
     [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
     [("cmd:myid", "🆔 My ID"), ("cmd:trailing", "🏃 Trailing Status")],
     [("cmd:settings", "⚙️ Settings")],
@@ -62,6 +65,14 @@ SUBSCRIBE_MENU: list[list[tuple[str, str]]] = [
     [("sub:pro", "⭐ PRO — Rp50K/bulan")],
     [("sub:elite", "👑 ELITE — Rp150K/bulan")],
     [("sub:lifetime", "💎 LIFETIME — Rp500K"), ("cancel_input", "❌ Batal")],
+    [("menu:account", "🔙 Back")],
+]
+
+DONATE_MENU: list[list[tuple[str, str]]] = [
+    [("pay:donate:15000", "☕ Kopi — Rp15.000")],
+    [("pay:donate:50000", "🚀 Bensin — Rp50.000")],
+    [("pay:donate:100000", "⚡ Server — Rp100.000")],
+    [("cmd:donate", "💚 Nominal Bebas")],
     [("menu:account", "🔙 Back")],
 ]
 
@@ -120,8 +131,9 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
         "market": MARKET_MENU,
         "history": HISTORY_MENU,
         "account": ACCOUNT_MENU,
-        "donate": SUBSCRIBE_MENU,
+        "donate": DONATE_MENU,
         "subscribe": SUBSCRIBE_MENU,
+        "analysis": ANALYSIS_MENU,
         "stockity": STOCKITY_MENU,
         "admin_panel": ADMIN_PANEL_MENU,
         "help": HELP_MENU,
@@ -160,16 +172,22 @@ def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> st
             "Status, subscribe, dan pengaturan."
         ),
         "donate": (
-            "💚 <b>SUBSCRIBE — VILONA AI</b>\n"
+            "💚 <b>DONASI PUBLIK — VILONA AI</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Dukung server AI tetap hidup!\n"
-            "Pilih nominal di bawah:"
+            "Dukungan Anda membantu menjaga server AI tetap aktif & cepat.\n"
+            "Silakan pilih nominal donasi di bawah ini:"
         ),
         "subscribe": (
-            "💚 <b>SUBSCRIBE — VILONA AI</b>\n"
+            "⭐ <b>LANGGANAN PREMIUM — VILONA AI</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Dukung server AI tetap hidup!\n"
-            "Pilih nominal di bawah:"
+            "Dapatkan akses eksklusif ke semua fitur premium,\n"
+            "tanpa batas kuota, dan auto-copy trading.\n"
+            "Pilih paket langganan Anda:"
+        ),
+        "analysis": (
+            "🔬 <b>TECHNICAL ANALYSIS TOOLS</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Pilih tools analisis teknis di bawah ini:"
         ),
         "stockity": (
             "💰 <b>STOCKITY INSIDER</b>\n"

@@ -137,6 +137,19 @@ class SubscriptionDatabase:
                 CREATE INDEX IF NOT EXISTS idx_pending_user ON pending_payments(user_id);
                 CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_payments(status);
                 CREATE INDEX IF NOT EXISTS idx_pending_ref ON pending_payments(merchant_ref);
+
+                CREATE TABLE IF NOT EXISTS user_signal_preferences (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id         INTEGER NOT NULL,
+                    symbol          TEXT NOT NULL DEFAULT 'ALL',
+                    min_confidence  REAL DEFAULT 0.6,
+                    direction       TEXT DEFAULT 'BOTH',
+                    enabled         INTEGER DEFAULT 1,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id),
+                    UNIQUE(user_id, symbol)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_sig_pref_user ON user_signal_preferences(user_id);
             """)
             conn.commit()
             LOG.info("Subscription database tables ready")
@@ -388,5 +401,27 @@ class SubscriptionDatabase:
             conn.execute(
                 "UPDATE pending_payments SET status='PAID', paid_at=? WHERE merchant_ref=?",
                 (now, merchant_ref),
+            )
+            conn.commit()
+    def get_user_signal_preferences(self, user_id: int) -> list[dict[str, Any]]:
+        with self._conn as conn:
+            cur = conn.execute(
+                "SELECT * FROM user_signal_preferences WHERE user_id = ?",
+                (user_id,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def set_user_signal_preference(
+        self, user_id: int, symbol: str, min_confidence: float, direction: str, enabled: int
+    ) -> None:
+        with self._conn as conn:
+            conn.execute(
+                """INSERT INTO user_signal_preferences (user_id, symbol, min_confidence, direction, enabled)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(user_id, symbol) DO UPDATE SET
+                       min_confidence=excluded.min_confidence,
+                       direction=excluded.direction,
+                       enabled=excluded.enabled""",
+                (user_id, symbol, min_confidence, direction, enabled),
             )
             conn.commit()

@@ -157,8 +157,7 @@ def _check_auth(request: Request) -> str:
     raise HTTPException(status_code=302, detail="Unauthorized", headers={"Location": "/login"})
 
 
-# ── Auth Routes ──────────────────────────────────────────────────────
-
+# ── Auth Routes (EXCLUSIVE FOR ADMINS — Public dashboard is strictly read-only) ──
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, error: str | None = None):

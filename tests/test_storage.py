@@ -333,3 +333,42 @@ class TestCognitiveDB:
         cog_db.reset_daily_counter(date)
         result = cog_db.get_daily_counter(date)
         assert result == {"profit": 0.0, "trades": 0, "wins": 0, "losses": 0}
+# ── SubscriptionDatabase ──────────────────────────────────────────────────
+
+class TestSubscriptionDatabase:
+    """SubscriptionDatabase — SQLite storage for user subscription bot data."""
+
+    @pytest.fixture
+    def sub_db(self, tmp_path):
+        from tradebot.storage.subscription import SubscriptionDatabase
+        db = SubscriptionDatabase(db_path=str(tmp_path / "test_sub.db"))
+        db.create_tables()
+        return db
+
+    def test_create_tables_and_signal_preferences(self, sub_db):
+        # Insert a user first (foreign key dependency)
+        with sub_db._conn as conn:
+            conn.execute(
+                "INSERT INTO users (user_id, chat_id, joined_at) VALUES (12345, 12345, 1620000000)"
+            )
+            conn.commit()
+
+        # Set preference
+        sub_db.set_user_signal_preference(12345, "XAUUSD", 0.75, "BUY", 1)
+
+        # Get preference
+        prefs = sub_db.get_user_signal_preferences(12345)
+        assert len(prefs) == 1
+        assert prefs[0]["user_id"] == 12345
+        assert prefs[0]["symbol"] == "XAUUSD"
+        assert prefs[0]["min_confidence"] == 0.75
+        assert prefs[0]["direction"] == "BUY"
+        assert prefs[0]["enabled"] == 1
+
+        # Update preference (on conflict check)
+        sub_db.set_user_signal_preference(12345, "XAUUSD", 0.85, "BOTH", 0)
+        prefs = sub_db.get_user_signal_preferences(12345)
+        assert len(prefs) == 1
+        assert prefs[0]["min_confidence"] == 0.85
+        assert prefs[0]["direction"] == "BOTH"
+        assert prefs[0]["enabled"] == 0

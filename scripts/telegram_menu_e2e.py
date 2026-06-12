@@ -44,7 +44,7 @@ async def test_menu_navigation(client, menu_button_text, expected_substrings, se
         if not msg:
             print("FAILED (No message found)")
             return False
-
+        print(f"DEBUG Initial msg: text={repr(msg.text)}, buttons={[btn.text for row in msg.buttons for btn in row] if msg.buttons else []}")
         # If it's stockity insider, we need to go to signals first
         if menu_button_text == "stockity insider":
             sig_btn = await find_button(msg, "signal system")
@@ -136,9 +136,9 @@ async def test_chained_navigation(client):
         await asyncio.sleep(4.5)
 
         # 5. Check Subscribe menu
-        msg = await get_menu_message(client, "pro")
-        if not msg or "hidup" not in msg.text.lower() or "nominal" not in msg.text.lower():
-            print("FAILED (Not in Subscribe menu)")
+        msg = await get_menu_message(client, "kopi")
+        if not msg or "donasi" not in msg.text.lower() or "nominal" not in msg.text.lower():
+            print("FAILED (Not in Donate menu)")
             return False
         btn_back = await find_button(msg, "back")
         if not btn_back:
@@ -151,8 +151,12 @@ async def test_chained_navigation(client):
         msg = await get_menu_message(client, "account")
         if not msg or "account" not in msg.text.lower() or "subscribe" not in msg.text.lower():
             print("FAILED (Failed to return to Account menu)")
+            if msg:
+                print(f"DEBUG: msg.text={repr(msg.text)}")
+                print(f"DEBUG: msg.buttons={[btn.text for row in msg.buttons for btn in row] if msg.buttons else []}")
+            else:
+                print("DEBUG: msg is None")
             return False
-
         # 8. Click 'back' to go back to Main menu
         btn_back2 = await find_button(msg, "back")
         if not btn_back2:
