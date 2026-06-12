@@ -2186,27 +2186,25 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         f"🕐 {now_wib.strftime('%Y.%m.%d %H:%M')} WIB | Session: {session(h)}",
     ]
 
-    if False:  # killzone gate DISABLED — always show full signal
-        pass
-    else:
-        lines.append(f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}")
+    # ── Killzone gate: DISABLED — always show full signal (24/7) ──
+    lines.append(f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}")
 
-        if is_free and is_actionable:
-            # ── FREE TIER: lock SL/TP — teaser only ──
-            lines.append(f"🔴 SL: 🔒 <b>[DONOR ONLY]</b>")
-            for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
-                if tp_val and tp_val > 0:
-                    lines.append(f"🟢 {tp_label}: 🔒 <b>[DONOR ONLY]</b>")
-            lines.append(f"")
-            lines.append(f"💡 <b>Free tier cuma bisa liat Entry Zone.</b>")
-            lines.append(f"   SL/TP dikunci — gak bisa eksekusi dengan aman.")
-            lines.append(f"   👑 <b>/subscribe</b> — Unlock SL/TP + 2 AI + Grok News")
-        else:
-            lines.append(f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}")
-            # TP levels
-            for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
-                if tp_val and tp_val > 0:
-                    lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
+    if is_free and is_actionable:
+        # ── FREE TIER: lock SL/TP — teaser only ──
+        lines.append(f"🔴 SL: 🔒 <b>[SUBSCRIBER ONLY]</b>")
+        for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+            if tp_val and tp_val > 0:
+                lines.append(f"🟢 {tp_label}: 🔒 <b>[SUBSCRIBER ONLY]</b>")
+        lines.append(f"")
+        lines.append(f"💡 <b>Free tier cuma bisa liat Entry Zone.</b>")
+        lines.append(f"   SL/TP dikunci — gak bisa eksekusi dengan aman.")
+        lines.append(f"   👑 <b>/subscribe</b> — Unlock SL/TP + 2 AI + Grok News")
+    else:
+        lines.append(f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}")
+        # TP levels
+        for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+            if tp_val and tp_val > 0:
+                lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
 
     # SnR + FIBO context (only for actionable signals)
     if levels and is_actionable:
@@ -2993,7 +2991,7 @@ def handle_command(cmd, text, chat_id, msg):
             "/analyze — Perintahkan AI Scan Market",
             "/price — Cek harga real-time",
             "/data — Market overview",
-            "/status — Cek Kuota & Akses VIP",
+            "/status — Cek Kuota & Akses Subscriber",
             "/subscribe — Upgrade Tier ⚡\n",
             "🔍 <b>TECHNICAL ANALYSIS (SMC)</b> 🆕",
             "/zones — Order Blocks + FVG + Supply/Demand",
@@ -3252,7 +3250,7 @@ def handle_command(cmd, text, chat_id, msg):
                 f"{fuel_text}\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"Terima kasih telah menghidupi mesin AI ini! 🥂\n"
-                f"Seluruh fitur VIP, Auto-Trade, dan Bridge\n"
+                f"Seluruh fitur Subscriber, Auto-Trade, dan Bridge\n"
                 f"telah TERBUKA untukmu.\n"
                 f"\n"
                 f"🔑 <b>AKSES EA & BRIDGE:</b>\n"
@@ -3947,7 +3945,7 @@ def handle_command(cmd, text, chat_id, msg):
             "🧪 <b>Test Upgrade Tier — Rp10,000</b>\n"
             "━━━━━━━━━━━━━━━━\n"
             "💰 Total: <b>Rp10,000</b>\n"
-            "👑 Status: SUBSCRIBER VIP — AKTIF PERMANEN\n"
+            "👑 Status: SUBSCRIBER — AKTIF PERMANEN\n"
             "⏰ Expired: 1 jam\n"
             "━━━━━━━━━━━━━━━━\n"
             "Klik tombol bayar di bawah 👇\n\n"
@@ -6413,7 +6411,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/download"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
@@ -6451,7 +6449,7 @@ def main():
                                         txt = (
                                             f"⚡ <b>Upgrade Tier Rp{amount:,}</b>\n"
                                             f"━━━━━━━━━━━━━━━━\n"
-                                            f"👑 Status: SUBSCRIBER VIP — AKTIF PERMANEN\n"
+                                            f"👑 Status: SUBSCRIBER — AKTIF PERMANEN\n"
                                         )
                                         if pay_code:
                                             txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
