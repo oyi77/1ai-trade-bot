@@ -6661,9 +6661,17 @@ def auto_analyze_loop():
                     send_to_channel(tease)
                 except Exception:
                     pass
-                # 3. Post to bridge for EA execution
-                post_signal_to_bridge(stier_sig, price, disp)
-                logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ' HIGH CONVICTION'} [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%}")
+                # 3. Killzone gate: S-TIER forex/metals outside London/NY → skip bridge
+                should_bridge = True
+                if disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
+                    lkz, nykz = killzone(h)
+                    if not lkz and not nykz:
+                        logger.info(f"💀 S-TIER [{disp}] bridge BLOCKED: outside killzone (London/NY only)")
+                        should_bridge = False
+                # 4. Post to bridge for EA execution
+                if should_bridge:
+                    post_signal_to_bridge(stier_sig, price, disp)
+                logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ' HIGH CONVICTION'} [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%} | bridge={'ON' if should_bridge else 'OFF'}")
                 log["signals_sent"] = log.get("signals_sent", 0) + 1
                 time.sleep(60)
                 continue
