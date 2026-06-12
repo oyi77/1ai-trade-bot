@@ -26,13 +26,13 @@ Tables (in tradebot.db):
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import secrets
 import time
 from typing import Any
 
-from tradebot.storage.sqlite import SQLiteStorage
-import contextlib
+from tradebot.storage.repository import get_repo
 
 LOG = logging.getLogger("tradebot.services.mlm_service")
 
@@ -59,8 +59,8 @@ EFFECTIVE_RATES = [r * MLM_POOL_SHARE for r in POOL_DISTRIBUTION]
 MIN_CLAIM_AMOUNT = 100_000  # Rp100.000 minimum claim
 
 
-def _storage() -> SQLiteStorage:
-    return SQLiteStorage()
+def _storage():
+    return get_repo()
 
 
 def init_tables() -> None:

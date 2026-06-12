@@ -13,7 +13,7 @@ import logging
 import time
 from typing import Any
 
-from tradebot.storage.sqlite import SQLiteStorage
+from tradebot.storage.repository import get_repo
 
 LOG = logging.getLogger("tradebot.services.subscription_service")
 
@@ -42,8 +42,8 @@ TIER_LABELS: dict[str, str] = {
 }
 
 
-def _storage() -> SQLiteStorage:
-    return SQLiteStorage()
+def _storage():
+    return get_repo()
 
 
 def get_plan_config(tier_type: str, plan: str) -> dict[str, int] | None:

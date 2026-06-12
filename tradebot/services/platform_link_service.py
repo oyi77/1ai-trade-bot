@@ -27,7 +27,7 @@ from typing import Any
 
 import httpx
 
-from tradebot.storage.sqlite import SQLiteStorage
+from tradebot.storage.repository import get_repo
 
 LOG = logging.getLogger("tradebot.services.platform_link")
 
@@ -40,8 +40,8 @@ def _now() -> str:
     return datetime.now(WIB).isoformat()
 
 
-def _storage() -> SQLiteStorage:
-    return SQLiteStorage()
+def _storage():
+    return get_repo()
 
 
 class PlatformLinkError(Exception):

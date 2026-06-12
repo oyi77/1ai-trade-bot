@@ -72,11 +72,27 @@ def _gen_id() -> str:
 def _validate_key(api_key: str) -> tuple[bool, dict[str, Any] | None]:
     if not api_key:
         return False, None
+
+    # Priority 1: SQLite ea_licenses via Repository API
+    try:
+        from tradebot.storage.repository import get_repo
+        repo = get_repo()
+        row = repo.fetchone(
+            "SELECT status, expires_at FROM ea_licenses WHERE key=? AND status='active' AND expires_at>?",
+            (api_key, int(time.time())),
+        )
+        if row:
+            return True, {"tier": "pro", "source": "sqlite"}
+    except Exception:
+        pass
+
+    # Priority 2: JSON api_keys.json (legacy)
     config = _load_keys()
     key_data = config["keys"].get(api_key)
-    if not key_data or not key_data.get("active"):
-        return False, None
-    return True, config["tiers"].get(key_data.get("tier", ""), {})
+    if key_data and key_data.get("active"):
+        return True, config["tiers"].get(key_data.get("tier", ""), {})
+
+    return False, None
 
 
 def _check_rate_limit(api_key: str) -> bool:

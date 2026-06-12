@@ -199,6 +199,7 @@ class Settings(BaseSettings):
 
     DATA_DIR: str = str(Path.home() / "projects" / "1ai-trade-bot" / "data")
     STORAGE_DB_PATH: str = ""  # Override for DB path (defaults to DATA_DIR / "tradebot.db")
+    DATABASE_BACKEND: str = "sqlite"  # sqlite | postgres | sqlmodel
 
     # ═══════════════════════════════════════════════════════════════
     #  SIGNALS — Market Data Source Configuration

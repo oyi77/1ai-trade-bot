@@ -11,14 +11,14 @@ Tables (in tradebot.db):
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import secrets
 import time
 from typing import Any
 
-from tradebot.storage.sqlite import SQLiteStorage
-import contextlib
+from tradebot.storage.repository import get_repo
 
 LOG = logging.getLogger("tradebot.services.ea_license")
 
@@ -26,8 +26,8 @@ EA_KEY_PRICE_IDR = 25_000  # Rp25.000/month per key
 EA_KEY_DURATION_DAYS = 30
 
 
-def _storage() -> SQLiteStorage:
-    return SQLiteStorage()
+def _storage():
+    return get_repo()
 
 
 def init_tables() -> None:

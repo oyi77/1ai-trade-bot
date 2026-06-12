@@ -14,7 +14,7 @@ import random
 import time
 from typing import Any
 
-from tradebot.storage.sqlite import SQLiteStorage
+from tradebot.storage.repository import get_repo
 
 LOG = logging.getLogger("tradebot.services.expiry_notifier")
 
@@ -35,8 +35,8 @@ EXPIRY_FOMO_PHRASES = [
 ]
 
 
-def _storage() -> SQLiteStorage:
-    return SQLiteStorage()
+def _storage():
+    return get_repo()
 
 
 def get_expiring_subscriptions(days_remaining: int) -> list[dict[str, Any]]:
