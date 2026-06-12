@@ -1582,7 +1582,15 @@ def register_vilona_commands(app, bot):
         ("stockity", "_cmd_stockity"),
     ]
 
-    for cmd, handler_name in essential_commands:
-        handler = getattr(bot, handler_name)
-        app.add_handler(CommandHandler(cmd, handler))
+    def make_handler(handler_name):
+        async def handler(update, context):
+            chat_id = str(update.effective_chat.id)
+            args = context.args or []
+            func = getattr(bot, handler_name)
+            resp = await func(args, chat_id)
+            if resp:
+                await update.message.reply_html(resp)
+        return handler
 
+    for cmd, handler_name in essential_commands:
+        app.add_handler(CommandHandler(cmd, make_handler(handler_name)))

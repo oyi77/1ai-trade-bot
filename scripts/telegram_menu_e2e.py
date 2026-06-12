@@ -14,7 +14,6 @@ async def get_menu_message(client, expected_text_query=None):
     async for message in client.iter_messages(bot_username, limit=8):
         if message.buttons:
             if expected_text_query:
-                # Check if expected query matches text or one of the buttons
                 match_text = expected_text_query.lower()
                 text_ok = match_text in message.text.lower()
                 btn_ok = any(
@@ -109,7 +108,7 @@ async def test_chained_navigation(client):
     print("Testing chained navigation (Main -> Account -> Donate -> Account -> Main) ... ", end="", flush=True)
     try:
         # 1. Main menu should be present
-        msg = await get_menu_message(client, "1ai trading")
+        msg = await get_menu_message(client, "market")
         if not msg:
             print("FAILED (Main menu not found)")
             return False
@@ -124,22 +123,22 @@ async def test_chained_navigation(client):
 
         # 3. Check Account menu
         msg = await get_menu_message(client, "account")
-        if not msg or "account" not in msg.text.lower() or "donate" not in msg.text.lower():
-            print("FAILED (Not in Account menu or Donate button missing)")
+        if not msg or "account" not in msg.text.lower() or "subscribe" not in msg.text.lower():
+            print("FAILED (Not in Account menu or Subscribe button missing)")
             return False
 
-        # 4. Click 'donate' inside Account menu
-        btn_donate = await find_button(msg, "donate")
+        # 4. Click 'subscribe' inside Account menu
+        btn_donate = await find_button(msg, "💚")
         if not btn_donate:
-            print("FAILED (Donate button not found in Account menu)")
+            print("FAILED (Subscribe button not found in Account menu)")
             return False
         await btn_donate.click()
         await asyncio.sleep(4.5)
 
-        # 5. Check Donate menu
-        msg = await get_menu_message(client, "kopi")
-        if not msg or "subscribe" not in msg.text.lower() or "nominal" not in msg.text.lower():
-            print("FAILED (Not in Donate menu)")
+        # 5. Check Subscribe menu
+        msg = await get_menu_message(client, "pro")
+        if not msg or "hidup" not in msg.text.lower() or "nominal" not in msg.text.lower():
+            print("FAILED (Not in Subscribe menu)")
             return False
         btn_back = await find_button(msg, "back")
         if not btn_back:
@@ -150,7 +149,7 @@ async def test_chained_navigation(client):
 
         # 7. Check Account menu again
         msg = await get_menu_message(client, "account")
-        if not msg or "account" not in msg.text.lower() or "donate" not in msg.text.lower():
+        if not msg or "account" not in msg.text.lower() or "subscribe" not in msg.text.lower():
             print("FAILED (Failed to return to Account menu)")
             return False
 
@@ -163,7 +162,7 @@ async def test_chained_navigation(client):
         await asyncio.sleep(4.5)
 
         # 9. Verify we are back on Main menu
-        msg = await get_menu_message(client, "1ai trading")
+        msg = await get_menu_message(client, "market")
         if not msg:
             print("FAILED (Failed to return to Main menu)")
             return False
@@ -187,7 +186,7 @@ async def main():
     await client.send_message(bot_username, "/start")
     await asyncio.sleep(4.5)
     # Ensure we get the main menu
-    msg = await get_menu_message(client, "1ai trading")
+    msg = await get_menu_message(client, "market")
     if not msg:
         print("FAILED (Main menu not found)")
         sys.exit(1)
@@ -198,9 +197,9 @@ async def main():
         ("signal system", ["signal", "system", "engines"], "signal"),
         ("market data", ["market", "data", "killzone"], "market"),
         ("trade history", ["trade", "history", "win rate", "mapping"], "history"),
-        ("account", ["account", "status", "donate", "pengaturan"], "account"),
+        ("account", ["account", "status", "subscribe", "pengaturan"], "account"),
         ("stockity insider", ["stockity", "insider", "bandar"], "stockity"),
-        ("help", ["command", "center"], "command"),
+        ("help", ["help", "command"], "command"),
         ("admin", ["admin panel", "manajemen", "bot"], "admin"),
     ]
 

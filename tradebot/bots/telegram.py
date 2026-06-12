@@ -28,6 +28,8 @@ from tradebot.bots.handlers import register_standard_commands
 from tradebot.config import settings
 from tradebot.services.plans import get_user_plan
 from tradebot.bots.platforms.vilona.commands import register_vilona_commands
+from tradebot.storage.subscription import SubscriptionDatabase
+from tradebot.bots.platforms.vilona.bot import VilonaBot
 
 LOG = logging.getLogger("tradebot.bots.telegram")
 
@@ -62,18 +64,19 @@ def _format_trade(row: dict[str, Any]) -> str:
     )
 
 
-class UnifiedBot:
+class UnifiedBot(VilonaBot):
     """One Telegram bot to rule them all.
 
     Registers:
-      - Trading commands (/signal, /scan, /symbols, /stats, /cookies)
-      - Account commands (/balance, /deposit)
-      - Shared commands via register_standard_commands()
+      * Trading commands (/signal, /scan, /symbols, /stats, /cookies)
+      * Account commands (/balance, /deposit)
+      * Shared commands via register_standard_commands()
         (/plans, /upgrade, /subscribe, /subscribe, /affiliate, /whitelabel, etc.)
-      - Platform routing: auto-detects from user's linked platform
+      * Platform routing: auto-detects from user's linked platform
     """
 
     def __init__(self, token: str | None = None):
+        super().__init__(name="unified-bot")
         self._token = token or settings.TELEGRAM_BOT_TOKEN
         self._app: Application | None = None
         self._running = False
@@ -83,6 +86,16 @@ class UnifiedBot:
         self._admin_chat_id: int = int(
             os.environ.get("ADMIN_CHAT_ID", "5220170786")
         )
+
+    def is_admin(self, uid: str | int) -> bool:
+        admin_ids = [str(x).strip() for x in os.environ.get("ADMIN_USER_IDS", "5220170786").split(",") if x.strip()]
+        admin_ids.append(str(self._admin_chat_id))
+        return str(uid) in admin_ids
+
+    async def _handle_menu_nav(self, menu_name: str, chat_id: str) -> str:
+        if menu_name == "main" and self.is_admin(chat_id):
+            menu_name = "admin"
+        return await super()._handle_menu_nav(menu_name, chat_id)
 
     # ── Build ──────────────────────────────────────────────────────
 
@@ -121,7 +134,10 @@ class UnifiedBot:
     # ── Start / Stop ───────────────────────────────────────────────
 
     async def start(self) -> None:
-        """Start polling."""
+        """Start polling and background loops."""
+        self._load_pending_signals()
+        self._load_autosync()
+
         self._app = self.build()
         self._running = True
         LOG.info("🤖 UnifiedBot starting...")
@@ -130,6 +146,12 @@ class UnifiedBot:
         await self._app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         LOG.info("✅ UnifiedBot running")
 
+        # Start the background tasks
+        self._schedule_background(self._auto_analysis_loop())
+        self._schedule_background(self._outcome_check_loop())
+        self._schedule_background(self._autosync_loop())
+        self._schedule_background(self._reminder_loop())
+
         # Keep alive
         while self._running:
             await asyncio.sleep(1)
@@ -137,6 +159,7 @@ class UnifiedBot:
     async def stop(self) -> None:
         """Graceful shutdown."""
         self._running = False
+        await super().stop()
         if self._app:
             await self._app.updater.stop()
             await self._app.stop()
@@ -146,7 +169,7 @@ class UnifiedBot:
     # ── Command Handlers ───────────────────────────────────────────
 
     async def _h_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """/start — welcome message with referral handling."""
+        """/start — welcome message with referral handling and inline keyboard."""
         user_id = str(update.effective_chat.id)
         plan = get_user_plan(user_id)
 
@@ -174,7 +197,26 @@ class UnifiedBot:
             "🤝 /affiliate — Earn commissions\n\n"
             "_Use /help for all commands_"
         )
-        await update.message.reply_markdown(text)
+
+        from tradebot.services.menu import get_inline_keyboard
+        is_admin = self.is_admin(user_id)
+        menu_name = "admin" if is_admin else "main"
+        kb_dict = get_inline_keyboard(menu_name)
+        kb = kb_dict.get("inline_keyboard", [])
+
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        rows = []
+        for r in kb:
+            row = []
+            for b in r:
+                if "url" in b:
+                    row.append(InlineKeyboardButton(text=b["text"], url=b["url"]))
+                else:
+                    row.append(InlineKeyboardButton(text=b["text"], callback_data=b["callback_data"]))
+            rows.append(row)
+        reply_markup = InlineKeyboardMarkup(rows)
+
+        await update.message.reply_markdown(text, reply_markup=reply_markup)
 
     async def _h_ref_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handled by _h_start — this is a no-op to prevent double-handling."""
@@ -456,6 +498,36 @@ class UnifiedBot:
             return str(sig)
 
     # ── Callback handler ─────────────────────────────────────────────────
+    async def _tg_send(
+        self,
+        text: str,
+        chat_id: str | None = None,
+        reply_markup: dict[str, Any] | None = None,
+    ) -> bool:
+        if hasattr(self, "_active_query") and self._active_query:
+            query = self._active_query
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            kb = None
+            if reply_markup and "inline_keyboard" in reply_markup:
+                rows = []
+                for r in reply_markup["inline_keyboard"]:
+                    row = []
+                    for b in r:
+                        if "url" in b:
+                            row.append(InlineKeyboardButton(text=b["text"], url=b["url"]))
+                        else:
+                            row.append(InlineKeyboardButton(text=b["text"], callback_data=b["callback_data"]))
+                    rows.append(row)
+                kb = InlineKeyboardMarkup(rows)
+            try:
+                await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=kb)
+                return True
+            except Exception as e:
+                LOG.warning("Failed to edit message in-place: %s", e)
+
+        return await super()._tg_send(text, chat_id, reply_markup)
+
+    # ── Callback handler ─────────────────────────────────────────────────
 
     async def _h_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
@@ -464,26 +536,44 @@ class UnifiedBot:
         data = query.data
         await query.answer()
 
-        if data == "plans":
-            await self._reply(update, self._pricing_text())
-        elif data == "link":
-            await self._reply(
-                update,
-                "🔗 Use `/link <your_auth_token>` to connect your Stockity account.\n\n"
-                "Need help? Run /link without arguments.",
-            )
-        elif data == "signal_now":
-            await self._reply(update, "⏳ Scanning... Stand by.")
-            await self._reply(update, "⚠️ Live signal requires Stockity auth. Use /signal <symbol>.")
-        elif data == "stats":
-            await self._h_stats(update, context)
-        elif data.startswith("check_"):
-            merchant_ref = data[6:]
-            if merchant_ref:
-                from tradebot.bots.handlers import _h_confirm
-                context.args = [merchant_ref]
-                await _h_confirm(update, context)
-
+        self._active_query = query
+        try:
+            if data == "plans":
+                await self._reply(update, self._pricing_text())
+            elif data == "link":
+                await self._reply(
+                    update,
+                    "🔗 Use `/link <your_auth_token>` to connect your Stockity account.\n\n"
+                    "Need help? Run /link without arguments.",
+                )
+            elif data == "signal_now":
+                await self._reply(update, "⏳ Scanning... Stand by.")
+                await self._reply(update, "⚠️ Live signal requires Stockity auth. Use /signal <symbol>.")
+            elif data == "stats":
+                await self._h_stats(update, context)
+            elif data.startswith("check_"):
+                merchant_ref = data[6:]
+                if merchant_ref:
+                    from tradebot.bots.handlers import _h_confirm
+                    context.args = [merchant_ref]
+                    await _h_confirm(update, context)
+            else:
+                cb_dict = {
+                    "id": query.id,
+                    "data": query.data,
+                    "from": {
+                        "id": query.from_user.id,
+                        "username": query.from_user.username or "",
+                        "first_name": query.from_user.first_name or "",
+                    },
+                    "message": {
+                        "message_id": query.message.message_id if query.message else None,
+                        "chat": {"id": query.message.chat.id if query.message else None},
+                    }
+                }
+                await self._handle_callback(cb_dict)
+        finally:
+            self._active_query = None
     @staticmethod
     def _pricing_text() -> str:
         return (

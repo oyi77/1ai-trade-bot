@@ -217,19 +217,16 @@ class TestEngineConsensus:
     async def test_analyze_multiple_engines_weighted_consensus(self):
         """Multiple engines with different confidences → weighted average.
 
-        Note: consensus weights are keyed by s.source.value (not engine name).
-        Since mock signals all use SignalSource.MOMEN, weights fall back to 1.0.
+        Consensus weights are keyed by engine name.
         """
         c = EngineConsensus(min_engines=1, min_confidence=0.1)
         c.register(_SignalEngine("e1", confidence=0.9), weight=2.0)
         c.register(_SignalEngine("e2", confidence=0.5), weight=1.0)
         result = await c.analyze(gold_ticks(10))
         assert result is not None
-        # Both signals have source=MOMEN → weight lookup falls back to 1.0
-        # Simple average: (0.9 + 0.5) / 2 = 0.7
-        assert result.confidence == pytest.approx(0.7, abs=0.01)
+        # Weighted average: (0.9 * 2.0 + 0.5 * 1.0) / 3.0 = 0.767
+        assert result.confidence == pytest.approx(0.767, abs=0.01)
         assert result.metadata["consensus_count"] == 2
-
     async def test_min_engines_threshold(self):
         """If fewer engines produce signals than min_engines → None."""
         c = EngineConsensus(min_engines=3, min_confidence=0.1)
@@ -282,16 +279,16 @@ class TestEngineConsensus:
         assert result.direction == "CALL"
 
     async def test_consensus_metadata_has_engine_list(self):
-        """Consensus metadata lists contributing signal source values."""
+        """Consensus metadata lists contributing engine names."""
         c = EngineConsensus(min_engines=1, min_confidence=0.1)
         c.register(_SignalEngine("alpha", confidence=0.7))
         c.register(_SignalEngine("beta", confidence=0.6))
         result = await c.analyze(gold_ticks(10))
         assert result is not None
-        # metadata["engines"] contains s.source.value, not engine names
-        assert "momen" in result.metadata["engines"]
+        # metadata["engines"] contains engine names
+        assert "alpha" in result.metadata["engines"]
+        assert "beta" in result.metadata["engines"]
         assert result.metadata["consensus_count"] == 2
-
 
 # ===================================================================
 # 3. Registry

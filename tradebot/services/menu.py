@@ -21,7 +21,7 @@ MAIN_MENU: list[list[tuple[str, str]]] = [
 ADMIN_MENU: list[list[tuple[str, str]]] = [
     [("menu:signals", "🧠 SIGNAL SYSTEM"), ("menu:market", "📊 MARKET DATA")],
     [("menu:history", "📈 TRADE HISTORY"), ("menu:account", "👤 ACCOUNT")],
-    [("menu:admin", "⚙️ ADMIN"), ("menu:help", "❓ HELP")],
+    [("menu:admin_panel", "⚙️ ADMIN"), ("menu:help", "❓ HELP")],
 ]
 
 SIGNAL_MENU: list[list[tuple[str, str]]] = [
@@ -51,7 +51,7 @@ HISTORY_MENU: list[list[tuple[str, str]]] = [
 
 ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("cmd:status", "📊 Status"), ("cmd:subscribe", "⭐ Subscribe")],
-    [("menu:subscribe", "💚 Subscribe"), ("cmd:mykey", "🔑 My Key")],
+    [("menu:donate", "💚 Subscribe"), ("cmd:mykey", "🔑 My Key")],
     [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
     [("cmd:myid", "🆔 My ID"), ("cmd:trailing", "🏃 Trailing Status")],
     [("cmd:settings", "⚙️ Settings")],
@@ -62,7 +62,7 @@ SUBSCRIBE_MENU: list[list[tuple[str, str]]] = [
     [("sub:pro", "⭐ PRO — Rp50K/bulan")],
     [("sub:elite", "👑 ELITE — Rp150K/bulan")],
     [("sub:lifetime", "💎 LIFETIME — Rp500K"), ("cancel_input", "❌ Batal")],
-    [("menu:main", "🔙 Back")],
+    [("menu:account", "🔙 Back")],
 ]
 
 STOCKITY_MENU: list[list[tuple[str, str] | tuple[str, str, str]]] = [
@@ -121,6 +121,7 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
         "history": HISTORY_MENU,
         "account": ACCOUNT_MENU,
         "donate": SUBSCRIBE_MENU,
+        "subscribe": SUBSCRIBE_MENU,
         "stockity": STOCKITY_MENU,
         "admin_panel": ADMIN_PANEL_MENU,
         "help": HELP_MENU,
@@ -159,6 +160,12 @@ def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> st
             "Status, subscribe, dan pengaturan."
         ),
         "donate": (
+            "💚 <b>SUBSCRIBE — VILONA AI</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Dukung server AI tetap hidup!\n"
+            "Pilih nominal di bawah:"
+        ),
+        "subscribe": (
             "💚 <b>SUBSCRIBE — VILONA AI</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "Dukung server AI tetap hidup!\n"
