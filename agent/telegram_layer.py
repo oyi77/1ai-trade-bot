@@ -112,7 +112,11 @@ class TelegramLayer:
                 mn = data.split(":", 1)[1]
                 if mn == "main" and self.is_admin(chat_id):
                     mn = "admin"
-                await self.send(chat_id, get_menu_text(mn), buttons=get_menu_kb(mn))
+                msg_id = cb.get("message", {}).get("message_id")
+                if msg_id:
+                    await self.edit(chat_id, msg_id, get_menu_text(mn), buttons=get_menu_kb(mn))
+                else:
+                    await self.send(chat_id, get_menu_text(mn), buttons=get_menu_kb(mn))
             elif data.startswith("cmd:"):
                 parts = data.split(":", 1)[1].split()
                 handler = self._cmd_router.get(parts[0])
@@ -126,6 +130,22 @@ class TelegramLayer:
                     await self.send(chat_id, f"💚 Rp{amt:,} — Hubungi @codergaboets")
         except Exception as e:
             LOG.error("Callback error: %s", e)
+
+    async def edit(self, chat_id: str, message_id: int, text: str, buttons: Any = None) -> bool:
+        payload: dict = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+            "parse_mode": "HTML"
+        }
+        if buttons:
+            kb = [[{"text": b.text, "url": b.url} if hasattr(b, 'url') and b.url
+                   else {"text": b.text, "callback_data": b.data.decode()}
+                   for b in row] for row in buttons]
+            payload["reply_markup"] = {"inline_keyboard": kb}
+        else:
+            payload["reply_markup"] = {"inline_keyboard": []}
+        return await self._api("editMessageText", payload) is not None
 
     async def send(self, chat_id: str, text: str, buttons: Any = None) -> bool:
         payload: dict = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}

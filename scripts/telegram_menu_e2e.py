@@ -83,6 +83,74 @@ async def test_menu_navigation(client, menu_button_text, expected_substrings, se
     except Exception as e:
         print(f"FAILED (Exception: {e})")
         return False
+async def test_chained_navigation(client):
+    print("Testing chained navigation (Main -> Account -> Donate -> Account -> Main) ... ", end="", flush=True)
+    try:
+        # 1. Main menu should be present
+        msg = await get_menu_message(client, "1ai trading")
+        if not msg:
+            print("FAILED (Main menu not found)")
+            return False
+
+        # 2. Click 'account'
+        btn_acc = await find_button(msg, "account")
+        if not btn_acc:
+            print("FAILED (Account button not found in main menu)")
+            return False
+        await btn_acc.click()
+        await asyncio.sleep(4.5)
+
+        # 3. Check Account menu
+        msg = await get_menu_message(client, "account")
+        if not msg or "account" not in msg.text.lower() or "donate" not in msg.text.lower():
+            print("FAILED (Not in Account menu or Donate button missing)")
+            return False
+
+        # 4. Click 'donate' inside Account menu
+        btn_donate = await find_button(msg, "donate")
+        if not btn_donate:
+            print("FAILED (Donate button not found in Account menu)")
+            return False
+        await btn_donate.click()
+        await asyncio.sleep(4.5)
+
+        # 5. Check Donate menu
+        msg = await get_menu_message(client, "kopi")
+        if not msg or "subscribe" not in msg.text.lower() or "nominal" not in msg.text.lower():
+            print("FAILED (Not in Donate menu)")
+            return False
+        btn_back = await find_button(msg, "back")
+        if not btn_back:
+            print("FAILED (Back button not found in Donate menu)")
+            return False
+        await btn_back.click()
+        await asyncio.sleep(4.5)
+
+        # 7. Check Account menu again
+        msg = await get_menu_message(client, "account")
+        if not msg or "account" not in msg.text.lower() or "donate" not in msg.text.lower():
+            print("FAILED (Failed to return to Account menu)")
+            return False
+
+        # 8. Click 'back' to go back to Main menu
+        btn_back2 = await find_button(msg, "back")
+        if not btn_back2:
+            print("FAILED (Back button not found in Account menu)")
+            return False
+        await btn_back2.click()
+        await asyncio.sleep(4.5)
+
+        # 9. Verify we are back on Main menu
+        msg = await get_menu_message(client, "1ai trading")
+        if not msg:
+            print("FAILED (Failed to return to Main menu)")
+            return False
+
+        print("PASSED")
+        return True
+    except Exception as e:
+        print(f"FAILED (Exception: {e})")
+        return False
 
 
 async def main():
@@ -118,6 +186,10 @@ async def main():
     for btn_text, subs, sq in menu_tests:
         if not await test_menu_navigation(client, btn_text, subs, sq):
             success = False
+
+    # Run the chained navigation test
+    if not await test_chained_navigation(client):
+        success = False
 
     await client.disconnect()
 
