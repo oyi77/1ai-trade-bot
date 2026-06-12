@@ -142,15 +142,22 @@ def get_broker(platform: str | BrokerPlatform) -> BaseBroker:
 class DerivBrokerAdapter(BaseBroker):
     """Adapter to make DerivWSClient conform to BaseBroker interface."""
 
-    def __init__(self, client_class: type) -> None:
-        self._client_class = client_class
-        self._client: Any | None = None
+    def __init__(self, client_spec: type = None) -> None:
+        if isinstance(client_spec, type):
+            self._client_class = client_spec
+            self._client: Any | None = None
+        else:
+            self._client = client_spec
+            self._client_class = None
 
     @property
     def platform(self) -> BrokerPlatform:
         return BrokerPlatform.DERIV
 
     async def connect(self) -> None:
+        if self._client is not None:
+            await self._client.connect()
+            return
         from tradebot.config import settings
         self._client = self._client_class(
             pat_token=settings.DERIV_PAT_TOKEN,

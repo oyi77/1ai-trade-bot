@@ -40,21 +40,27 @@ async def get_user_broker(
         user_id: Telegram chat_id.
         platform: Broker platform (stockity, deriv, ccxt, mt5).
         for_execution: If True, user MUST have valid credentials.
-                       If False, falls back to global cookie for market data.
+                       If False, falls back to global cookie for market data
+                       (Stockity only).
 
     Returns:
         Broker instance, or None if no credentials available and execution
         is required.
 
-    Priority chain (Stockity):
-        1. User's own cookie (from stored session) → primary
-        2. Global STOCKITY_FULL_COOKIE → fallback (market data only)
-        3. None → cannot proceed
+    Priority chain:
+        Stockity: user cookie → global cookie (market data only) → None
+        Deriv/CCXT/MT5: stored user credentials → None (no fallback)
     """
     if platform == "stockity":
         return await _get_stockity_broker(user_id, for_execution)
+    elif platform == "deriv":
+        return await _get_deriv_broker(user_id, for_execution)
+    elif platform == "ccxt":
+        return await _get_ccxt_broker(user_id, for_execution)
+    elif platform == "mt5":
+        return await _get_mt5_broker(user_id, for_execution)
 
-    LOG.warning("Platform %s not yet supported for per-user brokers", platform)
+    LOG.warning("Platform %s not supported for per-user brokers", platform)
     return None
 
 
@@ -85,6 +91,83 @@ async def _get_stockity_broker(user_id: str, for_execution: bool = False) -> Sto
         for_execution,
     )
     return None
+async def _get_deriv_broker(user_id: str, for_execution: bool = False) -> BaseBroker | None:
+    """Create a DerivBrokerAdapter with user's API credentials."""
+    from tradebot.brokers.base import DerivBrokerAdapter
+    from tradebot.brokers.deriv.client import DerivWSClient
+    from tradebot.services.platform_link_service import PlatformLinkService
+
+    svc = PlatformLinkService()
+    creds = await svc.get_platform_credentials(user_id, "deriv")
+    if not creds:
+        LOG.warning("No credentials for user %s deriv (execute=%s)", user_id, for_execution)
+        return None
+
+    creds_json = json.loads(creds.get("credentials", "{}"))
+    app_id = creds_json.get("app_id", "")
+    secret = creds_json.get("secret", "")
+    if not app_id or not secret:
+        LOG.warning("Incomplete deriv credentials for user %s", user_id)
+        return None
+
+    LOG.info("Using user's deriv credentials for %s", user_id)
+    client = DerivWSClient(api_token=secret, app_id=app_id)
+    adapter = DerivBrokerAdapter(client)
+    await adapter.connect()
+    return adapter
+
+
+async def _get_ccxt_broker(user_id: str, for_execution: bool = False) -> BaseBroker | None:
+    """Create a CCXTBroker with user's exchange API key."""
+    from tradebot.brokers.ccxt.broker import CCXTBroker
+    from tradebot.services.platform_link_service import PlatformLinkService
+
+    svc = PlatformLinkService()
+    creds = await svc.get_platform_credentials(user_id, "ccxt")
+    if not creds:
+        LOG.warning("No credentials for user %s ccxt (execute=%s)", user_id, for_execution)
+        return None
+
+    creds_json = json.loads(creds.get("credentials", "{}"))
+    exchange = creds_json.get("exchange", "")
+    api_key = creds_json.get("api_key", "")
+    api_secret = creds_json.get("api_secret", "")
+    if not exchange or not api_key or not api_secret:
+        LOG.warning("Incomplete ccxt credentials for user %s", user_id)
+        return None
+
+    LOG.info("Using user's ccxt credentials for %s (%s)", user_id, exchange)
+    broker = CCXTBroker(exchange=exchange, api_key=api_key, secret=api_secret, sandbox=False)
+    await broker.connect()
+    return broker
+
+
+async def _get_mt5_broker(user_id: str, for_execution: bool = False) -> BaseBroker | None:
+    """Create an MT5BrokerAdapter for a user.
+
+    MT5 terminal credentials (login/password/server) come from global
+    settings. The ea_key stored in user_platforms is verified before
+    returning a broker.
+    """
+    from tradebot.brokers.base import MT5BrokerAdapter
+    from tradebot.services.platform_link_service import PlatformLinkService
+
+    svc = PlatformLinkService()
+    creds = await svc.get_platform_credentials(user_id, "mt5")
+    if not creds:
+        LOG.warning("No credentials for user %s mt5 (execute=%s)", user_id, for_execution)
+        return None
+
+    creds_json = json.loads(creds.get("credentials", "{}"))
+    ea_key = creds_json.get("ea_key", "")
+    if not ea_key:
+        LOG.warning("No ea_key stored for user %s mt5", user_id)
+        return None
+
+    LOG.info("Using user's mt5 credentials for %s", user_id)
+    broker = MT5BrokerAdapter()
+    await broker.connect()
+    return broker
 
 
 async def refresh_user_broker(user_id: str, platform: str) -> bool:

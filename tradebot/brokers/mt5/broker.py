@@ -289,7 +289,7 @@ class MT5Broker(BaseBroker):
             metadata=result,
         )
 
-async def subscribe_ticks(self, symbol: str) -> bool:
+    async def subscribe_ticks(self, symbol: str) -> bool:
         """Subscribe to real-time MT5 ticks for a symbol.
 
         This enables MT5's tick cache for the symbol. Actual streaming

@@ -21,13 +21,12 @@ import json
 import logging
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
-from enum import StrEnum
 from typing import Any
 
 import websockets
 from websockets.protocol import State
 
-from tradebot.brokers.base import TradeResult
+from tradebot.brokers.base import BaseBroker, BrokerPlatform, TradeDirection, TradeResult
 from tradebot.brokers.base import TradeStatus as BaseTradeStatus
 from tradebot.config import settings
 
@@ -37,16 +36,9 @@ STOCKITY_PHOENIX_WS = "wss://ws.stockity.com/?v=2&vsn=2.0.0"
 STOCKITY_LEGACY_WS = "wss://as.stockity.com/"
 
 
-class TradeStatus(StrEnum):
-    """Stockity trade status values."""
-    PENDING = "pending"
-    OPENED = "opened"
-    CLOSED = "closed"
-    CANCELLED = "cancelled"
-    REJECTED = "rejected"
 
 
-class StockityBroker:
+class StockityBroker(BaseBroker):
     """Trade execution broker for Stockity.
 
     Uses Phoenix Channels WebSocket to join the 'bo' (binary options) topic
@@ -64,6 +56,9 @@ class StockityBroker:
         print(result)
         await broker.close()
     """
+    platform: BrokerPlatform = BrokerPlatform.STOCKITY
+
+
 
     def __init__(
         self,
@@ -418,7 +413,7 @@ class StockityBroker:
     async def place_trade(
         self,
         symbol: str,
-        direction: str,
+        direction: TradeDirection,
         amount: float,
         duration: int | None = None,
         option_type: str = "blitz",
@@ -479,7 +474,7 @@ class StockityBroker:
                 ref, symbol, direction, amount, self._balance_currency, duration,
             )
             return TradeResult(
-                platform="stockity",
+                platform=BrokerPlatform.STOCKITY,
                 order_id=ref,
                 symbol=symbol,
                 direction=direction,
@@ -490,7 +485,7 @@ class StockityBroker:
         except Exception as e:
             LOG.error("Trade failed: %s", e)
             return TradeResult(
-                platform="stockity",
+                platform=BrokerPlatform.STOCKITY,
                 order_id="",
                 symbol=symbol,
                 direction=direction,
