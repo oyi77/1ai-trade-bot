@@ -163,6 +163,15 @@ def _fire_meta_capi(chat_id: str, amount: int, brand: str) -> None:
     except Exception as e:
         LOG.warning("Meta CAPI failed: %s", e)
 
+def _fire_capi_purchase(chat_id: str, amount: int, tier: str, ref: str) -> None:
+    """Fire Meta CAPI purchase event via tracking system."""
+    try:
+        from tradebot.tracking.events import fire_purchase
+
+        fire_purchase(user_id=chat_id, amount=float(amount), tier=tier, transaction_id=ref)
+    except Exception as e:
+        LOG.warning("CAPI Purchase failed (non-critical): %s", e)
+
 
 def _send_telegram_notification(chat_id: str, brand: str, tier: str = "donor") -> None:
     """Send payment confirmation with tier-specific messaging via Telegram."""
@@ -225,6 +234,35 @@ def _send_telegram_notification(chat_id: str, brand: str, tier: str = "donor") -
         LOG.info("Telegram notification sent to user %s (brand=%s)", chat_id, brand)
     except Exception as e:
         LOG.warning("Failed to send Telegram notification: %s", e)
+
+def _track_commission(chat_id: str, amount: int, ref: str, brand: str) -> None:
+    """Track commission for payment."""
+    try:
+        from tradebot.services.mlm_service import record_commission
+
+        record_commission(payer_user_id=chat_id, amount_idr=amount, source="payment", reference_id=ref)
+    except Exception as e:
+        LOG.warning("Commission tracking failed (non-critical): %s", e)
+
+
+def _sync_group(chat_id: str, tier: str) -> None:
+    """Add user to premium Telegram groups."""
+    try:
+        from tradebot.tracking.group_sync import add_to_premium_groups
+
+        add_to_premium_groups(chat_id, tier)
+    except Exception as e:
+        LOG.warning("Group sync failed (non-critical): %s", e)
+
+
+def _log_activity(chat_id: str, amount: int, tier: str, ref: str) -> None:
+    """Log payment activity."""
+    try:
+        from tradebot.tracking.activity import log_activity
+
+        log_activity(chat_id, chat_id, "", "payment_success", tier, {"amount": amount, "ref": ref})
+    except Exception as e:
+        LOG.warning("Activity log failed (non-critical): %s", e)
 
 
 class PaymentWebhookHandler(BaseHTTPRequestHandler):
@@ -334,6 +372,10 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
             _mark_processed(merchant_ref)
             _fire_bemob_conversion(merchant_ref, amount, brand)
             _fire_meta_capi(chat_id, amount, brand)
+            _fire_capi_purchase(chat_id, amount, tier, merchant_ref)
+            _track_commission(chat_id, amount, merchant_ref, brand)
+            _sync_group(chat_id, tier)
+            _log_activity(chat_id, amount, tier, merchant_ref)
             _send_telegram_notification(chat_id, brand, tier)
 
         self._send_json(

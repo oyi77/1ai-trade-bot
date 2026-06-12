@@ -65,6 +65,7 @@ from tradebot.services.plans import (
 )
 from tradebot.web.monitoring_api import router as monitoring_router
 from tradebot.web.bridge_api import router as bridge_router
+from tradebot.web.tracking_api import router as tracking_router
 from tradebot.web.public_dashboard import (
     get_backtest_data as _get_backtest_data,
 )
@@ -108,6 +109,7 @@ app.add_middleware(
 app.include_router(monitoring_router)
 # Wire bridge API router (MT5 EA signal polling)
 app.include_router(bridge_router)
+app.include_router(tracking_router)  # FB Ads tracking pixel
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 # ═══════════════════════════════════════════════════════════
