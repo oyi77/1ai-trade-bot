@@ -799,15 +799,14 @@ def _touch_manual(chat_id, action=None, asset="", pair=""):
     if action in ("BUY", "SELL"):
         USER_LAST_DIRECTION[chat_id] = {"action": action, "at": wib_now().isoformat(), "asset": asset}
 
-def handle_trade_callback(callback_query):
-    """Handle inline keyboard: trade:<id> or skip:<id>"""
+def handle_onboarding_callback(callback_query):
+    """Handle interactive onboarding buttons: cmd:analyze_xauusd / cmd:guide / cmd:subscribe."""
     cb_id = callback_query.get("id", "")
     chat_id = str(callback_query.get("from", {}).get("id", ""))
     data = callback_query.get("data", "")
 
-    # ── Onboarding callbacks: cmd:analyze_xauusd / cmd:guide / cmd:subscribe ──
     if data == "cmd:analyze_xauusd":
-        # Answer callback silently, then trigger analyze
+        # Answer callback silently, then trigger /analyze xauusd
         try:
             payload = json.dumps({"callback_query_id": cb_id}).encode()
             req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
@@ -831,18 +830,18 @@ def handle_trade_callback(callback_query):
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
             "📊 <b>Signal Format:</b>\n"
             "• BUY/SELL — Arah trading\n"
-            "• Entry Zone — Harga masuk (pending order)\n"
-            "• SL — Stop Loss (risk management)\n"
-            "• TP1/TP2/TP3 — Take Profit levels\n\n"
-            "🧠 <b>AI Models:</b>\n"
+            "• Entry Zone — Harga masuk (pending limit order)\n"
+            "• SL — Stop Loss (risk management wajib)\n"
+            "• TP1/TP2/TP3/TP4 — Take Profit berjenjang\n\n"
+            "🧠 <b>AI Engines:</b>\n"
             "• DeepSeek V3 — SMC/ICT specialist\n"
-            "• GPT-4o — Pattern recognition\n"
-            "• Grok News — Real-time X/Twitter context\n\n"
+            "• GPT-4o — Pattern & structure recognition\n"
+            "• Grok — Real-time X/Twitter market context\n\n"
             "⚡ <b>PRO TIPS:</b>\n"
-            "• Entry selalu pakai pending limit order\n"
-            "• SL jangan diubah — AI udah kalkulasi\n"
+            "• Entry selalu pakai pending limit order, bukan market\n"
+            "• SL jangan diubah — AI udah kalkulasi risk\n"
             "• Partial TP di TP1 (50%), sisanya trailing\n"
-            "• Jangan trading pas news red folder 🔴\n\n"
+            "• Jangan entry pas news high-impact 🔴\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📱 Ketik /analyze xauusd buat mulai!"
         )
@@ -859,6 +858,22 @@ def handle_trade_callback(callback_query):
             pass
         _send_donate_menu(chat_id)
         return
+
+    # Unknown onboarding callback — answer silently
+    try:
+        payload = json.dumps({"callback_query_id": cb_id}).encode()
+        req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+            data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
+
+
+def handle_trade_callback(callback_query):
+    """Handle inline keyboard: trade:<id> or skip:<id>"""
+    cb_id = callback_query.get("id", "")
+    chat_id = str(callback_query.get("from", {}).get("id", ""))
+    data = callback_query.get("data", "")
 
     # ── Original trade callbacks below ──
     cb_id = callback_query.get("id", "")
