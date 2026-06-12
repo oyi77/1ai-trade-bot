@@ -1961,15 +1961,12 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     
     is_actionable = q_passed and action in ("BUY", "SELL")
 
-    # ── Killzone gate: forex/metals outside London/NY → NO TRADE ZONE ──
+    # ── Killzone gate: DISABLED — analyze all sessions 24/7 ──
     forex_metal = display in ("XAUUSD", "GOLD", "USOIL", "EURUSD", "GBPUSD", "USDJPY")
     in_kz = True
     if forex_metal:
         lkz, nykz = killzone(h)
-        in_kz = lkz or nykz
-        if not in_kz:
-            is_actionable = False
-            q_reason = f"🔴 NO TRADE ZONE — {display} only during London (14:00-17:00 WIB) & NY (19:00-22:00 WIB)"
+        in_kz = True  # gate bypassed — always allow
 
     header_emoji = emoji if is_actionable else "⚪️"
     header_label = f"SINYAL {action}" if is_actionable else "MARKET PULSE"
@@ -2189,12 +2186,8 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         f"🕐 {now_wib.strftime('%Y.%m.%d %H:%M')} WIB | Session: {session(h)}",
     ]
 
-    if forex_metal and not in_kz:
-        # ── OUTSIDE KILLZONE: no entry/SL/TP — NO TRADE ZONE ──
-        lines.append(f"")
-        lines.append(f"🔴 <b>NO TRADE ZONE</b>")
-        lines.append(f"💡 {display} hanya trading saat London (14:00-17:00 WIB) & NY (19:00-22:00 WIB)")
-        lines.append(f"   Sabar bro... sinyal muncul pas killzone aktif.")
+    if False:  # killzone gate DISABLED — always show full signal
+        pass
     else:
         lines.append(f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}")
 
@@ -3324,27 +3317,8 @@ def handle_command(cmd, text, chat_id, msg):
                 chat_id
             )
             return
-
-        # ── KILLZONE GATE (forex/metals outside London/NY) ──
-        forex_metal_pairs = ("xauusd", "gold", "usd", "oil", "eurusd", "gbpusd", "usdjpy")
-        if not is_crypto_pair(pair_check) and pair_check in forex_metal_pairs:
-            lkz, nykz = killzone(wib_now().hour)
-            if not (lkz or nykz):
-                logger.info(f"   [/analyze] {pair_check.upper()} outside killzone — NO TRADE ZONE")
-                next_session = "London (14:00 WIB)" if wib_now().hour < 14 else "New York (19:00 WIB)"
-                tg_send(
-                    f"🚫 <b>NO TRADE ZONE — {pair_check.upper()}</b>\n"
-                    f"━━━━━━━━━━━━━━━━\n"
-                    f"Forex & Metals hanya dianalisa saat:\n"
-                    f"🕐 London Killzone: 14:00-17:00 WIB\n"
-                    f"🕐 New York Killzone: 19:00-22:00 WIB\n\n"
-                    f"⏰ Sesi selanjutnya: <b>{next_session}</b>\n\n"
-                    f"💡 Untuk info killzone: /killzone\n"
-                    f"💡 Untuk crypto 24/7: /analyze btc",
-                    chat_id
-                )
-                return
-
+        # ── KILLZONE GATE: DISABLED — analyze all sessions 24/7 ──
+        # Gate bypassed per user request — /analyze always available
         # ── ELITE CUSTOM PARAMS ──
         elite_params = {}
         if sub:
@@ -6021,16 +5995,7 @@ def auto_analyze_loop():
                 save_signal_log(log, pair)
                 asset_logs[log_key] = log
                 time.sleep(120)  # 2 min cooldown after mechanical
-                continue
-
-            # ── AI Consensus — ONLY in killzone hours when mechanical misses ──
-            # Python screening is primary. AI hanya sebagai verifikator saat killzone.
-            in_killzone = (lkz or nykz)
-            if not in_killzone:
-                logger.info(f"   [{disp}] Outside killzone — skip AI, wait for mechanical")
-                time.sleep(60)
-                continue
-
+            # ── AI Consensus — always run (killzone gate DISABLED) ──
             sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=True,
                           ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
             if not sig:
