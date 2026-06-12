@@ -3692,13 +3692,14 @@ def handle_command(cmd, text, chat_id, msg):
             except Exception as exc:
                 logger.warning("Tracking link failed: %s", exc)
 
-        # ── INTERACTIVE ONBOARDING: InlineKeyboard, dual-mode (new vs returning) ──
+        # ── INTERACTIVE ONBOARDING: dynamic tier-based copy + InlineKeyboard ──
         if _has_accepted_ultimatum(chat_id):
-            # Returning user → compact welcome with interactive buttons
             is_donor = _is_donor(chat_id)
-            tier_label = "📊 Subscriber" if is_donor else "🆓 Free"
             quota = _get_quota(chat_id)
-            quota_line = "UNLIMITED ♾️" if is_donor else f"{quota['remaining']}/{FREE_QUOTA_PER_DAY}"
+            tier_info = _get_user_tier(chat_id)
+            tier_tag = tier_info.get("label", "🆓 Free")
+
+            # ── 1. HEADER (semua user) ──
             welcome = (
                 f"🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -3710,31 +3711,46 @@ def handle_command(cmd, text, chat_id, msg):
                 f"Mesin ini mengonsumsi resource besar untuk\n"
                 f"satu tujuan: <b>MENCETAK PROFIT.</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"{tier_label}\n"
-                f"⚡️ Kuota AI: {quota_line}"
             )
+
             if is_donor:
+                # ── 2a. DYNAMIC CONTENT: PAID (PRO / ELITE / LIFETIME) ──
                 welcome += (
-                    f"\n━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📊 <b>AKSES SUBSCRIBER:</b>\n"
+                    f"📊 Status: <b>SUBSCRIBER 👑</b>\n"
+                    f"⚡️ Kuota AI: <b>UNLIMITED ♾️</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📊 <b>AKSES VIP KAMU:</b>\n"
                     f"📥 Download EA MT5: phantomfx.aitradepulse.com/ea/download/\n"
                     f"🔑 Cek Licensi EA: /mykey\n"
-                    f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com"
+                    f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🧠 /signal — Signal dari 9 engines\n"
+                    f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
+                    f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
+                    f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
+                    f"💀 /stier — S-TIER Zone GOD TIER 👑\n"
+                    f"🕐 /session — Killzone + Session Level 🆕\n"
+                    f"📰 /news — Grok News X/Twitter intel 👑\n"
+                    f"📊 /dashboard — Live dashboard web\n"
+                    f"📱 /help — Semua command\n"
+                    f"⚡️ Perpanjang/Upgrade Tier → /subscribe"
                 )
-            welcome += (
-                f"\n━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🧠 /signal — Signal dari 9 engines\n"
-                f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
-                f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
-                f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
-                f"💀 /stier — S-TIER Zone GOD TIER 👑\n"
-                f"🕐 /session — Killzone + Session Level 🆕\n"
-                f"📰 /news — Grok News X/Twitter intel 👑\n"
-                f"📊 /dashboard — Live dashboard web\n"
-                f"📱 /help — Semua command\n"
-                f"⚡ Upgrade Tier → @berkahkaryaforexbotbot"
-            )
-            # Interactive onboarding buttons
+            else:
+                # ── 2b. DYNAMIC CONTENT: FREE ──
+                quota_line = f"{quota['remaining']}/{FREE_QUOTA_PER_DAY} Analisa/Hari"
+                welcome += (
+                    f"📊 Status: <b>FREE TIER</b>\n"
+                    f"⚡️ Kuota AI: {quota_line}\n"
+                    f"🔒 SL/TP: <b>Dikunci (Subscriber Only)</b>\n"
+                    f"❌ Akses EA: <b>Restricted</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Akses kamu sangat dibatasi. Upgrade sekarang\n"
+                    f"untuk membuka full SL/TP, kuota unlimited, dan\n"
+                    f"akses rahasia ke EA Auto-Trade!\n"
+                    f"Ketik /subscribe atau klik tombol di bawah."
+                )
+
+            # ── 3. Interactive onboarding buttons (tetap 3 tombol) ──
             markup = {
                 "inline_keyboard": [
                     [{"text": "📊 Cek Sinyal XAUUSD Sekarang", "callback_data": "cmd:analyze_xauusd"}],
