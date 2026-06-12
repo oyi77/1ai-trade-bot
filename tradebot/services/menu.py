@@ -61,6 +61,26 @@ ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("menu:main", "🔙 Back")],
 ]
 
+PLATFORMS_MENU: list[list[tuple[str, str]]] = [
+    [("cmd:platforms", "🔗 Linked Platforms")],
+    [("cmd:link", "➕ Link Platform")],
+    [("cmd:unlink", "➖ Unlink Platform")],
+    [("sub:signal_only:weekly", "📡 Signal Only Rp50K/mg")],
+    [("sub:signal_execute:weekly", "🤖 Signal+Execute Rp75K/mg")],
+    [("menu:subscriptions", "💳 All Plans")],
+    [("menu:account", "🔙 Back")],
+]
+
+SUBSCRIPTIONS_MENU: list[list[tuple[str, str]]] = [
+    [("sub:signal_only:weekly", "📡 Signal Only — Rp50K/mg")],
+    [("sub:signal_only:monthly", "📡 Signal Only — Rp100K/bln")],
+    [("sub:signal_only:lifetime", "📡 Signal Only — Rp300K")],
+    [("sub:signal_execute:weekly", "🤖 Signal+Execute — Rp75K/mg")],
+    [("sub:signal_execute:monthly", "🤖 Signal+Execute — Rp200K/bln")],
+    [("sub:signal_execute:lifetime", "🤖 Signal+Execute — Rp750K")],
+    [("menu:platforms", "🔙 Back")],
+]
+
 SUBSCRIBE_MENU: list[list[tuple[str, str]]] = [
     [("sub:pro", "⭐ PRO — Rp50K/bulan")],
     [("sub:elite", "👑 ELITE — Rp150K/bulan")],
@@ -138,6 +158,8 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
         "admin_panel": ADMIN_PANEL_MENU,
         "help": HELP_MENU,
         "trade": TRADE_MENU,
+        "platforms": PLATFORMS_MENU,
+        "subscriptions": SUBSCRIPTIONS_MENU,
     }
     menu = menus.get(menu_name, MAIN_MENU)
     return {"inline_keyboard": build_keyboard(menu)}
@@ -205,6 +227,19 @@ def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> st
             "❓ <b>HELP</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "Gunakan menu atau ketik command langsung."
+        ),
+        "platforms": (
+            "🔗 <b>PLATFORM MANAGEMENT</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Kelola akun broker Anda di sini.\n"
+            "Link akun untuk auto-trading, atau subscribe signal."
+        ),
+        "subscriptions": (
+            "💳 <b>SUBSCRIPTION PLANS</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Pilih paket langganan:\n\n"
+            "📡 <b>Signal Only</b> — Dapatkan sinyal Telegram\n"
+            "🤖 <b>Signal+Execute</b> — Sinyal + auto-trading via broker Anda"
         ),
     }
     return texts.get(menu_name, texts["main"])

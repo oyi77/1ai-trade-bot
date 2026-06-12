@@ -1623,6 +1623,92 @@ class CommandHandlersMixin(BaseBot):
             "<i>Contoh: ketik 50000 untuk Rp50.000</i>\n\n"
             "Atau hubungi admin: @codergaboets"
         )
+
+    async def _cmd_link(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not args or len(args) < 3:
+            return (
+                "Link akun broker Anda:\n\n"
+                "/link stockity &lt;email&gt; &lt;password&gt; — Stockity\n"
+                "/link deriv &lt;app_id&gt; &lt;secret&gt; — Deriv\n"
+                "/link ccxt &lt;exchange&gt; &lt;api_key&gt; &lt;api_secret&gt; — CCXT Exchange\n"
+                "/link mt5 &lt;ea_key&gt; — MetaTrader 5 via EA"
+            )
+        platform = args[0].lower()
+        from tradebot.services.platform_link_service import PlatformLinkService
+        svc = PlatformLinkService()
+        try:
+            if platform == "stockity":
+                if len(args) < 3:
+                    return "Usage: /link stockity &lt;email&gt; &lt;password&gt;"
+                result = await svc.link_stockity(target, args[1], args[2])
+                currency = result.get("currency", "IDR")
+                return (
+                    f"Akun Stockity berhasil ditautkan!\n"
+                    f"Currency: {currency}\n"
+                    f"User ID: {result.get('broker_user_id', '?')}"
+                )
+            elif platform == "deriv":
+                if len(args) < 3:
+                    return "Usage: /link deriv &lt;app_id&gt; &lt;secret&gt;"
+                result = await svc.link_deriv(target, args[1], args[2])
+                return f"Akun Deriv berhasil ditautkan (currency: USD)"
+            elif platform == "ccxt":
+                if len(args) < 4:
+                    return "Usage: /link ccxt &lt;exchange&gt; &lt;api_key&gt; &lt;api_secret&gt;"
+                result = await svc.link_ccxt(target, args[1], args[2], args[3])
+                return f"Exchange {args[1].upper()} berhasil ditautkan"
+            elif platform == "mt5":
+                result = await svc.link_mt5(target, args[1])
+                return "Akun MT5 berhasil ditautkan (currency: USD)"
+            else:
+                return f"Platform tidak dikenal: {platform}. Gunakan: stockity, deriv, ccxt, mt5"
+        except Exception as e:
+            LOG.error("Link %s error for %s: %s", platform, target, e)
+            return f"Gagal menautkan akun: {e}"
+
+    async def _cmd_unlink(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        if not args:
+            from tradebot.services.platform_link_service import PlatformLinkService
+            svc = PlatformLinkService()
+            platforms = await svc.get_linked_platforms(target)
+            if not platforms:
+                return "Belum ada platform yang ditautkan."
+            lines = ["Platform yang tertaut:"]
+            for p in platforms:
+                lines.append(f"  - {p['platform']}: {p.get('currency', '?')} ({p.get('status', 'active')})")
+            lines.append("\nGunakan /unlink &lt;platform&gt; untuk menghapus.")
+            return "\n".join(lines)
+        platform = args[0].lower()
+        from tradebot.services.platform_link_service import PlatformLinkService
+        svc = PlatformLinkService()
+        await svc.unlink_platform(target, platform)
+        return f"Platform {platform} berhasil dihapus."
+
+    async def _cmd_platforms(self, args: list[str], chat_id: str | None = None) -> str:
+        target = str(chat_id or "")
+        from tradebot.services.platform_link_service import PlatformLinkService
+        svc = PlatformLinkService()
+        platforms = await svc.get_linked_platforms(target)
+        if not platforms:
+            text = "Belum ada platform yang ditautkan.\nGunakan /link untuk menambahkan."
+        else:
+            lines = ["Platform yang tertaut:", ""]
+            for p in platforms:
+                lines.append(f"{p['platform'].upper()}")
+                lines.append(f"  Currency: {p.get('currency', '?')}")
+                lines.append(f"  Status: {p.get('status', 'active')}")
+                verif = "Terverifikasi" if p.get('status') == 'active' else "Perlu refresh"
+                lines.append(f"  Verifikasi: {verif}")
+                lines.append("")
+            text = "\n".join(lines)
+
+        from tradebot.services.subscription_service import check_subscription
+        sub = check_subscription(target)
+        if sub["active"]:
+            text += f"\nSubscription: {sub['tier_type']} ({sub['plan']})"
+        return text
 def register_vilona_commands(app, bot):
     """Register Vilona commands with the UnifiedBot application.
     Only essential text commands are registered — most features
@@ -1645,6 +1731,9 @@ def register_vilona_commands(app, bot):
         ("history", "_cmd_history"),
         ("recap", "_cmd_recap"),
         ("mapping", "_cmd_mapping"),
+        ("link", "_cmd_link"),
+        ("unlink", "_cmd_unlink"),
+        ("platforms", "_cmd_platforms"),
     ]
 
     def make_handler(handler_name):
