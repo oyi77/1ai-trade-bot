@@ -4665,7 +4665,7 @@ def handle_command(cmd, text, chat_id, msg):
             ]
             if st_grade == "S-TIER":
                 lines.append(f"")
-                lines.append(f"💀 <b>GOD TIER — FULL MARGIN READY</b>")
+                lines.append(f"💀 <b>GOD TIER — Near-100% Conviction</b>")
             lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
             lines.append(f"⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
             tg_send("\n".join(lines), chat_id)
@@ -5474,12 +5474,36 @@ def handle_command(cmd, text, chat_id, msg):
                 from signal_calculator import log_signal
                 log_signal(sig)
             except: pass
-            # ── Auto-execute: post to bridge for EA pickup ──
+            # ── Killzone enforcement: forex/metals outside London/NY = BLOCK ──
+            from datetime import datetime, timezone
+            h_now = datetime.now(timezone.utc).hour
+            if disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
+                lkz, nykz = killzone(h_now)
+                if not lkz and not nykz:
+                    logger.info(f"   [/signal {disp}] BLOCKED: outside killzone (London/NY only)")
+                    tg_send(f"⛔ <b>Signal ditahan — di luar Killzone</b>\n\n{disp} hanya trading di sesi London (14:00-17:00 WIB) & NY (19:00-22:00 WIB).\n\nGunakan /analyze untuk analisis only.", chat_id)
+                    return
+            # ── Post to channel FIRST, then bridge with message_id ──
+            tg_msg_id = None
+            try:
+                pair_k = "gold" if disp.startswith("XAU") else disp.lower()
+                _entry = sig.get("entry", 0) or 0
+                _sl = sig.get("sl", 0) or 0
+                _tp = sig.get("tp", 0) or 0
+                if _can_post_to_channel(pair_k, sig["action"], _entry, _sl, _tp):
+                    result = send_to_channel(msg)
+                    if result:
+                        tg_msg_id = result.get("result",{}).get("message_id")
+                        sig["telegram_message_id"] = tg_msg_id
+                        logger.info(f"CHANNEL POST OK [/signal {disp}]: message_id={tg_msg_id}")
+            except Exception as ex:
+                logger.warning(f"Channel post [/signal] failed: {ex}")
+            # ── Post to bridge for EA pickup ──
             try:
                 post_signal_to_bridge(sig, 0, disp)
-                logger.info(f"🤖 Auto-executed {disp} {sig['action']} via /signal")
+                logger.info(f"🤖 Auto-executed {disp} {sig['action']} via /signal (msg_id={tg_msg_id})")
             except Exception as ex:
-                logger.warning(f"Bridge post failed: {ex}")
+                logger.warning(f"Bridge post [/signal] failed: {ex}")
         elif verdict == "HOLD" and score == 0 and active_count == 0:
             msg += (
                 f"📭 <b>Tidak ada setup valid untuk {disp}</b>\n"
@@ -6394,11 +6418,11 @@ def auto_analyze_loop():
                     logger.debug(f"S-TIER check [{disp}]: {e}")
 
             if stier_sig and stier_sig["action"] in ("BUY", "SELL"):
-                # ── 💀 S-TIER FULL MARGIN: Triple Confluence, bypass killzone, max sizing ──
+                # ── 💀 S-TIER HIGH CONVICTION: Triple Confluence, bypass killzone, near-100% accuracy ──
                 action = stier_sig["action"]
                 stier_sig = _clamp_sltp(stier_sig, disp)
                 stier_sig["_tier_capped"] = False
-                stier_sig["risk_percent"] = 100.0   # FULL MARGIN
+                stier_sig["risk_percent"] = 2.0   # normal sizing, not full margin
                 stier_sig["source"] = "stier-god-tier"
                 stier_sig["grade"] = "S"
 
@@ -6407,20 +6431,20 @@ def auto_analyze_loop():
                     conf = conf / 100
                 stier_sig["confidence"] = conf
 
-                # Format as S-TIER signal
+                # Format as S-TIER HIGH CONVICTION signal
                 stier_text = fmt_signal(stier_sig, price, dxy, h, disp, "$")
                 stier_text = stier_text.replace(
-                    "SINYAL SELL", "💀 S-TIER FULL MARGIN SELL"
+                    "SINYAL SELL", "💀 S-TIER HIGH CONVICTION SELL"
                 ).replace(
-                    "SINYAL BUY", "💀 S-TIER FULL MARGIN BUY"
+                    "SINYAL BUY", "💀 S-TIER HIGH CONVICTION BUY"
                 ).replace(
-                    "MARKET PULSE", "💀 S-TIER FULL MARGIN"
+                    "MARKET PULSE", "💀 S-TIER HIGH CONVICTION"
                 )
                 stier_text += (
                     "\n━━━━━━━━━━━━━━━━━━━━━━\n"
                     "🔥 <b>TRIPLE CONFLUENCE DETECTED</b>\n"
                     "   Breaker + OB/FVG + Double Sweep\n"
-                    "   💯 100% Margin — Max Position Size\n"
+                    "   🎯 Near-100% Accuracy — Highest Conviction Setup\n"
                 )
 
                 # Post to channel + bridge
@@ -6432,7 +6456,7 @@ def auto_analyze_loop():
                     _mark_channel_post(pair, action, stier_entry, stier_sig.get("sl", 0), stier_sig.get("tp", 0))
 
                 post_signal_to_bridge(stier_sig, price, disp)
-                logger.info(f"💀 S-TIER FULL MARGIN [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%}")
+                logger.info(f"💀 S-TIER HIGH CONVICTION [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%}")
                 log["signals_sent"] = log.get("signals_sent", 0) + 1
                 time.sleep(60)
                 continue
