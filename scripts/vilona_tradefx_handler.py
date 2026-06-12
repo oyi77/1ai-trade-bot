@@ -5412,8 +5412,6 @@ def handle_command(cmd, text, chat_id, msg):
                 logger.info(f"🤖 Auto-executed {disp} {sig['action']} via /signal")
             except Exception as ex:
                 logger.warning(f"Bridge post failed: {ex}")
-            # ── Broadcast to channel ──
-            send_to_channel(msg)
         elif verdict == "HOLD" and score == 0 and active_count == 0:
             msg += (
                 f"📭 <b>Tidak ada setup valid untuk {disp}</b>\n"
@@ -6473,9 +6471,14 @@ def auto_analyze_loop():
                     rr_val = float(rr_val[2:]) if rr_val[2:] else 0
                 rr_val = float(rr_val) if rr_val else 0
 
-                # AI requires: 2+ model agreement + conf ≥ 70% + RR ≥ 1:1.5
+                # AI requires: 2+ model agreement OR solo with conf ≥ 80%, RR ≥ 1:1.5
                 if voters < 2:
-                    logger.info(f"   [{disp}] BLOCKED: solo AI call ({voters} model) — need ≥2")
+                    if conf < 0.80:
+                        logger.info(f"   [{disp}] BLOCKED: solo AI call conf={conf:.0%} < 80%")
+                    else:
+                        logger.info(f"   [{disp}] SOLO PUSH: conf={conf:.0%} ≥ 80% — bypassing voters gate")
+                        should_push = True
+                    rr_val_local = 0  # prevent RR double-log for same cycle
                 elif conf < 0.70:
                     logger.info(f"   [{disp}] BLOCKED: AI confidence {conf:.0%} < 70%")
                 elif rr_val > 0 and (rr_val < 1.5 or rr_val > 5.0):
@@ -6490,9 +6493,7 @@ def auto_analyze_loop():
                     sig = enrich_signal_with_layers(sig)
                 # Clamp SL/TP to realistic bounds before pushing
                 sig = _clamp_sltp(sig, disp)
-                post_signal_to_bridge(sig, price, disp)
 
-                # ── Post to channel (with rate limiter) ──
                 # ── SMC/ICT Enrichment ──
                 smc_text2 = ""
                 try:
@@ -6507,11 +6508,14 @@ def auto_analyze_loop():
                 _entry = sig.get("entry", price) or 0
                 _sl = sig.get("sl", 0) or 0
                 _tp = sig.get("tp", 0) or 0
+                # ── Post to channel FIRST, capture message_id for reply chain ──
+                tg_msg_id = None
                 if _can_post_to_channel(pair, action, _entry, _sl, _tp):
                     logger.info(f"CHANNEL POST [AI-consensus]: {pair} {action}")
                     result = send_to_channel(text)
                     if result:
-                        logger.info(f"CHANNEL POST OK [AI-consensus]: message_id={result.get('result',{}).get('message_id')}")
+                        tg_msg_id = result.get('result',{}).get('message_id')
+                        logger.info(f"CHANNEL POST OK [AI-consensus]: message_id={tg_msg_id}")
                     else:
                         logger.warning(f"CHANNEL POST FAILED [AI-consensus]: tg_send returned None")
                     _mark_channel_post(pair, action, _entry, _sl, _tp)
@@ -6529,12 +6533,19 @@ def auto_analyze_loop():
                     else:
                         logger.warning(f"🚨 FORCE POST [AI-{disp}]: rate limited but trade opened — posting anyway")
                         result = send_to_channel(text)
+                        if result:
+                            tg_msg_id = result.get('result',{}).get('message_id')
                         _mark_channel_post(pair, action, _entry, _sl, _tp)
                     _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
                               confidence=conf, rr_ratio=sig.get("rr_ratio","?"),
                               engines=sig.get("engines",{}), source="channel-auto",
                               price=price, grade=sig.get("grade",""),
                               models=sig.get("_models",""), voters=sig.get("voters","?"))
+
+                # ── Post to bridge NOW with telegram_message_id attached ──
+                if tg_msg_id:
+                    sig["telegram_message_id"] = tg_msg_id
+                post_signal_to_bridge(sig, price, disp)
 
                 if LEARNING_ENGINE:
                     try: track_signal(sig, price, disp, session(h), "ai")
