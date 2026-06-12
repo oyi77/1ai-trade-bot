@@ -52,7 +52,18 @@ def fetch_market():
     for sym, info in SYMBOLS.items():
         q = md.get_quote(sym, force=True)
         if q:
-            prices[sym] = {"price": q.price, "change": q.change_pct, "bid": q.bid, "ask": q.ask}
+            change_pct = q.change_pct or 0
+            # Fallback: calculate daily change from 1D bars
+            if change_pct == 0:
+                try:
+                    daily_bars = md.get_ohlcv(sym.lower(), "1d", 3, force=True)
+                    if daily_bars and len(daily_bars) >= 2:
+                        prev_close = daily_bars[-2].close
+                        if prev_close and prev_close > 0:
+                            change_pct = round((q.price - prev_close) / prev_close * 100, 2)
+                except Exception:
+                    pass
+            prices[sym] = {"price": q.price, "change": change_pct, "bid": q.bid, "ask": q.ask}
 
     dxy_q = md.get_quote("DX-Y.NYB", force=True)
     dxy = dxy_q.price if dxy_q else None
@@ -207,41 +218,46 @@ def generate_mapping():
 
 
 def send_mapping_to_channel():
-    """Send mapping to the channel via Telethon. Anti-spam: once per day."""
+    """Send mapping to the channel via Bot API. Anti-spam: once per day."""
     today_str = datetime.now(WIB).strftime("%Y%m%d")
     if _mapping_already_sent(today_str):
         log.info(f"Mapping already sent today ({today_str}) — skip (anti-spam)")
         return
 
-    import asyncio
-    from telethon import TelegramClient
+    import urllib.request
 
     mapping_text = generate_mapping()
     log.info(f"Generated mapping ({len(mapping_text)} chars)")
 
-    CHANNEL_ID = int(os.environ.get("VILONA_MAPPING_CHANNEL", "-1003257064212"))
-    SESSION = os.path.expanduser("~/.openclaw/workspace/vilona_session")
-    api_id = int(os.environ.get("TELEGRAM_API_ID", "23647272"))
-    api_hash = os.environ.get("TELEGRAM_API_HASH", "1f69a4e0f03e5f51ddfa5b67ac7b5c49")
+    CHANNEL_ID = os.environ.get("SIGNAL_CHANNEL_ID") or os.environ.get("MAPPING_CHANNEL_ID", "")
+    BOT_TOKEN = os.environ.get("VILONA_TRADEFX_BOT_TOKEN", os.environ.get("BOT_TOKEN", ""))
 
-    async def send():
-        client = TelegramClient(SESSION, api_id, api_hash)
-        await client.connect()
-        if not await client.is_user_authorized():
-            log.error("Telethon not authorized!")
-            return
+    if not CHANNEL_ID or not BOT_TOKEN:
+        log.error("CHANNEL_ID or BOT_TOKEN not configured")
+        return
 
-        try:
-            msg = await client.send_message(CHANNEL_ID, mapping_text, parse_mode='html', link_preview=False)
-            log.info(f"Mapping sent! msg_id={msg.id}")
-            _mark_mapping_sent(today_str)
-            log.info(f"State tracker updated: {today_str}")
-        except Exception as e:
-            log.error(f"Failed to send mapping: {e}")
-        finally:
-            await client.disconnect()
-
-    asyncio.run(send())
+    try:
+        payload = json.dumps({
+            "chat_id": CHANNEL_ID,
+            "text": mapping_text,
+            "parse_mode": "HTML",
+            "link_preview_options": {"is_disabled": True},
+        }).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=20) as r:
+            resp = json.loads(r.read())
+            if resp.get("ok"):
+                msg_id = resp.get("result", {}).get("message_id", "?")
+                log.info(f"Mapping sent! msg_id={msg_id}")
+                _mark_mapping_sent(today_str)
+            else:
+                log.error(f"Telegram API error: {resp.get('description', '?')}")
+    except Exception as e:
+        log.error(f"Failed to send mapping: {e}")
 
 
 if __name__ == "__main__":
