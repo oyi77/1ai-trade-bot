@@ -16,7 +16,9 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
 import signal
 import sys
 
@@ -89,11 +91,29 @@ class App:
         server = uvicorn.Server(config)
         await server.serve()
 
+    _BOT_LOCK = "/tmp/vilona_bot.lock"
+
     async def _run_telegram(self) -> None:
-        """Run unified Telegram bot."""
-        from tradebot.bots.telegram import UnifiedBot
-        bot = UnifiedBot()
-        await bot.start()
+        """Run unified Telegram bot — PID-locked to prevent duplicate polling."""
+        if os.path.exists(self._BOT_LOCK):
+            try:
+                with open(self._BOT_LOCK) as f:
+                    old_pid = int(f.read().strip())
+                os.kill(old_pid, 0)  # signal 0 = check if alive
+                LOG.warning("⚠️ Bot already running (PID %s) — SKIPPING duplicate", old_pid)
+                return
+            except (OSError, ValueError):
+                with contextlib.suppress(OSError):
+                    os.remove(self._BOT_LOCK)
+        with open(self._BOT_LOCK, "w") as f:
+            f.write(str(os.getpid()))
+        try:
+            from tradebot.bots.telegram import UnifiedBot
+            bot = UnifiedBot()
+            await bot.start()
+        finally:
+            with contextlib.suppress(OSError):
+                os.remove(self._BOT_LOCK)
 
     def shutdown(self) -> None:
         """Graceful shutdown."""
