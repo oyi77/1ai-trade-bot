@@ -6375,6 +6375,7 @@ def auto_analyze_loop():
                               engines=mech_sig.get("engines",{}), source="channel-auto",
                               price=price, grade=mech_sig.get("grade",""),
                               source_name=mech_sig.get("source","mech"))
+                    post_signal_to_bridge(mech_sig, price, disp)
                 else:
                     # Rate limited — check if we can still force (trade already opened via bridge)
                     state_force = _cs()
@@ -6393,7 +6394,6 @@ def auto_analyze_loop():
                               source_name=mech_sig.get("source","mech"))
                 if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
                     mech_sig = enrich_signal_with_layers(mech_sig)
-                post_signal_to_bridge(mech_sig, price, disp)
 
                 if LEARNING_ENGINE:
                     try: track_signal(mech_sig, price, disp, session(h), mech_sig.get("source","mech"))
