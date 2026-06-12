@@ -391,11 +391,13 @@ def fire_capi_purchase(
 ) -> bool:
     """Fire Meta CAPI Purchase event for a confirmed subscription.
 
-    Call this whenever a member is successfully upgraded — from Tripay
-    webhook, manual activation, or subscription bot.
+    Enriches user_data from the tracking database (fbclid, IP, UA) and
+    always includes a SHA256-hashed email for Event Match Quality (EMQ).
 
     Returns True if the event was successfully received by Meta.
     """
+    import hashlib
+
     fb_pixel = os.environ.get("FB_PIXEL_ID", "")
     fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
     if not fb_token:
@@ -409,18 +411,49 @@ def fire_capi_purchase(
                    "lifetime": "LIFETIME Subscription", "donor": "Fuel Donation"}
     content_name = tier_labels.get(tier, f"{tier.upper()} Subscription")
 
+    # ── Enrich from tracking DB ──────────────────────────────────
+    fbclid = ""
+    real_ip = ""
+    real_ua = ""
+    try:
+        from tradebot.tracking.capture import get_tracking_by_telegram
+        tracking = get_tracking_by_telegram(str(chat_id))
+        if tracking:
+            fbclid = tracking.get("fbclid", "") or ""
+            real_ip = tracking.get("ip_address", "") or ""
+            real_ua = tracking.get("user_agent", "") or ""
+            if fbclid:
+                logger.info("CAPI enriched: fbclid=%s ip=%s", fbclid[:20], real_ip)
+    except Exception as e:
+        logger.debug("Tracking lookup skipped: %s", e)
+
+    # ── Build user_data with EMQ parameters ──────────────────────
+    raw_email = f"{chat_id}@telegram.user".lower().strip()
+    email_hash = hashlib.sha256(raw_email.encode()).hexdigest()
+
+    user_data = {"em": email_hash}
+
+    if fbclid:
+        user_data["fbc"] = f"fb.1.{int(time.time() * 1000)}.{fbclid}"
+
+    if real_ip:
+        user_data["client_ip_address"] = real_ip
+    if real_ua:
+        user_data["client_user_agent"] = real_ua
+    else:
+        user_data["client_user_agent"] = "Vilona-Payment/2.0"
+
+    # ── Fire event ───────────────────────────────────────────────
+    now_ts = int(time.time())
     try:
         payload = json.dumps({
             "data": [{
                 "event_name": "Purchase",
-                "event_time": int(time.time()),
-                "event_id": f"vtfx-{chat_id}-{int(time.time())}",
+                "event_time": now_ts,
+                "event_id": f"vtfx-{chat_id}-{now_ts}",
                 "action_source": "website",
                 "event_source_url": event_source_url,
-                "user_data": {
-                    "client_ip_address": "0.0.0.0",
-                    "client_user_agent": "Vilona-Payment/2.0"
-                },
+                "user_data": user_data,
                 "custom_data": {
                     "currency": "IDR",
                     "value": float(amount),
@@ -436,8 +469,8 @@ def fire_capi_purchase(
                                      headers={"Content-Type": "application/json"})
         resp = json.loads(urllib.request.urlopen(req, timeout=5).read())
         events_received = resp.get("events_received", 0)
-        logger.info("Meta CAPI Purchase fired: tier=%s amount=%.0f events_received=%s",
-                     tier, amount, events_received)
+        logger.info("Meta CAPI Purchase fired: tier=%s amount=%.0f events_received=%s em=%s fbc=%s",
+                     tier, amount, events_received, email_hash[:12], bool(fbclid))
         return events_received > 0
     except Exception as e:
         logger.warning("Meta CAPI Purchase failed (non-critical): %s", e)
