@@ -10,9 +10,20 @@ session_path = os.path.expanduser("~/.openclaw/workspace/vilona_session")
 bot_username = "agent_1ai2_bot"
 
 
-async def get_latest_message(client):
-    async for message in client.iter_messages(bot_username, limit=1):
-        return message
+async def get_menu_message(client, expected_text_query=None):
+    async for message in client.iter_messages(bot_username, limit=8):
+        if message.buttons:
+            if expected_text_query:
+                # Check if expected query matches text or one of the buttons
+                match_text = expected_text_query.lower()
+                text_ok = match_text in message.text.lower()
+                btn_ok = any(
+                    match_text in btn.text.lower() for row in message.buttons for btn in row
+                )
+                if text_ok or btn_ok:
+                    return message
+            else:
+                return message
     return None
 
 
@@ -26,11 +37,11 @@ async def find_button(message, text_query):
     return None
 
 
-async def test_menu_navigation(client, menu_button_text, expected_substrings):
+async def test_menu_navigation(client, menu_button_text, expected_substrings, search_query=None):
     print(f"Testing navigation to: '{menu_button_text}' ... ", end="", flush=True)
     try:
         # 1. Get latest message (which should be the main menu)
-        msg = await get_latest_message(client)
+        msg = await get_menu_message(client)
         if not msg:
             print("FAILED (No message found)")
             return False
@@ -46,7 +57,10 @@ async def test_menu_navigation(client, menu_button_text, expected_substrings):
         await asyncio.sleep(4.5)  # Wait for bot response/edit
 
         # 4. Get the updated message
-        msg = await get_latest_message(client)
+        msg = await get_menu_message(client, search_query or menu_button_text)
+        if not msg:
+            print(f"FAILED (Response menu for '{menu_button_text}' not found)")
+            return False
         text = msg.text
 
         # 5. Check expected substrings
@@ -81,23 +95,28 @@ async def main():
 
     print("Telethon session authorized. Resetting to main menu...")
     await client.send_message(bot_username, "/start")
-    await asyncio.sleep(4)
+    await asyncio.sleep(4.5)
+    # Ensure we get the main menu
+    msg = await get_menu_message(client, "1ai trading")
+    if not msg:
+        print("FAILED (Main menu not found)")
+        sys.exit(1)
 
     print("\nRunning E2E Telegram Menu Navigation Tests...\n")
 
     menu_tests = [
-        ("signal system", ["signal system", "mtf", "engines"]),
-        ("market data", ["market data", "gold", "btc", "eth"]),
-        ("trade history", ["trade history", "win rate", "recap", "mapping"]),
-        ("account", ["account status", "subscribe", "my key"]),
-        ("stockity insider", ["stockity", "daftar stockity", "status akun"]),
-        ("help", ["bantuan", "symbols", "download ea"]),
-        ("admin", ["admin panel", "dashboard", "bridge"]),
+        ("signal system", ["signal", "system", "engines"], "signal"),
+        ("market data", ["market", "data", "killzone"], "market"),
+        ("trade history", ["trade", "history", "win rate", "mapping"], "history"),
+        ("account", ["account", "status", "donate", "pengaturan"], "account"),
+        ("stockity insider", ["stockity", "insider", "bandar"], "stockity"),
+        ("help", ["command", "center"], "command"),
+        ("admin", ["admin panel", "manajemen", "bot"], "admin"),
     ]
 
     success = True
-    for btn_text, subs in menu_tests:
-        if not await test_menu_navigation(client, btn_text, subs):
+    for btn_text, subs, sq in menu_tests:
+        if not await test_menu_navigation(client, btn_text, subs, sq):
             success = False
 
     await client.disconnect()

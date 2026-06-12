@@ -110,6 +110,8 @@ class TelegramLayer:
             if data.startswith("menu:"):
                 from agent.menu import get_menu_kb, get_menu_text
                 mn = data.split(":", 1)[1]
+                if mn == "main" and self.is_admin(chat_id):
+                    mn = "admin"
                 await self.send(chat_id, get_menu_text(mn), buttons=get_menu_kb(mn))
             elif data.startswith("cmd:"):
                 parts = data.split(":", 1)[1].split()
