@@ -378,3 +378,64 @@ def is_tripay_paid(merchant_ref: str) -> bool:
         status = result["data"].get("status", "").upper()
         return status in ("PAID", "SUCCESS", "SETTLEMENT")
     return False
+
+
+# ── Meta CAPI (Conversions API) ────────────────────────────────────────
+
+def fire_capi_purchase(
+    chat_id: str,
+    amount: float,
+    tier: str = "pro",
+    transaction_id: str = "",
+    event_source_url: str = "https://phantomfx.aitradepulse.com/lp",
+) -> bool:
+    """Fire Meta CAPI Purchase event for a confirmed subscription.
+
+    Call this whenever a member is successfully upgraded — from Tripay
+    webhook, manual activation, or subscription bot.
+
+    Returns True if the event was successfully received by Meta.
+    """
+    fb_pixel = os.environ.get("FB_PIXEL_ID", "771021905629860")
+    fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
+    if not fb_token:
+        logger.info("Meta CAPI skipped: FB_ACCESS_TOKEN not configured")
+        return False
+
+    tier_labels = {"pro": "PRO Subscription", "elite": "ELITE Subscription",
+                   "lifetime": "LIFETIME Subscription", "donor": "Fuel Donation"}
+    content_name = tier_labels.get(tier, f"{tier.upper()} Subscription")
+
+    try:
+        payload = json.dumps({
+            "data": [{
+                "event_name": "Purchase",
+                "event_time": int(time.time()),
+                "event_id": f"vtfx-{chat_id}-{int(time.time())}",
+                "action_source": "website",
+                "event_source_url": event_source_url,
+                "user_data": {
+                    "client_ip_address": "0.0.0.0",
+                    "client_user_agent": "Vilona-Payment/2.0"
+                },
+                "custom_data": {
+                    "currency": "IDR",
+                    "value": float(amount),
+                    "content_name": content_name,
+                    "content_category": tier,
+                    "transaction_id": transaction_id or f"vtfx-{chat_id}",
+                }
+            }]
+        }).encode()
+
+        url = f"https://graph.facebook.com/v21.0/{fb_pixel}/events?access_token={fb_token}"
+        req = urllib.request.Request(url, data=payload,
+                                     headers={"Content-Type": "application/json"})
+        resp = json.loads(urllib.request.urlopen(req, timeout=5).read())
+        events_received = resp.get("events_received", 0)
+        logger.info("Meta CAPI Purchase fired: tier=%s amount=%.0f events_received=%s",
+                     tier, amount, events_received)
+        return events_received > 0
+    except Exception as e:
+        logger.warning("Meta CAPI Purchase failed (non-critical): %s", e)
+        return False

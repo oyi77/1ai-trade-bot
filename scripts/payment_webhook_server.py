@@ -167,12 +167,16 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         chat_id = ""
         brand = "vilona"
+        tier = "pro"  # default
         try:
             parts = merchant_ref.split("-")
             if len(parts) >= 2:
                 prefix = parts[0].upper()
                 if prefix == "VTFX":
-                    brand, chat_id = "vilona", parts[1]
+                    brand = "vilona"
+                    if len(parts) >= 3:
+                        chat_id = parts[2]  # VTFX-{tier}-{chat_id}-{ts}
+                        tier = parts[1].lower()
                 elif prefix == "1AI":
                     brand, chat_id = "1ai", parts[1]
         except Exception as e:
@@ -185,11 +189,25 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         token = BOT_TOKEN_1AI if brand == "1ai" else BOT_TOKEN
 
-        # Upgrade member to DONOR
-        if not upgrade_member(chat_id, "donor", DONOR_DAYS, merchant_ref):
-            log.error(f"Member upgrade failed for {chat_id} — returning 500 for retry")
+        # Upgrade member to correct tier (extracted from merchant_ref)
+        tier_days = {"pro": 30, "elite": 30, "lifetime": 9999, "donor": 9999}
+        days = tier_days.get(tier, 30)
+        if not upgrade_member(chat_id, tier, days, merchant_ref):
+            log.error(f"Member upgrade failed for {chat_id} -- returning 500 for retry")
             self._json({"status": "error", "message": "upgrade_failed"}, 500)
             return
+
+        # Meta CAPI Purchase event
+        try:
+            from members.payment import fire_capi_purchase
+            fire_capi_purchase(
+                chat_id=chat_id,
+                amount=float(total_amount),
+                tier=tier,
+                transaction_id=merchant_ref,
+            )
+        except Exception as e:
+            log.warning(f"Meta CAPI Purchase failed (non-critical): {e}")
 
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -218,39 +236,6 @@ class WebhookHandler(BaseHTTPRequestHandler):
             urllib.request.urlopen(px_url, timeout=5)
         except Exception as e:
             log.warning(f"Bemob postback failed (non-critical): {e}")
-
-        # ── Meta CAPI Purchase event ──
-        fb_pixel = os.environ.get("FB_PIXEL_ID", "771021905629860")
-        fb_token = os.environ.get("FB_ACCESS_TOKEN", "")
-        if fb_token:
-            try:
-                capi_url = f"https://graph.facebook.com/v21.0/{fb_pixel}/events?access_token={fb_token}"
-                capi_payload = json.dumps({
-                    "data": [{
-                        "event_name": "Purchase",
-                        "event_time": int(time.time()),
-                        "action_source": "website",
-                        "event_source_url": "https://phantomfx.aitradepulse.com/lp",
-                        "user_data": {
-                            "client_ip_address": "0.0.0.0",
-                            "client_user_agent": "Vilona-Payment-Webhook/1.0"
-                        },
-                        "custom_data": {
-                            "currency": "IDR",
-                            "value": float(total_amount),
-                            "content_name": "Donation",
-                            "transaction_id": merchant_ref
-                        }
-                    }]
-                }).encode()
-                capi_req = urllib.request.Request(capi_url, data=capi_payload,
-                    headers={"Content-Type": "application/json"})
-                capi_resp = json.loads(urllib.request.urlopen(capi_req, timeout=5).read())
-                log.info(f"📊 Meta CAPI Purchase fired: events_received={capi_resp.get('events_received', 0)}")
-            except Exception as e:
-                log.warning(f"Meta CAPI Purchase failed (non-critical): {e}")
-        else:
-            log.info("Meta CAPI Purchase skipped: FB_ACCESS_TOKEN not configured")
 
         if brand == "1ai":
             msg = (

@@ -103,6 +103,20 @@ def upgrade_tier(chat_id: str, tier: str, days: int = 30, payment_ref: str = "")
                 (str(chat_id), tier, expiry.isoformat(), payment_ref, now.isoformat())
             )
 
+    # Fire Meta CAPI Purchase event on every successful upgrade
+    try:
+        from members.payment import fire_capi_purchase, PRICING
+        tier_config = PRICING.get(tier, {})
+        amount = tier_config.get("price_idr", 50000)
+        fire_capi_purchase(
+            chat_id=str(chat_id),
+            amount=float(amount),
+            tier=tier,
+            transaction_id=payment_ref or f"upgrade-{chat_id}",
+        )
+    except Exception:
+        pass  # CAPI is non-critical
+
 
 def insert_payment_order(merchant_ref: str, chat_id: str, amount: int,
                          product_key: str, gateway: str = "tripay",
