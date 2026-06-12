@@ -24,6 +24,11 @@ These rules are non-negotiable. They exist because prior AI runs left the codeba
 - **Required:** `LOG.warning("op failed: %s", exc)` (or `LOG.error` for recoverable-then-raise flows). If the error is genuinely ignorable, use `LOG.debug` and a comment explaining why.
 - The pre-existing codebase already migrated away from this — do not reintroduce it.
 
+### Never use `datetime.UTC` when importing `datetime` class
+- **Forbidden:** `from datetime import datetime` combined with `datetime.UTC`.
+- **Reason:** In Python 3.11+, `datetime.UTC` was added to the `datetime` *module*, but not to the `datetime.datetime` *class*. Calling `datetime.UTC` when `datetime` refers to the class raises `AttributeError: type object 'datetime.datetime' has no attribute 'UTC'`.
+- **Allowed:** Import timezone and use `timezone.utc` (e.g., `from datetime import datetime, timezone; datetime.now(timezone.utc)`), or `import datetime` and use `datetime.UTC`.
+
 ### Comments and docstrings — minimal, necessary
 - **Default: no comments.** Code should be self-documenting.
 - **Acceptable exceptions** (justify in commit message):
