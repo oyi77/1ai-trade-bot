@@ -79,7 +79,11 @@ def create_subscription(
 
     LOG.info(
         "Subscription: user=%s tier=%s plan=%s platform=%s expires=%d",
-        user_id, tier_type, plan, platform, expires_at,
+        user_id,
+        tier_type,
+        plan,
+        platform,
+        expires_at,
     )
 
     return {

@@ -4,6 +4,7 @@ TradeTracker — SQLite-backed trade outcome tracking.
 Tracks win rate, P&L, streaks, and trade history in a local SQLite
 database. Provides both raw data access and formatted reports.
 """
+
 from __future__ import annotations
 
 import logging
@@ -156,7 +157,9 @@ class TradeTracker:
             ),
         )
 
-        LOG.info("📝 Trade opened: %s %s %s @ %.2f", trade_id, signal["action"], symbol, entry_price)  # noqa: E501
+        LOG.info(
+            "📝 Trade opened: %s %s %s @ %.2f", trade_id, signal["action"], symbol, entry_price
+        )  # noqa: E501
         return trade_id
 
     def close_trade(
@@ -261,14 +264,22 @@ class TradeTracker:
             close_price = price
 
             # Check SL
-            if sl > 0 and ((action in ("BUY", "CALL") and price <= sl) or \
-                   (action in ("SELL", "PUT") and price >= sl)):
+            if sl > 0 and (
+                (action in ("BUY", "CALL") and price <= sl)
+                or (action in ("SELL", "PUT") and price >= sl)
+            ):
                 hit = "SL_HIT"
                 close_price = sl
 
             # Check TP
-            if not hit and tp > 0 and ((action in ("BUY", "CALL") and price >= tp) or \
-                   (action in ("SELL", "PUT") and price <= tp)):
+            if (
+                not hit
+                and tp > 0
+                and (
+                    (action in ("BUY", "CALL") and price >= tp)
+                    or (action in ("SELL", "PUT") and price <= tp)
+                )
+            ):
                 hit = "TP_HIT"
                 close_price = tp
 
@@ -321,7 +332,11 @@ class TradeTracker:
             emoji = "✅" if hit == "TP_HIT" else "❌"
             LOG.info(
                 "%s Trade closed: %s %s | %.1f pips | $%.2f",
-                emoji, trade["trade_id"], hit, pips, profit_usd,
+                emoji,
+                trade["trade_id"],
+                hit,
+                pips,
+                profit_usd,
             )
 
         return closed
@@ -341,7 +356,8 @@ class TradeTracker:
                COALESCE(SUM(pips), 0) as total_pips,
                COALESCE(SUM(profit_usd), 0) as total_profit_usd
                FROM trades WHERE outcome != 'OPEN'
-               """ + (" AND (user_id=? OR user_id='')" if user_id else ""),
+               """
+            + (" AND (user_id=? OR user_id='')" if user_id else ""),
             (user_id,) if user_id else (),
         )
 
@@ -417,7 +433,9 @@ class TradeTracker:
                       source, confidence, grade, user_id, currency, platform
                FROM trades
                WHERE outcome != 'OPEN'
-               """ + ("AND (user_id=? OR user_id='') " if user_id else "") + """
+               """
+            + ("AND (user_id=? OR user_id='') " if user_id else "")
+            + """
                ORDER BY close_time DESC
                LIMIT ?""",
             (user_id, limit) if user_id else (limit,),
@@ -439,7 +457,9 @@ class TradeTracker:
                       source, confidence, grade, user_id, currency, platform
                FROM trades
                WHERE outcome='OPEN'
-               """ + ("AND (user_id=? OR user_id='') " if user_id else "") + """
+               """
+            + ("AND (user_id=? OR user_id='') " if user_id else "")
+            + """
                ORDER BY open_time DESC""",
             (user_id,) if user_id else (),
         )
@@ -464,7 +484,8 @@ class TradeTracker:
                       source, confidence, grade, user_id, currency, platform
                FROM trades
                WHERE open_time LIKE ?
-               """ + ("AND (user_id=? OR user_id='')" if user_id else ""),
+               """
+            + ("AND (user_id=? OR user_id='')" if user_id else ""),
             (f"{date_str}%", user_id) if user_id else (f"{date_str}%",),
         )
 
@@ -473,9 +494,7 @@ class TradeTracker:
         losses = [t for t in trades if t.outcome in ("SL_HIT", "LOSS", "LOST")]
         open_pos = [t for t in trades if t.outcome == "OPEN"]
 
-        total_pips = sum(
-            t.pips for t in trades if t.outcome not in ("OPEN", "")
-        )
+        total_pips = sum(t.pips for t in trades if t.outcome not in ("OPEN", ""))
 
         # Pair breakdown
         pairs: dict[str, dict[str, Any]] = {}
@@ -483,7 +502,14 @@ class TradeTracker:
         for t in trades:
             sym = t.symbol
             if sym not in pairs:
-                pairs[sym] = {"total": 0, "wins": 0, "losses": 0, "pips": 0.0, "profit_usd": 0.0, "stake": 0.0}
+                pairs[sym] = {
+                    "total": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "pips": 0.0,
+                    "profit_usd": 0.0,
+                    "stake": 0.0,
+                }
             pairs[sym]["total"] += 1
             if t.outcome in ("TP_HIT", "WIN", "WON"):
                 pairs[sym]["wins"] += 1
@@ -574,7 +600,13 @@ class TradeTracker:
 
         lines = ["📋 <b>TRADE HISTORY</b>", "━" * 20]
         for t in trades[:limit]:
-            emoji = "✅" if t.outcome in ("TP_HIT", "WIN") else "❌" if t.outcome in ("SL_HIT", "LOSS") else "⚪"  # noqa: E501
+            emoji = (
+                "✅"
+                if t.outcome in ("TP_HIT", "WIN")
+                else "❌"
+                if t.outcome in ("SL_HIT", "LOSS")
+                else "⚪"
+            )  # noqa: E501
             close_t = t.close_time[:16].replace("T", " ") if t.close_time else ""
             lines.append(
                 f"{emoji} {t.action} {t.symbol} | {t.outcome}\n"
@@ -691,15 +723,26 @@ class TradeTracker:
             """SELECT trade_id, symbol, action, entry_price, sl, tp, stake,
                       open_time, source, confidence, grade, user_id, currency, platform
                FROM trades WHERE outcome='OPEN'
-               """ + ("AND (user_id=? OR user_id='')" if user_id else ""),
+               """
+            + ("AND (user_id=? OR user_id='')" if user_id else ""),
             (user_id,) if user_id else (),
         )
         return [
             {
-                "trade_id": r[0], "symbol": r[1], "action": r[2],
-                "entry_price": r[3], "sl": r[4], "tp": r[5], "stake": r[6],
-                "open_time": r[7], "source": r[8], "confidence": r[9],
-                "grade": r[10], "user_id": r[11], "currency": r[12], "platform": r[13],
+                "trade_id": r[0],
+                "symbol": r[1],
+                "action": r[2],
+                "entry_price": r[3],
+                "sl": r[4],
+                "tp": r[5],
+                "stake": r[6],
+                "open_time": r[7],
+                "source": r[8],
+                "confidence": r[9],
+                "grade": r[10],
+                "user_id": r[11],
+                "currency": r[12],
+                "platform": r[13],
             }
             for r in rows
         ]
@@ -799,8 +842,9 @@ class TradeTracker:
 
         count = 0
         for row in rows:
-            if (streak_type == "win" and row[0] in ("TP_HIT", "WIN")) or \
-               (streak_type == "loss" and row[0] in ("SL_HIT", "LOSS")):
+            if (streak_type == "win" and row[0] in ("TP_HIT", "WIN")) or (
+                streak_type == "loss" and row[0] in ("SL_HIT", "LOSS")
+            ):
                 count += 1
             else:
                 break

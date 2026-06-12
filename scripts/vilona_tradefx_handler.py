@@ -1078,9 +1078,23 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
     if (not tp or tp == 0) and tp1 > 0:
         tp = tp1
         sig["tp"] = tp
+
     confidence = sig.get("confidence", 0)
     rr = sig.get("rr_ratio", 0)
     action = sig.get("action", "HOLD")
+
+    # ── Minimum SL distance guard (prevents MT5 error 4756) ──
+    _min_sl_pips = {"XAUUSD": 5.0, "GOLD": 5.0, "BTCUSD": 20.0, "ETHUSD": 8.0,
+                    "USOIL": 3.0, "EURUSD": 3.0, "GBPUSD": 3.0, "USDJPY": 3.0}
+    _pip_size = 0.10 if display in ("XAUUSD","GOLD") else 0.01 if display=="USOIL" else 1.0
+    _min_sl_dist = _min_sl_pips.get(display.upper(), 3.0) * _pip_size
+    if sl > 0 and entry_from_sig > 0:
+        sl_dist = abs(sl - entry_from_sig)
+        if sl_dist < _min_sl_dist:
+            old_sl = sl
+            sl = round(entry_from_sig + _min_sl_dist if action == "BUY" else entry_from_sig - _min_sl_dist, 2)
+            sig["sl"] = sl
+            logger.info(f"🛡️ SL widened: {old_sl}→{sl} (was {sl_dist:.1f} pip, min {_min_sl_dist/_pip_size:.0f})")
 
     # ── ZONE MODE AUTO-DETECT ──
     # If AI set specific entry (not 0) and it differs from live price → use pending order

@@ -18,12 +18,15 @@ Architecture:
 """
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from tradebot.brokers.base import BaseBroker
 from tradebot.brokers.stockity.broker import StockityBroker
 from tradebot.config import settings
+
+LOG = logging.getLogger("tradebot.brokers.user_factory")
 
 
 async def get_user_broker(
@@ -55,11 +58,10 @@ async def get_user_broker(
     return None
 
 
-async def _get_stockity_broker(
-    user_id: str, for_execution: bool = False
-) -> StockityBroker | None:
+async def _get_stockity_broker(user_id: str, for_execution: bool = False) -> StockityBroker | None:
     """Create a StockityBroker with user's cookie or global fallback."""
     from tradebot.services.platform_link_service import PlatformLinkService
+
     svc = PlatformLinkService()
     creds = await svc.get_platform_credentials(user_id, "stockity")
     if creds:
@@ -95,6 +97,7 @@ async def refresh_user_broker(user_id: str, platform: str) -> bool:
     """
     if platform == "stockity":
         from tradebot.services.platform_link_service import PlatformLinkService
+
         svc = PlatformLinkService()
         cookie = await svc.refresh_stockity_cookie(user_id)
         return cookie is not None

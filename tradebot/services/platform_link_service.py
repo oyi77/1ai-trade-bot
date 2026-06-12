@@ -129,8 +129,7 @@ class PlatformLinkService:
             "Device-Id": "d79220637a3516ea5350ea509df42828",
             "Device-Type": "web",
             "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) "
-                "Gecko/20100101 Firefox/152.0"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0"
             ),
             "Origin": "https://stockity.id",
         }
@@ -154,10 +153,7 @@ class PlatformLinkService:
     def _build_stockity_cookie(self, authtoken: str, user_id: str) -> str:
         """Build full cookie string from auth components."""
         return (
-            f"_stockity_session_v3={authtoken}; "
-            f"authtoken={authtoken}; "
-            f"user_id={user_id}; "
-            f"locale=en"
+            f"_stockity_session_v3={authtoken}; authtoken={authtoken}; user_id={user_id}; locale=en"
         )
 
     async def _detect_stockity_currency(self, cookie: str) -> str:
@@ -188,7 +184,9 @@ class PlatformLinkService:
                 for acc in accounts:
                     currency = acc.get("currency", "")
                     if currency:
-                        LOG.info("Detected currency: %s (type=%s)", currency, acc.get("account_type"))
+                        LOG.info(
+                            "Detected currency: %s (type=%s)", currency, acc.get("account_type")
+                        )
                         return currency
         except Exception as e:
             LOG.warning("Currency detection failed, defaulting to IDR: %s", e)
@@ -314,9 +312,7 @@ class PlatformLinkService:
         )
         return [dict(r) for r in rows]
 
-    async def get_platform_credentials(
-        self, user_id: str, platform: str
-    ) -> dict[str, Any] | None:
+    async def get_platform_credentials(self, user_id: str, platform: str) -> dict[str, Any] | None:
         """Get stored credentials for a specific platform."""
         row = _storage().fetchone(
             "SELECT * FROM user_platforms WHERE user_id=? AND platform=? AND status='active'",
