@@ -74,7 +74,7 @@ class StockityBroker:
         self._deal_type: str = deal_type  # "demo" or "real"
         # Balance tracking (native currency, no conversion)
         self._balance_raw: int = 0
-        self._balance_currency: str = ""
+        self._balance_currency: str = settings.STOCKITY_CURRENCY
         self._balance_version: int = 0
         self._account_type: str = ""
         # Position tracking
@@ -117,6 +117,9 @@ class StockityBroker:
         for topic in ["connection", "bo", "account"]:
             await self._join_topic(topic)
 
+        # Select the active balance type (demo or real)
+        await self._send_event("account", "change_type", {"type": self._deal_type})
+
         # Join asset topic (gives majority_opinion + social_trading)
         await self._join_topic("asset:Z-CRY/IDX")
 
@@ -155,9 +158,19 @@ class StockityBroker:
         self._event_handlers[key].append(callback)
 
     @property
+    def currency_factor(self) -> int:
+        """Return the multiplier factor for the current currency."""
+        curr = self._balance_currency.upper()
+        if curr == "IDR":
+            return 10_000
+        return 100_000_000
+
+    @property
     def balance(self) -> float:
         """Current account balance in native units."""
-        return self._balance_raw
+        factor = self.currency_factor
+        return self._balance_raw / factor if self._balance_raw > 0 else 0.0
+
     @property
     def balance_currency(self) -> str:
         """Account currency (detected dynamically from balance_changed events)."""
@@ -165,7 +178,10 @@ class StockityBroker:
 
     @property
     def balance_usd(self) -> float:
-        """Estimated balance in USD (1 USD ≈ 100,000,000 units)."""
+        """Estimated balance in USD."""
+        curr = self._balance_currency.upper()
+        if curr == "IDR":
+            return self.balance / 16350.0
         return self._balance_raw / 100_000_000 if self._balance_raw > 0 else 0.0
 
     @property
@@ -361,8 +377,8 @@ class StockityBroker:
             LOG.error("Phoenix channel error: %s", msg)
 
     async def get_balance(self) -> float | None:
-        """Return current account balance in USD."""
-        return self.balance_usd if self.balance_usd > 0 else None
+        """Return current account balance in native units."""
+        return self.balance if self.balance > 0 else None
 
     async def place_trade(
         self,
@@ -411,7 +427,7 @@ class StockityBroker:
 
         payload = {
             "ric": _symbol_to_ric(symbol),
-            "amount": int(amount * 100000000),
+            "amount": int(amount * self.currency_factor),
             "created_at": now_ms,
             "deal_type": self._deal_type,
             "expire_at": expire_val,
@@ -424,8 +440,8 @@ class StockityBroker:
         try:
             ref = await self._send_event("bo", "create", payload)
             LOG.info(
-                "Trade placed: ref=%s %s %s $%.2f %ds",
-                ref, symbol, direction, amount, duration,
+                "Trade placed: ref=%s %s %s %.2f %s %ds",
+                ref, symbol, direction, amount, self._balance_currency, duration,
             )
             return TradeResult(
                 platform="stockity",

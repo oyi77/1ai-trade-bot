@@ -207,6 +207,7 @@ class Settings(BaseSettings):
     STOCKITY_AUTHTOKEN: str = ""
     STOCKITY_FULL_COOKIE: str = ""
     STOCKITY_USER_ID: str = ""
+    STOCKITY_CURRENCY: str = "IDR"
 
     FCS_API_KEY: str = ""
 

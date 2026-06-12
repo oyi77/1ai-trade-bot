@@ -67,14 +67,19 @@ async def main():
         broker.on_event("bo", "closed", on_closed)
 
         # Wait for initial balance load
-        await asyncio.sleep(2)
+        for i in range(20):
+            print(f"DEBUG: Loop {i}, raw_balance={broker._balance_raw}")
+            if broker.balance_currency and broker.balance > 0:
+                break
+            await asyncio.sleep(0.5)
         initial_balance = await broker.get_balance()
-        print(f"💰 Initial Demo Balance: {initial_balance} USD")
+        currency = broker.balance_currency
+        print(f"💰 Initial Demo Balance: {initial_balance} {currency}")
 
-        # 1. Generate Signal & Open Trade in Journals (Pending/Open status)
+        # Set stake dynamically based on currency
+        stake = 10000.0 if currency.upper() == "IDR" else 1.0
         symbol = "CRYPTO_IDX"
         direction = "CALL"
-        stake = 1.0
         confidence = 0.85
         grade = "A"
 
@@ -104,7 +109,7 @@ async def main():
         print(f"📝 Recorded open trade in SQLite journal (ID: {db_tid})")
 
         # 2. Place Trade via Broker
-        print("\n⚡ Executing 5-second BLITZ option trade on Stockity...")
+        print(f"\n⚡ Executing 5-second BLITZ (Amount: {stake} {currency})...")
         trade_res = await broker.place_trade(
             symbol=symbol,
             direction=direction,
@@ -138,13 +143,13 @@ async def main():
             # 4. Process Outcome & Calculate PNL
             status = closed_payload.get("status")  # 'won' or 'lost'
             win_amount_raw = closed_payload.get("win", 0)
-            win_amount_usd = win_amount_raw / 100_000_000
+            win_amount_native = win_amount_raw / broker.currency_factor
 
-            pnl_usd = win_amount_usd - stake if status == "won" else -stake
+            pnl_native = win_amount_native - stake if status == "won" else -stake
             outcome = "WON" if status == "won" else "LOST"
             print(
                 f"\n📊 [PNL Calculation] Outcome: {outcome} | "
-                f"Payout: {win_amount_usd} USD | P&L: {pnl_usd:+.2f} USD"
+                f"Payout: {win_amount_native} {currency} | P&L: {pnl_native:+.2f} {currency}"
             )
 
             # 5. Resolve/Close Trade in SQLite Journal
@@ -152,7 +157,7 @@ async def main():
             # Update PNL correctly for binary option in SQLite
             db_tracker._storage.execute(
                 "UPDATE trades SET outcome=?, profit_usd=?, profit_idr=?, pips=0 WHERE trade_id=?",
-                (outcome, pnl_usd, int(pnl_usd * USD_IDR), db_tid),
+                (outcome, pnl_native / USD_IDR, int(pnl_native), db_tid),
             )
             print(f"✅ Resolved trade {db_tid} in SQLite database.")
 
@@ -164,8 +169,8 @@ async def main():
                     t["close_time"] = datetime.now().isoformat()
                     t["close_price"] = 1.0
                     t["pips"] = 0.0
-                    t["profit_usd"] = pnl_usd
-                    t["profit_idr"] = int(pnl_usd * USD_IDR)
+                    t["profit_usd"] = pnl_native / USD_IDR
+                    t["profit_idr"] = int(pnl_native)
                     break
 
             # Recalculate JSON stats
@@ -173,10 +178,10 @@ async def main():
             s["total"] += 1
             if outcome == "WON":
                 s["wins"] += 1
-                s["total_profit_usd"] += pnl_usd
+                s["total_profit_usd"] += pnl_native / USD_IDR
             else:
                 s["losses"] += 1
-                s["total_profit_usd"] += pnl_usd
+                s["total_profit_usd"] += pnl_native / USD_IDR
             json_tracker._save(json_data)
             print(f"✅ Resolved trade {json_tid} in JSON journal file.")
 
@@ -209,7 +214,7 @@ async def main():
         # Wait a bit for balance sync on WS
         await asyncio.sleep(2)
         final_balance = await broker.get_balance()
-        print(f"\n💰 Final Demo Balance: {final_balance} USD")
+        print(f"\n💰 Final Demo Balance: {final_balance} {currency}")
 
     except Exception as e:
         print(f"❌ Error during execution: {e}")
