@@ -142,7 +142,7 @@ class UnifiedBot(VilonaBot):
         app = Application.builder().token(self._token).build()
 
         # Core commands
-        app.add_handler(CommandHandler(["start", "help"], self._h_start))
+        app.add_handler(CommandHandler("start", self._h_start))
         app.add_handler(CommandHandler("symbols", self._h_symbols))
         app.add_handler(CommandHandler("signal", self._h_signal))
         app.add_handler(CommandHandler("price", self._h_price))
