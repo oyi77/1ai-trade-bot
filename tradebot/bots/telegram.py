@@ -27,9 +27,8 @@ from telegram.ext import (
 from tradebot.bots.handlers import register_standard_commands
 from tradebot.config import settings
 from tradebot.services.plans import get_user_plan
-from tradebot.bots.platforms.vilona.commands import register_vilona_commands
-from tradebot.storage.subscription import SubscriptionDatabase
 from tradebot.bots.platforms.vilona.bot import VilonaBot
+from tradebot.storage.subscription import SubscriptionDatabase
 
 LOG = logging.getLogger("tradebot.bots.telegram")
 
@@ -136,40 +135,43 @@ class UnifiedBot(VilonaBot):
     # ── Build ──────────────────────────────────────────────────────
 
     def build(self) -> Application:
-        """Build PTB Application with all handlers."""
+        """Build PTB Application with payment/subscription-only handlers.
+
+        ALL core forex commands (/start, /help, /analyze, /price, /signal, etc.)
+        are handled exclusively by the legacy handler (vilona_tradefx_handler.py).
+        This bot ONLY handles payment flows to prevent double-output bugs.
+        """
         self.db.create_tables()
 
         app = Application.builder().token(self._token).build()
 
-        # Core commands
-        app.add_handler(CommandHandler("start", self._h_start))
-        app.add_handler(CommandHandler("symbols", self._h_symbols))
-        app.add_handler(CommandHandler("signal", self._h_signal))
-        app.add_handler(CommandHandler("price", self._h_price))
-        app.add_handler(CommandHandler("donate", self._h_donate))
+        # ── PAYMENT & SUBSCRIPTION ONLY ──
+        # NON-PAYMENT COMMANDS (/start, /help, /analyze, /signal, /price,
+        # etc.) have NO registered handlers here. PTB silently ignores
+        # them — the legacy handler processes them exclusively.
+        # This is structural segregation, not filtering.
+        #
+        # Whitelist: /subscribe, /donate, /settings,
+        # /plans, /upgrade, /confirm, /signals, /unsubscribe,
+        # /affiliate, /whitelabel, /set_share, /set_rate, /set_plan
+        # These are the ONLY commands this bot handles.
+        # Everything else is exclusively processed by the legacy handler.
         app.add_handler(CommandHandler("subscribe", self._h_subscribe_cmd))
+        app.add_handler(CommandHandler("donate", self._h_donate))
         app.add_handler(CommandHandler("settings", self._h_settings))
-        app.add_handler(CommandHandler("scan", self._h_scan))
-        app.add_handler(CommandHandler("stats", self._h_stats))
 
-        # Account linking
-        app.add_handler(CommandHandler("link", self._h_link))
-        app.add_handler(CommandHandler("unlink", self._h_unlink))
-
-        # All shared commands (plans, signals, affiliate, whitelabel, admin)
+        # All shared payment/affiliate commands (plans, upgrade, confirm, signals,
+        # unsubscribe, affiliate, whitelabel, set_share, set_rate, set_plan)
         register_standard_commands(app)
 
-        # Register Vilona-specific commands (Signal system, Market data, Trading tools, Admin)
-        register_vilona_commands(app, self)
-
-        # Callback queries — only handle unified-bot-specific prefixes
-        # (onboarding cmd:analyze_xauusd/cmd:guide/cmd:subscribe handled by legacy handler)
+        # Callback queries — payment-flow prefixes ONLY
+        # (onboarding/trade callbacks handled exclusively by legacy handler)
         app.add_handler(CallbackQueryHandler(
             self._h_callback,
-            pattern=r'^(plans|link|signal_now|stats|check_|cmd:settings|menu:settings|pref_|flow:|pay:|check:|pricing:|donate:|sub:|cancel_input|trade:|skip:|menu:|ultimatum:)'
+            pattern=r'^(plans|link|check_|cmd:settings|menu:settings|pref_|pay:|check:|pricing:|donate:|sub:|cancel_input|menu:)'
         ))
 
-        LOG.info("UnifiedBot built with all handlers")
+        LOG.info("UnifiedBot built — payment/subscription handlers only")
         return app
 
     # ── Start / Stop ───────────────────────────────────────────────
