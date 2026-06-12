@@ -221,5 +221,59 @@ systemctl list-units --type=service --state=running | grep -iE "(vilona|ea-)"
 
 ---
 
+## 11. AUTONOMOUS LEARNING LOOP 🧠
+
+> **Setiap SL = Pelajaran. Setiap TP = Pola. Semua otonom — zero user command.**
+
+### 11.1 Alur Belajar
+
+| Event | Aksi | Output |
+|---|---|---|
+| **SL HIT** 🛑 | `learn_from_sl()` → root cause analysis | `data/vilona_tradefx/lessons.json` |
+| **TP HIT** 🎯 | `learn_from_tp()` → simpan pola entry | `data/vilona_tradefx/winning_patterns.json` |
+
+### 11.2 Root Cause Analysis (SL)
+
+Setiap SL kena, sistem auto-analisa kenapa:
+- **SL_TOO_TIGHT**: SL kurang dari 20 pip — gak kasih ruang napas
+- **WRONG_DIRECTION**: Entry di top (BUY) atau bottom (SELL) — price langsung berlawanan
+- **LOW_CONFIDENCE**: Confidence <40% — seharusnya skip sinyal
+- **RISK_REWARD**: RR <1:1 atau >5:1
+- **WEAK_GRADE**: Grade C/D — sinyal lemah, perlu filter lebih ketat
+
+### 11.3 Winning Pattern (TP)
+
+Setiap TP kena, sistem simpan:
+- Action + Symbol + Grade + Confidence
+- Entry price + SL + TP
+- Time context (hour_wib)
+- Source (channel-auto / stier / mechanical)
+
+### 11.4 Files
+
+| File | Path | Purpose |
+|---|---|---|
+| Engine | `scripts/learning_loop.py` | All learning logic |
+| Integration | `scripts/vilona_tradefx_handler.py` | Auto-called in scan loop |
+| Lesson DB | `data/vilona_tradefx/lessons.json` | SL lessons |
+| Pattern DB | `data/vilona_tradefx/winning_patterns.json` | TP patterns |
+
+### 11.5 Trigger
+
+- **Otomatis** — berjalan di dalam handler scan loop setiap ada trade closed
+- **Zero user command** — gak perlu dikasih perintah
+- **Cron review**: `weekly-learning-review` tiap Minggu 21:00 WIB
+- **Query manual**: `get_learning_summary()` dari `learning_loop`
+
+### 11.6 Git & Brain
+
+- Commit: `3938b90` — `feat: autonomous learning loop`
+- Brain: `drawer_trading_general_62b739125c9a918c99ff2f6b` (BK Brain `/brain/add`)
+
+> **PELANGGARAN**: Jangan matikan LEARNING_LOOP flag. Jangan bypass learning call.
+> Setiap trade yang closed WAJIB dipelajari — SL untuk diperbaiki, TP untuk diulang.
+
+---
+
 *Version: 1.0 — 12 June 2026*
 *Owner: Vilona Engineering*
