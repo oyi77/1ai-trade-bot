@@ -2286,6 +2286,26 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     # ── Entry Zone: prefer sig zone_lo/zone_hi, fallback ±0.05% dari entry ──
     zone_lo = sig.get("zone_lo") or (entry - entry * 0.0005 if entry > 0 else entry)
     zone_hi = sig.get("zone_hi") or (entry + entry * 0.0005 if entry > 0 else entry)
+
+    # ── Pending Order Type ──
+    pending_order_types = {
+        ("SELL", "below"): "SELL LIMIT",
+        ("SELL", "above"): "SELL STOP",
+        ("SELL", "inside"): "SELL (zone)",
+        ("BUY", "below"): "BUY STOP",
+        ("BUY", "above"): "BUY LIMIT",
+        ("BUY", "inside"): "BUY (zone)",
+    }
+    if action in ("BUY", "SELL") and zone_lo < zone_hi and price:
+        if price < zone_lo:
+            rel_pos = "below"
+        elif price > zone_hi:
+            rel_pos = "above"
+        else:
+            rel_pos = "inside"
+        order_type = pending_order_types.get((action, rel_pos), action)
+    else:
+        order_type = action
     sl = sig.get("sl") or 0
     tp = sig.get("tp") or 0
     tp1 = sig.get("tp1", 0)
@@ -2313,7 +2333,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         in_kz = True  # gate bypassed — always allow
 
     header_emoji = emoji if is_actionable else "⚪️"
-    header_label = f"SINYAL {action}" if is_actionable else "MARKET PULSE"
+    header_label = f"SINYAL {order_type}" if is_actionable else "MARKET PULSE"
 
     # --- MIN SL GUARD: override if AI sets SL too tight (3-digit Exness adjusted) ---
     if action in ("BUY","SELL") and entry and sl and price:
@@ -2519,7 +2539,13 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     def _fmt_zone(lo, hi):
         return f"Rp{lo:,.0f} — Rp{hi:,.0f}" if is_idx else f"{currency}{lo:.2f} — {currency}{hi:.2f}"
 
-    zone_label = "🟢 BUY ZONE" if action == "BUY" else ("🔴 SELL ZONE" if action == "SELL" else "📍 Entry Zone")
+    if action == "BUY":
+        zone_emoji = "🟢"
+    elif action == "SELL":
+        zone_emoji = "🔴"
+    else:
+        zone_emoji = "📍"
+    zone_label = f"{zone_emoji} {order_type}" if order_type != action else f"{zone_emoji} {action} ZONE"
 
     # ── Tier gating: free users see Entry Zone only, SL/TP 🔒 locked ──
     is_free = sig.get("_tier_capped", True)
@@ -2532,6 +2558,16 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
 
     # ── Killzone gate: DISABLED — always show full signal (24/7) ──
     lines.append(f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}")
+
+    # ── Pending order type explanation ──
+    order_type_hints = {
+        "SELL LIMIT": "⏳ Harga naik ke zone → SELL (resistansi)",
+        "SELL STOP": "⏳ Harga turun ke zone → SELL (breakdown)",
+        "BUY LIMIT": "⏳ Harga turun ke zone → BUY (support)",
+        "BUY STOP": "⏳ Harga naik ke zone → BUY (breakout)",
+    }
+    if order_type != action and order_type in order_type_hints:
+        lines.append(order_type_hints[order_type])
 
     if is_free and is_actionable:
         # ── FREE TIER: lock SL/TP — teaser only ──
