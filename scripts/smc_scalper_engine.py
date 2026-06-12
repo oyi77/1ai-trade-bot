@@ -862,6 +862,7 @@ def analyze_smc_scalper(
     result["_idm"] = idm
     result["_false_break"] = false_break
     result["_sd_zones"] = sd_zones
+    result["_ob"] = ob
 
     return result
 

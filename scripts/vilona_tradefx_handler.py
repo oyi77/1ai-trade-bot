@@ -1371,18 +1371,35 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     
     confluence_zones = []
     
-    # ── Layer 1: Order Blocks ──
+    # ── Layer 1: Order Blocks + Supply/Demand Zones from SMC engine ──
     obs = []
+    bos = {}
+    fb = {}
+    idm = {}
     try:
         if SMC_ENGINE:
             smc = analyze_smc_scalper(ohlcv_bars, display)
             if smc:
-                blocks = smc.get("order_blocks", smc.get("blocks", []))
-                for ob in blocks:
-                    ob_price = ob.get("price", ob.get("level", 0))
-                    ob_dir = str(ob.get("direction", ob.get("type", ""))).upper()
+                # Primary: single best Order Block
+                ob_data = smc.get("_ob")
+                if ob_data and isinstance(ob_data, dict) and ob_data.get("direction"):
+                    ob_price = (ob_data.get("upper", 0) + ob_data.get("lower", 0)) / 2
                     if ob_price > 0:
-                        obs.append({"price": ob_price, "direction": ob_dir, "strength": ob.get("strength","mid")})
+                        obs.append({"price": ob_price, "direction": ob_data["direction"].upper(),
+                                    "strength": ob_data.get("strength", 3)})
+                # Secondary: Supply/Demand zones as additional anchor points
+                sd_zones = smc.get("_sd_zones", [])
+                for z in sd_zones[:5]:
+                    z_type = z.get("type", "")
+                    z_dir = "BUY" if "DEMAND" in str(z_type).upper() else "SELL" if "SUPPLY" in str(z_type).upper() else ""
+                    z_price = (z.get("upper", 0) + z.get("lower", 0)) / 2
+                    if z_price > 0 and z_dir:
+                        obs.append({"price": z_price, "direction": z_dir,
+                                    "strength": z.get("strength", 2)})
+                # Reuse bos, idm, false_break from this single call
+                bos = smc.get("_bos", {})
+                fb = smc.get("_false_break", {})
+                idm = smc.get("_idm", {})
     except Exception as e:
         logger.debug(f"S-TIER OB scan: {e}")
     
@@ -1404,25 +1421,21 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     except Exception as e:
         logger.debug(f"S-TIER FVG scan: {e}")
     
-    # ── Layer 3: Structure — BOS + False Break ──
+    # ── Layer 3: Structure — BOS + False Break (reuse smc from Layer 1) ──
     bos_price = None
     false_break_price = None
     fb_dir = None
     idm_price = None
     try:
-        if SMC_ENGINE:
-            smc2 = analyze_smc_scalper(ohlcv_bars, display)
-            bos = smc2.get("_bos", {}) if smc2 else {}
-            fb = smc2.get("_false_break", {}) if smc2 else {}
-            idm = smc2.get("_idm", {}) if smc2 else {}
-            if bos and bos.get("price"):
-                bos_price = bos["price"]
-            if fb and fb.get("price"):
-                false_break_price = fb["price"]
-                fb_dir = fb.get("direction", "")
-            if idm and idm.get("price"):
-                idm_price = idm["price"]
-    except: pass
+        if bos and bos.get("price"):
+            bos_price = bos["price"]
+        if fb and fb.get("price"):
+            false_break_price = fb["price"]
+            fb_dir = fb.get("direction", "")
+        if idm and idm.get("price"):
+            idm_price = idm["price"]
+    except Exception:
+        pass
     
     PROXIMITY_PIPS = 25
     
@@ -3550,7 +3563,7 @@ def handle_command(cmd, text, chat_id, msg):
                 tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
                 return
             ohlcv_bars = _fetch_ohlcv_for_ai(pair, keep=60)
-            # ── S-TIER ZONE SCAN: Run mechanical zone detection for premium users ──
+            # ── S-TIER ZONE SCAN: Run mechanical zone detection for all users ──
             stier_zones_text = ""
             if ohlcv_bars and len(ohlcv_bars) >= 30:
                 try:
@@ -3718,7 +3731,7 @@ def handle_command(cmd, text, chat_id, msg):
                             if crt_block:
                                 text += crt_block
                         except: pass
-                    # 💀 S-TIER ZONE Injection (premium mechanical confluence)
+                    # 💀 S-TIER ZONE Injection (mechanical confluence — all users)
                     if stier_zones_text:
                         text += stier_zones_text
                     # 🏦 SMC Scalper + 📈 Trend Break
