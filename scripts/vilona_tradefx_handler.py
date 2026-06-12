@@ -6645,6 +6645,7 @@ def auto_analyze_loop():
                 except Exception as me:
                     logger.warning(f"S-TIER premium DM error: {me}")
                 # 2. Teaser to public channel (no entry/SL/TP details)
+                tg_msg_id = None
                 try:
                     tease_label = "💀 S-TIER+ SnR" if is_snr_boosted else "💀 S-TIER HIGH CONVICTION"
                     tease = (
@@ -6658,7 +6659,9 @@ def auto_analyze_loop():
                         f"⭐ Upgrade ke PRO/ELITE untuk akses S-TIER:\n"
                         f"   /upgrade atau DM @berkahkaryaforexbotbot"
                     )
-                    send_to_channel(tease)
+                    result = send_to_channel(tease)
+                    if result:
+                        tg_msg_id = result.get('result', {}).get('message_id')
                 except Exception:
                     pass
                 # 3. Killzone gate: S-TIER forex/metals outside London/NY → skip bridge
@@ -6668,10 +6671,12 @@ def auto_analyze_loop():
                     if not lkz and not nykz:
                         logger.info(f"💀 S-TIER [{disp}] bridge BLOCKED: outside killzone (London/NY only)")
                         should_bridge = False
-                # 4. Post to bridge for EA execution
+                # 4. Post to bridge for EA execution (with telegram_message_id for reply chain)
                 if should_bridge:
+                    if tg_msg_id:
+                        stier_sig["telegram_message_id"] = tg_msg_id
                     post_signal_to_bridge(stier_sig, price, disp)
-                logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ' HIGH CONVICTION'} [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%} | bridge={'ON' if should_bridge else 'OFF'}")
+                logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ' HIGH CONVICTION'} [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%} | bridge={'ON' if should_bridge else 'OFF'} | msg_id={tg_msg_id}")
                 log["signals_sent"] = log.get("signals_sent", 0) + 1
                 time.sleep(60)
                 continue
