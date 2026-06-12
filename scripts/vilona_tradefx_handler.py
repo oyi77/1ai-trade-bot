@@ -804,6 +804,66 @@ def handle_trade_callback(callback_query):
     cb_id = callback_query.get("id", "")
     chat_id = str(callback_query.get("from", {}).get("id", ""))
     data = callback_query.get("data", "")
+
+    # ── Onboarding callbacks: cmd:analyze_xauusd / cmd:guide / cmd:subscribe ──
+    if data == "cmd:analyze_xauusd":
+        # Answer callback silently, then trigger analyze
+        try:
+            payload = json.dumps({"callback_query_id": cb_id}).encode()
+            req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+                data=payload, headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+        handle_command("/analyze", "xauusd", chat_id, callback_query)
+        return
+
+    if data == "cmd:guide":
+        try:
+            payload = json.dumps({"callback_query_id": cb_id, "text": "📖 Panduan dikirim!"}).encode()
+            req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+                data=payload, headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+        guide = (
+            "🎓 <b>CARA BACA SINYAL VILONA</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📊 <b>Signal Format:</b>\n"
+            "• BUY/SELL — Arah trading\n"
+            "• Entry Zone — Harga masuk (pending order)\n"
+            "• SL — Stop Loss (risk management)\n"
+            "• TP1/TP2/TP3 — Take Profit levels\n\n"
+            "🧠 <b>AI Models:</b>\n"
+            "• DeepSeek V3 — SMC/ICT specialist\n"
+            "• GPT-4o — Pattern recognition\n"
+            "• Grok News — Real-time X/Twitter context\n\n"
+            "⚡ <b>PRO TIPS:</b>\n"
+            "• Entry selalu pakai pending limit order\n"
+            "• SL jangan diubah — AI udah kalkulasi\n"
+            "• Partial TP di TP1 (50%), sisanya trailing\n"
+            "• Jangan trading pas news red folder 🔴\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📱 Ketik /analyze xauusd buat mulai!"
+        )
+        tg_send(guide, chat_id)
+        return
+
+    if data == "cmd:subscribe":
+        try:
+            payload = json.dumps({"callback_query_id": cb_id}).encode()
+            req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+                data=payload, headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+        _send_donate_menu(chat_id)
+        return
+
+    # ── Original trade callbacks below ──
+    cb_id = callback_query.get("id", "")
+    chat_id = str(callback_query.get("from", {}).get("id", ""))
+    data = callback_query.get("data", "")
     
     # Answer callback (required by Telegram)
     try:
@@ -3537,8 +3597,79 @@ def handle_command(cmd, text, chat_id, msg):
     sub_norm = _normalize_broker_symbol(sub)  # XAUUSDc → xauusd, EURUSD.pro → eurusd
 
     if cmd == "/start":
-        # ── Deep link tracking: capture track_<tracking_id> payload ──
-        if sub and sub.startswith("track_"):
+        # ── Dual-Funnel Router: ref_ (referral) + track_ (Meta CAPI) — no clash ──
+        sub_lower = sub.lower() if sub else ""
+        if sub and sub_lower.startswith("ref_"):
+            # ── REFERRAL FUNNEL: /start ref_<referrer_chat_id> ──
+            try:
+                referrer_id = sub[4:]  # strip "ref_"
+                from members.tags import add_tag as _add_tag
+                # Register new user with referrer
+                from members import _conn, register_member, get_member
+                existing = get_member(str(chat_id))
+                if not existing:
+                    username_val = (msg.get("chat", {}).get("username", "")
+                                    or msg.get("from", {}).get("username", "")
+                                    or f"User{chat_id}")
+                    register_member(
+                        str(chat_id),
+                        username_val,
+                        username_val,
+                        "free",
+                        "trial",
+                        referrer_id=str(referrer_id),
+                    )
+                # Increment referrer's count
+                with _conn() as db:
+                    db.execute(
+                        "UPDATE members SET ref_count = COALESCE(ref_count,0) + 1 WHERE chat_id=?",
+                        (str(referrer_id),)
+                    )
+                    # Check ref_count for milestone
+                    row = db.execute(
+                        "SELECT ref_count FROM members WHERE chat_id=?",
+                        (str(referrer_id),)
+                    ).fetchone()
+                    ref_count = row["ref_count"] if row else 0
+                # ── MILESTONE REWARD: 3 referrals → PRO 7 hari gratis ──
+                if ref_count >= 3:
+                    try:
+                        from members import upgrade_tier
+                        from datetime import datetime, timezone, timedelta
+                        WIB = timezone(timedelta(hours=7))
+                        expiry = (datetime.now(WIB) + timedelta(days=7)).isoformat()
+                        upgrade_tier(str(referrer_id), "pro", 7,
+                                     f"REF-MILESTONE-{referrer_id}")
+                        # Update expiry explicitly
+                        with _conn() as db:
+                            db.execute(
+                                "UPDATE members SET expiry=?, status='paid' WHERE chat_id=?",
+                                (expiry, str(referrer_id))
+                            )
+                        # DM reward
+                        dm = (
+                            "🎉 <b>BOOM! 3 Teman udah daftar pakai link lu!</b>\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "Sebagai reward, tier lu otomatis naik ke\n"
+                            "<b>PRO selama 7 hari!</b>\n\n"
+                            "Enjoy sinyal VIP-nya!\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "🔑 /mykey — Cek license EA kamu\n"
+                            "📊 /analyze — Langsung gas analisa!"
+                        )
+                        tg_send(dm, str(referrer_id))
+                        logger.info("REF MILESTONE: %s → PRO 7 hari (ref_count=%d)",
+                                    referrer_id, ref_count)
+                    except Exception as e:
+                        logger.warning("Ref milestone upgrade failed: %s", e)
+                _add_tag(str(referrer_id), "affiliate")
+                logger.info("🔗 Referral: %s invited by %s (ref_count=%d)",
+                            chat_id, referrer_id, ref_count)
+            except Exception as exc:
+                logger.warning("Referral processing failed: %s", exc)
+
+        elif sub and sub_lower.startswith("track_"):
+            # ── META CAPI TRACKING: /start track_<tracking_id> ──
             try:
                 from tradebot.tracking.deep_link import parse_start_payload
                 from tradebot.tracking.capture import link_telegram_user
@@ -3561,9 +3692,9 @@ def handle_command(cmd, text, chat_id, msg):
             except Exception as exc:
                 logger.warning("Tracking link failed: %s", exc)
 
-        # ── Two-Tier Gate: Ultimatum for new users, Welcome for returning ──
+        # ── INTERACTIVE ONBOARDING: InlineKeyboard, dual-mode (new vs returning) ──
         if _has_accepted_ultimatum(chat_id):
-            # Returning user → show welcome
+            # Returning user → compact welcome with interactive buttons
             is_donor = _is_donor(chat_id)
             tier_label = "📊 Subscriber" if is_donor else "🆓 Free"
             quota = _get_quota(chat_id)
@@ -3580,18 +3711,18 @@ def handle_command(cmd, text, chat_id, msg):
                 f"satu tujuan: <b>MENCETAK PROFIT.</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"{tier_label}\n"
-                f"⚡️ Kuota AI: {quota_line}\n"
+                f"⚡️ Kuota AI: {quota_line}"
             )
             if is_donor:
                 welcome += (
-                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"\n━━━━━━━━━━━━━━━━━━━━━\n"
                     f"📊 <b>AKSES SUBSCRIBER:</b>\n"
                     f"📥 Download EA MT5: phantomfx.aitradepulse.com/ea/download/\n"
                     f"🔑 Cek Licensi EA: /mykey\n"
-                    f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com\n"
+                    f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com"
                 )
             welcome += (
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"\n━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🧠 /signal — Signal dari 9 engines\n"
                 f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
                 f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
@@ -3603,10 +3734,62 @@ def handle_command(cmd, text, chat_id, msg):
                 f"📱 /help — Semua command\n"
                 f"⚡ Upgrade Tier → @berkahkaryaforexbotbot"
             )
-            tg_send(welcome, chat_id)
+            # Interactive onboarding buttons
+            markup = {
+                "inline_keyboard": [
+                    [{"text": "📊 Cek Sinyal XAUUSD Sekarang", "callback_data": "cmd:analyze_xauusd"}],
+                    [{"text": "🎓 Cara Baca Sinyal (Panduan)", "callback_data": "cmd:guide"}],
+                    [{"text": "💎 Lihat Keuntungan PRO", "callback_data": "cmd:subscribe"}],
+                ]
+            }
+            tg_send(welcome, chat_id, reply_markup=markup)
         else:
             # New user → ultimatum video (single message)
             send_ultimatum_video(chat_id)
+
+    elif cmd == "/referral":
+        # ── REFERRAL DASHBOARD ──
+        try:
+            from members import _conn
+            with _conn() as db:
+                row = db.execute(
+                    "SELECT ref_count FROM members WHERE chat_id=?",
+                    (str(chat_id),)
+                ).fetchone()
+            ref_count = row["ref_count"] if row else 0
+        except Exception:
+            ref_count = 0
+        ref_link = f"https://t.me/berkahkaryaforexbotbot?start=ref_{chat_id}"
+        if ref_count == 0:
+            msg = (
+                f"👥 <b>REFERRAL PROGRAM</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🔗 Link referral kamu:\n"
+                f"<code>{ref_link}</code>\n\n"
+                f"📊 Statistik:\n"
+                f"  • Teman diajak: <b>0</b>\n"
+                f"  • Reward berikutnya: <b>3 referral → PRO 7 hari GRATIS!</b>\n\n"
+                f"💡 Share link ini ke temen-temen trader!\n"
+                f"Setiap yang daftar lewat link lu, referral\n"
+                f"counter lu naik. 3 referral = tier PRO gratis!"
+            )
+        else:
+            remaining = max(0, 3 - ref_count)
+            tier_reward = "PRO 7 hari GRATIS" if ref_count < 3 else "SUDAH DIKLAIM ✅"
+            msg = (
+                f"👥 <b>REFERRAL PROGRAM</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🔗 Link referral kamu:\n"
+                f"<code>{ref_link}</code>\n\n"
+                f"📊 Statistik:\n"
+                f"  • Teman diajak: <b>{ref_count}</b>\n"
+                f"  • Reward: <b>{tier_reward}</b>\n"
+                f"  • Butuh <b>{remaining}</b> lagi untuk PRO 7 hari!\n\n"
+                f"💡 Share link ini ke temen-temen trader!\n"
+                f"Setiap yang daftar lewat link lu, referral\n"
+                f"counter lu naik. 3 referral = tier PRO gratis!"
+            )
+        tg_send(msg, chat_id)
 
     elif cmd == "/myid":
         text = (
@@ -4071,6 +4254,15 @@ def handle_command(cmd, text, chat_id, msg):
                 # Record direction for flip guard (after AI returns action)
                 action = sig.get("action", "HOLD")
                 _touch_manual(str(chat_id), action=action if action in ("BUY","SELL") else None, asset=disp)
+                # ── Behavioral Tagging: segment user by asset preference ──
+                try:
+                    from members.tags import add_tag
+                    if pair_check in ("gold", "xauusd"):
+                        add_tag(str(chat_id), "gold_trader")
+                    elif pair_check in ("btc", "btcusd", "eth", "ethusd"):
+                        add_tag(str(chat_id), "crypto_trader")
+                except Exception:
+                    pass
                 # Normalize confidence for quality checks
                 c = sig.get("confidence", 0)
                 if isinstance(c, (int,float)) and c > 10:
@@ -5899,6 +6091,12 @@ def handle_command(cmd, text, chat_id, msg):
                              "mtf", "", {"pair": disp_mtf})
             except Exception:
                 pass
+            # ── Behavioral Tagging: /mtf user = technical_geek ──
+            try:
+                from members.tags import add_tag
+                add_tag(str(chat_id), "technical_geek")
+            except Exception:
+                pass
             
         except Exception as e:
             tg_send(f"❌ MTF error: {e}", chat_id)
@@ -7424,7 +7622,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download","/referral"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
@@ -7520,6 +7718,9 @@ def main():
                             handle_ultimatum_callback(cb)
                         elif data.startswith(("pay:", "check:", "pricing:", "donate:", "sub:", "cancel_input")):
                             handle_payment_callback(cb)
+                        elif data.startswith("cmd:"):
+                            # ── Interactive Onboarding: cmd:analyze_xauusd / cmd:guide / cmd:subscribe ──
+                            handle_onboarding_callback(cb)
                         else:
                             handle_trade_callback(cb)
                     except Exception as e:
