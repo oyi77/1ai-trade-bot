@@ -349,6 +349,7 @@ def set_autosync(chat_id, enabled=True):
 # ── GPT-4o Rate Limiter (prevents HTTP 429) ──
 _LAST_GPT4O_CALL = 0
 _GPT4O_MIN_INTERVAL = 20  # seconds between GPT-4o calls
+_LAST_GOLDAPI_OHLC = {}    # cached OHLC from goldapi.io for bar generation
 
 def _fetch_ohlcv_for_ai(pair="gold", keep=20):
     """Fetch OHLCV bars for AI analysis.
@@ -435,21 +436,43 @@ def _normalize_broker_symbol(s):
     return s
 
 def get_xauusd_spot_offset() -> float:
-    """Calculate XAUUSD spot-futures differential (spot minus futures).
-    Positive = spot higher, Negative = spot lower (most common).
-    Returns 0 if can't determine."""
-    try:
-        spot = fetch_xauusd_spot()
-        if not spot: return 0
-        if MARKET_DATA:
-            quote = MARKET_DATA.get_quote("GC=F")
-            if quote and quote.price > 1000:
-                return spot - quote.price
-    except: pass
-    return 0
+    """Calculate XAUUSD spot offset for broker pricing.
+    With goldapi.io providing bid/ask directly, offset is handled by the API.
+    Returns hardcoded broker offset as fallback."""
+    # goldapi.io gives us real bid/ask — no futures offset needed
+    # Fallback: hardcoded 74-pip broker offset (Exness spread avg)
+    return float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
 
 def fetch_xauusd_spot() -> float | None:
-    """Fetch live spot XAUUSD from gold-api.com (free, unlimited, real-time)."""
+    """Fetch live spot XAUUSD from goldapi.io (premium, bid/ask/OHLC) → gold-api.com fallback."""
+    global _LAST_GOLDAPI_OHLC
+    # ── Primary: goldapi.io (premium API key — bid/ask spread, OHLC data) ──
+    GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
+    if GOLDAPI_KEY:
+        try:
+            req = urllib.request.Request("https://www.goldapi.io/api/XAU/USD",
+                headers={"x-access-token": GOLDAPI_KEY, "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = json.loads(r.read())
+            price = float(data.get("price", 0))
+            if 2000 < price < 6000:
+                # Cache OHLC for bar generation
+                _LAST_GOLDAPI_OHLC = {
+                    "open": float(data.get("open_price", price)),
+                    "high": float(data.get("high_price", price)),
+                    "low": float(data.get("low_price", price)),
+                    "close": price,
+                    "prev_close": float(data.get("prev_close_price", price)),
+                    "bid": float(data.get("bid", price)),
+                    "ask": float(data.get("ask", price)),
+                    "ts": int(data.get("timestamp", time.time())),
+                }
+                logger.debug(f"GoldAPI.io: bid={_LAST_GOLDAPI_OHLC['bid']:.2f} ask={_LAST_GOLDAPI_OHLC['ask']:.2f} spread={_LAST_GOLDAPI_OHLC['ask']-_LAST_GOLDAPI_OHLC['bid']:.2f}")
+                return price
+        except Exception as e:
+            logger.debug(f"GoldAPI.io failed: {e}")
+    
+    # ── Fallback: gold-api.com (free, no key needed) ──
     try:
         req = urllib.request.Request("https://api.gold-api.com/price/XAU", headers={"User-Agent": "Vilona/1.0"})
         with urllib.request.urlopen(req, timeout=5) as r:
@@ -458,7 +481,7 @@ def fetch_xauusd_spot() -> float | None:
         if 2000 < price < 6000:
             return price
     except Exception as e:
-        logger.debug(f"Gold-API failed: {e}")
+        logger.debug(f"Gold-API.com failed: {e}")
     return None
 
 def fetch_price(pair="gold"):
