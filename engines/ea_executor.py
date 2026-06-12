@@ -91,9 +91,9 @@ def save_state(s):
 # ── Price feed (symbol-aware) ──
 
 def fetch_price(symbol="XAUUSD"):
-    """Fetch live price for symbol. XAUUSD via gold-api.com + offset.
-    Other symbols via Yahoo Finance. Returns offset-adjusted price for
-    XAUUSD or raw price for everything else.
+    """Fetch live price for symbol.
+    XAUUSD via gold-api.com, crypto via Binance public API.
+    No Yahoo Finance — prices don't match broker.
     """
     sym = symbol.upper()
     try:
@@ -103,15 +103,21 @@ def fetch_price(symbol="XAUUSD"):
             if 2000 < spot < 6000:
                 return round(spot + XAUUSD_OFFSET, 2)
             logger.warning("XAU spot %.2f outside range", spot)
+        elif sym in ("BTCUSD", "BITCOIN"):
+            r = urllib.request.urlopen("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT", timeout=10)
+            price = float(json.loads(r.read())["price"])
+            return round(price, 2)
+        elif sym in ("ETHUSD", "ETHEREUM"):
+            r = urllib.request.urlopen("https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT", timeout=10)
+            price = float(json.loads(r.read())["price"])
+            return round(price, 2)
+        elif sym in ("USOIL", "OIL", "WTI"):
+            # No reliable free API for oil — return None to skip slippage check
+            # Price from OHLCV last close is used as reference in caller
+            logger.debug("fetch_price(%s): no live price API available", sym)
+            return None
         else:
-            # Yahoo Finance for USOIL, BTCUSD, etc.
-            yf_sym = {"USOIL": "CL=F", "OIL": "CL=F", "BTCUSD": "BTC-USD",
-                      "ETHUSD": "ETH-USD"}.get(sym, sym)
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_sym}?interval=1m"
-            r = urllib.request.urlopen(url, timeout=10)
-            data = json.loads(r.read())
-            price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
-            return round(float(price), 2)
+            logger.warning("fetch_price(%s): unknown symbol", sym)
     except Exception as e:
         logger.warning("fetch_price(%s) failed: %s", sym, e)
     return None
