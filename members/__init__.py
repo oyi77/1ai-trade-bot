@@ -119,6 +119,35 @@ def insert_payment_order(merchant_ref: str, chat_id: str, amount: int,
         return {"merchant_ref": merchant_ref, "status": "pending", "created_at": now}
 
 
+def get_pending_order(chat_id: str, tier: str = None) -> dict | None:
+    """Get active pending payment order for a user. Returns None if none exists."""
+    with _conn() as db:
+        if tier:
+            row = db.execute(
+                "SELECT * FROM payment_orders WHERE chat_id=? AND status='pending' AND product_key=? "
+                "ORDER BY id DESC LIMIT 1",
+                (str(chat_id), tier)
+            ).fetchone()
+        else:
+            row = db.execute(
+                "SELECT * FROM payment_orders WHERE chat_id=? AND status='pending' "
+                "ORDER BY id DESC LIMIT 1",
+                (str(chat_id),)
+            ).fetchone()
+        return dict(row) if row else None
+
+
+def expire_old_pending_orders(hours: int = 24):
+    """Mark pending orders older than N hours as expired."""
+    cutoff = (datetime.now(WIB) - timedelta(hours=hours)).isoformat()
+    with _conn() as db:
+        count = db.execute(
+            "UPDATE payment_orders SET status='expired' WHERE status='pending' AND created_at < ?",
+            (cutoff,)
+        ).rowcount
+        return count
+
+
 def mark_payment_paid(merchant_ref: str):
     now = datetime.now(WIB).isoformat()
     with _conn() as db:

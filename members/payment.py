@@ -149,6 +149,68 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "pro",
 
     Returns dict with payment_url or error.
     """
+    # ── Auto-cleanup old pending orders (>24h) ──
+    try:
+        from members import expire_old_pending_orders
+        expired = expire_old_pending_orders(24)
+        if expired:
+            logger.info(f"Auto-expired {expired} old pending payment orders")
+    except Exception:
+        pass
+
+    # ── Check if user already has a pending order ──
+    try:
+        from members import get_pending_order
+        existing = get_pending_order(str(chat_id), tier)
+        if existing:
+            # User already has a pending order — check if still valid on Tripay
+            logger.info(f"Found existing pending order for {chat_id} ({tier}): ref={existing['merchant_ref']}")
+            tripay_status = None
+            try:
+                tripay_status = check_tripay_status(existing["merchant_ref"])
+                if tripay_status.get("success") and tripay_status.get("data"):
+                    status = tripay_status["data"].get("status", "").upper()
+                    if status == "PAID":
+                        # Already paid but not processed — trigger callback
+                        logger.info(f"Order already paid on Tripay: {existing['merchant_ref']}")
+                        from members import mark_payment_paid
+                        mark_payment_paid(existing["merchant_ref"])
+                        return {"success": True, "reference": existing["merchant_ref"],
+                                "merchant_ref": existing["merchant_ref"],
+                                "payment_url": "", "pay_code": "", "qr_url": "",
+                                "amount": existing["amount"], "tier": tier,
+                                "tier_label": PRICING.get(tier, {}).get("label", ""),
+                                "message": "✅ Pembayaran sudah diterima! Selamat menikmati akses subscriber."}
+                    elif status in ("EXPIRED", "FAILED"):
+                        # Expired — allow creating new one
+                        logger.info(f"Old order expired on Tripay: {existing['merchant_ref']} → {status}")
+                else:
+                    # Tripay check failed — create fresh anyway
+                    logger.warning(f"Tripay status check failed for ref {existing['merchant_ref']}, creating fresh")
+            except Exception as e:
+                logger.warning(f"Tripay status check error: {e}")
+
+            # If Tripay invoice is still active (UNPAID/WAITING status), return existing URL
+            try:
+                if tripay_status and tripay_status.get("data"):
+                    tstatus = tripay_status["data"].get("status", "").upper()
+                    if tstatus in ("UNPAID", "WAITING", "PENDING"):
+                        checkout_url = (tripay_status["data"].get("checkout_url", "") or
+                                       tripay_status["data"].get("qr_url", "") or "")
+                        if checkout_url:
+                            logger.info(f"Returning existing pending payment URL for {chat_id}")
+                            return {"success": True, "reference": existing["merchant_ref"],
+                                    "merchant_ref": existing["merchant_ref"],
+                                    "payment_url": checkout_url,
+                                    "pay_code": tripay_status["data"].get("pay_code", ""),
+                                    "qr_url": tripay_status["data"].get("qr_url", ""),
+                                    "amount": existing["amount"], "tier": tier,
+                                    "tier_label": PRICING.get(tier, {}).get("label", ""),
+                                    "message": "⏳ Kamu masih punya pembayaran yang belum selesai. Lanjutkan bayar!"}
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning(f"Error checking pending order: {e}")
     import hashlib, hmac
 
     if not TRIPAY_API_KEY or not TRIPAY_PRIVATE_KEY:
