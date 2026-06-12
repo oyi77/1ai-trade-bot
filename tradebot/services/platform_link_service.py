@@ -344,13 +344,12 @@ class PlatformLinkService:
             return None
 
         cookie = self._build_stockity_cookie(authtoken, broker_user_id)
-
-        # Update stored cookie
         store = _storage()
-        store.execute(
-            "UPDATE user_platforms SET credentials=?, updated_at=? WHERE user_id=? AND platform='stockity'",
-            (json.dumps({"cookie": cookie}), _now(), user_id),
+        sql = (
+            "UPDATE user_platforms SET credentials=?, updated_at=? "
+            "WHERE user_id=? AND platform='stockity'"
         )
+        store.execute(sql, (json.dumps({"cookie": cookie}), _now(), user_id))
 
         LOG.info("Cookie refreshed for user %s", user_id)
         return cookie

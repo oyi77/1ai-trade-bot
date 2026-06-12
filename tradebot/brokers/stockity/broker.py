@@ -65,8 +65,22 @@ class StockityBroker:
         await broker.close()
     """
 
-    def __init__(self, deal_type: str = "demo") -> None:
-        self._cookie: str = settings.STOCKITY_FULL_COOKIE
+    def __init__(
+        self,
+        deal_type: str = "demo",
+        cookie: str | None = None,
+        currency: str | None = None,
+    ) -> None:
+        """Initialize Stockity broker.
+
+        Args:
+            deal_type: "demo" or "real"
+            cookie: Per-user session cookie. Falls back to global
+                    STOCKITY_FULL_COOKIE from settings when None.
+            currency: Account currency (e.g. "IDR", "USD"). Auto-detected
+                      from balance API during connect() when None.
+        """
+        self._cookie: str = cookie or settings.STOCKITY_FULL_COOKIE
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._ref_counter: int = 0
         self._listener_task: asyncio.Task[None] | None = None
@@ -74,7 +88,7 @@ class StockityBroker:
         self._deal_type: str = deal_type  # "demo" or "real"
         # Balance tracking (native currency, no conversion)
         self._balance_raw: int = 0
-        self._balance_currency: str = settings.STOCKITY_CURRENCY
+        self._balance_currency: str = currency or settings.STOCKITY_CURRENCY
         self._balance_version: int = 0
         self._account_type: str = ""
         # Position tracking

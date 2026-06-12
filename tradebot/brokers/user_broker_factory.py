@@ -70,9 +70,7 @@ async def _get_stockity_broker(user_id: str, for_execution: bool = False) -> Sto
         currency = creds.get("currency", "IDR")
         if cookie:
             LOG.info("Using user's cookie for %s (currency=%s)", user_id, currency)
-            broker = StockityBroker()
-            broker._cookie = cookie
-            broker._balance_currency = currency
+            broker = StockityBroker(cookie=cookie, currency=currency)
             return broker
 
     if not for_execution:
