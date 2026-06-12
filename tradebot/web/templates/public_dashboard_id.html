@@ -1137,8 +1137,8 @@ async function loadAll() {
     // Signal stats
     const sigStats = [0, 0, 0];
     signals.forEach(s => {
-      if (s.status === 'tp') { sigStats[1]++; sigStats[0]++; }
-      else if (s.status === 'sl') { sigStats[2]++; sigStats[0]++; }
+      if (s.status === 'tp_hit') { sigStats[1]++; sigStats[0]++; }
+      else if (s.status === 'sl_hit') { sigStats[2]++; sigStats[0]++; }
       else if (s.direction) sigStats[0]++;
     });
     document.getElementById('sig-total').textContent = signals.length;
@@ -1230,7 +1230,9 @@ function renderSinyal(signals) {
     const isBuy = s.direction === 'BUY';
     const ts = (s.timestamp || '').replace('T', ' ').slice(0, 16);
     const outcome = s.status !== 'pending'
-      ? `<span class="${s.status==='tp'?'sig-tp':'sig-sl'} font-bold">${s.status.toUpperCase()}</span>`
+      ? (s.status === 'tp_hit'
+        ? '<span class="sig-tp font-bold">✓ TP</span>'
+        : '<span class="sig-sl font-bold">✗ SL</span>')
       : '<span class="text-slate-500">PENDING</span>';
     const source = s.source === 'user-generate'
       ? `👤 @${s.source_user || 'anon'}`

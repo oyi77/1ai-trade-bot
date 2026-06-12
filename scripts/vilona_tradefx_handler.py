@@ -6394,12 +6394,48 @@ def auto_analyze_loop():
                     logger.debug(f"S-TIER check [{disp}]: {e}")
 
             if stier_sig and stier_sig["action"] in ("BUY", "SELL"):
-                # S-TIER zone → highest priority, bypass all other checks
-                mech_sig = stier_sig
-                logger.info(f"💀 S-TIER OVERRIDE [{disp}]: bypassing mechanical — using God Tier zone")
-            else:
-                # ── AI-ONLY MODE: skip mechanical, langsung ke AI consensus ──
-                mech_sig = None
+                # ── 💀 S-TIER FULL MARGIN: Triple Confluence, bypass killzone, max sizing ──
+                action = stier_sig["action"]
+                stier_sig = _clamp_sltp(stier_sig, disp)
+                stier_sig["_tier_capped"] = False
+                stier_sig["risk_percent"] = 100.0   # FULL MARGIN
+                stier_sig["source"] = "stier-god-tier"
+                stier_sig["grade"] = "S"
+
+                conf = stier_sig.get("confidence", 0)
+                if isinstance(conf, (int, float)) and conf > 10:
+                    conf = conf / 100
+                stier_sig["confidence"] = conf
+
+                # Format as S-TIER signal
+                stier_text = fmt_signal(stier_sig, price, dxy, h, disp, "$")
+                stier_text = stier_text.replace(
+                    "SINYAL SELL", "💀 S-TIER FULL MARGIN SELL"
+                ).replace(
+                    "SINYAL BUY", "💀 S-TIER FULL MARGIN BUY"
+                ).replace(
+                    "MARKET PULSE", "💀 S-TIER FULL MARGIN"
+                )
+                stier_text += (
+                    "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🔥 <b>TRIPLE CONFLUENCE DETECTED</b>\n"
+                    "   Breaker + OB/FVG + Double Sweep\n"
+                    "   💯 100% Margin — Max Position Size\n"
+                )
+
+                # Post to channel + bridge
+                stier_entry = stier_sig.get("entry", price) or 0
+                if _can_post_to_channel(pair, action, stier_entry, stier_sig.get("sl", 0), stier_sig.get("tp", 0)):
+                    result = send_to_channel(stier_text)
+                    if result:
+                        stier_sig["telegram_message_id"] = result.get("result", {}).get("message_id")
+                    _mark_channel_post(pair, action, stier_entry, stier_sig.get("sl", 0), stier_sig.get("tp", 0))
+
+                post_signal_to_bridge(stier_sig, price, disp)
+                logger.info(f"💀 S-TIER FULL MARGIN [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%}")
+                log["signals_sent"] = log.get("signals_sent", 0) + 1
+                time.sleep(60)
+                continue
 
             # ── AI Consensus — ONLY source of signals ──
             sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=True,
