@@ -3417,6 +3417,30 @@ def handle_command(cmd, text, chat_id, msg):
     sub_norm = _normalize_broker_symbol(sub)  # XAUUSDc → xauusd, EURUSD.pro → eurusd
 
     if cmd == "/start":
+        # ── Deep link tracking: capture track_<tracking_id> payload ──
+        if sub and sub.startswith("track_"):
+            try:
+                from tradebot.tracking.deep_link import parse_start_payload
+                from tradebot.tracking.capture import link_telegram_user
+                from tradebot.tracking.events import fire_lead
+                from tradebot.tracking.activity import log_activity
+
+                ok, tracking_id = parse_start_payload(sub)
+                if ok:
+                    username_val = ""
+                    if msg:
+                        username_val = (msg.get("chat", {}).get("username", "")
+                                        or msg.get("from", {}).get("username", ""))
+                    link_telegram_user(tracking_id, str(chat_id))
+                    fire_lead(str(chat_id), tracking_id, "free")
+                    log_activity(str(chat_id), chat_id, username_val,
+                                 "start_tracked", "free",
+                                 {"tracking_id": tracking_id})
+                    logger.info("🔗 Tracking linked: %s → %s",
+                                tracking_id, chat_id)
+            except Exception as exc:
+                logger.warning("Tracking link failed: %s", exc)
+
         # ── Two-Tier Gate: Ultimatum for new users, Welcome for returning ──
         if _has_accepted_ultimatum(chat_id):
             # Returning user → show welcome
@@ -4018,6 +4042,15 @@ def handle_command(cmd, text, chat_id, msg):
                             "👉 /subscribe — Upgrade Tier"
                         )
                     tg_send(auto_text, chat_id)
+                    # ── Log activity ──
+                    try:
+                        username = (msg.get("chat", {}).get("username", "") or
+                                   msg.get("from", {}).get("username", "") or "")
+                        from tradebot.tracking.activity import log_activity
+                        log_activity(str(chat_id), str(chat_id), username.lstrip("@"),
+                                     "analyze", user_tier, {"pair": disp})
+                    except Exception:
+                        pass
                 else:
                     PENDING_SIGNALS[str(chat_id)] = {
                         "sig": sig, "price": price,
@@ -4141,6 +4174,13 @@ def handle_command(cmd, text, chat_id, msg):
                                   source_user=username, price=price, grade=sig.get("grade",""))
                     except Exception:
                         pass
+                    # ── Log activity ──
+                    try:
+                        from tradebot.tracking.activity import log_activity
+                        log_activity(str(chat_id), str(chat_id), username,
+                                     "analyze", user_tier, {"pair": disp})
+                    except Exception:
+                        pass
             else:
                 # ── AI FALLBACK: Mechanical signal when all AI models fail ──
                 logger.warning(f"AI all failed for {disp} — falling back to mechanical")
@@ -4157,6 +4197,15 @@ def handle_command(cmd, text, chat_id, msg):
                         text = fmt_signal(mech_sig, price, dxy, wib_now().hour, disp, curr, quality="C")
                         text += f"\n\n⚠️ <b>Mechanical Fallback</b> — AI models sedang sibuk (rate limit).\nAkurasi terbatas. Coba /analyze lagi nanti."
                         tg_send(text, chat_id)
+                        # ── Log activity ──
+                        try:
+                            username_fb = (msg.get("chat", {}).get("username", "") or
+                                         msg.get("from", {}).get("username", "") or "")
+                            from tradebot.tracking.activity import log_activity
+                            log_activity(str(chat_id), str(chat_id), username_fb.lstrip("@"),
+                                         "analyze", user_tier, {"pair": disp})
+                        except Exception:
+                            pass
                     else:
                         tg_send("❌ Analisa gagal — semua mesin analisa sibuk. Coba lagi dalam 1 menit.", chat_id)
                 except Exception as e:
@@ -4414,6 +4463,15 @@ def handle_command(cmd, text, chat_id, msg):
                         f"Status akan otomatis aktif setelah pembayaran."
                     )
                     tg_send(txt, chat_id)
+                    # Activity + CAPI InitiateCheckout
+                    try:
+                        from tradebot.tracking.activity import log_activity
+                        log_activity(str(chat_id), chat_id, username, "subscribe", sub_arg, {"amount": amount, "ref": result.get("reference", "")})
+                    except Exception: pass
+                    try:
+                        from tradebot.tracking.events import fire_initiate_checkout
+                        fire_initiate_checkout(str(chat_id), sub_arg, amount)
+                    except Exception: pass
                 else:
                     tg_send(f"❌ {result.get('error', 'Gagal membuat pembayaran.')}", chat_id)
             except Exception as e:
@@ -5712,6 +5770,15 @@ def handle_command(cmd, text, chat_id, msg):
                 f"📊 Dashboard: phantomfx.aitradepulse.com/dashboard"
             )
             tg_send(msg, chat_id)
+            # ── Log activity ──
+            try:
+                username_mtf = (msg.get("chat", {}).get("username", "") or
+                              msg.get("from", {}).get("username", "") or "")
+                from tradebot.tracking.activity import log_activity
+                log_activity(str(chat_id), str(chat_id), username_mtf.lstrip("@"),
+                             "mtf", "", {"pair": disp_mtf})
+            except Exception:
+                pass
             
         except Exception as e:
             tg_send(f"❌ MTF error: {e}", chat_id)
@@ -5776,6 +5843,12 @@ def handle_command(cmd, text, chat_id, msg):
                 f"🔥 /signal — Generate signal dari matrix ini"
             )
             tg_send(msg, chat_id)
+            # Activity tracking
+            try:
+                from tradebot.tracking.activity import log_activity
+                tier = _get_user_tier(chat_id).get("tier", "free")
+                log_activity(str(chat_id), chat_id, username, "engines", tier, {"pair": disp_eng})
+            except Exception: pass
             
         except Exception as e:
             tg_send(f"❌ Engine error: {e}", chat_id)

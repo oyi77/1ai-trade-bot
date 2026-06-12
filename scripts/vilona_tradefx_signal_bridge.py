@@ -473,6 +473,43 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content.encode("utf-8"))
             except FileNotFoundError:
                 self._json({"error": "landing page not found"}, 404)
+        elif path == "/track.js":
+            # Proxy to tracking API on port 8790
+            try:
+                req = urllib.request.Request("http://127.0.0.1:8790/track.js")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    content = resp.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/javascript")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            except Exception as e:
+                self._json({"error": f"tracking proxy: {e}"}, 502)
+        elif path.startswith("/api/track/"):
+            # Proxy to tracking API on port 8790
+            try:
+                qs = "&".join(f"{k}={','.join(v)}" for k, v in params.items()) if params else ""
+                proxy_path = path + ("?" + qs if qs else "")
+                req = urllib.request.Request("http://127.0.0.1:8790" + proxy_path)
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    content = resp.read()
+                self.send_response(resp.status)
+                self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+            except urllib.error.HTTPError as e:
+                self.send_response(e.code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(e.read())
+            except Exception as e:
+                self._json({"error": f"tracking proxy: {e}"}, 502)
         elif path == "/api/trade-log":
             log_path = os.path.join(PROJECT_DIR, "data", "trade_log.json")
             try:

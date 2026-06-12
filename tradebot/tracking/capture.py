@@ -66,9 +66,9 @@ def link_telegram_user(tracking_id, telegram_user_id):
 def get_tracking_by_telegram(telegram_user_id):
     """Query tracking records by telegram_user_id for CAPI event enrichment."""
     with _conn() as db:
-        rows = db.execute(
+        row = db.execute(
             "SELECT * FROM user_tracking WHERE telegram_user_id = ? "
             "ORDER BY created_at DESC LIMIT 1",
             (str(telegram_user_id),)
-        ).fetchall()
-    return [dict(r) for r in rows]
+        ).fetchone()
+    return dict(row) if row else {}

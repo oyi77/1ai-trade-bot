@@ -237,6 +237,20 @@ class WebhookHandler(BaseHTTPRequestHandler):
         except Exception as e:
             log.warning(f"Bemob postback failed (non-critical): {e}")
 
+        # ── Auto-add to premium group/channel ──
+        try:
+            from tradebot.tracking.group_sync import add_to_premium_groups
+            add_to_premium_groups(chat_id, tier)
+        except Exception as e:
+            log.warning(f"Group sync failed (non-critical): {e}")
+
+        # ── Log activity ──
+        try:
+            from tradebot.tracking.activity import log_activity
+            log_activity(chat_id, chat_id, '', 'payment_success', tier, {'amount': total_amount, 'ref': merchant_ref})
+        except Exception as e:
+            log.warning(f"Activity log failed (non-critical): {e}")
+
         if brand == "1ai":
             msg = (
                 f"🔥 <b>BOOM! Bahan bakar server sudah masuk.</b>\n"
