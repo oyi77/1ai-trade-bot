@@ -1531,13 +1531,22 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
             reasons.append("💀 DOUBLE SWEEP — liquidity cleared 2x at same level")
         
         # ── GATE 6: Trend filter — trend-aligned breakers get bonus ──
+        # SMC Breaker Logic for direction:
+        #   Broken bullish OB (demand→supply) = SELL the retest
+        #   Broken bearish OB (supply→demand) = BUY the retest
+        #   Holding bullish OB (demand holds) = BUY the bounce
+        #   Holding bearish OB (supply holds) = SELL the rejection
+        if breaker:
+            direction = "SELL" if ob_is_bull else "BUY"
+        else:
+            direction = "BUY" if ob_is_bull else "SELL"
+        
         if breaker and trend_bias != "NEUTRAL":
-            breaker_with_trend = (ob_is_bull and trend_bias == "BULLISH") or (not ob_is_bull and trend_bias == "BEARISH")
+            # Breaker expects reversal — broken bull OB wants BEARISH trend, broken bear OB wants BULLISH
+            breaker_with_trend = (ob_is_bull and trend_bias == "BEARISH") or (not ob_is_bull and trend_bias == "BULLISH")
             if breaker_with_trend:
                 score += 0.5
                 reasons.append(f"📈 Trend-aligned ({trend_bias}) — higher probability")
-        
-        direction = "BUY" if price < zone_level else "SELL"
         confluence_zones.append({
             "level": zone_level, "score": score, "reasons": reasons, "direction": direction
         })
@@ -1552,9 +1561,8 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     
     direction = best["direction"]
     entry = best["level"]
-    sl = round(entry - 30 * pip_s, 2) if direction == "BUY" else round(entry + 30 * pip_s, 2)
-    tp = round(entry + 60 * pip_s, 2) if direction == "BUY" else round(entry - 60 * pip_s, 2)
     
+    # Grade first (needed for ATR multipliers)
     if best["score"] >= 6:
         grade = "S-TIER"
         grade_label = "💀 TRIPLE CONFLUENCE — GOD TIER ZONE"
@@ -1564,6 +1572,59 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     else:
         grade = "B"
         grade_label = "⚡ STRUCTURAL ZONE — Valid Confluence"
+    
+    # ── ATR-based dynamic SL/TP ──
+    rr_ratio = 2.0
+    atr = None
+    try:
+        if ohlcv_bars and len(ohlcv_bars) >= 16:
+            trs = []
+            for i in range(1, min(15, len(ohlcv_bars))):
+                high = float(ohlcv_bars[i].get("high", ohlcv_bars[i].get("h", 0)))
+                low = float(ohlcv_bars[i].get("low", ohlcv_bars[i].get("l", 0)))
+                prev_close = float(ohlcv_bars[i-1].get("close", ohlcv_bars[i-1].get("c", 0)))
+                tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+                trs.append(tr)
+            if trs:
+                atr = sum(trs) / len(trs)
+    except Exception:
+        pass
+    
+    if atr and atr > 0:
+        sl_distance = round(atr * (1.0 if grade == "S-TIER" else 1.5), 2)
+        tp_distance = round(sl_distance * rr_ratio, 2)
+    else:
+        sl_distance = round(30 * pip_s, 2)
+        tp_distance = round(60 * pip_s, 2)
+    
+    # ── Entry distance check: skip if price too far from zone ──
+    price_distance = abs(price - entry)
+    if price_distance > sl_distance * 0.5:
+        logger.info(
+            "S-TIER zone [%s] skip: price %.2f too far from zone %.2f (%.1f > %.1f sl_half)",
+            display, price, entry, price_distance, sl_distance * 0.5,
+        )
+        return None, None
+    
+    if direction == "BUY":
+        sl = round(entry - sl_distance, 2)
+        tp = round(entry + tp_distance, 2)
+    else:
+        sl = round(entry + sl_distance, 2)
+        tp = round(entry - tp_distance, 2)
+    
+    # ── TP2: structure-based extension ──
+    # TP2 = midpoint extension beyond TP1 (half again the distance to TP1)
+    tp2_dist = tp_distance + (tp_distance - sl_distance) * 0.5
+    if direction == "BUY":
+        tp2_candidate = round(entry + tp2_dist, 2)
+    else:
+        tp2_candidate = round(entry - tp2_dist, 2)
+    # Only set TP2 if within reasonable range (max 200 pips from entry)
+    if abs(tp2_candidate - entry) / pip_s <= 200:
+        tp2 = tp2_candidate
+    else:
+        tp2 = 0
     
     reason = f"🤖 S-TIER ZONE [{grade}]: {grade_label}\n" + "\n".join(f"  • {r}" for r in best["reasons"])
     

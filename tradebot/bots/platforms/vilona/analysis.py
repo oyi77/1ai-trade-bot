@@ -8,6 +8,7 @@ import logging
 import re
 import time
 import urllib.request
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from tradebot.bots.base import BaseBot
@@ -44,7 +45,7 @@ class AnalysisHandlersMixin(BaseBot):
                     elif sig and sig.get("action") != "HOLD":
                         display = pair.upper()
                         last_posted = self._posted_signals.get(pair, 0)
-                        if time.time() - last_posted < 10800:
+                        if time.time() - last_posted < 5400:
                             LOG.info(
                                 "Auto signal SKIPPED (dedup): %s %s (last: %ds ago)",
                                 display,
@@ -52,6 +53,22 @@ class AnalysisHandlersMixin(BaseBot):
                                 int(time.time() - last_posted),
                             )
                             continue
+
+                        # Daily circuit breaker: max 5 mechanical signals/day per pair
+                        today_key = datetime.now().strftime("%Y-%m-%d")
+                        daily_key = f"{pair}:{today_key}"
+                        daily_count = getattr(self, "_signal_daily_count", {})
+                        if daily_count.get(daily_key, 0) >= 5:
+                            LOG.info(
+                                "Auto signal SKIPPED (daily limit): %s — %d/5 today",
+                                display,
+                                daily_count.get(daily_key, 0),
+                            )
+                            continue
+                        if not hasattr(self, "_signal_daily_count"):
+                            self._signal_daily_count = {}
+                        self._signal_daily_count[daily_key] = self._signal_daily_count.get(daily_key, 0) + 1
+
                         self._posted_signals[pair] = time.time()
                         price = sig.get("entry", 0)
                         msg = format_signal_basic(sig, price, display)
@@ -148,6 +165,26 @@ class AnalysisHandlersMixin(BaseBot):
         if not price:
             price = float(ohlcv_bars[-1].get("close", ohlcv_bars[-1].get("open", 0)))
 
+        # ── Priority 1: S-TIER Zone (mechanical, highest conviction) ──
+        try:
+            from scripts.vilona_tradefx_handler import detect_stier_zone
+
+            stier_sig, stier_reason = detect_stier_zone(
+                display, display, price, ohlcv_bars
+            )
+            if stier_sig and stier_sig.get("action") in ("BUY", "SELL"):
+                LOG.info(
+                    "🎯 Auto S-TIER [%s]: %s @ %.2f | Grade=%s",
+                    display,
+                    stier_sig["action"],
+                    stier_sig.get("entry", 0),
+                    stier_sig.get("grade", "?"),
+                )
+                return stier_sig, stier_reason
+        except Exception as e:
+            LOG.debug("S-TIER mechanical failed for %s: %s", display, e)
+
+        # ── Priority 2: Quant + FVG (mechanical, medium conviction) ──
         quant_result = None
         fvg_signals = []
 
@@ -179,20 +216,20 @@ class AnalysisHandlersMixin(BaseBot):
                 LOG.debug("FVG detection failed: %s", e)
 
         quant_bias = None
-        if quant_result and quant_result.get("match_count", 0) >= 15:
+        if quant_result and quant_result.get("match_count", 0) >= 20:
             dom = quant_result.get("dominant_next")
             g = quant_result.get("green_pct", 0)
             r = quant_result.get("red_pct", 0)
-            if dom == "G" and g >= 40:
+            if dom == "G" and g >= 50:
                 quant_bias = "BUY"
-            elif dom == "R" and r >= 40:
+            elif dom == "R" and r >= 50:
                 quant_bias = "SELL"
 
         fvg_bias = None
         fvg_sig_obj = None
         if fvg_signals:
             fvg_sig_obj = fvg_signals[0]
-            if hasattr(fvg_sig_obj, "confidence") and fvg_sig_obj.confidence >= 0.20:
+            if hasattr(fvg_sig_obj, "confidence") and fvg_sig_obj.confidence >= 0.35:
                 fvg_bias = fvg_sig_obj.direction
 
         if quant_bias and fvg_bias and fvg_bias == quant_bias and fvg_sig_obj:
@@ -361,6 +398,47 @@ class AnalysisHandlersMixin(BaseBot):
         buy_votes = [s for s in signals if s["sig"]["action"] == "BUY"]
         sell_votes = [s for s in signals if s["sig"]["action"] == "SELL"]
 
+        # ── Mechanical validation helper ──
+        def _mech_vet(sig_action: str, ohlcv: list | None, price_f: float) -> tuple[float | None, str | None]:
+            """Returns (confidence_multiplier, warning) or (None, msg) to block."""
+            if not ohlcv or len(ohlcv) < 30:
+                return 1.0, None
+            try:
+                from scripts.vilona_tradefx_handler import detect_stier_zone
+                v_sig, _ = detect_stier_zone(display, display, price_f, ohlcv)
+                if v_sig and v_sig.get("action") in ("BUY", "SELL"):
+                    v_grade = v_sig.get("grade", "B")
+                    if v_grade in ("A", "S-TIER") and v_sig["action"] != sig_action:
+                        LOG.warning("MECH BLOCK: S-TIER %s vs AI %s %s", v_sig["action"], sig_action, display)
+                        return None, f"S-TIER {v_sig['action']} contradicts AI {sig_action}"
+                    if v_grade in ("A", "S-TIER") and v_sig["action"] == sig_action:
+                        LOG.info("MECH BOOST: S-TIER %s confirms AI %s %s", v_sig["action"], sig_action, display)
+                        return 1.3, f"S-TIER {v_sig['action']} confirms (+30%)"
+                if v_sig and v_sig.get("action") in ("BUY", "SELL") and v_sig["action"] != sig_action:
+                    # Lower-grade contradiction — slash confidence
+                    return 0.6, f"S-TIER {v_sig['action']} disagrees (-40%)"
+            except Exception:
+                pass
+            return 1.0, None
+
+        # ── Grok news cross-check ──
+        def _news_vet(sig_action: str, grok: dict | None) -> tuple[float | None, str | None]:
+            """Returns (confidence_multiplier, warning) or (None, msg) to block."""
+            if not grok or not isinstance(grok, dict):
+                return 1.0, None
+            sentiment = grok.get("sentiment", "NEUTRAL")
+            impact = grok.get("impact", "LOW")
+            if impact == "HIGH":
+                if (sig_action == "BUY" and sentiment == "BEARISH") or \
+                   (sig_action == "SELL" and sentiment == "BULLISH"):
+                    LOG.warning("NEWS BLOCK: HIGH %s news contradicts %s %s", sentiment, sig_action, display)
+                    return None, f"HIGH impact {sentiment} news contradicts {sig_action}"
+                if impact == "MEDIUM":
+                    if (sig_action == "BUY" and sentiment == "BEARISH") or \
+                       (sig_action == "SELL" and sentiment == "BULLISH"):
+                        return 0.7, f"MEDIUM {sentiment} news reduces confidence (-30%)"
+            return 1.0, None
+
         # Consensus
         if len(buy_votes) >= 2 or len(sell_votes) >= 2:
             winner = buy_votes if len(buy_votes) >= 2 else sell_votes
@@ -379,6 +457,25 @@ class AnalysisHandlersMixin(BaseBot):
             sig["_token_prompt"] = token_prompt
             sig["_token_completion"] = token_completion
             sig["_grok_news"] = grok_news
+
+            # ── S-TIER + Grok cross-check for dual consensus ──
+            vet_conf, vet_warn = _mech_vet(sig["action"], ohlcv_data, price)
+            if vet_conf is None:
+                sig["confidence"] = round(sig["confidence"] * 0.3, 3)
+                sig["_warning"] = vet_warn or ""
+                LOG.warning("DUAL overridden: AI %s vetoed by S-TIER %s", sig["action"], display)
+            elif vet_conf != 1.0:
+                sig["confidence"] = round(min(sig["confidence"] * vet_conf, conf_cap), 3)
+                sig["_warning"] = vet_warn or ""
+
+            news_conf, news_warn = _news_vet(sig["action"], grok_news)
+            if news_conf is None:
+                sig["confidence"] = round(sig["confidence"] * 0.3, 3)
+                sig["_news_warning"] = news_warn or ""
+            elif news_conf != 1.0:
+                sig["confidence"] = round(sig["confidence"] * news_conf, 3)
+                sig["_news_warning"] = news_warn or ""
+
             LOG.info(
                 "AI CONSENSUS [%d/%d]: %s conf=%.0f%% tier=%s tokens=%d",
                 len(winner),
@@ -405,6 +502,26 @@ class AnalysisHandlersMixin(BaseBot):
             sig["_token_prompt"] = token_prompt
             sig["_token_completion"] = token_completion
             sig["_grok_news"] = grok_news
+
+            # ── Solo quality gate: mechanical MUST NOT strongly disagree ──
+            vet_conf, vet_warn = _mech_vet(sig["action"], ohlcv_data, price)
+            if vet_conf is None:
+                LOG.warning("SOLO %s BLOCKED: S-TIER contradicts %s %s", best["name"], sig["action"], display)
+                return None
+            if vet_conf != 1.0:
+                sig["confidence"] = round(min(sig["confidence"] * vet_conf, conf_cap), 3)
+                sig["_warning"] = vet_warn or ""
+
+            # ── Grok news: solo signals are blocked by HIGH contradictory news ──
+            news_conf, news_warn = _news_vet(sig["action"], grok_news)
+            if news_conf is None:
+                LOG.warning("SOLO %s BLOCKED: HIGH impact %s news %s", best["name"],
+                            grok_news.get("sentiment", "?") if grok_news else "?", display)
+                return None
+            if news_conf != 1.0:
+                sig["confidence"] = round(sig["confidence"] * news_conf, 3)
+                sig["_news_warning"] = news_warn or ""
+
             LOG.info(
                 "SOLO [%s]: %s conf=%.0f%% tier=%s tokens=%d",
                 best["name"],
