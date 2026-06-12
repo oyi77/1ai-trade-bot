@@ -54,16 +54,16 @@ _EPOCH_DATE = datetime(2026, 1, 1, tzinfo=UTC)
 _BASE_USERS_START = 50
 _BASE_KEYS_START = 75
 
-_BASE_CLAIM_START = 1_000_000        # Rp1,000,000
-_CLAIM_GROWTH_PER_DAY = 50_000       # Rp50,000/day
+_BASE_CLAIM_START = 1_000_000  # Rp1,000,000
+_CLAIM_GROWTH_PER_DAY = 50_000  # Rp50,000/day
 
-_BASE_TP_MIN = 100.0                 # $100
-_BASE_TP_MAX = 500.0                 # $500
-_TP_GROWTH_MIN = 5.0                 # $5/day
-_TP_GROWTH_MAX = 20.0                # $20/day
+_BASE_TP_MIN = 100.0  # $100
+_BASE_TP_MAX = 500.0  # $500
+_TP_GROWTH_MIN = 5.0  # $5/day
+_TP_GROWTH_MAX = 20.0  # $20/day
 
-_ROBOT_TOTAL_PROFIT_START = 500_000_000   # Rp500,000,000
-_ROBOT_PROFIT_GROWTH_PER_DAY = 10_000_000 # Rp10,000,000/day
+_ROBOT_TOTAL_PROFIT_START = 500_000_000  # Rp500,000,000
+_ROBOT_PROFIT_GROWTH_PER_DAY = 10_000_000  # Rp10,000,000/day
 
 # ---------------------------------------------------------------------------
 # Helpers

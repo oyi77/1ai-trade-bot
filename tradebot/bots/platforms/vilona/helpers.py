@@ -163,18 +163,53 @@ FOMO_FAKE_CLAIM: list[str] = []
 FOMO_FAKE_TP: list[str] = []
 FOMO_FAKE_ROBOT: list[str] = []
 
-def refresh_fake_fomo() -> None:
-    """Refresh fake FOMO message lists from the fomo_fake_stats engine.
 
-    Called periodically (every hour) to regenerate consistent fake
-    statistics that monotonically increase over time.
+def refresh_fake_fomo() -> None:
+    """Refresh fake FOMO message lists from the FOMO Agent (LLM) or fallback engine.
+
+    Tries FOMO Agent (LangGraph + LLM) first.
+    Falls back to deterministic template engine from fomo_fake_stats.
+
+    Called periodically (every hour) to regenerate fake statistics.
     """
+    global FOMO_FAKE_CLAIM, FOMO_FAKE_TP, FOMO_FAKE_ROBOT
+
+    # Try LLM-powered FOMO Agent first
+    try:
+        from tradebot.agents.fomo_agent import get_fomo_broadcast
+
+        messages = get_fomo_broadcast()
+        if messages and len(messages) >= 3:
+            FOMO_FAKE_CLAIM[:] = [
+                m
+                for m in messages
+                if "claim" in m.lower()
+                or "tarik" in m.lower()
+                or "komisi" in m.lower()
+                or "Rp" in m
+            ] or [messages[0]]
+            FOMO_FAKE_TP[:] = [
+                m for m in messages if "tp" in m.upper() or "profit" in m.lower() or "$" in m
+            ] or [messages[1] if len(messages) > 1 else messages[0]]
+            FOMO_FAKE_ROBOT[:] = [
+                m
+                for m in messages
+                if "robot" in m.lower()
+                or "ea" in m.upper()
+                or "trader" in m.lower()
+                or "pengguna" in m.lower()
+            ] or [messages[-1]]
+            return
+    except Exception as exc:
+        LOG.debug("FOMO Agent unavailable, using template: %s", exc)
+
+    # Fallback to deterministic template engine
     from tradebot.services.fomo_fake_stats import (
         get_fomo_claim_message,
-        get_fomo_tp_message,
         get_fomo_robot_message,
+        get_fomo_tp_message,
     )
-    global FOMO_FAKE_CLAIM, FOMO_FAKE_TP, FOMO_FAKE_ROBOT
+
     FOMO_FAKE_CLAIM[:] = [get_fomo_claim_message()]
     FOMO_FAKE_TP[:] = [get_fomo_tp_message()]
     FOMO_FAKE_ROBOT[:] = [get_fomo_robot_message()]
@@ -691,7 +726,7 @@ def fmt_pulse(pulse_data: dict) -> str:
     price = pulse_data.get("price", 0)
     verdict = pulse_data.get("verdict", "HOLD")
     consensus = pulse_data.get("consensus", {})
-    details = pulse_data.get("details", {})
+    pulse_data.get("details", {})
 
     lines = [
         "🔄 <b>MARKET PULSE DIAGNOSTIC</b>",
