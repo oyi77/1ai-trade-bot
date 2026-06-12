@@ -64,7 +64,7 @@ def is_duplicate(log, signal):
             # Cek time gap — minimal 180 menit (3 jam) untuk sinyal yang sama
             try:
                 t1 = datetime.fromisoformat(s.get("timestamp", "")).timestamp()
-                if now - t1 < 10800:  # 180 menit
+                if now - t1 < 5400:  # 90 menit (M15 siklus)
                     return True
             except:
                 pass  # kalau gak bisa parse, lanjut cek
