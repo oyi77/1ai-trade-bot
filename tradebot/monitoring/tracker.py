@@ -44,6 +44,9 @@ class TradeRecord:
     confidence: float = 0.0
     grade: str = ""
     strategy: str = ""
+    user_id: str = ""
+    currency: str = "USD"
+    platform: str = ""
 
 
 @dataclass
@@ -95,6 +98,9 @@ class TradeTracker:
         symbol: str = "XAUUSD",
         source: str = "ai",
         chat_id: str = "",
+        user_id: str = "",
+        currency: str = "USD",
+        platform: str = "",
     ) -> str | None:
         """Record a new trade when signal is executed.
 
@@ -580,10 +586,54 @@ class TradeTracker:
                 grade TEXT DEFAULT '',
                 chat_id TEXT DEFAULT '',
                 strategy TEXT DEFAULT '',
+                user_id TEXT DEFAULT '',
+                currency TEXT DEFAULT 'USD',
+                platform TEXT DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        LOG.debug("Trade tracker DB initialized")
+        # Schema migration: add new columns for existing databases
+        for col, col_type in [
+            ("user_id", "TEXT DEFAULT ''"),
+            ("currency", "TEXT DEFAULT 'USD'"),
+            ("platform", "TEXT DEFAULT ''"),
+        ]:
+            try:
+                self._storage.execute(f"ALTER TABLE trades ADD COLUMN {col} {col_type}")
+            except Exception:
+                pass  # Column already exists
+        # New tables
+        self._storage.execute("""
+            CREATE TABLE IF NOT EXISTS user_platforms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                label TEXT DEFAULT 'main',
+                email TEXT DEFAULT '',
+                password TEXT DEFAULT '',
+                credentials TEXT DEFAULT '{}',
+                currency TEXT DEFAULT 'USD',
+                broker_user_id TEXT DEFAULT '',
+                status TEXT DEFAULT 'active',
+                linked_at TEXT NOT NULL,
+                updated_at TEXT,
+                UNIQUE(user_id, platform, label)
+            )
+        """)
+        self._storage.execute("""
+            CREATE TABLE IF NOT EXISTS subscription_tiers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                platform TEXT DEFAULT '',
+                tier_type TEXT NOT NULL,
+                plan TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                started_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                auto_renew INTEGER DEFAULT 0,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+            )
+        """)
 
     def _get_open_trade(self, trade_id: str) -> dict | None:
         row = self._storage.fetchone(
@@ -645,6 +695,9 @@ class TradeTracker:
             source=row[14] or "",
             confidence=row[15] or 0.0,
             grade=row[16] or "",
+            user_id=row[17] if len(row) > 17 else "",
+            currency=row[18] if len(row) > 18 else "USD",
+            platform=row[19] if len(row) > 19 else "",
         )
 
     @staticmethod

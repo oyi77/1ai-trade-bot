@@ -5569,8 +5569,9 @@ def handle_command(cmd, text, chat_id, msg):
                 log_signal(sig)
             except: pass
             # ── Killzone enforcement: forex/metals outside London/NY = BLOCK ──
-            from datetime import datetime, timezone
-            h_now = datetime.now(timezone.utc).hour
+            from datetime import datetime, timezone, timedelta
+            _wib = timezone(timedelta(hours=7))
+            h_now = datetime.now(_wib).hour
             if disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
                 lkz, nykz = killzone(h_now)
                 if not lkz and not nykz:
