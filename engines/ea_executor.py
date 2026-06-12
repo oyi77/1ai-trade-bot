@@ -88,21 +88,32 @@ def load_state():
 def save_state(s):
     STATE_FILE.write_text(json.dumps(s, indent=2, default=str))
 
-# ── Price feed (SAME reference as handler: spot + static offset) ──
+# ── Price feed (symbol-aware) ──
 
 def fetch_price(symbol="XAUUSD"):
-    """Fetch XAUUSD: gold-api.com spot + XAUUSD_OFFSET.
-    MATCHES handler's fetch_price('gold') EXACTLY — same price space.
+    """Fetch live price for symbol. XAUUSD via gold-api.com + offset.
+    Other symbols via Yahoo Finance. Returns offset-adjusted price for
+    XAUUSD or raw price for everything else.
     """
+    sym = symbol.upper()
     try:
-        r = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=10)
-        spot = float(json.loads(r.read()).get("price", 0))
-        if 2000 < spot < 6000:
-            return round(spot + XAUUSD_OFFSET, 2)
+        if sym in ("XAUUSD", "GOLD"):
+            r = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=10)
+            spot = float(json.loads(r.read()).get("price", 0))
+            if 2000 < spot < 6000:
+                return round(spot + XAUUSD_OFFSET, 2)
+            logger.warning("XAU spot %.2f outside range", spot)
         else:
-            logger.warning("fetch_price: spot price %.2f outside valid range (2000-6000)", spot)
+            # Yahoo Finance for USOIL, BTCUSD, etc.
+            yf_sym = {"USOIL": "CL=F", "OIL": "CL=F", "BTCUSD": "BTC-USD",
+                      "ETHUSD": "ETH-USD"}.get(sym, sym)
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_sym}?interval=1m"
+            r = urllib.request.urlopen(url, timeout=10)
+            data = json.loads(r.read())
+            price = data["chart"]["result"][0]["meta"]["regularMarketPrice"]
+            return round(float(price), 2)
     except Exception as e:
-        logger.warning("fetch_price failed: %s", e)
+        logger.warning("fetch_price(%s) failed: %s", sym, e)
     return None
 
 def read_signal():
@@ -222,47 +233,49 @@ def main():
     while True:
         try:
             # ── 1. Check open positions ──
-            price = fetch_price()
+            new_positions = []
+            for pos in state.get("positions", []):
+                sym = pos.get("symbol", "XAUUSD")
+                price = fetch_price(sym)
+                if not price:
+                    new_positions.append(pos)
+                    continue
+                result = check_position(pos, price)
+                if result:
+                    reason, close_price = result
+                    is_loss = reason == "SL_HIT"
+                    pnl = _pnl_from_pips(
+                        pos["entry"], close_price,
+                        pos.get("symbol", "XAUUSD"), is_loss
+                    )
+                    pos["status"] = reason
+                    pos["close_price"] = close_price
+                    pos["close_time"] = wib_now().isoformat()
+                    pos["pnl"] = round(pnl, 2)
 
-            if price and state["positions"]:
-                new_positions = []
-                for pos in state["positions"]:
-                    result = check_position(pos, price)
-                    if result:
-                        reason, close_price = result
-                        is_loss = reason == "SL_HIT"
-                        pnl = _pnl_from_pips(
-                            pos["entry"], close_price,
-                            pos.get("symbol", "XAUUSD"), is_loss
-                        )
-                        pos["status"] = reason
-                        pos["close_price"] = close_price
-                        pos["close_time"] = wib_now().isoformat()
-                        pos["pnl"] = round(pnl, 2)
+                    # Pips for logging
+                    ps = _pip_size(pos.get("symbol", "XAUUSD"))
+                    pips_closed = abs(pos["entry"] - close_price) / ps
 
-                        # Pips for logging
-                        ps = _pip_size(pos.get("symbol", "XAUUSD"))
-                        pips_closed = abs(pos["entry"] - close_price) / ps
+                    emoji = "🟢" if reason == "TP_HIT" else "🔴"
+                    logger.info(
+                        f"{emoji} CLOSED: {pos['action']} {pos.get('symbol','?')} | {reason} | "
+                        f"PnL=${pos['pnl']:.2f} ({pips_closed:.1f} pip) | "
+                        f"Entry=${pos['entry']:.2f} → Close=${close_price:.2f} "
+                        f"(SL=${pos['sl']:.2f} TP=${pos['tp']:.2f})"
+                    )
+                    if reason == "TP_HIT":
+                        logger.info("🎉 TP HIT! CUAN! 🎉")
 
-                        emoji = "🟢" if reason == "TP_HIT" else "🔴"
-                        logger.info(
-                            f"{emoji} CLOSED: {pos['action']} {pos.get('symbol','?')} | {reason} | "
-                            f"PnL=${pos['pnl']:.2f} ({pips_closed:.1f} pip) | "
-                            f"Entry=${pos['entry']:.2f} → Close=${close_price:.2f} "
-                            f"(SL=${pos['sl']:.2f} TP=${pos['tp']:.2f})"
-                        )
-                        if reason == "TP_HIT":
-                            logger.info("🎉 TP HIT! CUAN! 🎉")
+                    state["closed"].append(pos)
+                    state["total_pnl"] += pos["pnl"]
 
-                        state["closed"].append(pos)
-                        state["total_pnl"] += pos["pnl"]
-
-                        # ── Write to trade_result.json (handler picks up for broadcast) ──
-                        _write_trade_result(pos, reason)
-                    else:
-                        new_positions.append(pos)
-                state["positions"] = new_positions
-                save_state(state)
+                    # ── Write to trade_result.json (handler picks up for broadcast) ──
+                    _write_trade_result(pos, reason)
+                else:
+                    new_positions.append(pos)
+            state["positions"] = new_positions
+            save_state(state)
 
             # ── 2. Check for new signals ──
             if SIGNAL_FILE.exists():
@@ -292,9 +305,10 @@ def main():
 
                         # ── SLIPPAGE GUARD: re-fetch live price before execution ──
                         sig_entry = sig.get("entry", 0) or 0
-                        live_check = fetch_price()
+                        sig_symbol = sig.get("symbol", "XAUUSD")
+                        live_check = fetch_price(sig_symbol) if sig_symbol else None
                         if live_check and sig_entry:
-                            pip_s = 0.10  # XAUUSD
+                            pip_s = _pip_size(sig_symbol)
                             drift_pips = abs(live_check - sig_entry) / pip_s
                             if drift_pips > 15:
                                 logger.warning(
@@ -334,13 +348,15 @@ def main():
             # ── 3. Status heartbeat ──
             if state["positions"]:
                 p = state["positions"][0]
-                current = f"${price:.2f}" if price else "N/A"
+                hb_sym = p.get("symbol", "XAUUSD")
+                hb_price = fetch_price(hb_sym)
+                current = f"${hb_price:.2f}" if hb_price else "N/A"
                 pnl_est = ""
-                if price and p["entry"]:
+                if hb_price and p["entry"]:
                     direction = 1 if p["action"] == "BUY" else -1
-                    pnl_est = f" | Est.PnL=${(price - p['entry']) * direction:.2f}"
+                    pnl_est = f" | Est.PnL=${(hb_price - p['entry']) * direction:.2f}"
                 logger.info(
-                    f"💼 {p['action']} @ ${p['entry']:.2f} | Current={current}{pnl_est} | "
+                    f"💼 {p['action']} {hb_sym} @ ${p['entry']:.2f} | Current={current}{pnl_est} | "
                     f"SL=${p['sl']:.2f} TP=${p['tp']:.2f}"
                 )
 
