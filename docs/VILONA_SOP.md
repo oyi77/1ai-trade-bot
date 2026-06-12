@@ -275,5 +275,50 @@ Setiap TP kena, sistem simpan:
 
 ---
 
+## 12. AUTO-EXECUTION ENGINE SIGNAL 🤖⚡
+
+> **Setiap /signal yang lulus Quality Gate → auto-execute ke EA Bridge**
+
+### 12.1 Alur Eksekusi
+
+```
+User ketik /signal xauusd
+    ↓
+run_engine_consensus() → MTF Matrix + Quality Gate
+    ↓ (lolos grade A/B, conf ≥65%, RR ≥1:1.5)
+compute_signal() → {action, entry, sl, tp, grade, confidence}
+    ↓
+post_signal_to_bridge(sig, 0, disp)
+    ├─ write ea_signal.json → EA executor pick up
+    ├─ open_trade() → trade_tracker record
+    └─ POST /signal → bridge → EA poll → eksekusi MT5
+```
+
+### 12.2 Quality Gate Bridge
+
+Bridge punya quality gate sendiri sebelum eksekusi:
+- **Confidence ≥ 65%** — sinyal lemah ditolak
+- **RR ≥ 1:1.5** — risk/reward minimal
+- **SL on correct side** — BUY: SL < entry, SELL: SL > entry
+- **Crypto bypass** — BTCUSD/ETHUSD 24/7 via SMC (no killzone)
+
+### 12.3 Yang Auto-Execute
+
+| Sumber | Status |
+|---|---|
+| `/signal` command (trigger user) | ✅ Auto-post ke bridge + open_trade |
+| Mechanical signal (scan loop) | ✅ Auto-post ke bridge + open_trade |
+| AI signal (premium) | ✅ Auto-post ke bridge + open_trade |
+
+### 12.4 Git & Brain
+
+- Commit: `031b110` — `feat: auto-execute /signal to bridge`
+- Brain: auto-execution SOP
+
+> **PELANGGARAN**: Jangan hapus `post_signal_to_bridge()` dari command handler.
+> Signal yg lolos quality gate WAJIB dieksekusi — display-only = buang kesempatan.
+
+---
+
 *Version: 1.0 — 12 June 2026*
 *Owner: Vilona Engineering*
