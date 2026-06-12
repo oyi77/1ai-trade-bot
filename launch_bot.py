@@ -5,8 +5,16 @@ Replaces: scripts/vilona_tradefx_handler.py (legacy, 5844 LOC)
 Uses: tradebot/bots/platforms/vilona/VilonaBot (unified, mixin-based)
 """
 
-import json, logging, os, sys, time, urllib.request
+import json
+import logging
+import os
+import sys
+import urllib.request
 from pathlib import Path
+
+import dotenv
+
+dotenv.load_dotenv(Path(__file__).resolve().parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
@@ -25,6 +33,23 @@ LOG = logging.getLogger("vilona-bot-launcher")
 
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 OFFSET_FILE = Path(__file__).resolve().parent / "data" / "offset.txt"
+BOT_LOCK = "/tmp/vilona_bot.lock"
+
+
+def acquire_bot_lock() -> bool:
+    """Acquire PID lock to prevent duplicate bot processes. Returns True if lock acquired."""
+    if os.path.exists(BOT_LOCK):
+        try:
+            with open(BOT_LOCK) as f:
+                old_pid = int(f.read().strip())
+            os.kill(old_pid, 0)
+            LOG.warning("⚠️ Bot already running (PID %s) — EXITING", old_pid)
+            return False
+        except (OSError, ValueError):
+            os.remove(BOT_LOCK)
+    with open(BOT_LOCK, "w") as f:
+        f.write(str(os.getpid()))
+    return True
 
 
 def load_offset() -> int:
@@ -41,6 +66,10 @@ def save_offset(offset: int) -> None:
 
 def main():
     LOG.info("VilonaBot launcher starting...")
+
+    if not acquire_bot_lock():
+        LOG.critical("Duplicate bot detected — exiting to prevent double-polling")
+        sys.exit(1)
 
     from tradebot.bots.platforms.vilona import VilonaBot
 

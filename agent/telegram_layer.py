@@ -89,7 +89,13 @@ class TelegramLayer:
             if handler:
                 resp = await handler(parts[1:], chat_id)
                 if resp:
-                    await self.send(chat_id, resp)
+                    if cmd in ("start", "help"):
+                        from agent.menu import build_kb
+                        is_admin = chat_id in [str(x) for x in os.environ.get("ADMIN_USER_IDS", "157228659,5220170786").split(",")]
+                        menu_name = "admin" if is_admin else "main"
+                        await self.send(chat_id, resp, buttons=build_kb(menu_name))
+                    else:
+                        await self.send(chat_id, resp)
             else:
                 await self.send(chat_id, "❌ Command tidak dikenal. Ketik /start")
         except Exception as e:

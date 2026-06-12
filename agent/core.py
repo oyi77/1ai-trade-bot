@@ -683,7 +683,7 @@ async def handle_donate_callback(data: str, chat_id: str) -> str:
             f"━━━━━━━━━━━━━━━━\n"
             f"Terima kasih! Hubungi admin @codergaboets\n"
             f"untuk instruksi pembayaran.\n\n"
-            f"🔥 <i>Server AI butuh {'kopi' tier-based subscription}</i>"
+            f"🔥 <i>Server AI butuh kopi untuk tetap menyala 24/7</i>"
         )
     return "💳 Payment: hubungi admin @codergaboets"
 

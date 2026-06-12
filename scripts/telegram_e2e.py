@@ -7,7 +7,7 @@ from telethon import TelegramClient
 api_id = 23647272
 api_hash = "1f69a4e0f03e5f51ddfa5b67ac7b5c49"
 session_path = os.path.expanduser("~/.openclaw/workspace/vilona_session")
-bot_username = "berkahkaryaforexbotbot"
+bot_username = "agent_1ai2_bot"
 
 
 async def test_command(client, command, expected_substrings):
@@ -48,14 +48,14 @@ async def main():
     print("Telethon session authorized. Running E2E Telegram Bot Command Tests...\n")
 
     tests = [
-        ("/start", ["revolusi trading", "markas besar", "/signal"]),
-        ("/signal", ["mtf matrix", "verdict", "entry", "sl", "tp"]),
+        ("/start", ["1ai trading", "agent", "selamat datang"]),
+        ("/signal", ["mtf", "matrix", "verdict"]),
         ("/levels", ["level", "snr", "fibo"]),
-        ("/zones", ["order block", "fvg"]),
-        ("/structure", ["structure", "bos", "choch"]),
+        ("/zones", ["liquidity", "zones", "gaps"]),
+        ("/structure", ["market", "structure", "trend"]),
         ("/session", ["session", "level"]),
         ("/mykey", ["license", "key"]),
-        ("/subscribe", ["subscription", "free", "pro"]),
+        ("/donate", ["pilih", "nominal", "subscribe"]),
     ]
 
     success = True
