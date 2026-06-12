@@ -147,25 +147,12 @@ class UnifiedBot(VilonaBot):
             from telegram import BotCommand
             commands = [
                 BotCommand("start", "📖 Mulai bot & Tampilkan menu utama"),
-                BotCommand("help", "📚 Panduan & Semua perintah"),
-                BotCommand("signal", "🎯 Sinyal live (Crypto, Forex, Indices)"),
-                BotCommand("mtf", "🧬 Analisis multi-timeframe (MTF)"),
-                BotCommand("engines", "🔧 Pembacaan engine consensus"),
-                BotCommand("dashboard", "📊 Buka live dashboard web"),
-                BotCommand("analyze", "🧠 Analisis AI & Scan pasar"),
-                BotCommand("price", "💰 Cek harga ticker real-time"),
-                BotCommand("mapping", "📐 Mapping harian & level S/R"),
-                BotCommand("levels", "🏛 SnR + FIBO level kunci"),
-                BotCommand("news", "📰 Grok News — Sentiment intel pasar"),
-                BotCommand("killzone", "🎯 Trading sessions & volume killzones"),
-                BotCommand("zones", "🧲 Supply/Demand & FVG scanner"),
-                BotCommand("structure", "🏗 Struktur pasar (BOS/CHoCH)"),
-                BotCommand("stier", "💀 S-TIER zone confluence scanner"),
-                BotCommand("subscribe", "⭐ Langganan PRO/ELITE/LIFETIME"),
-                BotCommand("status", "🛡 Cek kuota & status akun"),
-                BotCommand("mykey", "🔑 Cek/Kelola Lisensi EA"),
-                BotCommand("affiliate", "🤝 Join affiliate & komisi"),
-                BotCommand("whitelabel", "🌐 Buat whitelabel bot trading sendiri"),
+                BotCommand("help", "📚 Panduan & Bantuan penggunaan"),
+                BotCommand("signal", "🎯 Generate sinyal trading (CEX, Forex, dll)"),
+                BotCommand("price", "💰 Cek harga real-time (CEX, Forex, dll)"),
+                BotCommand("status", "🛡 Cek kuota & status akun aktif"),
+                BotCommand("subscribe", "⭐ Upgrade langganan PRO/ELITE/LIFETIME"),
+                BotCommand("dashboard", "📊 Akses Web Dashboard"),
             ]
             await self._app.bot.set_my_commands(commands)
             LOG.info("✅ Telegram commands menu updated successfully via set_my_commands")
