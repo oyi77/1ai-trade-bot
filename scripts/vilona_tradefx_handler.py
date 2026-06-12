@@ -1692,6 +1692,89 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     return sig, reason
 
 
+# ── SnR PROXIMITY CHECK ──
+def _snr_proximity_check(price, pip_s, ohlcv_bars=None, display="XAUUSD"):
+    """Check if price is within 0.3% of a Daily/4H Support or Resistance level.
+    
+    Returns (snr_level, snr_type, distance_pct, zone_lo, zone_hi) or None.
+    """
+    try:
+        if not ohlcv_bars or len(ohlcv_bars) < 20:
+            return None
+        
+        # ── Find swing highs/lows from last 20-60 bars ──
+        n_bars = min(len(ohlcv_bars), 60)
+        bars = ohlcv_bars[-n_bars:]
+        
+        highs = [float(b.get("high", b.get("h", 0))) for b in bars]
+        lows = [float(b.get("low", b.get("l", 0))) for b in bars]
+        closes = [float(b.get("close", b.get("c", 0))) for b in bars]
+        
+        # Find swing points (local maxima/minima with 3-bar lookback)
+        swings_high = []
+        swings_low = []
+        for i in range(3, len(highs) - 3):
+            if highs[i] == max(highs[i-3:i+4]):
+                swings_high.append(highs[i])
+            if lows[i] == min(lows[i-3:i+4]):
+                swings_low.append(lows[i])
+        
+        # Merge + deduplicate (cluster within 0.2%)
+        def _cluster_levels(levels):
+            if not levels:
+                return []
+            sorted_lvls = sorted(set(round(l, 2) for l in levels))
+            clusters = []
+            current = [sorted_lvls[0]]
+            for l in sorted_lvls[1:]:
+                if abs(l - current[-1]) / l < 0.002:
+                    current.append(l)
+                else:
+                    clusters.append(sum(current) / len(current))
+                    current = [l]
+            clusters.append(sum(current) / len(current))
+            return clusters
+        
+        resistance_levels = _cluster_levels(swings_high)
+        support_levels = _cluster_levels(swings_low)
+        
+        # Check proximity: within 0.3% of any level
+        best_level = None
+        best_type = None
+        best_dist = float('inf')
+        
+        for r in resistance_levels:
+            dist = abs(price - r) / price
+            if dist < 0.003 and dist < best_dist:  # 0.3%
+                best_level = r
+                best_type = "RESISTANCE"
+                best_dist = dist
+        
+        for s in support_levels:
+            dist = abs(price - s) / price
+            if dist < 0.003 and dist < best_dist:
+                best_level = s
+                best_type = "SUPPORT"
+                best_dist = dist
+        
+        if best_level is None:
+            return None
+        
+        # Build SnR zone (±2 pip for XAUUSD, ±0.5 pip for others)
+        zone_padding = 2.0 * pip_s if display in ("XAUUSD", "GOLD") else 1.0 * pip_s
+        if best_type == "SUPPORT":
+            zone_lo = best_level - zone_padding * 0.5
+            zone_hi = best_level + zone_padding * 1.5
+        else:
+            zone_lo = best_level - zone_padding * 1.5
+            zone_hi = best_level + zone_padding * 0.5
+        
+        return (best_level, best_type, best_dist, round(zone_lo, 2), round(zone_hi, 2))
+    except Exception as e:
+        logger.debug(f"SnR proximity check error: {e}")
+        return None
+
+
 # ── AI Models ──
 SYSTEM_PROMPT = """Kamu adalah Vilona Trade FX — Full-Stack Institutional AI Trading System.
 Senior Hedge Fund Portfolio Manager menganalisis market dengan data REAL.
@@ -6442,21 +6525,66 @@ def auto_analyze_loop():
                     conf = conf / 100
                 stier_sig["confidence"] = conf
 
-                # Format as S-TIER HIGH CONVICTION signal
+                # ── 🔬 SnR PROXIMITY UPGRADE: S-TIER + Daily/4H SnR = GOD TIER ──
+                is_snr_boosted = False
+                snr_level = None
+                snr_type = None
+                try:
+                    ohlcv_snr = _fetch_ohlcv_for_ai(pair, keep=60)
+                    pip_sz = 0.10 if disp in ("XAUUSD","GOLD") else (0.01 if disp=="USOIL" else 1.0)
+                    snr_result = _snr_proximity_check(price, pip_sz, ohlcv_snr, disp)
+                    if snr_result:
+                        snr_level, snr_type, snr_dist, snr_zone_lo, snr_zone_hi = snr_result
+                        # Validate: S-TIER direction must match SnR type
+                        # SELL near RESISTANCE = valid | BUY near SUPPORT = valid
+                        dir_ok = (action == "SELL" and snr_type == "RESISTANCE") or (action == "BUY" and snr_type == "SUPPORT")
+                        if dir_ok:
+                            is_snr_boosted = True
+                            # Replace entry zone with SnR zone (tighter, proven level)
+                            stier_sig["entry"] = round(snr_level, 2)
+                            stier_sig["zone_lo"] = snr_zone_lo
+                            stier_sig["zone_hi"] = snr_zone_hi
+                            stier_sig["entry_mode"] = "zone"
+                            # Tighter SL: below SnR zone (not below entry)
+                            zone_margin = 3.0 * pip_sz
+                            if action == "BUY":
+                                stier_sig["sl"] = round(snr_zone_lo - zone_margin, 2)
+                            else:
+                                stier_sig["sl"] = round(snr_zone_hi + zone_margin, 2)
+                            stier_sig["grade"] = "S+"
+                            stier_sig["source"] = "stier-snr-god-tier"
+                            stier_sig["confidence"] = min(0.97, conf + 0.05)
+                            stier_sig = _clamp_sltp(stier_sig, disp)
+                            logger.info(f"🔬 S-TIER+ SnR [{disp}]: {action} @ ${snr_level:.2f} | "
+                                        f"{snr_type} dist={snr_dist*100:.2f}% | zone=[{snr_zone_lo:.2f}-{snr_zone_hi:.2f}]")
+                except Exception as snre:
+                    logger.debug(f"SnR upgrade error [{disp}]: {snre}")
+
+                # Format as S-TIER signal (upgraded if SnR proximity confirmed)
+                signal_label = "💀 S-TIER+ SnR" if is_snr_boosted else "💀 S-TIER HIGH CONVICTION"
                 stier_text = fmt_signal(stier_sig, price, dxy, h, disp, "$")
                 stier_text = stier_text.replace(
-                    "SINYAL SELL", "💀 S-TIER HIGH CONVICTION SELL"
+                    "SINYAL SELL", f"{signal_label} SELL"
                 ).replace(
-                    "SINYAL BUY", "💀 S-TIER HIGH CONVICTION BUY"
+                    "SINYAL BUY", f"{signal_label} BUY"
                 ).replace(
-                    "MARKET PULSE", "💀 S-TIER HIGH CONVICTION"
+                    "MARKET PULSE", signal_label
                 )
                 stier_text += (
                     "\n━━━━━━━━━━━━━━━━━━━━━━\n"
                     "🔥 <b>TRIPLE CONFLUENCE DETECTED</b>\n"
                     "   Breaker + OB/FVG + Double Sweep\n"
-                    "   🎯 Near-100% Accuracy — Highest Conviction Setup\n"
                 )
+                if is_snr_boosted:
+                    stier_text += (
+                        f"🔬 <b>SnR CONFIRMED — {snr_type}</b>\n"
+                        f"   Entry zone = Daily/4H {snr_type.lower()} @ ${snr_level:.2f}\n"
+                        f"   SL di bawah zone — GOD TIER precision\n"
+                    )
+                else:
+                    stier_text += (
+                        "   🎯 Near-100% Accuracy — Highest Conviction Setup\n"
+                    )
 
                 # ── PREMIUM-ONLY: S-TIER signals only for paying members ──
                 stier_entry = stier_sig.get("entry", price) or 0
@@ -6475,17 +6603,18 @@ def auto_analyze_loop():
                             time.sleep(0.3)  # rate limit safety
                         except Exception as dme:
                             logger.warning(f"S-TIER DM failed for {row['chat_id']}: {dme}")
-                    logger.info(f"💀 S-TIER DM'd to {premium_count} premium members")
+                    logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ''} DM'd to {premium_count} premium members")
                 except Exception as me:
                     logger.warning(f"S-TIER premium DM error: {me}")
                 # 2. Teaser to public channel (no entry/SL/TP details)
                 try:
+                    tease_label = "💀 S-TIER+ SnR" if is_snr_boosted else "💀 S-TIER HIGH CONVICTION"
                     tease = (
-                        f"💀 <b>S-TIER HIGH CONVICTION — {action} {disp}</b>\n"
+                        f"<b>{tease_label} — {action} {disp}</b>\n"
                         f"━━━━━━━━━━━━━━━━━━━━━━\n"
                         f"🔥 Triple Confluence terdeteksi!\n"
                         f"   Breaker + OB/FVG + Double Sweep\n"
-                        f"🎯 Near-100% Accuracy Setup\n"
+                        + (f"🔬 SnR CONFIRMED — {snr_type} @ ${snr_level:.2f}\n" if is_snr_boosted else f"🎯 Near-100% Accuracy Setup\n") +
                         f"━━━━━━━━━━━━━━━━━━━━━━\n"
                         f"👑 <b>PREMIUM ONLY</b> — Signal dikirim ke {premium_count} subscriber.\n"
                         f"⭐ Upgrade ke PRO/ELITE untuk akses S-TIER:\n"
@@ -6496,7 +6625,7 @@ def auto_analyze_loop():
                     pass
                 # 3. Post to bridge for EA execution
                 post_signal_to_bridge(stier_sig, price, disp)
-                logger.info(f"💀 S-TIER HIGH CONVICTION [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%}")
+                logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ' HIGH CONVICTION'} [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%}")
                 log["signals_sent"] = log.get("signals_sent", 0) + 1
                 time.sleep(60)
                 continue

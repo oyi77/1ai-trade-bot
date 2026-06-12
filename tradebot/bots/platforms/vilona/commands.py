@@ -363,20 +363,28 @@ class CommandHandlersMixin(BaseBot):
                 action = t.get("action", "?")
                 sym = t.get("symbol", "?")
                 close_t = t.get("close_time", "")
-
             is_win = outcome in ("TP_HIT", "WON")
             is_loss = outcome in ("SL_HIT", "LOST")
             emoji = "✅" if is_win else "❌" if is_loss else "⚪"
             close_t_str = str(close_t)[:16].replace("T", " ")
-            # For binary options, show stake instead of pips
+            # Detect currency based on stake value
             stake_val = t.stake if hasattr(t, "stake") else t.get("stake", 0)
-            if stake_val > 1:
+            if stake_val >= 100:
+                # IDR currency (binary options)
                 lines.append(
                     f"{emoji} {action} {sym} | {outcome}\n"
-                    f"   Stake: ${stake_val:,.0f} | P&L: ${usd:+.2f} (Rp {idr:+,})\n"
+                    f"   Stake: Rp {stake_val:,.0f} | P&L: ${usd:+.2f} (Rp {idr:+,})\n"
+                    f"   {close_t_str}"
+                )
+            elif stake_val > 0:
+                # USD currency (forex)
+                lines.append(
+                    f"{emoji} {action} {sym} | {outcome}\n"
+                    f"   Stake: ${stake_val:.2f} | P&L: ${usd:+.2f} (Rp {idr:+,})\n"
                     f"   {close_t_str}"
                 )
             else:
+                # No stake info
                 lines.append(
                     f"{emoji} {action} {sym} | {outcome}\n"
                     f"   Pips: {pips:+.1f} | ${usd:+.2f} (Rp {idr:+,})\n"
@@ -417,19 +425,10 @@ class CommandHandlersMixin(BaseBot):
         total_stake = recap.get("total_stake", 0)
         perf = "🟢 PROFIT" if micro > 0 else "🔴 LOSS" if micro < 0 else "⚪ FLAT"
 
-        lines = [
-            "📊 <b>REKAP SINYAL HARIAN</b>",
-            f"🗓 {date_display}",
-            "━━━━━━━━━━━━━━━━", "",
-            f"📡 <b>Total Sinyal:</b> {total}",
-            f"✅ Win: {wins} | ❌ Loss: {losses} | 📊 WR: {wr:.1f}%", "",
-            "━━━━━━━━━━━━━━━━",
-        ]
-
         # For binary options, show stake and profit instead of pips
         if total_stake > 0:
             lines.extend([
-                f"💰 <b>Total Stake:</b> ${total_stake:,.2f} (Rp {int(total_stake * USD_IDR):,})",
+                f"💰 <b>Total Stake:</b> Rp {total_stake:,.0f}",
                 f"📈 <b>Net Profit:</b> ${micro:+.2f} (Rp {micro_idr:+,})",
                 f"📊 <b>Return:</b> {return_pct:+.1f}%", "",
             ])
@@ -447,7 +446,7 @@ class CommandHandlersMixin(BaseBot):
                 if stats.get("stake", 0) > 0:
                     # Binary option display
                     lines.append(f"   {p_emoji} {sym}: {stats.get('total', 0)} sinyal | "
-                                 f"Stake: ${stats.get('stake', 0):,.0f} | "
+                                 f"Stake: Rp {stats.get('stake', 0):,.0f} | "
                                  f"Net: ${stats.get('profit_usd', 0):+.2f}")
                 else:
                     # Forex display
