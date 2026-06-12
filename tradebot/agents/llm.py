@@ -37,6 +37,12 @@ PROVIDERS: list[dict[str, str]] = [
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "default_model": "gemini-2.0-flash",
     },
+    {
+        "name": "grok",
+        "env_key": "GROK_API_KEY",
+        "base_url": "https://api.x.ai/v1",
+        "default_model": "grok-2-latest",
+    },
 ]
 
 

@@ -7,8 +7,7 @@ import json
 import logging
 import re
 import time
-import urllib.request
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from typing import Any
 
 from tradebot.bots.base import BaseBot
@@ -67,7 +66,9 @@ class AnalysisHandlersMixin(BaseBot):
                             continue
                         if not hasattr(self, "_signal_daily_count"):
                             self._signal_daily_count = {}
-                        self._signal_daily_count[daily_key] = self._signal_daily_count.get(daily_key, 0) + 1
+                        self._signal_daily_count[daily_key] = (
+                            self._signal_daily_count.get(daily_key, 0) + 1
+                        )
 
                         self._posted_signals[pair] = time.time()
                         price = sig.get("entry", 0)
@@ -169,9 +170,7 @@ class AnalysisHandlersMixin(BaseBot):
         try:
             from scripts.vilona_tradefx_handler import detect_stier_zone
 
-            stier_sig, stier_reason = detect_stier_zone(
-                display, display, price, ohlcv_bars
-            )
+            stier_sig, stier_reason = detect_stier_zone(display, display, price, ohlcv_bars)
             if stier_sig and stier_sig.get("action") in ("BUY", "SELL"):
                 LOG.info(
                     "🎯 Auto S-TIER [%s]: %s @ %.2f | Grade=%s",
@@ -361,20 +360,35 @@ class AnalysisHandlersMixin(BaseBot):
         )
 
         is_free_tier = tier == "starter" and not premium
+        # ── Multi-AI Ensemble via unified _call_llm ──
+        # Starter: DeepSeek only. Pro: DeepSeek + GPT-4o. Elite: All 3 + Grok news.
 
-        # 1. DeepSeek
-        deepseek = await self._call_deepseek(prompt)
+        deepseek = await self._call_llm(prompt, prefer="deepseek")
 
-        # 2. GPT-4o
         gpt4o = None
         if not is_free_tier:
-            gpt4o = await self._call_openai(prompt, model="gpt-4o")
+            gpt4o = await self._call_llm(prompt, prefer="openai", model="gpt-4o")
 
-        # 3. Grok News (Twitter Context)
         grok_news = None
         if not is_free_tier:
-            grok_news = await self._call_grok_news(display, price)
-
+            news_prompt = (
+                f"Search X/Twitter for the LATEST breaking news, macro events, or market-moving "
+                f"headlines about {display} (currently ${price:.2f}). "
+                f"Focus on: FOMC/Fed speakers, NFP/CPI/economic data, geopolitical events, "
+                f"major institutional moves, or sentiment shifts in the last 2 hours.\n\n"
+                f"Return ONLY a structured JSON with these fields:\n"
+                f'{{"headline": "1 most impactful headline", '
+                f'"sentiment": "BULLISH/BEARISH/NEUTRAL", '
+                f'"impact": "HIGH/MED/LOW", '
+                f'"detail": "2-3 sentence context explaining WHY this matters for {display}"}}\n\n'
+                f"Be CONCISE. Max 150 words total. If no significant news, headline='No major catalysts'."
+            )
+            grok_news = await self._call_llm(
+                news_prompt,
+                system_prompt="",  # No trading system prompt for news
+                prefer="grok",
+                max_tokens=300,
+            )
         token_total = sum(v.get("total", 0) for v in self._ai_token_usage.values())
         token_prompt = sum(v.get("prompt", 0) for v in self._ai_token_usage.values())
         token_completion = sum(v.get("completion", 0) for v in self._ai_token_usage.values())
@@ -399,22 +413,39 @@ class AnalysisHandlersMixin(BaseBot):
         sell_votes = [s for s in signals if s["sig"]["action"] == "SELL"]
 
         # ── Mechanical validation helper ──
-        def _mech_vet(sig_action: str, ohlcv: list | None, price_f: float) -> tuple[float | None, str | None]:
+        def _mech_vet(
+            sig_action: str, ohlcv: list | None, price_f: float
+        ) -> tuple[float | None, str | None]:
             """Returns (confidence_multiplier, warning) or (None, msg) to block."""
             if not ohlcv or len(ohlcv) < 30:
                 return 1.0, None
             try:
                 from scripts.vilona_tradefx_handler import detect_stier_zone
+
                 v_sig, _ = detect_stier_zone(display, display, price_f, ohlcv)
                 if v_sig and v_sig.get("action") in ("BUY", "SELL"):
                     v_grade = v_sig.get("grade", "B")
                     if v_grade in ("A", "S-TIER") and v_sig["action"] != sig_action:
-                        LOG.warning("MECH BLOCK: S-TIER %s vs AI %s %s", v_sig["action"], sig_action, display)
+                        LOG.warning(
+                            "MECH BLOCK: S-TIER %s vs AI %s %s",
+                            v_sig["action"],
+                            sig_action,
+                            display,
+                        )
                         return None, f"S-TIER {v_sig['action']} contradicts AI {sig_action}"
                     if v_grade in ("A", "S-TIER") and v_sig["action"] == sig_action:
-                        LOG.info("MECH BOOST: S-TIER %s confirms AI %s %s", v_sig["action"], sig_action, display)
+                        LOG.info(
+                            "MECH BOOST: S-TIER %s confirms AI %s %s",
+                            v_sig["action"],
+                            sig_action,
+                            display,
+                        )
                         return 1.3, f"S-TIER {v_sig['action']} confirms (+30%)"
-                if v_sig and v_sig.get("action") in ("BUY", "SELL") and v_sig["action"] != sig_action:
+                if (
+                    v_sig
+                    and v_sig.get("action") in ("BUY", "SELL")
+                    and v_sig["action"] != sig_action
+                ):
                     # Lower-grade contradiction — slash confidence
                     return 0.6, f"S-TIER {v_sig['action']} disagrees (-40%)"
             except Exception:
@@ -429,13 +460,17 @@ class AnalysisHandlersMixin(BaseBot):
             sentiment = grok.get("sentiment", "NEUTRAL")
             impact = grok.get("impact", "LOW")
             if impact == "HIGH":
-                if (sig_action == "BUY" and sentiment == "BEARISH") or \
-                   (sig_action == "SELL" and sentiment == "BULLISH"):
-                    LOG.warning("NEWS BLOCK: HIGH %s news contradicts %s %s", sentiment, sig_action, display)
+                if (sig_action == "BUY" and sentiment == "BEARISH") or (
+                    sig_action == "SELL" and sentiment == "BULLISH"
+                ):
+                    LOG.warning(
+                        "NEWS BLOCK: HIGH %s news contradicts %s %s", sentiment, sig_action, display
+                    )
                     return None, f"HIGH impact {sentiment} news contradicts {sig_action}"
                 if impact == "MEDIUM":
-                    if (sig_action == "BUY" and sentiment == "BEARISH") or \
-                       (sig_action == "SELL" and sentiment == "BULLISH"):
+                    if (sig_action == "BUY" and sentiment == "BEARISH") or (
+                        sig_action == "SELL" and sentiment == "BULLISH"
+                    ):
                         return 0.7, f"MEDIUM {sentiment} news reduces confidence (-30%)"
             return 1.0, None
 
@@ -506,7 +541,12 @@ class AnalysisHandlersMixin(BaseBot):
             # ── Solo quality gate: mechanical MUST NOT strongly disagree ──
             vet_conf, vet_warn = _mech_vet(sig["action"], ohlcv_data, price)
             if vet_conf is None:
-                LOG.warning("SOLO %s BLOCKED: S-TIER contradicts %s %s", best["name"], sig["action"], display)
+                LOG.warning(
+                    "SOLO %s BLOCKED: S-TIER contradicts %s %s",
+                    best["name"],
+                    sig["action"],
+                    display,
+                )
                 return None
             if vet_conf != 1.0:
                 sig["confidence"] = round(min(sig["confidence"] * vet_conf, conf_cap), 3)
@@ -515,8 +555,12 @@ class AnalysisHandlersMixin(BaseBot):
             # ── Grok news: solo signals are blocked by HIGH contradictory news ──
             news_conf, news_warn = _news_vet(sig["action"], grok_news)
             if news_conf is None:
-                LOG.warning("SOLO %s BLOCKED: HIGH impact %s news %s", best["name"],
-                            grok_news.get("sentiment", "?") if grok_news else "?", display)
+                LOG.warning(
+                    "SOLO %s BLOCKED: HIGH impact %s news %s",
+                    best["name"],
+                    grok_news.get("sentiment", "?") if grok_news else "?",
+                    display,
+                )
                 return None
             if news_conf != 1.0:
                 sig["confidence"] = round(sig["confidence"] * news_conf, 3)
@@ -613,117 +657,53 @@ class AnalysisHandlersMixin(BaseBot):
         except Exception:
             return None
 
-    async def _call_deepseek(self, prompt: str) -> dict[str, Any] | None:
-        key = self.deepseek_key
-        if not key:
-            return None
-        try:
-            req = urllib.request.Request(
-                "https://api.deepseek.com/v1/chat/completions",
-                data=json.dumps(
-                    {
-                        "model": "deepseek-chat",
-                        "max_tokens": 800,
-                        "temperature": 0.3,
-                        "messages": [
-                            {"role": "system", "content": self._build_system_prompt()},
-                            {"role": "user", "content": prompt},
-                        ],
-                    }
-                ).encode(),
-                headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
-            )
-            with urllib.request.urlopen(req, timeout=45) as r:
-                data = json.loads(r.read())
-                content = data["choices"][0]["message"]["content"]
-                usage = data.get("usage", {})
-                self._ai_token_usage["deepseek"] = {
-                    "prompt": usage.get("prompt_tokens", 0),
-                    "completion": usage.get("completion_tokens", 0),
-                    "total": usage.get("total_tokens", 0),
-                }
-                return self._extract_json(content)
-        except Exception as e:
-            LOG.warning("DeepSeek error: %s", e)
-            return None
+    async def _call_llm(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        prefer: str = "openai",
+        model: str | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 800,
+    ) -> dict[str, Any] | None:
+        """Unified LLM call via LangChain provider chain (replaces raw-HTTP calls).
 
-    async def _call_openai(self, prompt: str, model: str = "gpt-4o") -> dict[str, Any] | None:
-        key = self.openai_key
-        if not key:
-            return None
-        try:
-            messages = [
-                {"role": "system", "content": self._build_system_prompt()},
-                {"role": "user", "content": prompt},
-            ]
-            req = urllib.request.Request(
-                "https://api.openai.com/v1/chat/completions",
-                data=json.dumps(
-                    {"model": model, "max_tokens": 800, "temperature": 0.3, "messages": messages}
-                ).encode(),
-                headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
-            )
-            with urllib.request.urlopen(req, timeout=45) as r:
-                data = json.loads(r.read())
-                content = data["choices"][0]["message"]["content"]
-                usage = data.get("usage", {})
-                self._ai_token_usage["openai"] = {
-                    "prompt": usage.get("prompt_tokens", 0),
-                    "completion": usage.get("completion_tokens", 0),
-                    "total": usage.get("total_tokens", 0),
-                }
-                return self._extract_json(content)
-        except Exception as e:
-            LOG.warning("OpenAI error: %s", e)
-            return None
+        Uses get_llm() from tradebot.agents.llm which has auto-fallback
+        chain: OpenAI → DeepSeek → Gemini → Grok.
 
-    async def _call_grok_news(self, display: str, price: float) -> dict[str, Any] | None:
-        key = self.grok_api_key
-        if not key:
-            return None
+        Args:
+            prompt: User prompt for the LLM
+            system_prompt: Override system prompt (defaults to _build_system_prompt())
+            prefer: Provider preference ("openai", "deepseek", "grok", "gemini")
+            model: Override default model name
+            temperature: Sampling temperature (0-1)
+            max_tokens: Max output tokens
+
+        Returns:
+            Parsed JSON dict, or None on failure.
+        """
+        from tradebot.agents.llm import get_llm
+
         try:
-            news_prompt = (
-                f"Search X/Twitter for the LATEST breaking news, macro events, or market-moving "
-                f"headlines about {display} (currently ${price:.2f}). "
-                f"Focus on: FOMC/Fed speakers, NFP/CPI/economic data, geopolitical events, "
-                f"major institutional moves, or sentiment shifts in the last 2 hours.\n\n"
-                f"Return ONLY a structured JSON with these fields:\n"
-                f'{{"headline": "1 most impactful headline", '
-                f'"sentiment": "BULLISH/BEARISH/NEUTRAL", '
-                f'"impact": "HIGH/MED/LOW", '
-                f'"detail": "2-3 sentence context explaining WHY this matters for {display}"}}\n\n'
-                f"Be CONCISE. Max 150 words total. If no significant news, headline='No major catalysts'."
-            )
-            req = urllib.request.Request(
-                self.grok_url,
-                data=json.dumps(
-                    {
-                        "model": "grok-2-latest",
-                        "max_tokens": 300,
-                        "temperature": 0.3,
-                        "messages": [{"role": "user", "content": news_prompt}],
-                    }
-                ).encode(),
-                headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
-            )
-            with urllib.request.urlopen(req, timeout=25) as r:
-                data = json.loads(r.read())
-                content = data["choices"][0]["message"]["content"]
-                usage = data.get("usage", {})
-                self._ai_token_usage["grok"] = {
-                    "prompt": usage.get("prompt_tokens", 0),
-                    "completion": usage.get("completion_tokens", 0),
-                    "total": usage.get("total_tokens", 0),
-                }
-                news = self._extract_json(content)
-                if news and isinstance(news, dict):
-                    return news
-                return {
-                    "headline": content[:200],
-                    "sentiment": "NEUTRAL",
-                    "impact": "LOW",
-                    "detail": "",
-                }
+            llm = get_llm(model=model, temperature=temperature, prefer=prefer)
+            messages: list[dict[str, str]] = []
+            sp = system_prompt or self._build_system_prompt()
+            if sp:
+                messages.append({"role": "system", "content": sp})
+            messages.append({"role": "user", "content": prompt})
+
+            response = await llm.ainvoke(messages)
+            content = response.content if hasattr(response, "content") else str(response)
+
+            # Token usage from LangChain metadata
+            usage = getattr(response, "usage_metadata", None) or {}
+            self._ai_token_usage[prefer] = {
+                "prompt": usage.get("input_tokens", 0),
+                "completion": usage.get("output_tokens", 0),
+                "total": usage.get("total_tokens", 0),
+            }
+
+            return self._extract_json(content)
         except Exception as e:
-            LOG.warning("Grok News error: %s", e)
+            LOG.warning("LLM call failed (%s): %s", prefer, e)
             return None
