@@ -513,7 +513,7 @@ class VilonaBot(
                 except Exception as e2:
                     LOG.error("tg_send fallback failed: %s", e2)
             else:
-                LOG.error("tg_send failed: %s", e)
+                LOG.error("tg_send failed to %s: %s", target, e)
             return False
 
     async def _tg_send_video_file(self, chat_id: str, video: str) -> bool:
