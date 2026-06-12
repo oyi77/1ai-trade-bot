@@ -9,7 +9,7 @@ Absorbed from scripts/auto_signal_publisher.py.
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -170,6 +170,6 @@ class SignalPublisher:
         if sl:
             lines.append(f"🛡️ <b>SL:</b> {sl}")
         lines.append(
-            f"⏰ {datetime.now(datetime.UTC).strftime('%H:%M UTC')}"
+            f"⏰ {datetime.now(timezone.utc).strftime('%H:%M UTC')}"
         )
         return "\n".join(lines)

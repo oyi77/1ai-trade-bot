@@ -52,18 +52,17 @@ HISTORY_MENU: list[list[tuple[str, str]]] = [
 
 ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("cmd:status", "📊 Status"), ("cmd:subscribe", "⭐ Subscribe")],
-    [("menu:donate", "💚 Donate"), ("cmd:mykey", "🔑 My Key")],
+    [("menu:subscribe", "💚 Subscribe"), ("cmd:mykey", "🔑 My Key")],
     [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
     [("cmd:myid", "🆔 My ID"), ("cmd:trailing", "🏃 Trailing Status")],
     [("cmd:settings", "⚙️ Settings")],
     [("menu:main", "🔙 Back")],
 ]
 
-DONATE_MENU: list[list[tuple[str, str]]] = [
-    [("sub:pro", "☕️ Kopi (Rp 15K)")],
-    [("sub:pro", "🍱 Makan Siang (Rp 25K)")],
-    [("sub:elite", "🚀 Bensin Full (Rp 50K)")],
-    [("sub:lifetime", "💰 Nominal Bebas"), ("cancel_input", "❌ Batal")],
+SUBSCRIBE_MENU: list[list[tuple[str, str]]] = [
+    [("sub:pro", "⭐ PRO — Rp50K/bulan")],
+    [("sub:elite", "👑 ELITE — Rp150K/bulan")],
+    [("sub:lifetime", "💎 LIFETIME — Rp500K"), ("cancel_input", "❌ Batal")],
     [("menu:main", "🔙 Back")],
 ]
 
@@ -122,7 +121,7 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
         "market": MARKET_MENU,
         "history": HISTORY_MENU,
         "account": ACCOUNT_MENU,
-        "donate": DONATE_MENU,
+        "donate": SUBSCRIBE_MENU,
         "stockity": STOCKITY_MENU,
         "admin_panel": ADMIN_PANEL_MENU,
         "help": HELP_MENU,
@@ -158,7 +157,7 @@ def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> st
         "account": (
             "👤 <b>ACCOUNT</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Status, subscribe, donate, dan pengaturan."
+            "Status, subscribe, dan pengaturan."
         ),
         "donate": (
             "💚 <b>SUBSCRIBE — VILONA AI</b>\n"
@@ -201,7 +200,7 @@ __all__ = [
     "MARKET_MENU",
     "HISTORY_MENU",
     "ACCOUNT_MENU",
-    "DONATE_MENU",
+    "SUBSCRIBE_MENU",
     "STOCKITY_MENU",
     "ADMIN_PANEL_MENU",
     "HELP_MENU",

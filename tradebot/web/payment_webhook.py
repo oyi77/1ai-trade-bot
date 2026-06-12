@@ -22,14 +22,14 @@ from typing import Any
 
 LOG = logging.getLogger("tradebot.web.payment_webhook")
 
-DATA_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "vilona_tradefx"
-)
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "vilona_tradefx"
 STATE_PATH = DATA_DIR / "processed_callbacks.json"
 WHITELABEL_PATH = DATA_DIR / "whitelabel_config.json"
 
 TRIPAY_PRIVATE_KEY = os.environ.get("TRIPAY_PRIVATE_KEY", "")
-TELEGRAM_BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TOKEN", os.environ.get("TELEGRAM_BOT_TOKEN", ""))
+TELEGRAM_BOT_TOKEN = os.environ.get(
+    "VILONA_TRADEFX_TOKEN", os.environ.get("TELEGRAM_BOT_TOKEN", "")
+)
 
 
 def _load_processed() -> set[str]:
@@ -87,8 +87,13 @@ def _upgrade_member(chat_id: str, merchant_ref: str, tier: str = "pro") -> bool:
         tier_days = {"pro": 30, "elite": 30, "lifetime": 9999, "donor": 9999}
         days = tier_days.get(tier, 9999)
         activate_premium(str(chat_id), tier, days)
-        LOG.info("Upgraded user %s (ref: %s) to %s tier (%d days)",
-                 chat_id, merchant_ref, tier.upper(), days)
+        LOG.info(
+            "Upgraded user %s (ref: %s) to %s tier (%d days)",
+            chat_id,
+            merchant_ref,
+            tier.upper(),
+            days,
+        )
         return True
     except Exception as e:
         LOG.error("Failed to upgrade member %s: %s", chat_id, e)
@@ -114,6 +119,7 @@ def _fire_bemob_conversion(reference: str, amount: int, brand: str) -> None:
         return
     try:
         import urllib.request as ureq
+
         url = postback_url.format(
             reference=reference,
             amount=str(amount),
@@ -135,14 +141,19 @@ def _fire_meta_capi(chat_id: str, amount: int, brand: str) -> None:
         return
     try:
         import urllib.request as ureq
-        payload = json.dumps({
-            "data": [{
-                "event_name": "Purchase",
-                "event_time": int(time.time()),
-                "user_data": {"external_id": chat_id},
-                "custom_data": {"value": amount, "currency": "IDR"},
-            }],
-        }).encode()
+
+        payload = json.dumps(
+            {
+                "data": [
+                    {
+                        "event_name": "Purchase",
+                        "event_time": int(time.time()),
+                        "user_data": {"external_id": chat_id},
+                        "custom_data": {"value": amount, "currency": "IDR"},
+                    }
+                ],
+            }
+        ).encode()
         url = f"https://graph.facebook.com/v18.0/{pixel_id}/events?access_token={access_token}"
         req = ureq.Request(url, data=payload, headers={"Content-Type": "application/json"})
         ureq.urlopen(req, timeout=10)
@@ -198,11 +209,13 @@ def _send_telegram_notification(chat_id: str, brand: str, tier: str = "donor") -
         f"<i>Mari cetak profit bersama Vilona AI! 🚀</i>"
     )
 
-    payload = json.dumps({
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-    }).encode()
+    payload = json.dumps(
+        {
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+        }
+    ).encode()
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     try:
         req = ureq.Request(url, data=payload, headers={"Content-Type": "application/json"})
@@ -227,11 +240,14 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path == "/health":
-            self._send_json(200, {
-                "status": "ok",
-                "service": "payment-webhook",
-                "timestamp": time.time(),
-            })
+            self._send_json(
+                200,
+                {
+                    "status": "ok",
+                    "service": "payment-webhook",
+                    "timestamp": time.time(),
+                },
+            )
         else:
             self._send_json(404, {"error": "Not found"})
 
@@ -317,10 +333,13 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
             _fire_meta_capi(chat_id, amount, brand)
             _send_telegram_notification(chat_id, brand, tier)
 
-        self._send_json(200, {
-            "success": upgrade_ok,
-            "merchant_ref": merchant_ref,
-        })
+        self._send_json(
+            200,
+            {
+                "success": upgrade_ok,
+                "merchant_ref": merchant_ref,
+            },
+        )
 
 
 def start_webhook_server(host: str = "0.0.0.0", port: int = 8787) -> HTTPServer:

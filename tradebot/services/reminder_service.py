@@ -16,9 +16,7 @@ from pathlib import Path
 LOG = logging.getLogger("tradebot.services.reminder")
 
 WIB = timezone(timedelta(hours=7))
-DATA_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "vilona_tradefx"
-)
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "vilona_tradefx"
 STATE_PATH = DATA_DIR / "reminder_state.json"
 
 
@@ -139,17 +137,23 @@ async def send_bensin_reminders(bot_token: str) -> int:
             continue
 
         reminder = build_reminder(donor)
-        payload = json.dumps({
-            "chat_id": str(chat_id),
-            "text": reminder,
-            "parse_mode": "HTML",
-        }).encode()
+        payload = json.dumps(
+            {
+                "chat_id": str(chat_id),
+                "text": reminder,
+                "parse_mode": "HTML",
+            }
+        ).encode()
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
         try:
             req = ureq.Request(url, data=payload, headers={"Content-Type": "application/json"})
             ureq.urlopen(req, timeout=10)
-            LOG.info("Bensin reminder sent to user %s (days_since=%d)", chat_id, donor.get("days_since", 0))
+            LOG.info(
+                "Bensin reminder sent to user %s (days_since=%d)",
+                chat_id,
+                donor.get("days_since", 0),
+            )
             sent_count += 1
             already_sent.add(str(chat_id))
         except Exception as e:
@@ -157,6 +161,7 @@ async def send_bensin_reminders(bot_token: str) -> int:
 
         # Throttle: 1 second between DMs
         import asyncio
+
         await asyncio.sleep(1)
 
     state["last_week"] = current_week

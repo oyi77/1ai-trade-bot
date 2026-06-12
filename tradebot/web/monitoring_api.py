@@ -19,7 +19,7 @@ import logging
 import platform
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter
@@ -59,7 +59,7 @@ def wire_health_checks(fn: Callable[[], dict[str, Any]]) -> None:
 def _fmt_dt(ts: float | None) -> str:
     if ts is None or ts == 0:
         return ""
-    return datetime.fromtimestamp(ts, tz=datetime.UTC).isoformat()
+    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
 
 
 def _engine_health() -> list[dict[str, Any]]:
@@ -197,7 +197,7 @@ async def api_system_status():
         "brokers": _broker_status(),
         "metrics": _metrics_snapshot(),
         "extra": extra,
-        "timestamp": datetime.now(datetime.UTC).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 

@@ -16,9 +16,7 @@ from pathlib import Path
 LOG = logging.getLogger("tradebot.services.briefing")
 
 WIB = timezone(timedelta(hours=7))
-DATA_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "vilona_tradefx"
-)
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "vilona_tradefx"
 STATE_PATH = DATA_DIR / "briefing_state.json"
 
 GOLD_API_KEY = os.environ.get("GOLD_API_KEY", "")
@@ -50,13 +48,14 @@ def _mark_briefing_sent() -> None:
 
 def _fetch_gold_price() -> float | None:
     """Fetch XAUUSD spot price from gold-api.com."""
-    if not GOLD_API_KEY:
-        LOG.debug("GOLD_API_KEY not set")
-        return None
     try:
         import urllib.request as ureq
-        url = f"https://www.gold-api.com/api/XAU/USD?api_key={GOLD_API_KEY}"
-        with ureq.urlopen(url, timeout=10) as r:
+
+        req = ureq.Request(
+            "https://api.gold-api.com/price/XAU",
+            headers={"User-Agent": "VilonaPremarket/1.0"}
+        )
+        with ureq.urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode())
             price = data.get("price", 0)
             if price > 0:
@@ -71,6 +70,7 @@ def _fetch_dxy() -> float | None:
     """Fetch DXY index from Yahoo Finance (DX-Y.NYB)."""
     try:
         import urllib.request as ureq
+
         url = "https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?range=1d&interval=5m"
         headers = {"User-Agent": "Mozilla/5.0"}
         req = ureq.Request(url, headers=headers)
@@ -196,11 +196,13 @@ async def send_daily_briefing(
         return False
 
     for target in targets:
-        payload = json.dumps({
-            "chat_id": target,
-            "text": briefing,
-            "parse_mode": "HTML",
-        }).encode()
+        payload = json.dumps(
+            {
+                "chat_id": target,
+                "text": briefing,
+                "parse_mode": "HTML",
+            }
+        ).encode()
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         try:
             req = ureq.Request(url, data=payload, headers={"Content-Type": "application/json"})
