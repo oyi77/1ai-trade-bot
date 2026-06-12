@@ -346,15 +346,32 @@ class CommandHandlersMixin(BaseBot):
 
         lines = ["📋 <b>RIWAYAT TRADE</b>", "━━━━━━━━━━━━━━━━"]
         for t in trades[:15]:
-            outcome = t.get("outcome", "?")
-            emoji = "✅" if outcome == "TP_HIT" else "❌" if outcome == "SL_HIT" else "⚪"
-            pips = t.get("pips", 0)
-            usd = t.get("profit_usd", 0)
-            idr = t.get("profit_idr", 0)
-            action = t.get("action", "?")
-            sym = t.get("symbol", "?")
-            close_t = t.get("close_time", "")[:16].replace("T", " ")
-            lines.append(f"{emoji} {action} {sym} | {outcome}\n   Pips: {pips:+.1f} | ${usd:+.2f} (Rp {idr:+,})\n   {close_t}")
+            if hasattr(t, "outcome"):
+                outcome = t.outcome
+                pips = t.pips
+                usd = t.profit_usd
+                idr = t.profit_idr
+                action = t.action
+                sym = t.symbol
+                close_t = t.close_time
+            else:
+                outcome = t.get("outcome", "?")
+                pips = t.get("pips", 0)
+                usd = t.get("profit_usd", 0)
+                idr = t.get("profit_idr", 0)
+                action = t.get("action", "?")
+                sym = t.get("symbol", "?")
+                close_t = t.get("close_time", "")
+
+            is_win = outcome in ("TP_HIT", "WON")
+            is_loss = outcome in ("SL_HIT", "LOST")
+            emoji = "✅" if is_win else "❌" if is_loss else "⚪"
+            close_t_str = str(close_t)[:16].replace("T", " ")
+            lines.append(
+                f"{emoji} {action} {sym} | {outcome}\n"
+                f"   Pips: {pips:+.1f} | ${usd:+.2f} (Rp {idr:+,})\n"
+                f"   {close_t_str}"
+            )
         return "\n".join(lines)
 
     async def _cmd_recap(self, args: list[str], chat_id: str | None = None) -> str:
@@ -433,11 +450,22 @@ class CommandHandlersMixin(BaseBot):
             except Exception:
                 return "📭 Trade tracker tidak tersedia."
 
-        total = stats.get("total", 0)
-        wins = stats.get("wins", 0)
-        losses = stats.get("losses", 0)
-        wr = stats.get("win_rate", 0)
-        open_pos = stats.get("open_positions", 0)
+        if hasattr(stats, "total"):
+            total = stats.total
+            wins = stats.wins
+            losses = stats.losses
+            wr = stats.win_rate
+            open_pos = stats.open_positions
+            total_pips = stats.total_pips
+            total_profit_usd = stats.total_profit_usd
+        else:
+            total = stats.get("total", 0)
+            wins = stats.get("wins", 0)
+            losses = stats.get("losses", 0)
+            wr = stats.get("win_rate", 0)
+            open_pos = stats.get("open_positions", 0)
+            total_pips = stats.get("total_pips", 0)
+            total_profit_usd = stats.get("total_profit_usd", 0)
 
         if wr >= 60:
             perf = "🟢"
@@ -452,8 +480,8 @@ class CommandHandlersMixin(BaseBot):
             f"{perf} Win Rate: <b>{wr:.1f}%</b> ({wins}W / {losses}L)\n"
             f"📈 Total Trades: {total} | Open: {open_pos}\n"
             f"━━━━━━━━━━━━━━━━\n"
-            f"💰 Total Pips: {stats.get('total_pips', 0):+.1f}\n"
-            f"💵 Profit: <b>${stats.get('total_profit_usd', 0):+,.2f}</b>"
+            f"💰 Total Pips: {total_pips:+.1f}\n"
+            f"💵 Profit: <b>${total_profit_usd:+,.2f}</b>"
         )
 
     async def _cmd_mapping(self, args: list[str], chat_id: str | None = None) -> str:
@@ -1098,14 +1126,14 @@ class CommandHandlersMixin(BaseBot):
                 "🎯 <b>Smart Trailing</b> [🔒 LOCKED]\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Auto-trailing SL saat profit jalan.\n"
-                "👑 Khusus Subscriber.\n"
+                "⭐ Khusus PRO / ELITE / LIFETIME.\n"
                 "⚡ /subscribe untuk unlock."
             )
         # Query trailing status from bridge
         try:
             import urllib.request
-            bridge_url = os.environ.get("BRIDGE_URL", "http://localhost:5001")
-            api_key = os.environ.get("BRIDGE_API_KEY", "default")
+            bridge_url = os.environ.get("BRIDGE_URL", "http://localhost:8765")
+            api_key = os.environ.get("BRIDGE_API_KEY", "VT-MASTER")
             req = urllib.request.Request(
                 f"{bridge_url}/trailing?api_key={api_key}&account_id=MT5-{target}",
             )
@@ -1147,8 +1175,8 @@ class CommandHandlersMixin(BaseBot):
         enabled = args[0].lower() in ("on", "enable")
         try:
             import urllib.request
-            bridge_url = os.environ.get("BRIDGE_URL", "http://localhost:5001")
-            api_key = os.environ.get("BRIDGE_API_KEY", "default")
+            bridge_url = os.environ.get("BRIDGE_URL", "http://localhost:8765")
+            api_key = os.environ.get("BRIDGE_API_KEY", "VT-MASTER")
             payload = json.dumps({"enabled": enabled, "account_id": f"MT5-{target}"}).encode()
             req = urllib.request.Request(
                 f"{bridge_url}/trailing",

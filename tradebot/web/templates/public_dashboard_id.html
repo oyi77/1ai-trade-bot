@@ -51,6 +51,8 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
 .sig-sell{color:#f87171;background:rgba(248,113,113,0.08)}
 .sig-tp{color:#34d399}
 .sig-sl{color:#f87171}
+/* Premium signal blur — entry/SL/TP hidden for free users */
+.signal-premium-blur{filter:blur(5px);pointer-events:none;user-select:none}
 
 /* Sidebar */
 .sidebar{width:240px;height:100vh;position:fixed;left:0;top:0;background:rgba(10,10,20,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;z-index:100;overflow-y:auto}
@@ -178,6 +180,21 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
 
 <!-- ==================== PAGE: OVERVIEW ==================== -->
 <div class="page active" id="page-home">
+
+  <!-- ═══ CONVERSION BANNER — Dismissible donation prompt ═══ -->
+  <div id="conversion-banner" style="background:rgba(10,10,20,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(251,191,36,0.15);border-radius:14px;padding:12px 18px;margin-bottom:16px;">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-amber-400 font-bold text-sm">🔥 Udah liat sinyal gratis?</span>
+        <span class="text-slate-300 text-xs">Dukung AI kami biar makin akurat — mulai Rp 10rb aja!</span>
+        <span class="text-[10px] text-emerald-400 font-mono" id="conversion-banner-stats"></span>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <a href="#" onclick="switchPage('fuel');return false;" class="text-xs px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg transition-all whitespace-nowrap">💛 Donasi Sekarang</a>
+        <button onclick="document.getElementById('conversion-banner').style.display='none'" class="text-slate-600 hover:text-white text-lg leading-none px-1" aria-label="Tutup banner">✕</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Hero Section -->
   <div class="relative overflow-hidden rounded-2xl mb-8" style="background:#151924;border:1px solid rgba(255,255,255,0.05)">
@@ -308,6 +325,44 @@ body{font-family:'Inter','Plus Jakarta Sans',system-ui,sans-serif;background:#00
     </div>
     <div id="live-engines">
       <div class="text-center py-8 text-sm text-slate-500">⏳ Memuat data AI engine...</div>
+    </div>
+  </div>
+
+  <!-- ═══ FUEL / DONATION PREVIEW on Homepage ═══ -->
+  <div class="kpi-card mb-5" style="background:linear-gradient(135deg,rgba(6,78,59,0.08),rgba(6,78,59,0.02));border-color:rgba(52,211,153,0.12)">
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">⛽ Subscription AI Preview</h3>
+      <a href="#" onclick="switchPage('fuel');return false;" class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold transition-colors">Lihat detail →</a>
+    </div>
+    <div class="flex items-end gap-2 mb-2">
+      <span class="text-3xl font-mono font-extrabold text-emerald-400" id="home-fund-pct">0%</span>
+      <span class="text-xs text-slate-500 pb-1">terkumpul dari target bulan ini</span>
+    </div>
+    <div class="h-2.5 bg-white/5 rounded-full mb-4 overflow-hidden">
+      <div class="h-full rounded-full transition-all duration-1000" id="home-fund-bar" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mb-3">
+      <div class="text-center bg-white/5 rounded-lg p-2.5">
+        <div class="font-mono font-bold text-white text-sm" id="home-fund-collected">Rp 0</div>
+        <div class="text-slate-500 mt-0.5">Terkumpul</div>
+      </div>
+      <div class="text-center bg-white/5 rounded-lg p-2.5">
+        <div class="font-mono font-bold text-emerald-400 text-sm" id="home-fund-donors">0</div>
+        <div class="text-slate-500 mt-0.5">Donatur</div>
+      </div>
+      <div class="text-center bg-white/5 rounded-lg p-2.5">
+        <div class="font-mono font-bold text-red-400 text-sm" id="home-fund-shortfall">Rp 0</div>
+        <div class="text-slate-500 mt-0.5">Kekurangan</div>
+      </div>
+      <div class="text-center bg-white/5 rounded-lg p-2.5">
+        <div class="font-mono font-bold text-blue-400 text-sm" id="home-fund-target">Rp 7.3jt</div>
+        <div class="text-slate-500 mt-0.5">Target</div>
+      </div>
+    </div>
+    <div class="flex justify-center">
+      <a href="#" onclick="switchPage('fuel');return false;" class="inline-flex items-center gap-1.5 text-xs px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-400/20 hover:border-emerald-400/40 text-emerald-400 font-bold rounded-lg transition-all">
+        💚 Donasi
+      </a>
     </div>
   </div>
 
@@ -1134,6 +1189,28 @@ async function loadAll() {
     renderBacktest(backtest);
     renderDailyRecap(recap);
     renderFuelStats(fuelRes);
+    // Update home page fuel preview from fuel stats
+    if (fuelRes) {
+      const hpct = fuelRes.percent || 0;
+      const hcollected = fuelRes.collected || 0;
+      const hshortfall = fuelRes.shortfall || 7357500;
+      const htarget = fuelRes.monthly_cost || 7357500;
+      const hdonors = fuelRes.donation_transactions || fuelRes.donors || 0;
+      const hElPct = document.getElementById('home-fund-pct');
+      const hElBar = document.getElementById('home-fund-bar');
+      const hElCollected = document.getElementById('home-fund-collected');
+      const hElShortfall = document.getElementById('home-fund-shortfall');
+      const hElTarget = document.getElementById('home-fund-target');
+      const hElDonors = document.getElementById('home-fund-donors');
+      const hBannerStats = document.getElementById('conversion-banner-stats');
+      if (hElPct) hElPct.textContent = hpct + '%';
+      if (hElBar) hElBar.style.width = hpct + '%';
+      if (hElCollected) hElCollected.textContent = fmtRupiah(hcollected);
+      if (hElShortfall) hElShortfall.textContent = fmtRupiah(hshortfall);
+      if (hElTarget) hElTarget.textContent = fmtRupiah(htarget);
+      if (hElDonors) hElDonors.textContent = hdonors;
+      if (hBannerStats) hBannerStats.textContent = '· ' + hdonors + ' donatur · ' + fmtRupiah(hcollected);
+    }
     renderFuelSubscriberWall(subscribers);
     renderEngineReadings(engineData);
 
@@ -1167,9 +1244,9 @@ function renderSinyal(signals) {
           <span class="text-xs text-slate-600 ml-auto">${ts}</span>
         </div>
         <div class="flex items-center gap-4 text-xs text-slate-400 font-mono">
-          <span>E: ${s.entry}</span>
-          <span>SL: ${s.sl}</span>
-          <span>TP: ${s.tp}</span>
+          <span>E: <span class="signal-premium-blur">${s.entry}</span></span>
+          <span>SL: <span class="signal-premium-blur">${s.sl}</span></span>
+          <span>TP: <span class="signal-premium-blur">${s.tp}</span></span>
           <span class="text-slate-500">RR 1:${s.rr_ratio || '?'} · ${((s.confidence||0)*100).toFixed(0)}%</span>
         </div>
         <div class="text-[11px] text-slate-600 mt-0.5">${source}</div>
@@ -1796,11 +1873,34 @@ async function updateSystemStatus() {
   }
 }
 
+/* ═══ DONATION TOAST — timed popup with localStorage guard ═══ */
+function showDonationToast() {
+  const toast = document.getElementById('donation-toast');
+  if (!toast) return;
+  if (localStorage.getItem('donation_toast_shown')) return;
+  localStorage.setItem('donation_toast_shown', '1');
+  toast.style.display = 'block';
+  // Trigger reflow then animate in
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  });
+  // Auto-dismiss after 8 seconds
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(20px)';
+    setTimeout(() => { toast.style.display = 'none'; }, 400);
+  }, 8000);
+}
+
 // Init
 loadAll();
 updateSystemStatus();
 setInterval(loadAll, 30000);
 setInterval(updateSystemStatus, 15000);
+
+// Show donation toast after 25 seconds (once per session via localStorage)
+setTimeout(showDonationToast, 25000);
 </script>
 <script>(function(){var c=document.getElementById('bg-particles'),x=c.getContext('2d'),p=[],w,h;function r(){w=c.width=innerWidth;h=c.height=innerHeight}r();addEventListener('resize',r);for(var i=0;i<150;i++)p.push({x:Math.random()*w,y:Math.random()*h,s:Math.random()*1.5+0.3,o:Math.random()*0.5+0.1,sp:Math.random()*0.25+0.03,dr:Math.random()*0.01-0.005,hue:Math.random()>0.6?195:Math.random()>0.5?270:210});function anim(){x.clearRect(0,0,w,h);for(var i=0;i<p.length;i++){var t=p[i];t.y+=t.sp;if(t.y>h+10){t.y=-10;t.x=Math.random()*w}t.x+=t.dr;if(t.x<0)t.x=w;if(t.x>w)t.x=0;x.beginPath();x.arc(t.x,t.y,t.s,0,Math.PI*2);x.fillStyle='hsla('+t.hue+',70%,60%,'+t.o+')';x.fill()}for(var i=0;i<p.length;i+=5){for(var j=i+1;j<p.length;j+=5){var dx=p[i].x-p[j].x,dy=p[i].y-p[j].y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<110){x.beginPath();x.moveTo(p[i].x,p[i].y);x.lineTo(p[j].x,p[j].y);x.strokeStyle='rgba(0,229,255,'+(0.025*(1-dist/110))+')';x.lineWidth=0.4;x.stroke()}}}requestAnimationFrame(anim)}anim()})();(function(){var g=document.getElementById('cursor-glow'),t;document.addEventListener('mousemove',function(e){g.style.left=e.clientX+'px';g.style.top=e.clientY+'px';g.style.opacity='1';clearTimeout(t);t=setTimeout(function(){g.style.opacity='0'},1500)});document.addEventListener('mouseleave',function(){g.style.opacity='0'})})();
 // ── CAPI server-side tracking ──
@@ -1814,6 +1914,17 @@ setInterval(updateSystemStatus, 15000);
     document.querySelectorAll('a[href*="t.me/berkahkaryaforexbotbot"]').forEach(function(a){a.addEventListener('click',function(){S('Lead',{content_name:'Telegram Bot CTA'})})});
   });
 })();
-</script>
+
+<!-- ═══ TOAST NOTIFICATION — timed donation prompt ═══ -->
+<div id="donation-toast" style="position:fixed;bottom:24px;right:24px;z-index:9999;background:rgba(10,10,20,0.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(251,191,36,0.2);border-radius:14px;padding:14px 20px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.5);cursor:pointer;opacity:0;transform:translateY(20px);transition:opacity 0.4s ease,transform 0.4s ease;display:none;" onclick="switchPage('fuel');this.style.opacity='0';this.style.transform='translateY(20px)';setTimeout(()=>{this.style.display='none'},400)">
+  <div class="flex items-center gap-3">
+    <span class="text-2xl">🔥</span>
+    <div>
+      <div class="text-sm font-bold text-white">3 orang udah donasi. Lo kapan?</div>
+      <div class="text-xs text-amber-400 font-semibold mt-0.5">Klik disini! 💛</div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

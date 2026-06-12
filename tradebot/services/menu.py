@@ -57,7 +57,7 @@ ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("menu:donate", "💚 Donate"), ("cmd:mykey", "🔑 My Key")],
     [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
     [("cmd:myid", "🆔 My ID"), ("cmd:trailing", "🏃 Trailing Status")],
-    [("cmd:settings", "⚙️ Settings")],
+    [("cmd:settrailing", "⚡ Set Trailing"), ("cmd:settings", "⚙️ Settings")],
     [("menu:main", "🔙 Back")],
 ]
 

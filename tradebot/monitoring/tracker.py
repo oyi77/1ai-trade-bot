@@ -319,8 +319,8 @@ class TradeTracker:
         row = self._storage.fetchone(
             """SELECT
                COUNT(*) as total,
-               SUM(CASE WHEN outcome IN ('TP_HIT','WIN') THEN 1 ELSE 0 END) as wins,
-               SUM(CASE WHEN outcome IN ('SL_HIT','LOSS') THEN 1 ELSE 0 END) as losses,
+               SUM(CASE WHEN outcome IN ('TP_HIT','WIN','WON') THEN 1 ELSE 0 END) as wins,
+               SUM(CASE WHEN outcome IN ('SL_HIT','LOSS','LOST') THEN 1 ELSE 0 END) as losses,
                SUM(CASE WHEN outcome='BREAKEVEN' THEN 1 ELSE 0 END) as breakeven,
                COALESCE(SUM(pips), 0) as total_pips,
                COALESCE(SUM(profit_usd), 0) as total_profit_usd
