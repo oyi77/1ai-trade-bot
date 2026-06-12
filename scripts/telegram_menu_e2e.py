@@ -46,6 +46,20 @@ async def test_menu_navigation(client, menu_button_text, expected_substrings, se
             print("FAILED (No message found)")
             return False
 
+        # If it's stockity insider, we need to go to signals first
+        if menu_button_text == "stockity insider":
+            sig_btn = await find_button(msg, "signal system")
+            if not sig_btn:
+                print("FAILED (Signal System button not found for nested Stockity nav)")
+                return False
+            await sig_btn.click()
+            await asyncio.sleep(4.5)
+            # Fetch Signal menu message
+            msg = await get_menu_message(client, "signal")
+            if not msg:
+                print("FAILED (Signal menu not loaded for nested Stockity nav)")
+                return False
+
         # 2. Find target menu button
         btn = await find_button(msg, menu_button_text)
         if not btn:
@@ -78,6 +92,14 @@ async def test_menu_navigation(client, menu_button_text, expected_substrings, se
             # print("Clicking Back button...")
             await back_btn.click()
             await asyncio.sleep(4.5)
+
+        # If it's stockity, we are now in Signal menu. We need to go back one more time to reach Main menu
+        if menu_button_text == "stockity insider":
+            msg = await get_menu_message(client, "signal")
+            back_btn2 = await find_button(msg, "back")
+            if back_btn2:
+                await back_btn2.click()
+                await asyncio.sleep(4.5)
 
         return True
     except Exception as e:

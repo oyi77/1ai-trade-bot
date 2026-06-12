@@ -10,20 +10,19 @@ STOCKITY_LINK = "https://stockity-mr.com/auth?invite_code=7b8730c84b6450e3e0b02f
 MAIN_MENU = [
     [Button.inline("🧠 SIGNAL SYSTEM", "menu:signals"), Button.inline("📊 MARKET DATA", "menu:market")],
     [Button.inline("📈 TRADE HISTORY", "menu:history"), Button.inline("👤 ACCOUNT", "menu:account")],
-    [Button.inline("💰 STOCKITY INSIDER", "menu:stockity")],
     [Button.inline("❓ HELP", "menu:help")],
 ]
 
 ADMIN_MENU = [
     [Button.inline("🧠 SIGNAL SYSTEM", "menu:signals"), Button.inline("📊 MARKET DATA", "menu:market")],
     [Button.inline("📈 TRADE HISTORY", "menu:history"), Button.inline("👤 ACCOUNT", "menu:account")],
-    [Button.inline("💰 STOCKITY INSIDER", "menu:stockity")],
     [Button.inline("⚙️ ADMIN", "menu:admin_panel"), Button.inline("❓ HELP", "menu:help")],
 ]
 
 SIGNAL_MENU = [
     [Button.inline("🎯 Signal MTF+9 Engines", "cmd:signal")],
     [Button.inline("🏗 Market Structure", "cmd:structure")],
+    [Button.inline("💰 Stockity Insider", "menu:stockity")],
     [Button.inline("🔙 Back", "menu:main")],
 ]
 
@@ -58,7 +57,7 @@ DONATE_MENU = [
 STOCKITY_MENU = [
     [Button.url("🚀 Daftar Stockity", STOCKITY_LINK)],
     [Button.inline("📊 Status Akun", "cmd:status")],
-    [Button.inline("🔙 Back", "menu:main")],
+    [Button.inline("🔙 Back", "menu:signals")],
 ]
 
 ADMIN_PANEL = [

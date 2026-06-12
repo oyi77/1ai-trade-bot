@@ -15,14 +15,12 @@ from typing import Any
 MAIN_MENU: list[list[tuple[str, str]]] = [
     [("menu:signals", "🧠 SIGNAL SYSTEM"), ("menu:market", "📊 MARKET DATA")],
     [("menu:history", "📈 TRADE HISTORY"), ("menu:account", "👤 ACCOUNT")],
-    [("menu:stockity", "💰 STOCKITY INSIDER")],
     [("menu:help", "❓ HELP")],
 ]
 
 ADMIN_MENU: list[list[tuple[str, str]]] = [
     [("menu:signals", "🧠 SIGNAL SYSTEM"), ("menu:market", "📊 MARKET DATA")],
     [("menu:history", "📈 TRADE HISTORY"), ("menu:account", "👤 ACCOUNT")],
-    [("menu:stockity", "💰 STOCKITY INSIDER")],
     [("menu:admin", "⚙️ ADMIN"), ("menu:help", "❓ HELP")],
 ]
 
@@ -32,6 +30,7 @@ SIGNAL_MENU: list[list[tuple[str, str]]] = [
     [("cmd:engines", "🔧 Engine Consensus")],
     [("cmd:structure", "🏗 Market Structure")],
     [("cmd:pulse", "🔄 Market Pulse")],
+    [("menu:stockity", "💰 STOCKITY INSIDER")],
     [("menu:main", "🔙 Back")],
 ]
 
@@ -69,7 +68,7 @@ SUBSCRIBE_MENU: list[list[tuple[str, str]]] = [
 STOCKITY_MENU: list[list[tuple[str, str] | tuple[str, str, str]]] = [
     [("__url__", "🚀 Daftar Stockity", "https://stockity-mr.com/auth?invite_code=7b8730c84b6450e3e0b02fd3fd864f69#SignUp")],
     [("cmd:status", "📊 Status Akun")],
-    [("menu:main", "🔙 Back")],
+    [("menu:signals", "🔙 Back")],
 ]
 
 ADMIN_PANEL_MENU: list[list[tuple[str, str]]] = [
