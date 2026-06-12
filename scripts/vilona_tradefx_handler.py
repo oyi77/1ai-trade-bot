@@ -3131,6 +3131,7 @@ def handle_command(cmd, text, chat_id, msg):
                 f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
                 f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
                 f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
+                f"💀 /stier — S-TIER Zone GOD TIER 🆕\n"
                 f"🕐 /session — Killzone + Session Level 🆕\n"
                 f"📰 /news — Grok News X/Twitter intel 👑\n"
                 f"📊 /dashboard — Live dashboard web\n"
@@ -4386,6 +4387,88 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"❌ Gagal fetch Grok News: {e}", chat_id)
 
     # ── NEW: Technical Analysis Commands ──
+    elif cmd == "/stier":
+        """S-TIER Zone Detector — Triple Confluence (Breaker + OB/FVG + Double Sweep)."""
+        sub_norm_st = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_st = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_st = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        pair_st = pair_map_st.get(sub_norm_st, "gold")
+        disp_st = disp_map_st.get(pair_st, "XAUUSD")
+        pip_sz = 0.10 if disp_st in ("XAUUSD","GOLD") else 0.01 if disp_st=="USOIL" else 1.0
+        
+        price_st = fetch_price(pair_st)
+        if not price_st:
+            tg_send(f"❌ Harga tidak tersedia untuk {disp_st}.", chat_id)
+            return
+        
+        tg_send(f"💀 <b>Scanning S-TIER Zones — {disp_st} @ ${price_st:.2f}...</b>\n<i>Triple Confluence: Breaker Block + OB/FVG + Double Sweep</i>", chat_id)
+        
+        ohlcv_st = _fetch_ohlcv_for_ai(pair_st, keep=60)
+        if not ohlcv_st or len(ohlcv_st) < 30:
+            tg_send(f"❌ Data OHLCV tidak cukup untuk {disp_st}.", chat_id)
+            return
+        
+        try:
+            st_sig, st_reason = detect_stier_zone(pair_st.upper(), disp_st, price_st, ohlcv_st)
+            
+            if not st_sig:
+                lines = [
+                    f"💀 <b>S-TIER ZONE — {disp_st} @ ${price_st:.2f}</b>",
+                    f"━━━━━━━━━━━━━━━━━━━━━━",
+                    f"",
+                    f"⚪️ <b>Tidak ada S-TIER zone terdeteksi</b>",
+                    f"",
+                    f"Market saat ini belum menunjukkan triple confluence:",
+                    f"  • Belum ada Breaker Block valid",
+                    f"  • OB + FVG tidak aligned di level yang sama",
+                    f"  • Tidak ada Double Liquidity Sweep",
+                    f"",
+                    f"━━━━━━━━━━━━━━━━━━━━━━",
+                    f"💡 S-TIER zone adalah setup probabilitas tertinggi.",
+                    f"   Sabar — zone ini muncul 1-3x per sesi.",
+                    f"   Cek /zones atau /structure untuk analisa regular.",
+                    f"━━━━━━━━━━━━━━━━━━━━━━",
+                    f"⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>",
+                ]
+                tg_send("\n".join(lines), chat_id)
+                return
+            
+            st_grade = st_sig.get("grade", "B")
+            st_entry = st_sig.get("entry", 0)
+            st_sl = st_sig.get("sl", 0)
+            st_tp = st_sig.get("tp", 0)
+            st_conf = st_sig.get("confidence", 0)
+            st_act = st_sig.get("action", "HOLD")
+            dist = abs(price_st - st_entry) / pip_sz
+            near = "🎯 IN ZONE" if dist <= 10 else f"📡 {dist:.0f} pip away"
+            act_emoji = "🟢" if st_act == "BUY" else "🔴" if st_act == "SELL" else "⚪️"
+            
+            lines = [
+                f"💀 <b>S-TIER ZONE [{st_grade}] — {disp_st}</b>",
+                f"━━━━━━━━━━━━━━━━━━━━━━",
+                f"",
+                st_reason,
+                f"",
+                f"━━━━━━━━━━━━━━━━━━━━━━",
+                f"📍 <b>Zone Entry:</b> ${st_entry:.2f}",
+                f"🔴 <b>SL:</b> ${st_sl:.2f} (-30 pip)",
+                f"🟢 <b>TP:</b> ${st_tp:.2f} (+60 pip)",
+                f"📐 <b>RR 1:2.0</b> | Conf: {st_conf:.0%}",
+                f"",
+                f"{act_emoji} <b>{st_act}</b> | {near}",
+            ]
+            if st_grade == "S-TIER":
+                lines.append(f"")
+                lines.append(f"💀 <b>GOD TIER — FULL MARGIN READY</b>")
+            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append(f"⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
+            tg_send("\n".join(lines), chat_id)
+            logger.info(f"💀 /stier [{disp_st}]: {st_act} | Grade={st_grade}")
+        except Exception as e:
+            logger.error(f"/stier error: {e}")
+            tg_send(f"❌ Gagal scan S-TIER zone: {e}", chat_id)
+
     elif cmd == "/zones":
         """Liquidity zones: OB + FVG + Supply/Demand. Free: 1 TF. Donor: multi-TF."""
         sub_norm = _normalize_broker_symbol(sub or "xauusd")
@@ -6571,6 +6654,9 @@ def main():
             {"command": "levels",   "description": "🏛 SnR + FIBO + Engine (Subscriber)"},
             {"command": "news",     "description": "📰 Grok News — X/Twitter intel (Subscriber)"},
             {"command": "killzone", "description": "🎯 Radar sesi market aktif"},
+            {"command": "zones", "description": "🧲 Order Blocks + FVG Scanner"},
+            {"command": "structure", "description": "🏗 BOS/CHoCH + MTF Alignment"},
+            {"command": "stier", "description": "💀 S-TIER Zone — Triple Confluence GOD TIER"},
             {"command": "subscribe","description": "⭐ Upgrade ke PRO/ELITE/LIFETIME"},
             {"command": "status",   "description": "🛡 Cek Kuota & Status"},
             {"command": "mykey",    "description": "🔑 Cek License EA Kamu"},
