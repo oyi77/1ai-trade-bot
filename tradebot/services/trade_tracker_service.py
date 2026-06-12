@@ -120,7 +120,7 @@ def open_trade(
     chat_id: str = "",
     telegram_message_id: int | None = None,
 ) -> str | None:
-    if not signal or signal.get("action") not in ("BUY", "SELL"):
+    if not signal or signal.get("action") not in ("BUY", "SELL", "CALL", "PUT"):
         return None
 
     entry_price = float(entry_price) if entry_price else 0
@@ -196,20 +196,24 @@ def check_outcomes(current_prices: dict[str, float] | None = None) -> list[dict]
         hit = None
         close_price = price
 
-        if sl > 0:
-            if action == "BUY" and price <= sl or action == "SELL" and price >= sl:
-                hit = "SL_HIT"
-                close_price = sl
+        if sl > 0 and (
+            (action in ("BUY", "CALL") and price <= sl)
+            or (action in ("SELL", "PUT") and price >= sl)
+        ):
+            hit = "SL_HIT"
+            close_price = sl
 
-        if not hit and tp > 0:
-            if action == "BUY" and price >= tp or action == "SELL" and price <= tp:
-                hit = "TP_HIT"
-                close_price = tp
+        if not hit and tp > 0 and (
+            (action in ("BUY", "CALL") and price >= tp)
+            or (action in ("SELL", "PUT") and price <= tp)
+        ):
+            hit = "TP_HIT"
+            close_price = tp
 
         if not hit:
             continue
 
-        if action == "BUY":
+        if action in ("BUY", "CALL"):
             pip_diff = _to_pips(close_price - entry, symbol)
         else:
             pip_diff = _to_pips(entry - close_price, symbol)
@@ -265,7 +269,7 @@ def close_trade_manually(trade_id: str, close_price: float, symbol: str = "XAUUS
             entry = trade.get("entry", close_price)
             action = trade.get("action", "BUY")
 
-            if action == "BUY":
+            if action in ("BUY", "CALL"):
                 pip_diff = _to_pips(close_price - entry, symbol)
             else:
                 pip_diff = _to_pips(entry - close_price, symbol)
