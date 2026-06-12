@@ -435,7 +435,7 @@ class CommandHandlersMixin(BaseBot):
             "📱 Trading real: /analyze xauusd", "",
             "<i>#VilonaTradeFX #AITrading</i>",
         ])
-
+        return "\n".join(lines)
     async def _cmd_winrate(self, args: list[str], chat_id: str | None = None) -> str:
         try:
             from tradebot.monitoring.tracker import TradeTracker

@@ -3336,7 +3336,7 @@ def handle_command(cmd, text, chat_id, msg):
                 f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
                 f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
                 f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
-                f"💀 /stier — S-TIER Zone GOD TIER 🆕\n"
+                f"💀 /stier — S-TIER Zone GOD TIER 👑\n"
                 f"🕐 /session — Killzone + Session Level 🆕\n"
                 f"📰 /news — Grok News X/Twitter intel 👑\n"
                 f"📊 /dashboard — Live dashboard web\n"
@@ -4593,7 +4593,18 @@ def handle_command(cmd, text, chat_id, msg):
 
     # ── NEW: Technical Analysis Commands ──
     elif cmd == "/stier":
-        """S-TIER Zone Detector — Triple Confluence (Breaker + OB/FVG + Double Sweep)."""
+        """S-TIER Zone Detector — Triple Confluence (Breaker + OB/FVG + Double Sweep). 👑 PREMIUM ONLY."""
+        # ── PREMIUM GATE ──
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "👑 <b>S-TIER Zone — PREMIUM ONLY</b>\n\n"
+                "S-TIER adalah detektor triple confluence dengan akurasi tertinggi.\n"
+                "Fitur ini eksklusif untuk subscriber PRO/ELITE/LIFETIME.\n\n"
+                "⭐ <b>Upgrade sekarang:</b>\n"
+                "   /upgrade atau DM @berkahkaryaforexbotbot",
+                chat_id
+            )
+            return
         sub_norm_st = _normalize_broker_symbol(sub or "xauusd")
         pair_map_st = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
                       "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
