@@ -6447,14 +6447,43 @@ def auto_analyze_loop():
                     "   🎯 Near-100% Accuracy — Highest Conviction Setup\n"
                 )
 
-                # Post to channel + bridge
+                # ── PREMIUM-ONLY: S-TIER signals only for paying members ──
                 stier_entry = stier_sig.get("entry", price) or 0
-                if _can_post_to_channel(pair, action, stier_entry, stier_sig.get("sl", 0), stier_sig.get("tp", 0)):
-                    result = send_to_channel(stier_text)
-                    if result:
-                        stier_sig["telegram_message_id"] = result.get("result", {}).get("message_id")
-                    _mark_channel_post(pair, action, stier_entry, stier_sig.get("sl", 0), stier_sig.get("tp", 0))
-
+                # 1. DM to all premium members (PRO, ELITE, LIFETIME)
+                premium_count = 0
+                try:
+                    from members import _conn as members_conn
+                    with members_conn() as db:
+                        rows = db.execute(
+                            "SELECT chat_id FROM members WHERE status='paid' AND tier IN ('pro','elite','lifetime')"
+                        ).fetchall()
+                    for row in rows:
+                        try:
+                            tg_send(stier_text, str(row["chat_id"]))
+                            premium_count += 1
+                            time.sleep(0.3)  # rate limit safety
+                        except Exception as dme:
+                            logger.warning(f"S-TIER DM failed for {row['chat_id']}: {dme}")
+                    logger.info(f"💀 S-TIER DM'd to {premium_count} premium members")
+                except Exception as me:
+                    logger.warning(f"S-TIER premium DM error: {me}")
+                # 2. Teaser to public channel (no entry/SL/TP details)
+                try:
+                    tease = (
+                        f"💀 <b>S-TIER HIGH CONVICTION — {action} {disp}</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🔥 Triple Confluence terdeteksi!\n"
+                        f"   Breaker + OB/FVG + Double Sweep\n"
+                        f"🎯 Near-100% Accuracy Setup\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"👑 <b>PREMIUM ONLY</b> — Signal dikirim ke {premium_count} subscriber.\n"
+                        f"⭐ Upgrade ke PRO/ELITE untuk akses S-TIER:\n"
+                        f"   /upgrade atau DM @berkahkaryaforexbotbot"
+                    )
+                    send_to_channel(tease)
+                except Exception:
+                    pass
+                # 3. Post to bridge for EA execution
                 post_signal_to_bridge(stier_sig, price, disp)
                 logger.info(f"💀 S-TIER HIGH CONVICTION [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%}")
                 log["signals_sent"] = log.get("signals_sent", 0) + 1
