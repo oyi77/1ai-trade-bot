@@ -57,8 +57,8 @@ def tg_send(text: str, chat_id: str, bot_token: str = None, reply_markup=None):
 def verify_tripay_signature(body: bytes, callback_sig: str) -> bool:
     """Verify Tripay HMAC-SHA256 signature."""
     if not TRIPAY_PRIVATE_KEY:
-        log.warning("TRIPAY_PRIVATE_KEY not set — skipping signature check")
-        return True  # Allow in dev mode
+        log.error("TRIPAY_PRIVATE_KEY not set — REJECTING callback")
+        return False  # Reject in production — never accept unverified callbacks
     expected = hmac.new(
         TRIPAY_PRIVATE_KEY.encode(), body, hashlib.sha256
     ).hexdigest()
@@ -143,7 +143,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         callback_sig = self.headers.get("X-Callback-Signature", "")
         if not callback_sig or not verify_tripay_signature(body, callback_sig):
             log.warning(f"Invalid Tripay signature for: {data.get('merchant_ref', '?')}")
-            self._json({"error": "invalid signature"}, 403)
+            self._json({"error": "invalid signature"}, 200)  # 200 tell Tripay to stop retrying
             return
 
         merchant_ref = data.get("merchant_ref", "")
