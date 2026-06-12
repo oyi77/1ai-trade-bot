@@ -5,26 +5,22 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
+import urllib.request
 from typing import Any
-from random import choice
 
 from tradebot.bots.base import BaseBot
+from tradebot.bots.platforms.vilona.helpers import (
+    killzone,
+    news_blackout_status,
+    resolve_yahoo_symbol,
+    session,
+    wib_fmt,
+    wib_now,
+)
 
 LOG = logging.getLogger("tradebot.bots.vilona.analysis")
-
-FOMO_PHRASES = [
-    "🔥 Sinyal ini cuma untuk yang FAST RESPONSE!",
-    "⚡ 9 engines udah konsensus — tinggal kamu yang belum action!",
-    "💰 Orang lain udah cuan, kamu masih tunggu apa?",
-    "🎯 Setiap detik delay = profit yang hilang!",
-    "🚀 Ini bukan latihan. Ini real signal.",
-    "💎 DIAMOND ALERT — Jangan sampai kelewatan!",
-    "⚡ Signal premium detected! Upgrade buat akses FULL analysis!",
-    "🔥 90% orang yang subscribe cuan tiap hari. Kamu kapan?",
-    "💰 Udah 15 member lain yg eksekusi signal ini. Lo ketinggalan!",
-    "🎯 Signal akurasi tinggi — cuma buat subscriber PREMIUM.",
-]
 
 
 class AnalysisHandlersMixin(BaseBot):
@@ -49,14 +45,20 @@ class AnalysisHandlersMixin(BaseBot):
                         display = pair.upper()
                         last_posted = self._posted_signals.get(pair, 0)
                         if time.time() - last_posted < 10800:
-                            LOG.info("Auto signal SKIPPED (dedup): %s %s (last: %ds ago)",
-                                     display, sig["action"], int(time.time() - last_posted))
+                            LOG.info(
+                                "Auto signal SKIPPED (dedup): %s %s (last: %ds ago)",
+                                display,
+                                sig["action"],
+                                int(time.time() - last_posted),
+                            )
                             continue
                         self._posted_signals[pair] = time.time()
                         price = sig.get("entry", 0)
                         msg = format_signal_basic(sig, price, display)
                         await self._tg_send(msg)
-                        self.bridge.post_signal(sig, price)
+                        from tradebot.bots.platforms.vilona.helpers import post_signal_to_bridge
+
+                        post_signal_to_bridge(sig, price)
                         await self._broadcast_signal(sig, display, price)
                         LOG.info("Auto signal: %s %s | %s", display, sig["action"], reason)
                     await asyncio.sleep(2)
@@ -100,7 +102,7 @@ class AnalysisHandlersMixin(BaseBot):
                 f"⚡ Mau signal REAL-TIME langsung ke HP?\n"
                 f"   /subscribe all — Subscribe sekarang!\n\n"
                 f"💚 Atau dukung server AI biar makin akurat:\n"
-                f"   /subscribe — Isi Bahan Bakar AI\n\n"
+                f"   /donate — Isi Bahan Bakar AI\n\n"
                 f"⚠️ NFA — Not Financial Advice"
             )
 
@@ -124,17 +126,12 @@ class AnalysisHandlersMixin(BaseBot):
         price: float | None = None,
         ohlcv_bars: list[dict[str, Any]] | None = None,
     ) -> tuple[dict[str, Any] | None, str | None]:
-        from tradebot.bots.platforms.vilona.helpers import (
-            killzone_active,
-            resolve_yahoo_symbol,
-        )
-
         symbol = resolve_yahoo_symbol(pair)
         display = pair.upper()
 
         is_forex_metal = display in ("XAUUSD", "USOIL")
         if is_forex_metal:
-            lkz, nykz = killzone_active()
+            lkz, nykz = killzone()
             if not (lkz or nykz):
                 return None, f"⏳ {display} mechanical signal SKIPPED — outside London/NY killzone"
 
@@ -156,11 +153,16 @@ class AnalysisHandlersMixin(BaseBot):
         if self._engines.get("quant"):
             try:
                 from quant_engine import analyze_quantitative_pattern
+
                 qdata = [
-                    {"timestamp": b.get("timestamp", 0),
-                     "open": float(b["open"]), "high": float(b["high"]),
-                     "low": float(b["low"]), "close": float(b["close"]),
-                     "volume": float(b.get("volume", 0))}
+                    {
+                        "timestamp": b.get("timestamp", 0),
+                        "open": float(b["open"]),
+                        "high": float(b["high"]),
+                        "low": float(b["low"]),
+                        "close": float(b["close"]),
+                        "volume": float(b.get("volume", 0)),
+                    }
                     for b in ohlcv_bars
                 ]
                 quant_result = analyze_quantitative_pattern(qdata, pattern_size=5)
@@ -170,6 +172,7 @@ class AnalysisHandlersMixin(BaseBot):
         if self._engines.get("fvg"):
             try:
                 from fvg_detector import detect_fvg
+
                 fvg_signals = detect_fvg(ohlcv_bars, "M1")
             except Exception as e:
                 LOG.debug("FVG detection failed: %s", e)
@@ -192,9 +195,7 @@ class AnalysisHandlersMixin(BaseBot):
                 fvg_bias = fvg_sig_obj.direction
 
         if quant_bias and fvg_bias and fvg_bias == quant_bias and fvg_sig_obj:
-            confidence = round(
-                (quant_result["confidence_score"] + fvg_sig_obj.confidence) / 2, 2
-            )
+            confidence = round((quant_result["confidence_score"] + fvg_sig_obj.confidence) / 2, 2)
             reasoning = (
                 f"🤖 MECHANICAL SIGNAL | Quant {quant_bias} "
                 f"({quant_result['green_pct']:.0f}%G/{quant_result['red_pct']:.0f}%R) "
@@ -213,17 +214,7 @@ class AnalysisHandlersMixin(BaseBot):
 
         return None, None
 
-    async def _ai_analyze(
-        self, pair: str = "gold"
-    ) -> tuple[dict[str, Any] | None, str | None]:
-        from tradebot.bots.platforms.vilona.helpers import (
-            killzone_active,
-            news_blackout_status,
-            resolve_yahoo_symbol,
-            session_label,
-            wib_now,
-        )
-
+    async def _ai_analyze(self, pair: str = "gold") -> tuple[dict[str, Any] | None, str | None]:
         symbol = resolve_yahoo_symbol(pair)
         display = pair.upper()
 
@@ -240,147 +231,381 @@ class AnalysisHandlersMixin(BaseBot):
         if not price:
             return None, "Price unavailable"
 
+        # Try mechanical fallback first
         mech_sig, mech_reason = self._detect_mechanical_signal(pair, price, ohlcv_bars)
         if mech_sig:
             return mech_sig, mech_reason
 
-        now = wib_now()
-        ses = session_label()
-        lkz, nykz = killzone_active()
-        bn, pn, nn = news_blackout_status()
+        # Fetch DXY
+        from tradebot.services.briefing_service import _fetch_dxy
 
-        user_prompt = (
-            f"Analyze {display} ({symbol}) technical setup.\n"
-            f"Time: {now.strftime('%Y-%m-%d %H:%M WIB')} | Session: {ses}\n"
-            f"Killzone: {'London' if lkz else ''} {'NY' if nykz else ''} | Price: ${price:.2f}\n"
-            f"News: {nn or 'none'}\n"
-            f"OHLCV bars (last 80 × 15m):\n" + "\n".join(
-                f"{b['timestamp']} O:{b['open']:.2f} H:{b['high']:.2f} "
-                f"L:{b['low']:.2f} C:{b['close']:.2f} V:{b.get('volume', 0)}"
-                for b in ohlcv_bars[-30:]
-            )
+        dxy = _fetch_dxy()
+
+        # Call ask_ai_ensemble
+        sess = session(wib_now().hour)
+        lkz, nykz = killzone()
+        kz_str = "London" if lkz else ("NY" if nykz else "None")
+
+        # Basic loss count tracker simulation
+        loss_count = 0
+
+        # Determine user tier
+        tier = "starter"
+        # Check from database
+        try:
+            from tradebot.services.members_service import get_member
+
+            m = get_member(str(self.chat_id))
+            if m:
+                tier = m.get("tier", "starter")
+        except Exception:
+            pass
+
+        sig = await self.ask_ai_ensemble(
+            price=price,
+            dxy=dxy,
+            sess=sess,
+            kz_str=kz_str,
+            loss_count=loss_count,
+            ohlcv_data=ohlcv_bars,
+            display=display,
+            tier=tier,
         )
-        return await self._call_ai(user_prompt, display)
 
-    async def _call_tier1_gemini(self, user_prompt: str) -> dict[str, Any] | None:
-        from tradebot.bots.platforms.vilona.helpers import extract_json
+        if not sig:
+            return None, "AI Ensemble returned no signal"
 
-        system_prompt = self._build_system_prompt()
-        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        return sig, sig.get("reasoning", "")
 
-        LOG.info("Tier 1 (Gemini) analyzing...")
-        response = await self._call_gemini_native(full_prompt)
-        if not response:
-            LOG.warning("Tier 1 Gemini returned no response")
-            return None
+    async def ask_ai_ensemble(
+        self,
+        price: float,
+        dxy: float | None,
+        sess: str,
+        kz_str: str,
+        loss_count: int,
+        premium: bool = False,
+        ohlcv_data: list | None = None,
+        display: str = "XAUUSD",
+        tier: str = "starter",
+    ) -> dict[str, Any] | None:
+        """Multi-AI consensus — tier-based model selection.
 
-        result = extract_json(response)
-        if not result:
-            LOG.warning("Tier 1 Gemini response not parseable: %.200s", response)
-            return None
-        return result
+        starter:  DeepSeek only (solo, max 55% conf) — free tier
+        pro:      DeepSeek + GPT-4o (dual, max 85% conf) — donor
+        elite:    All 3 models + Grok News (max 95% conf) — premium subscriber
+        """
+        self._ai_token_usage = {}
 
-    async def _call_gemini_native(self, prompt: str) -> str | None:
-        import urllib.request
+        data_section = f"💰 Current Price: ${price:.2f}"
+        if ohlcv_data:
+            data_section += (
+                f"\n📊 OHLCV (last {len(ohlcv_data)} bars): {json.dumps(ohlcv_data[-10:])}"
+            )
+        if dxy:
+            data_section += f"\n💵 DXY: {dxy:.2f}"
 
-        api_key = self.gemini_key
-        if not api_key:
-            LOG.warning("GEMINI_API_KEY not set")
-            return None
+        is_blackout, is_post_news, news_name = news_blackout_status()
+        news_protocol = ""
+        if is_post_news:
+            news_protocol = f"\n\n⚡ POST-NEWS PROTOCOL: {news_name}\n🔴 MODE: LIQUIDITY HUNTER — counter-trend only\n"
+        elif is_blackout:
+            news_protocol = f"\n\n🚫 PRE-NEWS BLACKOUT: {news_name} — WAJIB HOLD.\n"
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"  # noqa: E501
-        payload = json.dumps({
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 2048},
-        }).encode()
+        prompt = (
+            f"🕐 {wib_fmt()} | Session: {sess} | Killzone: {kz_str}\n"
+            f"🔴 Circuit Breaker: Loss hari ini: {loss_count}/3\n"
+            f"{news_protocol}\n{data_section}\n\n"
+            f"Analisis {display} dengan SMC + SnR. Entry/SL/TP wajib dari data.\n"
+            f"R:R minimum 1:2. {'⚠️ FRIDAY: SL +10-15 pips extra.' if wib_now().weekday() == 4 else ''}\n"
+            f"⚡ XAUUSD 3-DIGIT: 1 pip = 0.10. SL 30 pip = 3.0 poin harga. TP 60 pip = 6.0 poin.\n"
+            f"Contoh SELL entry=4334: SL=4337.00 (+3.0 poin = 30 pip) TP=4328.00 (−6.0 poin = 60 pip) untuk RR 1:2"
+        )
 
-        try:
-            req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=30) as r:
-                data = json.loads(r.read())
-            candidates = data.get("candidates", [])
-            if candidates:
-                return candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        except Exception as e:
-            LOG.error("Gemini native call failed: %s", e)
+        is_free_tier = tier == "starter" and not premium
+
+        # 1. DeepSeek
+        deepseek = await self._call_deepseek(prompt)
+
+        # 2. GPT-4o
+        gpt4o = None
+        if not is_free_tier:
+            gpt4o = await self._call_openai(prompt, model="gpt-4o")
+
+        # 3. Grok News (Twitter Context)
+        grok_news = None
+        if not is_free_tier:
+            grok_news = await self._call_grok_news(display, price)
+
+        token_total = sum(v.get("total", 0) for v in self._ai_token_usage.values())
+        token_prompt = sum(v.get("prompt", 0) for v in self._ai_token_usage.values())
+        token_completion = sum(v.get("completion", 0) for v in self._ai_token_usage.values())
+
+        signals = []
+        if deepseek and deepseek.get("action") in ("BUY", "SELL"):
+            signals.append({"sig": deepseek, "name": "DeepSeek-V3", "weight": 1.2})
+        if gpt4o and gpt4o.get("action") in ("BUY", "SELL"):
+            signals.append({"sig": gpt4o, "name": "GPT-4o", "weight": 1.0})
+
+        model_count = len(signals)
+        tier_label = {"starter": "🆓 Free", "pro": "⭐ Pro", "elite": "👑 Elite"}.get(
+            tier, tier.upper()
+        )
+
+        conf_caps = {"starter": 0.55, "pro": 0.85, "elite": 0.95}
+        conf_cap = conf_caps.get(tier, 0.95)
+        if premium:
+            conf_cap = 0.95
+
+        buy_votes = [s for s in signals if s["sig"]["action"] == "BUY"]
+        sell_votes = [s for s in signals if s["sig"]["action"] == "SELL"]
+
+        # Consensus
+        if len(buy_votes) >= 2 or len(sell_votes) >= 2:
+            winner = buy_votes if len(buy_votes) >= 2 else sell_votes
+            conf = sum(s["sig"].get("confidence", 0) * s["weight"] for s in winner) / sum(
+                s["weight"] for s in winner
+            )
+            sig = winner[0]["sig"].copy()
+            sig["confidence"] = min(conf, conf_cap)
+            sig["ensemble"] = "dual"
+            sig["voters"] = len(winner)
+            sig["_model"] = "+".join(s["name"] for s in winner)
+            sig["_tier"] = tier_label
+            sig["_tier_capped"] = is_free_tier
+            sig["_models"] = f"{model_count}/2"
+            sig["_token_total"] = token_total
+            sig["_token_prompt"] = token_prompt
+            sig["_token_completion"] = token_completion
+            sig["_grok_news"] = grok_news
+            LOG.info(
+                "AI CONSENSUS [%d/%d]: %s conf=%.0f%% tier=%s tokens=%d",
+                len(winner),
+                len(signals),
+                sig["action"],
+                sig["confidence"] * 100,
+                tier,
+                token_total,
+            )
+            return sig
+
+        # Solo fallback
+        if signals:
+            best = max(signals, key=lambda s: s["sig"].get("confidence", 0) * s["weight"])
+            sig = best["sig"].copy()
+            sig["confidence"] = min(sig.get("confidence", 0), conf_cap)
+            sig["ensemble"] = "solo"
+            sig["voters"] = 1
+            sig["_model"] = best["name"]
+            sig["_tier"] = tier_label
+            sig["_tier_capped"] = is_free_tier
+            sig["_models"] = f"{model_count}/2"
+            sig["_token_total"] = token_total
+            sig["_token_prompt"] = token_prompt
+            sig["_token_completion"] = token_completion
+            sig["_grok_news"] = grok_news
+            LOG.info(
+                "SOLO [%s]: %s conf=%.0f%% tier=%s tokens=%d",
+                best["name"],
+                sig["action"],
+                sig["confidence"] * 100,
+                tier,
+                token_total,
+            )
+            return sig
+
+        # Hold fallback
+        if deepseek:
+            s = dict(deepseek)
+            s["ensemble"] = "hold"
+            s["voters"] = 0
+            s["_model"] = "DeepSeek-V3"
+            s["_tier"] = tier_label
+            s["_tier_capped"] = is_free_tier
+            s["_models"] = "0/2"
+            s["_token_total"] = token_total
+            s["_token_prompt"] = token_prompt
+            s["_token_completion"] = token_completion
+            s["_grok_news"] = grok_news
+            return s
+
         return None
-
-    async def _call_ai_with_model(self, model: str, user_content: str) -> str:
-        import urllib.request
-
-        api_keys = {
-            "deepseek": self.deepseek_key,
-            "openai": self.openai_key,
-            "claude": self.claude_key,
-        }
-        api_key = api_keys.get(model, self.deepseek_key)
-        if not api_key:
-            return ""
-
-        payload = json.dumps({
-            "model": model,
-            "messages": [
-                {"role": "system", "content": self._build_system_prompt()},
-                {"role": "user", "content": user_content},
-            ],
-            "temperature": 0.3,
-        }).encode()
-
-        url_map = {
-            "deepseek": "https://api.deepseek.com/chat/completions",
-            "openai": "https://api.openai.com/v1/chat/completions",
-            "claude": "https://api.anthropic.com/v1/messages",
-        }
-        url = url_map.get(model, "https://api.deepseek.com/chat/completions")
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-        try:
-            req = urllib.request.Request(url, data=payload, headers=headers)
-            with urllib.request.urlopen(req, timeout=30) as r:
-                result = json.loads(r.read())
-            if model == "claude":
-                return result.get("content", [{}])[0].get("text", "")
-            return result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        except Exception as e:
-            LOG.error("AI call (%s) failed: %s", model, e)
-            return ""
 
     def _build_system_prompt(self) -> str:
         return (
-            "You are a precise XAUUSD (Gold) futures technical analyst. "
-            "Use ICT/SMC concepts: fair value gaps, order blocks, market structure. "
-            "Return ONLY valid JSON with action, confidence (0-100), entry, sl, tp, reasoning. "
-            "If the setup is unclear, be honest and return HOLD with low confidence."
+            "Kamu adalah Vilona Trade FX — Full-Stack Institutional AI Trading System.\n"
+            "Senior Hedge Fund Portfolio Manager menganalisis market dengan data REAL.\n\n"
+            "⚠️ CRITICAL RULE: Analisa HARUS berdasarkan DATA OHLCV yang diberikan dalam prompt.\n"
+            "DILARANG mengarang harga, level, atau pola yang tidak ada di data.\n"
+            "Jika data tidak tersedia → HOLD. Jika data tidak mendukung setup → HOLD.\n\n"
+            "═══════════════════════════════════════════\n"
+            "🛡️ CONSTITUTION (Non-Negotiable)\n"
+            "═══════════════════════════════════════════\n"
+            "LAW #1 — CIRCUIT BREAKER: loss_count >= 3 → WAJIB HOLD. TIDAK ADA pengecualian.\n"
+            "LAW #2 — REALISTIC: Target 5-15%/bulan, bukan 100%.\n"
+            "LAW #3 — COMPOUNDING > JACKPOT: $1,000 @ 10%/bln → 12 bln: $3,138 | 5 thn: $300K+\n"
+            "LAW #4 — DUAL RISK TIER: SKC ≥ 8.7 → 1% risk | SKC 7.0-8.6 → 0.5% risk | SKC < 7.0 → SKIP\n"
+            "LAW #5 — DON'T CHASE: Entry hanya setelah candle CLOSED dengan konfirmasi.\n"
+            "LAW #6 — PIP CALCULATION: XAUUSD broker 3-digit → 1 pip = 0.10. USOIL 3-digit → 1 pip = 0.01. BTCUSD → 1 pip = 1.0. Forex → 1 pip = 0.00010 (5-digit) / 0.01 (JPY). entry/sl/tp = HARGA ABSOLUTE.\n"
+            "LAW #7 — SL/TP RULES: SL 20-35 pip dari entry. TP = SL × RR (min 1:2). Contoh SELL entry=4334: SL=4337.00 (+3.0 poin = 30 pip) TP=4328.00 (−6.0 poin = 60 pip) untuk RR 1:2.\n\n"
+            "═══════════════════════════════════════════\n"
+            "🔬 SKC SCORING ENGINE (Max 10 pts)\n"
+            "═══════════════════════════════════════════\n"
+            "S — STRUKTUR (Max 4.0): W1/D1 aligned(+1.5) | H4 CHoCH/BOS(+1.5) | H1 POI(+0.5) | M15/M5(+0.5)\n"
+            "K — KONFLUENSI (Max 3.5): Liq sweep(+1.0) | ≥3TF bias aligned(+1.0) | Killzone active(+0.75) | S/R round number(+0.75)\n"
+            "C — KONTEKS (Max 2.5): Macro align(+1.0) | News align(+1.0) | Clean chart no chop(+0.5)\n\n"
+            "OUTPUT: JSON only. No markdown, no text outside JSON.\n"
+            "Return exactly this JSON structure:\n"
+            "{\n"
+            ' "action":"BUY|SELL|HOLD",\n'
+            ' "entry":0.0, "sl":0.0, "tp":0.0,\n'
+            ' "sl_pips":0, "tp_pips":0,\n'
+            ' "rr_ratio":"1:X.XX",\n'
+            ' "confidence":0.0, "grade":"A|B|C|D",\n'
+            ' "combat_style":"SNIPER|COMMANDO|CRUSADER|LIQUIDITY_HUNTER|HOLD",\n'
+            ' "bias":"BULLISH|BEARISH|NEUTRAL",\n'
+            ' "skc_score":{"s_struktur":0.0,"k_konfluensi":0.0,"c_konteks":0.0,"total":0.0,"zone":"GREEN|YELLOW|RED"},\n'
+            ' "risk_tier":"1%|0.5%|SKIP",\n'
+            ' "layer_1":"TRIGGERED|WAITING|N/A",\n'
+            ' "layer_2":"CONFIRMED|PENDING|FAILED",\n'
+            ' "confluences":["factor1","factor2"],\n'
+            ' "reasoning":"6-8 kalimat ANALISA LENGKAP..."\n'
+            "}"
         )
 
-    async def _call_ai(self, user_prompt: str, display: str) -> tuple[dict[str, Any] | None, str | None]:
-        from tradebot.bots.platforms.vilona.helpers import extract_json
-
-        tier1 = await self._call_tier1_gemini(user_prompt)
-        if not tier1:
-            return None, "AI analysis unavailable"
-
-        tier1_conf = tier1.get("confidence", 0)
-        if tier1_conf < 75:
-            LOG.info("Tier 1 confidence %.0f%% < 75%% — pipeline halted", tier1_conf)
-            return {"action": "HOLD", "confidence": tier1_conf, "grade": "C",
-                    "reasoning": f"Gemini confidence {tier1_conf:.0f}% below threshold"}, None
-
+    def _extract_json(self, content: str) -> dict[str, Any] | None:
+        content = re.sub(r"```[a-z]*\s*", "", content)
+        start = content.find("{")
+        if start < 0:
+            return None
+        depth = 0
+        end = start
+        for i, ch in enumerate(content[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        json_str = content[start:end]
+        json_str = re.sub(r"[\x00-\x1f]+", " ", json_str)
         try:
-            sniper_prompt = (
-                f"Cross-check this {display} analysis. "
-                f"Tier 1 (Gemini) says: {json.dumps(tier1)}. "
-                f"Verify or override. Return valid JSON."
-            )
-            sniper_raw = await self._call_ai_with_model("deepseek-chat", sniper_prompt)
-            sniper = extract_json(sniper_raw) if sniper_raw else None
-            if sniper and sniper.get("action") in ("BUY", "SELL"):
-                sig = {**tier1, **sniper}
-                sig["source"] = "gemini→deepseek-sniper"
-                sig["gemini_confidence"] = tier1_conf
-                LOG.info("Sniper confirmed: %s @ %.0f%%", sig["action"], sig.get("confidence", 0))
-                return sig, sig.get("reasoning", "")
-        except Exception as e:
-            LOG.warning("Sniper call failed: %s", e)
+            return json.loads(json_str, strict=False)
+        except Exception:
+            return None
 
-        return tier1, tier1.get("reasoning", "Sniper unavailable — Gemini workhorse only.")
+    async def _call_deepseek(self, prompt: str) -> dict[str, Any] | None:
+        key = self.deepseek_key
+        if not key:
+            return None
+        try:
+            req = urllib.request.Request(
+                "https://api.deepseek.com/v1/chat/completions",
+                data=json.dumps(
+                    {
+                        "model": "deepseek-chat",
+                        "max_tokens": 800,
+                        "temperature": 0.3,
+                        "messages": [
+                            {"role": "system", "content": self._build_system_prompt()},
+                            {"role": "user", "content": prompt},
+                        ],
+                    }
+                ).encode(),
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+            )
+            with urllib.request.urlopen(req, timeout=45) as r:
+                data = json.loads(r.read())
+                content = data["choices"][0]["message"]["content"]
+                usage = data.get("usage", {})
+                self._ai_token_usage["deepseek"] = {
+                    "prompt": usage.get("prompt_tokens", 0),
+                    "completion": usage.get("completion_tokens", 0),
+                    "total": usage.get("total_tokens", 0),
+                }
+                return self._extract_json(content)
+        except Exception as e:
+            LOG.warning("DeepSeek error: %s", e)
+            return None
+
+    async def _call_openai(self, prompt: str, model: str = "gpt-4o") -> dict[str, Any] | None:
+        key = self.openai_key
+        if not key:
+            return None
+        try:
+            messages = [
+                {"role": "system", "content": self._build_system_prompt()},
+                {"role": "user", "content": prompt},
+            ]
+            req = urllib.request.Request(
+                "https://api.openai.com/v1/chat/completions",
+                data=json.dumps(
+                    {"model": model, "max_tokens": 800, "temperature": 0.3, "messages": messages}
+                ).encode(),
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+            )
+            with urllib.request.urlopen(req, timeout=45) as r:
+                data = json.loads(r.read())
+                content = data["choices"][0]["message"]["content"]
+                usage = data.get("usage", {})
+                self._ai_token_usage["openai"] = {
+                    "prompt": usage.get("prompt_tokens", 0),
+                    "completion": usage.get("completion_tokens", 0),
+                    "total": usage.get("total_tokens", 0),
+                }
+                return self._extract_json(content)
+        except Exception as e:
+            LOG.warning("OpenAI error: %s", e)
+            return None
+
+    async def _call_grok_news(self, display: str, price: float) -> dict[str, Any] | None:
+        key = self.grok_api_key
+        if not key:
+            return None
+        try:
+            news_prompt = (
+                f"Search X/Twitter for the LATEST breaking news, macro events, or market-moving "
+                f"headlines about {display} (currently ${price:.2f}). "
+                f"Focus on: FOMC/Fed speakers, NFP/CPI/economic data, geopolitical events, "
+                f"major institutional moves, or sentiment shifts in the last 2 hours.\n\n"
+                f"Return ONLY a structured JSON with these fields:\n"
+                f'{{"headline": "1 most impactful headline", '
+                f'"sentiment": "BULLISH/BEARISH/NEUTRAL", '
+                f'"impact": "HIGH/MED/LOW", '
+                f'"detail": "2-3 sentence context explaining WHY this matters for {display}"}}\n\n'
+                f"Be CONCISE. Max 150 words total. If no significant news, headline='No major catalysts'."
+            )
+            req = urllib.request.Request(
+                self.grok_url,
+                data=json.dumps(
+                    {
+                        "model": "grok-2-latest",
+                        "max_tokens": 300,
+                        "temperature": 0.3,
+                        "messages": [{"role": "user", "content": news_prompt}],
+                    }
+                ).encode(),
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
+            )
+            with urllib.request.urlopen(req, timeout=25) as r:
+                data = json.loads(r.read())
+                content = data["choices"][0]["message"]["content"]
+                usage = data.get("usage", {})
+                self._ai_token_usage["grok"] = {
+                    "prompt": usage.get("prompt_tokens", 0),
+                    "completion": usage.get("completion_tokens", 0),
+                    "total": usage.get("total_tokens", 0),
+                }
+                news = self._extract_json(content)
+                if news and isinstance(news, dict):
+                    return news
+                return {
+                    "headline": content[:200],
+                    "sentiment": "NEUTRAL",
+                    "impact": "LOW",
+                    "detail": "",
+                }
+        except Exception as e:
+            LOG.warning("Grok News error: %s", e)
+            return None

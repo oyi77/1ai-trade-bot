@@ -17,9 +17,13 @@ class CallbackHandlersMixin(BaseBot):
     async def _handle_callback(self, callback_query: dict[str, Any]) -> str | None:
         cb_id = callback_query.get("id", "")
         chat_id = str(callback_query.get("from", {}).get("id", ""))
+        username = callback_query.get("from", {}).get("username", "")
         data = callback_query.get("data", "")
 
         await self._tg_answer_callback(cb_id)
+
+        if not chat_id or not data:
+            return None
 
         # Menu navigation
         if data.startswith("menu:"):
@@ -41,12 +45,19 @@ class CallbackHandlersMixin(BaseBot):
             await self._tg_send(response, chat_id=chat_id)
             return response
 
-        # Legacy callbacks (trade, payment)
+        # Trade confirmation / skip callbacks
         if data.startswith("trade:") or data.startswith("skip:"):
-            return self._handle_trade_callback(chat_id, data)
+            return await self._handle_trade_callback(chat_id, data)
 
-        if data.startswith("pay:") or data.startswith("check:") or data.startswith("donate:"):
-            return self._handle_payment_callback(chat_id, data)
+        # Payment callbacks
+        if (
+            data.startswith("pay:")
+            or data.startswith("check:")
+            or data.startswith("donate:")
+            or data.startswith("pricing:")
+            or data == "cancel_input"
+        ):
+            return await self._handle_payment_callback(chat_id, username, data)
 
         return None
 
@@ -58,9 +69,11 @@ class CallbackHandlersMixin(BaseBot):
         await self._tg_send(text, chat_id=chat_id, reply_markup=kb)
         return ""
 
-    def _handle_trade_callback(self, chat_id: str, data: str) -> str:
+    async def _handle_trade_callback(self, chat_id: str, data: str) -> str:
         if chat_id not in self._pending_signals:
-            return "⏰ Sinyal kadaluarsa. Kirim /analyze lagi."
+            msg = "⏰ Sinyal kadaluarsa. Kirim /analyze lagi."
+            await self._tg_send(msg, chat_id=chat_id)
+            return msg
 
         pending = self._pending_signals.pop(chat_id, {})
         sig = pending.get("sig")
@@ -72,102 +85,241 @@ class CallbackHandlersMixin(BaseBot):
         if data.startswith("trade:"):
             action = sig.get("action", "HOLD")
             if action == "HOLD":
-                return "⚪ Sinyal HOLD — tidak ada trade."
+                msg = "⚪ Sinyal HOLD — tidak ada trade."
+                await self._tg_send(msg, chat_id=chat_id)
+                return msg
             sig["target_user"] = chat_id
-            self.bridge.post_signal(sig, price)
-            return f"✅ <b>Sinyal {action} dikirim!</b>\nEA kamu auto-eksekusi dalam 5 detik."
-        else:
-            return "⏭ Sinyal dilewati. Analisa lagi: /analyze"
+            from tradebot.bots.platforms.vilona.helpers import post_signal_to_bridge
 
-    def _handle_payment_callback(self, chat_id: str, data: str) -> str:
-        if data == "sub:pro":
+            post_signal_to_bridge(sig, price)
+            msg = f"✅ <b>Sinyal {action} dikirim!</b>\nEA kamu auto-eksekusi dalam 5 detik."
+            await self._tg_send(msg, chat_id=chat_id)
+            self._save_pending_signals()
+            return msg
+        else:
+            msg = "⏭ Sinyal dilewati. Analisa lagi: /analyze"
+            await self._tg_send(msg, chat_id=chat_id)
+            self._save_pending_signals()
+            return msg
+
+    async def _handle_payment_callback(self, chat_id: str, username: str, data: str) -> str:
+        if data == "cancel_input":
             DONATION_INPUT_STATE.pop(chat_id, None)
-            return (
-                "⭐ <b>PRO — Rp50.000/bulan</b>\n"
-                "━━━━━━━━━━━━━━━━\n"
-                "✓ 20x /analyze per hari\n"
-                "✓ SL/TP unlocked\n"
-                "✓ EA Bridge gratis\n"
-                "✓ Nama di subscriber wall\n\n"
-                "💚 Subscribe via /subscribe atau\n"
-                "hubungi @codergaboets"
-            )
-        if data == "sub:elite":
-            DONATION_INPUT_STATE.pop(chat_id, None)
-            return (
-                "👑 <b>ELITE — Rp150.000/bulan</b>\n"
-                "━━━━━━━━━━━━━━━━\n"
-                "✓ Semua fitur PRO +\n"
-                "✓ /analyze UNLIMITED\n"
-                "✓ GPT-4o + Grok AI\n"
-                "✓ Priority EA Token\n"
-                "✓ Daily performance report\n\n"
-                "💚 Subscribe via /subscribe atau\n"
-                "hubungi @codergaboets"
-            )
-        if data == "sub:lifetime":
-            DONATION_INPUT_STATE.pop(chat_id, None)
-            return (
-                "💎 <b>LIFETIME — Rp500.000 sekali</b>\n"
-                "━━━━━━━━━━━━━━━━\n"
-                "✓ Semua fitur ELITE\n"
-                "✓ Permanent — never expires\n"
-                "✓ Nama di homepage\n"
-                "✓ Elite API key\n"
-                "✓ 1-on-1 setup support\n\n"
-                "💚 Subscribe via /subscribe atau\n"
-                "hubungi @codergaboets"
-            )
+            msg = "❌ Input dibatalkan."
+            await self._tg_send(msg, chat_id=chat_id)
+            await self._handle_menu_nav("donate", chat_id)
+            return msg
+
+        # Pricing plans info
+        pricing = {
+            "pro": {"label": "⭐ PRO", "price": 50000},
+            "elite": {"label": "👑 ELITE", "price": 150000},
+            "lifetime": {"label": "💎 LIFETIME", "price": 500000},
+        }
+
+        if data.startswith("pay:") or data.startswith("donate:"):
+            tier = "pro"
+            amount = 50000
+            if ":" in data:
+                tier = data.split(":", 1)[1]
+            if tier == "coffee":
+                tier = "pro"
+                amount = 15000  # legacy compat Rp15K
+            elif tier == "learn":
+                tier = "pro"
+                amount = 25000  # legacy compat Rp25K
+            elif tier == "fuel":
+                tier = "elite"
+                amount = 150000
+            elif tier == "custom":
+                DONATION_INPUT_STATE[chat_id] = True
+                msg = (
+                    "💰 <b>Ketik nominal donasi kamu:</b>\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    "Silakan ketik angka saja (contoh: <code>50000</code>)\n"
+                    "Minimal nominal Rp10.000."
+                )
+                markup = {
+                    "inline_keyboard": [[{"text": "❌ Batal", "callback_data": "cancel_input"}]]
+                }
+                await self._tg_send(msg, chat_id=chat_id, reply_markup=markup)
+                return msg
+            else:
+                pkg = pricing.get(tier, pricing["pro"])
+                amount = pkg["price"]
+
+            msg_creating = f"⏳ <b>Membuat invoice...</b>\nPaket: {tier.upper()} — Rp{amount:,}"
+            await self._tg_send(msg_creating, chat_id=chat_id)
+
+            try:
+                from tradebot.services.payment import PaymentService
+
+                svc = PaymentService()
+                result = await svc.create_tripay_transaction(
+                    user_id=chat_id,
+                    username=username,
+                    amount=amount,
+                    method="QRIS2",
+                )
+                if result.get("success") is False:
+                    raise ValueError(result.get("error", "Failed"))
+
+                pay_url = result.get("data", {}).get("checkout_url", "")
+                pay_code = result.get("data", {}).get("pay_code", "")
+                ref = result.get("data", {}).get("reference", "")
+
+                txt = (
+                    f"💳 <b>Invoice — {tier.upper()}</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"💰 Total: <b>Rp{amount:,}</b>\n"
+                )
+                if pay_code:
+                    txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
+                txt += "⏰ Expired: 1 jam\n━━━━━━━━━━━━━━━━\nKlik tombol di bawah untuk bayar:"
+
+                markup = {
+                    "inline_keyboard": [
+                        [{"text": f"💳 Bayar Rp{amount:,}", "url": pay_url}] if pay_url else [],
+                        [
+                            {"text": "🔄 Cek Status", "callback_data": f"check:{ref}"},
+                            {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
+                        ],
+                    ]
+                }
+                await self._tg_send(txt, chat_id=chat_id, reply_markup=markup)
+                return txt
+            except Exception as e:
+                LOG.error("Failed to create Tripay payment: %s", e)
+                fallback = (
+                    "💚 <b>Sistem Pembayaran Sibuk</b>\n"
+                    "━━━━━━━━━━━━━━━━\n"
+                    "<b>Manual Transfer</b>\n\n"
+                    "🏦 BCA: <b>8531425531</b>\n"
+                    "   a.n. <b>MOH SUHUD</b>\n\n"
+                    "📱 Dana/GoPay:\n"
+                    "Hubungi admin @codergaboets untuk konfirmasi manual.\n\n"
+                    "Terima kasih atas dukunganmu! 🙏"
+                )
+                await self._tg_send(fallback, chat_id=chat_id)
+                return fallback
+
+        elif data.startswith("check:"):
+            ref = data.split(":", 1)[1] if ":" in data else ""
+            if not ref:
+                msg = "❌ Referensi tidak valid."
+                await self._tg_send(msg, chat_id=chat_id)
+                return msg
+
+            await self._tg_send("🔍 <b>Cek Status Pembayaran ke Tripay...</b>", chat_id=chat_id)
+
+            try:
+                from tradebot.services.payment import PaymentService
+
+                svc = PaymentService()
+                result = await svc.get_tripay_transaction(ref)
+
+                status = "PENDING"
+                if result.get("success") and result.get("data"):
+                    status = result["data"].get("status", "").upper()
+
+                if status in ("PAID", "SUCCESS", "SETTLEMENT"):
+                    from tradebot.services.members_service import (
+                        activate_premium,
+                        mark_payment_paid,
+                    )
+
+                    activate_premium(chat_id, "donor", 9999)
+                    mark_payment_paid(ref)
+
+                    msg = (
+                        "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
+                        "━━━━━━━━━━━━━━━━\n"
+                        "👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                        "♾️ /analyze — UNLIMITED\n"
+                        "🤖 EA Auto-Trade — AKTIF PERMANEN\n\n"
+                        "Download EA: https://bit.ly/vilona-ea\n"
+                        "Channel: @vilonaaichanel\n"
+                        "Group: @vilona_tradefx_group\n\n"
+                        "Mari cetak profit! 🔥"
+                    )
+                    await self._tg_send(msg, chat_id=chat_id)
+                    return msg
+                else:
+                    msg = (
+                        "⏳ <b>Pembayaran Belum Terkonfirmasi</b>\n"
+                        "━━━━━━━━━━━━━━━━\n"
+                        "Tripay belum menerima pembayaran untuk invoice ini.\n"
+                        "Pastikan kamu sudah menyelesaikan pembayaran.\n\n"
+                        "Biasanya butuh 1-5 menit setelah transfer.\n"
+                        "Kalau sudah lebih dari 10 menit, hubungi admin."
+                    )
+                    await self._tg_send(msg, chat_id=chat_id)
+                    return msg
+            except Exception as e:
+                LOG.error("Tripay check status failed: %s", e)
+                msg = "⚠️ <b>Cek status gagal.</b> Coba lagi nanti atau kirim bukti pembayaran ke admin: @codergaboets"
+                await self._tg_send(msg, chat_id=chat_id)
+                return msg
+
+        elif data.startswith("pricing:"):
+            # Resend donate menu with pricing options
+            await self._handle_menu_nav("donate", chat_id)
+            return ""
+
         return "💳 Hubungi @codergaboets untuk subscribe"
 
     async def _handle_donation_input(self, chat_id: str, text: str) -> str:
         try:
             amount = int(text.replace(".", "").replace(",", ""))
             if amount < 10000:
-                return "💰 Minimal Rp10,000. Silakan ketik nominal lain."
+                return "💰 Minimal Rp10.000. Silakan ketik nominal lain."
             DONATION_INPUT_STATE.pop(chat_id, None)
-            # Try Tripay payment engine
-            from tradebot.services.payment_service import create_tripay_invoice
+
             try:
-                invoice = create_tripay_invoice(
-                    chat_id, amount, f"Subscribe {chat_id} - Rp{amount:,}"
+                from tradebot.services.payment import PaymentService
+
+                svc = PaymentService()
+                result = await svc.create_tripay_transaction(
+                    user_id=chat_id,
+                    username=f"User{chat_id}",
+                    amount=amount,
+                    method="QRIS2",
                 )
-                if invoice and invoice.get("pay_url"):
-                    return (
-                        f"💚 <b>Dukungan Rp{amount:,}</b>\n"
-                        f"━━━━━━━━━━━━━━━━\n"
-                        f"🔗 <a href='{invoice['pay_url']}'>Klik bayar di sini</a>\n"
-                        f"━━━━━━━━━━━━━━━━\n"
-                        f"Terima kasih atas dukunganmu! 🙏"
-                    )
-            except Exception:
-                pass
-            # Payment engine offline — show manual transfer instructions
-            return (
-                f"💚 <b>Dukungan Rp{amount:,}</b>\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"<b>Manual Transfer</b>\n\n"
-                f"🏦 BCA: <b>8531425531</b>\n"
-                f"   a.n. <b>MOH SUHUD</b>\n\n"
-                f"📱 Dana/GoPay:\n"
-                f"Hubungi admin @codergaboets\n\n"
-                f"📸 Kirim bukti transfer ke admin.\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"Terima kasih atas dukunganmu! 🙏"
-            )
-        except ImportError:
-            DONATION_INPUT_STATE.pop(chat_id, None)
-            return (
-                f"💚 <b>Dukungan Rp{amount:,}</b>\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"<b>Manual Transfer</b>\n\n"
-                f"🏦 BCA: <b>8531425531</b>\n"
-                f"   a.n. <b>MOH SUHUD</b>\n\n"
-                f"📱 Dana/GoPay:\n"
-                f"Hubungi admin @codergaboets\n\n"
-                f"📸 Kirim bukti transfer ke admin.\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"Terima kasih atas dukunganmu! 🙏"
-            )
+                if result.get("success") is False:
+                    raise ValueError(result.get("error", "Failed"))
+
+                pay_url = result.get("data", {}).get("checkout_url", "")
+                pay_code = result.get("data", {}).get("pay_code", "")
+                ref = result.get("data", {}).get("reference", "")
+
+                txt = f"💚 <b>Dukungan Rp{amount:,}</b>\n━━━━━━━━━━━━━━━━\n"
+                if pay_code:
+                    txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
+                txt += "⏰ Expired: 1 jam\n━━━━━━━━━━━━━━━━\nKlik tombol di bawah untuk bayar:"
+
+                markup = {
+                    "inline_keyboard": [
+                        [{"text": f"💳 Bayar Rp{amount:,}", "url": pay_url}] if pay_url else [],
+                        [
+                            {"text": "🔄 Cek Status", "callback_data": f"check:{ref}"},
+                            {"text": "📞 Admin", "url": "https://t.me/codergaboets"},
+                        ],
+                    ]
+                }
+                await self._tg_send(txt, chat_id=chat_id, reply_markup=markup)
+                return ""
+            except Exception as e:
+                LOG.error("Tripay custom donation invoice failed: %s", e)
+                # Payment engine offline — show manual transfer instructions
+                return (
+                    f"💚 <b>Dukungan Rp{amount:,}</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"<b>Manual Transfer</b>\n\n"
+                    f"🏦 BCA: <b>8531425531</b>\n"
+                    f"   a.n. <b>MOH SUHUD</b>\n\n"
+                    f"📱 Dana/GoPay:\n"
+                    f"Hubungi admin @codergaboets untuk konfirmasi manual.\n\n"
+                    f"Terima kasih atas dukunganmu! 🙏"
+                )
         except ValueError:
             return "❌ Nominal tidak valid. Ketik angka saja (contoh: 50000)."
