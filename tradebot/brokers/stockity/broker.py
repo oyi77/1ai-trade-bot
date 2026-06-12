@@ -120,6 +120,27 @@ class StockityBroker:
         # Select the active balance type (demo or real)
         await self._send_event("account", "change_type", {"type": self._deal_type})
 
+        # Fetch initial balances from REST API to seed the WebSocket state
+        try:
+            from tradebot.brokers.stockity.rest import StockityREST
+            rest = StockityREST()
+            balances_data = await rest.get_balances()
+            if balances_data and balances_data.get("data"):
+                for acc in balances_data["data"]:
+                    if acc.get("account_type") == self._deal_type:
+                        self._balance_raw = acc.get("balance", 0)
+                        self._balance_currency = acc.get("currency", settings.STOCKITY_CURRENCY)
+                        self._account_type = acc.get("account_type", "")
+                        LOG.info(
+                            "Initial Balance (REST): %.0f %s (%s)",
+                            self._balance_raw,
+                            self._balance_currency,
+                            self._account_type,
+                        )
+            await rest.close()
+        except Exception as e:
+            LOG.error("Failed to fetch initial balance from REST API: %s", e)
+
         # Join asset topic (gives majority_opinion + social_trading)
         await self._join_topic("asset:Z-CRY/IDX")
 

@@ -264,6 +264,20 @@ class StockityREST:
             LOG.error("Candles failed: %s", e)
             return None
 
+    async def get_balances(self) -> dict[str, Any] | None:
+        """Get account balances via REST API."""
+        url = f"{self._base}/bank/v1/read"
+        if not self._client:
+            self._client = httpx.AsyncClient(timeout=15)
+        try:
+            resp = await self._client.get(
+                url, params={"locale": "en"}, headers=self.headers
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            LOG.error("Get balances failed: %s", e)
+            return None
     async def close(self) -> None:
         """Close HTTP client."""
         if self._client:
