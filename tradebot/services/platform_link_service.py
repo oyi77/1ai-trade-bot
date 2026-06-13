@@ -88,8 +88,8 @@ class PlatformLinkService:
 
         cookie = full_cookie
 
-        # Detect currency from balance API
-        currency = await self._detect_stockity_currency(cookie)
+        # Detect currency and balances from balance API
+        currency, balances = await self._detect_stockity_currency(cookie)
         LOG.info("Stockity currency detected: %s for user %s", currency, user_id)
 
         # Save to user_platforms table
@@ -119,6 +119,7 @@ class PlatformLinkService:
             "currency": currency,
             "broker_user_id": broker_user_id,
             "label": label,
+            "balances": balances,
         }
 
     async def _stockity_login(self, email: str, password: str) -> tuple[str, str, str]:
@@ -187,11 +188,11 @@ class PlatformLinkService:
                 )
             return authtoken, broker_user_id, full_cookie
 
-    async def _detect_stockity_currency(self, cookie: str) -> str:
-        """Detect account currency from Stockity balance API.
+    async def _detect_stockity_currency(self, cookie: str) -> tuple[str, dict[str, float]]:
+        """Detect account currency and balances from Stockity balance API.
 
         Returns:
-            Currency code (e.g. "IDR", "USD"), defaults to "IDR" on failure.
+            Tuple of (Currency code, dict of account balances), defaults to ("IDR", {}) on failure.
         """
         import re as _re
         authtoken = ""
@@ -232,17 +233,25 @@ class PlatformLinkService:
                 resp.raise_for_status()
                 data = resp.json()
                 accounts = data.get("data", [])
+                currency = "IDR"
+                balances = {}
                 for acc in accounts:
-                    currency = acc.get("currency", "")
-                    if currency:
-                        LOG.info(
-                            "Detected currency: %s (type=%s)", currency, acc.get("account_type")
-                        )
-                        return currency
+                    c = acc.get("currency", "")
+                    if c and currency == "IDR":
+                        currency = c
+                    
+                    acc_type = acc.get("account_type", "unknown")
+                    amount = acc.get("amount", 0) / 100.0  # Stockity uses cents
+                    balances[acc_type] = amount
+                
+                LOG.info(
+                    "Detected currency: %s, balances: %s", currency, balances
+                )
+                return currency, balances
         except Exception as e:
             LOG.warning("Currency detection failed, defaulting to IDR: %s", e)
 
-        return "IDR"
+        return "IDR", {}
 
     # ── Deriv ────────────────────────────────────────────────────────────
 

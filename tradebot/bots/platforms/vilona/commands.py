@@ -1681,11 +1681,22 @@ class CommandHandlersMixin(BaseBot):
                     return "Usage: /link stockity &lt;email&gt; &lt;password&gt;"
                 result = await svc.link_stockity(target, args[1], args[2])
                 currency = result.get("currency", "IDR")
+                balances = result.get("balances", {})
+                bal_text = ""
+                if balances:
+                    bal_text = "\nBalance:\n"
+                    for b_type, b_amt in balances.items():
+                        if currency in ["IDR", "VND"]:
+                            bal_text += f"  • {b_type.title()}: {currency} {b_amt:,.0f}\n"
+                        else:
+                            bal_text += f"  • {b_type.title()}: {currency} {b_amt:,.2f}\n"
+                
                 return (
-                    f"Akun Stockity berhasil ditautkan!\n"
+                    f"✅ **Akun Stockity berhasil ditautkan!**\n"
                     f"Currency: {currency}\n"
-                    f"User ID: {result.get('broker_user_id', '?')}"
-                )
+                    f"User ID: {result.get('broker_user_id', '?')}\n"
+                    f"{bal_text}"
+                ).strip()
             elif platform == "deriv":
                 if len(args) < 3:
                     return "Usage: /link deriv &lt;app_id&gt; &lt;secret&gt;"
