@@ -207,6 +207,10 @@ class PortfolioOracle:
 
         result: dict[str, Any] = {
             "ric": best["ric"],
+            "wr": best["wr"],
+            "win": best["win"],
+            "thr": best["thr"],
+            "payout": best["payout"],
             "direction_picker_params": direction_picker_params,
             "duration": 60,  # 1m turbo
             "action": "turbo",
