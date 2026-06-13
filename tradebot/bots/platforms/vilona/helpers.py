@@ -387,8 +387,8 @@ def get_xauusd_spot_offset() -> float:
             _last_offset = spot - quote.price
             _last_offset_time = now
             return _last_offset
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
     return _last_offset
 
 
@@ -953,8 +953,8 @@ def fmt_signal(
         wr_t = stats.get("win_rate", 0)
         if total_t > 0:
             wr_text = f"📊 Winrate: {total_t} sinyal | {wr_t}% ({wins_t}W/{losses_t}L)"
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
 
     def _pips(dist: float, asset: str = display) -> str:
         a = asset.upper()

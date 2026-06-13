@@ -33,8 +33,8 @@ def _load_feed() -> dict[str, Any]:
                 }}
             if isinstance(raw, dict):
                 return raw
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
     return {"signals": [], "stats": {"total": 0, "tp": 0, "sl": 0, "pending": 0}}
 
 
@@ -43,8 +43,8 @@ def _save_feed(data: dict[str, Any]) -> None:
         if len(data.get("signals", [])) > MAX_FEED_ENTRIES:
             data["signals"] = data["signals"][-MAX_FEED_ENTRIES:]
         FEED_FILE.write_text(json.dumps(data, indent=2, default=str))
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
 
 
 def add_signal(

@@ -163,22 +163,22 @@ def format_bridge_status() -> str:
     try:
         with ureq.urlopen("http://localhost:8765/health", timeout=5) as r:
             bridge_health = json.loads(r.read().decode())
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
 
     try:
         master_key = os.environ.get("BRIDGE_MASTER_KEY", "VT-MASTER-734AD731F5FB")
         url = f"http://localhost:8765/accounts?api_key={master_key}"
         with ureq.urlopen(url, timeout=5) as r:
             accounts_data = json.loads(r.read().decode())
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
 
     try:
         with ureq.urlopen("http://localhost:8787/health", timeout=5) as r:
             webhook_health = json.loads(r.read().decode())
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
 
     bridge_ok = bridge_health.get("status") == "ok"
     webhook_ok = webhook_health.get("status") == "ok"

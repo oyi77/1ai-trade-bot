@@ -460,8 +460,8 @@ async def webhook_tripay(request: Request):
             if existing and existing["status"] == "paid":
                 conn.close()
                 return {"success": True, "duplicate": True}
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
         amount = data.get("amount", 0)
         paid_at = data.get("paid_at") or __import__("datetime").datetime.now(

@@ -59,8 +59,8 @@ def _load() -> dict[str, Any]:
             elif not isinstance(payload, dict):
                 raise ValueError("invalid")
             return payload
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
     return {
         "trades": [],
         "stats": {
@@ -412,8 +412,8 @@ def format_trade_close_alert(trade: dict) -> str:
         try:
             dt = datetime.fromisoformat(called_on.replace("Z", "+00:00"))
             called_on = dt.strftime("%d/%m %H:%M WIB")
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
     called_line = f" | 🕐 {called_on}" if called_on else ""
 
     result = trade["outcome"]

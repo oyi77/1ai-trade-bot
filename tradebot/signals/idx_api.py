@@ -63,8 +63,8 @@ async def fetch_company_list(page_size: int = 100) -> list[dict[str, str]]:
             if data:
                 LOG.info("Loaded %d companies from cache", len(data))
                 return data
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
     all_companies: list[dict[str, str]] = []
     page = 0

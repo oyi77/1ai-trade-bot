@@ -273,8 +273,8 @@ def is_premium(chat_id: str) -> bool:
                     return True
                 else:
                     deactivate_premium(chat_id)
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
     return False
 
 

@@ -151,8 +151,8 @@ class AutonomousWorker:
             tmp = HEARTBEAT_PATH.with_suffix(".tmp")
             tmp.write_text(json.dumps(hb, indent=2, ensure_ascii=False))
             tmp.rename(HEARTBEAT_PATH)
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
         # Fire-and-forget webhook heartbeat
         self.sync.push_heartbeat()
@@ -176,16 +176,16 @@ class AutonomousWorker:
                     price = get_xauusd()
                     if price and 2000 < price < 6000:
                         return price
-                except Exception:
-                    pass
+                except Exception as e:
+                    LOG.warning("Silent exception caught: %s", e)
                 # Fallback: gold-api.com
                 try:
                     resp = _ur.urlopen("https://api.gold-api.com/price/XAU", timeout=5)
                     data = json.loads(resp.read())
                     if data.get("price"):
                         return float(data["price"])
-                except Exception:
-                    pass
+                except Exception as e:
+                    LOG.warning("Silent exception caught: %s", e)
                 # Tertiary: MT5 bridge
                 try:
                     resp = _ur.urlopen("http://localhost:8765/current_price", timeout=3)
@@ -194,8 +194,8 @@ class AutonomousWorker:
                         price = data.get("price") or data.get("bid")
                         if price and 2000 < float(price) < 6000:
                             return float(price)
-                except Exception:
-                    pass
+                except Exception as e:
+                    LOG.warning("Silent exception caught: %s", e)
                 return None
             return _get_resilience().resilient_call(_get, max_retries=3, base_delay=2.0)
 
@@ -207,8 +207,8 @@ class AutonomousWorker:
                 prices = fetch_prices([pair_upper])
                 if prices.get(pair_upper):
                     return prices[pair_upper]
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             # Fallback: yfinance
             try:
                 import yfinance as yf
@@ -218,8 +218,8 @@ class AutonomousWorker:
                 data = ticker.history(period="1d", interval="5m")
                 if not data.empty:
                     return float(data["Close"].iloc[-1])
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             return None
 
         return _get_resilience().resilient_call(_get, max_retries=3, base_delay=2.0)
@@ -435,8 +435,8 @@ class AutonomousWorker:
                     "reason": "Liquidity sweep below support",
                     "confidence": 70,
                 }
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
         return None
 

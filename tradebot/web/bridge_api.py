@@ -83,8 +83,8 @@ def _validate_key(api_key: str) -> tuple[bool, dict[str, Any] | None]:
         )
         if row:
             return True, {"tier": "pro", "source": "sqlite"}
-    except Exception:
-        pass
+    except Exception as e:
+        LOG.warning("Silent exception caught: %s", e)
 
     # Priority 2: JSON api_keys.json (legacy)
     config = _load_keys()

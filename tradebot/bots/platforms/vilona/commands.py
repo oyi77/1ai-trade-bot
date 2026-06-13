@@ -265,8 +265,8 @@ class CommandHandlersMixin(BaseBot):
         try:
             from tradebot.services.ea_license_service import get_user_keys
             keys = get_user_keys(target)
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
         # Cek apakah user punya key aktif
         active_key = None
@@ -652,8 +652,8 @@ class CommandHandlersMixin(BaseBot):
             try:
                 from tradebot.services.signal_calculator_service import log_signal
                 log_signal(sig)
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
         else:
             msg += "\n⚠️ Quality gate blocked — belum memenuhi syarat entry."
 
@@ -1048,8 +1048,8 @@ class CommandHandlersMixin(BaseBot):
         if self._market_data:
             try:
                 return self._market_data.get_price(pair)
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
         try:
             import yfinance as yf
             symbol = resolve_yahoo_symbol(pair)
@@ -1057,8 +1057,8 @@ class CommandHandlersMixin(BaseBot):
             data = ticker.history(period="1d", interval="1m")
             if not data.empty:
                 return float(data["Close"].iloc[-1])
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         return None
 
 
@@ -1083,8 +1083,8 @@ class CommandHandlersMixin(BaseBot):
                 layers = getattr(layering, "enrich_signal", None)
                 if layers:
                     sig = layers(sig, symbol=display)
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         # Quality gate: confidence >= 65%, RR >= 1.5, SL direction check
         confidence = sig.get("confidence", 0) or sig.get("score", 0)
         if isinstance(confidence, float) and confidence < 1:
@@ -1126,8 +1126,8 @@ class CommandHandlersMixin(BaseBot):
                 try:
                     self.bridge.post(sig)
                     posted = True
-                except Exception:
-                    pass
+                except Exception as e:
+                    LOG.warning("Silent exception caught: %s", e)
         # Write to ea_signal.json
         try:
             ea_dir = os.path.join(
@@ -1147,8 +1147,8 @@ class CommandHandlersMixin(BaseBot):
                 "target_user": target,
             }
             open(ea_path, "w").write(json.dumps(ea_payload))
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         # Track trade
         try:
             from tradebot.services.trade_tracker_service import log_sent_signal
@@ -1157,8 +1157,8 @@ class CommandHandlersMixin(BaseBot):
             try:
                 from trade_tracker import log_signal
                 log_signal(target, display, action, price, sig)
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
         bridge_status = "✅ TERKIRIM" if posted else "⚠️ Bridge offline — sinyal di-cache"
         fomo_msg = (
             "\n\n🔥 <b>JANGAN FOMO!</b>\n"
@@ -1277,8 +1277,8 @@ class CommandHandlersMixin(BaseBot):
         try:
             if self.bridge and hasattr(self.bridge, "set_autotrade"):
                 self.bridge.set_autotrade(target, self._autosync_enabled)
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         return f"🤖 <b>Auto-Trade: {state}</b>\nSinyal akan auto-trade ke EA tanpa konfirmasi."
 
     async def _cmd_pulse(self, args: list[str], chat_id: str | None = None) -> str:
@@ -1348,8 +1348,8 @@ class CommandHandlersMixin(BaseBot):
             dxy = None
             try:
                 dxy = self._fetch_price("dxy")
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             # Compute H1 SMA bias
             h1_bias = "NEUTRAL"
             try:
@@ -1365,8 +1365,8 @@ class CommandHandlersMixin(BaseBot):
                         h1_bias = "BEARISH 📉"
                     else:
                         h1_bias = "CHOPPY ↔️"
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             now = wib_now()
             lkz, nykz = killzone_active()
             ses = session_label()
@@ -1437,8 +1437,8 @@ class CommandHandlersMixin(BaseBot):
                 if user_id:
                     await self._tg_send(reminder_text, chat_id=user_id)
                     reminders_sent += 1
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
         lines.append("━━━━━━━━━━━━━━━━")
         lines.append(f"📨 Reminder terkirim ke {reminders_sent}/{len(stale)} subscriber")
         return "\n".join(lines)
@@ -1474,8 +1474,8 @@ class CommandHandlersMixin(BaseBot):
                 )
         except ImportError:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         # PAYMENT_ENGINE offline — show manual transfer
         return (
             f"💚 <b>Subscribe Rp{amount:,}</b>\n"
@@ -1517,8 +1517,8 @@ class CommandHandlersMixin(BaseBot):
         try:
             if self.bridge and hasattr(self.bridge, "format_full_status"):
                 return self.bridge.format_full_status()
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         # Fallback formatting
         lines = [
             "🌉 <b>BRIDGE FULL STATUS</b>",
@@ -1535,8 +1535,8 @@ class CommandHandlersMixin(BaseBot):
             if hasattr(self.bridge, 'instances'):
                 for inst_id, inst in self.bridge.instances.items():
                     lines.append(f"Instance {inst_id}: {inst.get('status', '?')}")
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         return "\n".join(lines)
 
     async def _cmd_ultimatum(self, args: list[str], chat_id: str | None = None) -> str:
@@ -1549,8 +1549,8 @@ class CommandHandlersMixin(BaseBot):
                 await self._tg_send_video_file(target, self._cached_video_file_id)
             elif os.path.exists(self._ultimatum_video_local):
                 await self._tg_send_video_file(target, self._ultimatum_video_local)
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         # Check if ULTIMATUM_ACCEPTED_PATH exists
         ultimatum_text = (
             "🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
@@ -1598,8 +1598,8 @@ class CommandHandlersMixin(BaseBot):
             if member:
                 risk = str(member.get("risk_percent", "1.0")) + "%"
                 tf = member.get("timeframe", "H1").upper()
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         return (
             f"⚙️ <b>Settings — {target}</b>\n"
             f"━━━━━━━━━━━━━━━━\n"

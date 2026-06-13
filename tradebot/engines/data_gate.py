@@ -264,8 +264,8 @@ class DataGate:
             else:
                 current = int(open(_loss_file).read().strip() or "0") + 1
                 open(_loss_file, "w").write(str(current))
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
     # ── Full Pipeline ──
 

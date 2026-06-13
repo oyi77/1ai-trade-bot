@@ -375,7 +375,7 @@ class StockityBroker(BaseBroker):
                         }
                         for cb in self._tick_callbacks:
                             try: cb(tick)
-                            except Exception: pass
+                            except Exception as e: LOG.warning("Error: %s", e)
             return
 
         # Resolve pending topic joins (general phx_reply)

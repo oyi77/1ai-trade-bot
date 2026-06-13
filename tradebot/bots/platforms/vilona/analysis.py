@@ -295,8 +295,8 @@ class AnalysisHandlersMixin(BaseBot):
             m = get_member(str(self.chat_id))
             if m:
                 tier = m.get("tier", "starter")
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
         sig = await self.ask_ai_ensemble(
             price=price,
@@ -448,8 +448,8 @@ class AnalysisHandlersMixin(BaseBot):
                 ):
                     # Lower-grade contradiction — slash confidence
                     return 0.6, f"S-TIER {v_sig['action']} disagrees (-40%)"
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             return 1.0, None
 
         # ── Grok news cross-check ──

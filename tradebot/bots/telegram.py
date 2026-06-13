@@ -646,10 +646,10 @@ class UnifiedBot(VilonaBot):
                                 results.append(f"  • `{symbol}`: {result.direction} "
                                                f"({name}, {result.confidence:.0%})")
                                 break
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
+                        except Exception as e:
+                            LOG.warning("Silent exception caught: %s", e)
+                except Exception as e:
+                    LOG.warning("Silent exception caught: %s", e)
 
             lines = [f"📊 *Scan Results* ({len(symbol_list)} symbols)\n"]
             if results:

@@ -318,8 +318,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                 stats.update(s)
                 stats["trades"] = get_recent_trades(10)
                 stats["total_profit"] = s.get("total_profit_usd", 0)
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             try:
                 req = urllib.request.Request(
                     "https://api.gold-api.com/price/XAU",
@@ -328,8 +328,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                 with urllib.request.urlopen(req, timeout=4) as r:
                     xau = json.loads(r.read())
                 stats["xau_price"] = float(xau.get("price", 0))
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             uptime = int(time.time() - START_TIME)
             h, m = divmod(uptime, 3600)
             mi, s = divmod(m, 60)
@@ -346,8 +346,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                 if time.time() - eng_path.stat().st_mtime < 120:
                     self._json(cached)
                     return
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             try:
                 _scripts = str(Path(settings.DATA_DIR).parent / "scripts")
                 if _scripts not in sys.path:
@@ -385,8 +385,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                 try:
                     eng_path.parent.mkdir(parents=True, exist_ok=True)
                     eng_path.write_text(json.dumps(dashboard_output, indent=2))
-                except Exception:
-                    pass
+                except Exception as e:
+                    LOG.warning("Silent exception caught: %s", e)
                 active_tf = dashboard_output["timeframes"].get("M15", {})
                 dashboard_output["engines"] = active_tf.get("engines", {})
                 dashboard_output["verdict"] = dashboard_output["hierarchical"].get("verdict", "HOLD")  # noqa: E501

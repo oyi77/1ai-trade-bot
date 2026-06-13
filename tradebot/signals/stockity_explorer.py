@@ -274,8 +274,8 @@ class StockityExplorer:
                         hourly[hour]['wins'] += 1
                     else:
                         hourly[hour]['losses'] += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    LOG.warning("Silent exception caught: %s", e)
 
         # Find best hours
         best_hours = []

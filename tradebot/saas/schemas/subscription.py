@@ -71,9 +71,9 @@ class CheckoutSessionResponse(BaseModel):
 # ── Donation / Tip Jar ─────────────────────────────────────────────
 
 DONATION_TIERS = {
-    "pro": {"amount_idr": 50000, "label": "⭐ PRO (Rp 50K/month)"}
-    "elite": {"amount_idr": 150000, "label": "👑 ELITE (Rp 150K/month)"}
-    "lifetime": {"amount_idr": 500000, "label": "💎 LIFETIME (Rp 500K once)"}
+    "pro": {"amount_idr": 50000, "label": "⭐ PRO (Rp 50K/month)"},
+    "elite": {"amount_idr": 150000, "label": "👑 ELITE (Rp 150K/month)"},
+    "lifetime": {"amount_idr": 500000, "label": "💎 LIFETIME (Rp 500K once)"},
     
 }
 

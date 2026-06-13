@@ -245,8 +245,8 @@ class VilonaBot(
         try:
             os.makedirs(os.path.dirname(self._pending_signal_path), exist_ok=True)
             open(self._pending_signal_path, "w").write(json.dumps(self._pending_signals))
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
     def _cleanup_expired_pending_signals(self) -> None:
         now = time.time()
@@ -270,8 +270,8 @@ class VilonaBot(
         try:
             os.makedirs(os.path.dirname(self._autosync_path), exist_ok=True)
             open(self._autosync_path, "w").write(json.dumps(self._autosync_data))
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
     def _is_autosync(self, chat_id: str) -> bool:
         if not self._autosync_enabled:
@@ -295,8 +295,8 @@ class VilonaBot(
                     tt = importlib.import_module("trade_tracker")
                     if hasattr(tt, "check_outcomes"):
                         tt.check_outcomes()
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             await asyncio.sleep(60)
 
     async def _autosync_loop(self) -> None:
@@ -304,16 +304,16 @@ class VilonaBot(
             try:
                 if self._autosync_enabled and self.bridge:
                     pass  # autosync bridge polling handled by signal dispatch
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             await asyncio.sleep(30)
 
     async def _reminder_loop(self) -> None:
         while True:
             try:
                 pass  # placeholder for due/expired member checks
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
             await asyncio.sleep(3600)
 
     # ── Subscriber / anti-abuse checks ───────────────────────────────────────
@@ -325,8 +325,8 @@ class VilonaBot(
             if member:
                 tier = member.get("tier", "")
                 return tier in ("pro", "elite", "lifetime")
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         return False
 
     def _is_manual_blocked(self, chat_id: str, pair: str = "") -> tuple[bool, str]:
@@ -362,8 +362,8 @@ class VilonaBot(
                         f"🔒 Terdeteksi arah {rec['action']} pada {rec.get('asset', '?')}. "
                         f"Tunggu {int(self._direction_lock_seconds - elapsed)} detik."
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                LOG.warning("Silent exception caught: %s", e)
         return False, ""
 
     def _check_donor_quota(self, chat_id: str) -> tuple[bool, int, str | None]:
@@ -405,8 +405,8 @@ class VilonaBot(
                 data = json.loads(open(qp).read())
                 if data.get("date") == today:
                     return data
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         return {"date": today, "used": 0, "remaining": self._free_daily_quota}
 
     def _deduct_quota(self, chat_id: str) -> tuple[bool, int]:
@@ -431,16 +431,16 @@ class VilonaBot(
         try:
             if os.path.exists(self._video_file_id_path):
                 return open(self._video_file_id_path).read().strip()
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
         return ""
 
     def _save_file_id(self, file_id: str) -> None:
         try:
             os.makedirs(os.path.dirname(self._video_file_id_path), exist_ok=True)
             open(self._video_file_id_path, "w").write(file_id)
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
     def _has_accepted_ultimatum(self, chat_id: str) -> bool:
         return os.path.exists(os.path.join(self._ultimatum_accepted_path, f"{chat_id}.json"))
@@ -455,8 +455,8 @@ class VilonaBot(
                     "chat_id": str(chat_id),
                 })
             )
-        except Exception:
-            pass
+        except Exception as e:
+            LOG.warning("Silent exception caught: %s", e)
 
     # ── Telegram message sending ─────────────────────────────────────────
 
