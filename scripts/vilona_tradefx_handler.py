@@ -1258,8 +1258,8 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
         if sl and entry_from_sig:
             sl_dist = abs(sl - entry_from_sig)
             zone_radius = sl_dist * 0.3
-            sig["zone_lo"] = round(min(entry_from_sig, entry_from_sig) - zone_radius, 2)
-            sig["zone_hi"] = round(max(entry_from_sig, entry_from_sig) + zone_radius, 2)
+            sig["zone_lo"] = round(entry - zone_radius, 2)
+            sig["zone_hi"] = round(entry + zone_radius, 2)
         else:
             zone_half = entry_from_sig * 0.0005
             sig["zone_lo"] = round(entry_from_sig - zone_half, 2)
@@ -1295,6 +1295,7 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
         "zone_lo": sig.get("zone_lo", entry),
         "zone_hi": sig.get("zone_hi", entry),
         "entry_mode": sig.get("entry_mode", "market"),
+        "order_type": order_type,
         "sl": sl,
         "tp": tp,
         "tp1": sig.get("tp1", sig.get("tp", 0)),
@@ -2876,7 +2877,7 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         zone_emoji = "🔴"
     else:
         zone_emoji = "📍"
-    zone_label = f"{zone_emoji} {order_type}" if order_type != action else f"{zone_emoji} {action} ZONE"
+    zone_label = f"{zone_emoji} {order_type}"
 
     # ── Tier gating: free users see Entry Zone only, SL/TP 🔒 locked ──
     is_free = sig.get("_tier_capped", True)
@@ -7751,40 +7752,97 @@ def main():
     def _weekly_learning_scheduler():
         """Auto-run pattern extraction every Saturday at 02:00 WIB."""
         import datetime as _dt
+        _VILONA_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
+
+        def _post_to_channel(text: str):
+            """Post WFA result to @vilonaaichanel via bot API."""
+            if not _VILONA_TOKEN:
+                logger.warning("No bot token — can't post WFA to channel")
+                return
+            try:
+                _chan = "-1003257064212"
+                _data = json.dumps({"chat_id": _chan, "text": text, "parse_mode": "HTML"}).encode()
+                _req = urllib.request.Request(
+                    f"https://api.telegram.org/bot{_VILONA_TOKEN}/sendMessage",
+                    data=_data, headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(_req, timeout=10):
+                    logger.info("WFA posted to @vilonaaichanel")
+            except Exception as exc:
+                logger.warning("WFA channel post failed: %s", exc)
+
         while True:
             try:
                 now = _dt.datetime.now(WIB)
-                # Target: next Saturday 02:00 WIB
-                days_until_sat = (5 - now.weekday()) % 7  # Monday=0, Saturday=5
-                if days_until_sat == 0 and now.hour >= 2:
-                    days_until_sat = 7  # already past Saturday 2AM, wait for next
-                next_run = now.replace(hour=2, minute=0, second=0, microsecond=0) + _dt.timedelta(days=days_until_sat)
-                wait = (next_run - now).total_seconds()
+                days_until_sat = (5 - now.weekday()) % 7
+                # If Saturday 02:00-03:00 → run NOW; if Saturday past 03:00 → run NOW (catchup)
+                is_saturday = now.weekday() == 5
+                should_run_now = is_saturday and now.hour >= 2
+
+                if should_run_now:
+                    wait = 0  # nggak perlu nunggu
+                else:
+                    # Wait until next Saturday 02:00
+                    if days_until_sat == 0:
+                        days_until_sat = 7  # past Saturday, next week
+                    next_run = now.replace(hour=2, minute=0, second=0, microsecond=0) + _dt.timedelta(days=days_until_sat)
+                    wait = int((next_run - now).total_seconds())
+
                 if wait > 0:
-                    time.sleep(min(wait, 3600))  # sleep max 1h chunks
-                    continue
+                    while wait > 0:
+                        chunk = min(wait, 3600)
+                        time.sleep(chunk)
+                        wait -= chunk
+                    # Fell through → now is Saturday 02:00, run
+                    pass
+
                 # ── Run extraction ──
-                logger.info("📅 Weekly walk-forward analysis starting...")
+                logger.info("📅 Weekly walk-forward analysis running...")
                 try:
                     from scripts.pattern_extractor import run_learning_pipeline
                     DB = str(DATA_DIR / "members.db")
                     result = run_learning_pipeline(DB, lookback_days=14)
                     n = result.get("total_signals", 0)
                     if n > 0:
-                        tg_send(
-                            f"📅 <b>Weekly Walk-Forward Analysis Completed</b>\n"
-                            f"━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"📊 {n} signal dianalisa\n"
-                            f"⚖️ New weights injected ke weight_manager\n"
-                            f"🧠 Ketik /learn_report untuk lihat detail.",
-                            str(CHANNEL_ID or ADMIN_CHAT_ID or '')
-                        )
+                        # Format report
+                        tp_stats = result.get("tp_stats", {})
+                        sl_stats = result.get("sl_stats", {})
+                        weights = result.get("suggested_weights", {})
+                        lines = [
+                            "📊 <b>WEEKLY WALK-FORWARD ANALYSIS</b>",
+                            "━━━━━━━━━━━━━━━━━━━━━",
+                            f"📆 <b>14 Hari Terakhir</b>",
+                            f"  • Total Signal: <b>{n}</b>",
+                        ]
+                        for regime, stats in tp_stats.items():
+                            if stats["count"] > 0:
+                                lines.append("")
+                                lines.append(f"✅ <b>TP — {regime.upper()}</b>")
+                                lines.append(f"  • Jumlah: {stats['count']}")
+                                lines.append(f"  • Score Avg: {stats['mean_total_score']:.0%}")
+                                lines.append(f"  • MFE Eff: {stats['mfe_efficiency']:.0%}")
+                        for regime, stats in sl_stats.items():
+                            if stats["count"] > 0:
+                                lines.append("")
+                                lines.append(f"❌ <b>SL — {regime.upper()}</b>")
+                                lines.append(f"  • Jumlah: {stats['count']}")
+                        lines.append("")
+                        lines.append("⚖️ <b>WEIGHT ADJUSTMENT</b>")
+                        for regime, w in weights.items():
+                            lines.append(f"  • {regime}: SMC={w['smc']:.0%} Liq={w['liq']:.0%} Macro={w['macro']:.0%}")
+                        lines.append("")
+                        lines.append("🧠 /learn_report — Detail lengkap")
+                        msg = "\n".join(lines)
+
+                        # Post to channel + log
+                        _post_to_channel(msg)
+                        tg_send(msg, str(ADMIN_CHAT_ID or ""))
                         logger.info("Weekly WFA done: %d signals, weights updated", n)
                     else:
                         logger.info("Weekly WFA skipped: no closed signals")
                 except Exception as exc:
                     logger.error("Weekly WFA failed: %s", exc)
-                time.sleep(3600)  # sleep 1h after completion to avoid re-trigger
+                time.sleep(3600)  # anti-spin: 1h cooldown
             except Exception as exc:
                 logger.error("Weekly scheduler error: %s", exc)
                 time.sleep(3600)
