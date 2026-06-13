@@ -1773,6 +1773,63 @@ class CommandHandlersMixin(BaseBot):
         ledger = format_ledger(target)
         return bal + "\n\n" + ledger
 
+
+    async def _cmd_portfolio(self, args: list[str], chat_id: str | None = None) -> str:
+        """Show best asset for current session and portfolio status."""
+        from tradebot.signals.portfolio_oracle import get_best_asset_for_now, ASSET_TIERS
+        best = get_best_asset_for_now()
+        if not best:
+            return "Tidak bisa menentukan aset terbaik saat ini."
+        t1 = len(ASSET_TIERS.get("tier1", []))
+        t2 = len(ASSET_TIERS.get("tier2", []))
+        t3 = len(ASSET_TIERS.get("tier3", []))
+        return (
+            f"<b>PORTFOLIO ORACLE</b>\n"
+            f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+            f"Best Now: <b>{best['ric']}</b>\n"
+            f"Win Rate: {best['wr']}% | Win: {best['win']} bar\n"
+            f"Threshold: {best['thr']:.0%}\n"
+            f"Payout: {best['payout']:.0%}\n"
+            f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+            f"Portfolio: {t1}T1 | {t2}T2 | {t3}T3\n"
+            f"Rotate /trade &lt;asset&gt;"
+        )
+
+    async def _cmd_trade(self, args: list[str], chat_id: str | None = None) -> str:
+        """Execute a trade on the specified Stockity turbo asset."""
+        if not args or not chat_id:
+            return "Gunakan: /trade &lt;RIC&gt;\nContoh: /trade POWER-X"
+        ric = args[0].upper().strip()
+        from tradebot.signals.portfolio_oracle import _ric_to_asset
+        asset = _ric_to_asset(ric)
+        if not asset:
+            return f"Aset {ric} tidak dikenal. /portfolio untuk daftar."
+        from tradebot.brokers.user_broker_factory import get_user_broker
+        try:
+            broker = await get_user_broker(chat_id, "stockity", for_execution=True)
+        except Exception as e:
+            return f"Gagal konek broker: {e}"
+        if not broker:
+            return "Akun Stockity belum ditautkan. /link stockity"
+        import time as _time
+        direction = "CALL" if int(_time.time()) % 2 == 0 else "PUT"
+        stake = 14000.0
+        try:
+            result = await broker.place_trade(
+                symbol=ric, direction=direction, amount=stake, duration=60, option_type="turbo"
+            )
+            return (
+                f"<b>EXECUTING TRADE</b>\n"
+                f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+                f"{ric} {direction}\n"
+                f"Rp{stake:,.0f} | 60s Turbo\n"
+                f"\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n"
+                f"Order submitted \u2014 /history untuk hasil"
+            )
+        except Exception as e:
+            return f"Trade gagal: {e}"
+
+
     async def _cmd_claim(self, args: list[str], chat_id: str | None = None) -> str:
         """Request a claim for available earnings."""
         target = str(chat_id or "")
@@ -1838,6 +1895,8 @@ def register_vilona_commands(app, bot):
         ("readings", "_cmd_engine_readings"),
         ("link", "_cmd_link"),
         ("unlink", "_cmd_unlink"),
+        ("portfolio", "_cmd_portfolio"),
+        ("trade", "_cmd_trade"),
         ("platforms", "_cmd_platforms"),
     ]
 

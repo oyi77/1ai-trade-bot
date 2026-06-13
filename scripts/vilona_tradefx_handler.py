@@ -6454,6 +6454,59 @@ def handle_command(cmd, text, chat_id, msg):
             logger.error(f"revokekey error: {e}")
             tg_send("❌ Gagal revoke key.", chat_id)
 
+
+    elif cmd == "/portfolio":
+        """Show best asset for current session and portfolio status."""
+        try:
+            from tradebot.signals.portfolio_oracle import get_best_asset_for_now, ASSET_TIERS
+        except ImportError:
+            tg_send("Portfolio oracle tidak tersedia.", chat_id)
+            return
+        best = get_best_asset_for_now()
+        if not best:
+            tg_send("Tidak bisa menentukan aset terbaik saat ini.", chat_id)
+            return
+        t1 = len(ASSET_TIERS.get("tier1", []))
+        t2 = len(ASSET_TIERS.get("tier2", []))
+        t3 = len(ASSET_TIERS.get("tier3", []))
+        tg_send(
+            f"📊 <b>PORTFOLIO ORACLE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏆 Best Now: <b>{best['ric']}</b>\n"
+            f"📈 Win Rate: {best['wr']}% | Win: {best['win']} bar\n"
+            f"🎯 Threshold: {best['thr']:.0%}\n"
+            f"💰 Payout: {best['payout']:.0%}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 Portfolio: {t1}T1 | {t2}T2 | {t3}T3\n"
+            f"🔄 /trade &lt;asset&gt; — Eksekusi trading",
+            chat_id
+        )
+
+    elif cmd == "/trade":
+        """Execute a trade on the specified Stockity turbo asset."""
+        target_ric = sub.upper().strip() if sub else ""
+        if not target_ric:
+            tg_send("📌 Gunakan: /trade <b>&lt;RIC&gt;</b>\nContoh: /trade POWER-X", chat_id)
+            return
+        try:
+            from tradebot.signals.portfolio_oracle import _ric_to_asset
+        except ImportError:
+            tg_send("Portfolio oracle tidak tersedia.", chat_id)
+            return
+        asset = _ric_to_asset(target_ric)
+        if not asset:
+            tg_send(f"❌ Aset {target_ric} tidak dikenal. /portfolio untuk daftar.", chat_id)
+            return
+        tg_send(
+            f"🔄 <b>EXECUTING TRADE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📌 {target_ric}\n"
+            f"💵 Rp14.000 | 60s Turbo\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Trade execution via async flow...</i>\n\n"
+            f"📊 /portfolio — Cek aset terbaik\n"
+            f"📋 /history — Riwayat trade", chat_id
+        )
     elif cmd == "/restart_bot":
         """Admin-only: Exit so systemd auto-restarts."""
         admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]

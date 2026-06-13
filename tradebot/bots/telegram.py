@@ -159,6 +159,9 @@ class UnifiedBot(VilonaBot):
         app.add_handler(CommandHandler("subscribe", self._h_subscribe_cmd))
         app.add_handler(CommandHandler("donate", self._h_donate))
         app.add_handler(CommandHandler("settings", self._h_settings))
+        # Portfolio & trading commands
+        app.add_handler(CommandHandler("portfolio", self._h_portfolio))
+        app.add_handler(CommandHandler("trade", self._h_trade))
 
         # All shared payment/affiliate commands (plans, upgrade, confirm, signals,
         # unsubscribe, affiliate, whitelabel, set_share, set_rate, set_plan)
@@ -290,6 +293,31 @@ class UnifiedBot(VilonaBot):
         lines.append(f"\nTotal: {len(symbol_list)} symbols")
         lines.append("\nUse `/signal <symbol>` to get a signal")
         await update.message.reply_markdown("\n".join(lines))
+
+    async def _h_portfolio(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/portfolio — show best asset for current session."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        try:
+            resp = await self._cmd_portfolio([], chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_portfolio error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_trade(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/trade <RIC> — execute turbo trade on Stockity."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_trade(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_trade error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
 
     async def _h_signal(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """/signal <symbol> — generate signal for a symbol (or start flow)."""
