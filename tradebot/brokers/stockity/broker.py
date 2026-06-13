@@ -159,8 +159,7 @@ class StockityBroker(BaseBroker):
         except Exception as e:
             LOG.error("Failed to fetch initial balance from REST API: %s", e)
 
-        # Join asset topic (gives majority_opinion + social_trading)
-        await self._join_topic("asset:Z-CRY/IDX")
+        # Asset topic will be joined dynamically per trade in place_order
 
         self._listener_task = asyncio.create_task(self._listen())
 
@@ -429,10 +428,18 @@ class StockityBroker(BaseBroker):
             duration: Trade duration in seconds.
 
         Returns:
-            Trade object with status and result.
         """
         if not self._connected:
             await self.connect()
+
+        # Ensure asset topic is joined for this symbol
+        ric = _symbol_to_ric(symbol)
+        asset_topic = f"asset:{ric}"
+        if not hasattr(self, "_joined_assets"):
+            self._joined_assets = set()
+        if asset_topic not in self._joined_assets:
+            await self._join_topic(asset_topic)
+            self._joined_assets.add(asset_topic)
 
         now = datetime.now(UTC)
         now_ms = int(now.timestamp() * 1000)
@@ -547,6 +554,6 @@ class StockityBroker(BaseBroker):
 
 
 def _symbol_to_ric(symbol: str) -> str:
-    """Map platform symbol to Stockity RIC."""
+    # Map platform symbol to Stockity RIC
     from tradebot.signals.stockity import RIC_MAP
     return RIC_MAP.get(symbol.upper(), symbol)

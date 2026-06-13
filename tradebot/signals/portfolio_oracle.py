@@ -35,6 +35,8 @@ ASSET_TIERS: dict[str, list[dict[str, Any]]] = {
         {"ric": "ETHUSD-OTC",  "win": 3,  "thr": 0.50, "payout": 0.75, "wr": 57.2},
         {"ric": "EURGBP",      "win": 3,  "thr": 0.50, "payout": 0.78, "wr": 57.0},
         {"ric": "AUDNZD",      "win": 3,  "thr": 0.50, "payout": 0.78, "wr": 56.5},
+
+        {"ric": "CRYPTO_IDX",    "win": 3,  "thr": 0.50, "payout": 0.80, "wr": 58.0},
     ],
     "tier3": [
         {"ric": "USDSEK",      "win": 3,  "thr": 0.50, "payout": 0.78, "wr": 56.2},

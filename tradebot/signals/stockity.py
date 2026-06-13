@@ -40,13 +40,40 @@ CANDLE_API = "https://api.stockity.com/candles/v1/{ric}/{time}/{seconds}"
 # RIC mappings for Stockity.
 # CRYPTO_IDX is VERIFIED via both REST and WS HAR analysis.
 # Others are best-guess following the Z-{SYMBOL}/IDX pattern.
+# RIC mappings for Stockity.
+# CRYPTO_IDX is VERIFIED via both REST and WS HAR analysis.
+# POWER-X works as raw "POWER-X" (confirmed via bo/create success).
+# Forex pairs follow Z-{BASE}{QUOTE}/IDX pattern (best-guess, mostly UNVERIFIED).
+# OTC crypto follow Z-{SYMBOL}/IDX pattern (UNVERIFIED).
 RIC_MAP: dict[str, str] = {
-    "CRYPTO_IDX": "Z-CRY/IDX",  # VERIFIED
-    "BTC_IDX": "Z-BTC/IDX",      # UNVERIFIED
-    "ETH_IDX": "Z-ETH/IDX",      # UNVERIFIED
-    "GOLD_IDX": "Z-GOLD/IDX",    # UNVERIFIED
+    "CRYPTO_IDX": "Z-CRY/IDX",      # VERIFIED
+    "POWER-X": "POWER-X",           # VERIFIED — Stockity accepts raw "POWER-X" as RIC
+    # Tier 1
+    "GBPSGD": "Z-GBPSGD/IDX",       # UNVERIFIED
+    # Tier 2
+    "CADSEK": "Z-CADSEK/IDX",       # UNVERIFIED
+    "CHFNOK": "Z-CHNOK/IDX",        # UNVERIFIED
+    "BCHUSD-OTC": "Z-BCH/IDX",      # UNVERIFIED
+    "ETHUSD-OTC": "Z-ETH/IDX",      # UNVERIFIED
+    "EURGBP": "Z-EURGBP/IDX",       # UNVERIFIED
+    "AUDNZD": "Z-AUDNZD/IDX",       # UNVERIFIED
+    # Tier 3
+    "USDSEK": "Z-USDSEK/IDX",       # UNVERIFIED
+    "EURUSD": "Z-EURUSD/IDX",       # UNVERIFIED
+    "USDJPY": "Z-USDJPY/IDX",       # UNVERIFIED
+    "BTCUSD-OTC": "Z-BTC/IDX",      # UNVERIFIED
+    "GBPUSD": "Z-GBPUSD/IDX",       # UNVERIFIED
+    "USDCHF": "Z-USDCHF/IDX",       # UNVERIFIED
+    "USDCAD": "Z-USDCAD/IDX",       # UNVERIFIED
+    "AUDUSD": "Z-AUDUSD/IDX",       # UNVERIFIED
+    "NZDUSD": "Z-NZDUSD/IDX",       # UNVERIFIED
+    "EURJPY": "Z-EURJPY/IDX",       # UNVERIFIED
+    "GBPJPY": "Z-GBPJPY/IDX",       # UNVERIFIED
+    "EURCHF": "Z-EURCHF/IDX",       # UNVERIFIED
+    "GBPAUD": "Z-GBPAUD/IDX",       # UNVERIFIED
+    "AUDJPY": "Z-AUDJPY/IDX",       # UNVERIFIED
+    "EURAUD": "Z-EURAUD/IDX",       # UNVERIFIED
 }
-
 PLATFORM_ASSETS: set[str] = set(RIC_MAP.keys())
 
 DEFAULT_CANDLE_SECONDS = 60  # 1-minute candles
