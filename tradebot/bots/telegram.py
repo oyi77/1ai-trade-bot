@@ -21,6 +21,8 @@ from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
+    MessageHandler,
+    filters,
     ContextTypes,
 )
 
@@ -138,24 +140,15 @@ class UnifiedBot(VilonaBot):
         """Build PTB Application with payment/subscription-only handlers.
 
         ALL core forex commands (/start, /help, /analyze, /price, /signal, etc.)
-        are handled exclusively by the legacy handler (vilona_tradefx_handler.py).
-        This bot ONLY handles payment flows to prevent double-output bugs.
         """
         self.db.create_tables()
+        self._register_commands()
 
         app = Application.builder().token(self._token).build()
 
-        # ── PAYMENT & SUBSCRIPTION ONLY ──
-        # NON-PAYMENT COMMANDS (/start, /help, /analyze, /signal, /price,
-        # etc.) have NO registered handlers here. PTB silently ignores
-        # them — the legacy handler processes them exclusively.
-        # This is structural segregation, not filtering.
-        #
-        # Whitelist: /subscribe, /donate, /settings,
-        # /plans, /upgrade, /confirm, /signals, /unsubscribe,
-        # /affiliate, /whitelabel, /set_share, /set_rate, /set_plan
-        # These are the ONLY commands this bot handles.
-        # Everything else is exclusively processed by the legacy handler.
+        # We now handle ALL commands since the legacy handler is killed.
+        # Specific handlers defined below take precedence.
+        # The catch-all MessageHandler at the end delegates the rest.
         app.add_handler(CommandHandler("subscribe", self._h_subscribe_cmd))
         app.add_handler(CommandHandler("donate", self._h_donate))
         app.add_handler(CommandHandler("settings", self._h_settings))
@@ -171,12 +164,39 @@ class UnifiedBot(VilonaBot):
         # unsubscribe, affiliate, whitelabel, set_share, set_rate, set_plan)
         register_standard_commands(app)
 
+        # Catch-all for legacy commands (e.g. /history, /start, /help, /signal)
+        app.add_handler(MessageHandler(filters.COMMAND, self._h_legacy_command))
+
         # Callback queries — all supported prefixes
         app.add_handler(CallbackQueryHandler(
             self._h_callback,
             pattern=r'^(plans|link|check_|cmd:|menu:|pref_|pay:|check:|pricing:|donate:|sub:|cancel_input|portfolio:|autotrade:)'
         ))
         return app
+
+    async def _h_legacy_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Fallback for any command not explicitly registered above."""
+        if not update.message or not update.message.text:
+            return
+            
+        text = update.message.text.strip()
+        chat_id = str(update.message.chat.id)
+        
+        parts = text.split()
+        cmd = parts[0].lower().lstrip("/")
+        args = parts[1:]
+        
+        handler = self._command_handlers.get(cmd)
+        if handler:
+            try:
+                response = await handler(args, chat_id=chat_id)
+                if response:
+                    await update.message.reply_html(response)
+            except Exception as e:
+                LOG.warning("Legacy command error [%s]: %s", cmd, e)
+                await update.message.reply_html("⚠️ Format error atau command gagal diproses.")
+        else:
+            await update.message.reply_html(f"❌ Unknown command: <code>{cmd}</code>\nUse /start for available commands.")
 
     # ── Start / Stop ───────────────────────────────────────────────
 
