@@ -176,6 +176,7 @@ class UnifiedBot(VilonaBot):
             self._h_callback,
             pattern=r'^(plans|link|check_|cmd:|menu:|pref_|pay:|check:|pricing:|donate:|sub:|cancel_input|portfolio:|autotrade:)'
         ))
+        return app
 
     # ── Start / Stop ───────────────────────────────────────────────
 

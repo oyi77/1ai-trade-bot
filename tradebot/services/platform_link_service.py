@@ -127,10 +127,19 @@ class PlatformLinkService:
         Returns:
             Tuple of (authtoken, broker_user_id, full_cookie_string).
         """
+        from tradebot.config import settings as _cfg
+        base_cookie = _cfg.STOCKITY_FULL_COOKIE
+        device_id = "d79220637a3516ea5350ea509df42828"
+        if base_cookie:
+            import re as _re
+            match = _re.search(r'device_id=([^;]+)', base_cookie)
+            if match:
+                device_id = match.group(1)
+
         payload = json.dumps({"email": email, "password": password}).encode()
         headers = {
             "Content-Type": "application/json",
-            "Device-Id": "d79220637a3516ea5350ea509df42828",
+            "Device-Id": device_id,
             "Device-Type": "web",
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:152.0) Gecko/20100101 Firefox/152.0"
@@ -184,13 +193,33 @@ class PlatformLinkService:
         Returns:
             Currency code (e.g. "IDR", "USD"), defaults to "IDR" on failure.
         """
+        import re as _re
+        authtoken = ""
+        dev_id = ""
+        tz = "Asia%2FJakarta"
+        m = _re.search(r'authtoken=([^;]+)', cookie)
+        if m:
+            authtoken = m.group(1)
+        m = _re.search(r'device_id=([^;]+)', cookie)
+        if m:
+            dev_id = m.group(1)
+        m = _re.search(r'user_timezone=([^;]+)', cookie)
+        if m:
+            tz = m.group(1)
         headers = {
             "accept": "application/json, text/plain, */*",
             "accept-language": "en-US,en;q=0.9",
+            "authorization-token": authtoken,
+            "device-id": dev_id,
+            "device-type": "web",
+            "user-timezone": tz.replace("%2F", "/"),
             "cookie": cookie,
+            "origin": "https://stockity.id",
+            "referer": "https://stockity.id/",
+            "cache-control": "no-cache, no-store, must-revalidate",
             "user-agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 Chrome/148.0.0.0 Safari/537.36"
+                "AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36"
             ),
         }
         try:

@@ -53,6 +53,7 @@ class StockityREST:
             "accept": "application/json, text/plain, */*",
             "accept-language": "en-US,en;q=0.9",
             "authorization-token": auth_token,
+            "cache-control": "no-cache, no-store, must-revalidate",
             "device-id": dev_id,
             "device-type": "web",
             "user-timezone": tz,
@@ -61,7 +62,7 @@ class StockityREST:
             "cookie": self._cookie,
             "user-agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 Chrome/148.0.0.0 Safari/537.36"
+                "AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36"
             ),
         }
 
