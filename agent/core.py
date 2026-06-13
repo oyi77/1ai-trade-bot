@@ -28,6 +28,92 @@ LOG = logging.getLogger("agent.core")
 WIB = timezone(timedelta(hours=7))
 
 
+def _gold_api_price() -> float | None:
+    """Fetch XAUUSD spot from gold-api.com — no futures offset."""
+    try:
+        import urllib.request
+        resp = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=5)
+        data = json.loads(resp.read())
+        price = data.get("price")
+        if price and 2000 < float(price) < 6000:
+            return float(price)
+    except Exception:
+        pass
+    return None
+
+
+def _mt5_bridge_price() -> float | None:
+    """Fetch XAUUSD from MT5 EA bridge (Exness broker price)."""
+    try:
+        import urllib.request
+        resp = urllib.request.urlopen("http://localhost:8765/current_price", timeout=3)
+        if resp.status == 200:
+            data = json.loads(resp.read())
+            price = data.get("price") or data.get("bid")
+            if price and 2000 < float(price) < 6000:
+                return float(price)
+    except Exception:
+        pass
+    return None
+
+
+def _rapid_price(symbol: str) -> float | None:
+    """Fetch live price from RapidAPI — primary source."""
+    try:
+        from tradebot.signals.rapid_finance import get_forex_rate
+        forex_map = {"XAUUSD": ("XAU", "USD"), "GOLD": ("XAU", "USD"),
+                     "BTCUSD": ("BTC", "USD"), "ETHUSD": ("ETH", "USD"),
+                     "EURUSD": ("EUR", "USD"), "GBPUSD": ("GBP", "USD"),
+                     "USDJPY": ("USD", "JPY"), "USDIDR": ("USD", "IDR")}
+        pair = forex_map.get(symbol.upper())
+        if pair:
+            return get_forex_rate(*pair)
+        return None
+    except Exception:
+        return None
+
+
+def _yf_price(symbol: str) -> float | None:
+    """Fallback: yfinance. NEVER used for XAUUSD/GOLD (GC=F is futures, $75 off)."""
+    import yfinance as yf
+    yf_map = {"BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
+              "EURUSD": "EURUSD=X", "USDIDR": "IDR=X",
+              "BBCA": "BBCA.JK", "USOIL": "CL=F"}
+    sym = yf_map.get(symbol.upper(), symbol)
+    try:
+        t = yf.Ticker(sym)
+        d = t.history(period="1d", interval="5m")
+        if not d.empty:
+            return float(d["Close"].iloc[-1])
+    except Exception:
+        pass
+    return None
+
+
+def _get_live_price(symbol: str) -> float | None:
+    """Fetch live price with correct asset-specific chain.
+    XAUUSD: RapidAPI → gold-api.com → MT5 bridge (NEVER yfinance GC=F)
+    Crypto: RapidAPI → yfinance
+    Other:  RapidAPI → yfinance"""
+    sym_u = symbol.upper()
+    is_gold = sym_u in ("XAUUSD", "GOLD")
+
+    price = _rapid_price(symbol)
+    if price is not None and price > 0:
+        return price
+
+    if is_gold:
+        price = _gold_api_price()
+        if price:
+            return price
+        price = _mt5_bridge_price()
+        if price:
+            return price
+        return None
+
+    return _yf_price(symbol)
+
+
 # ── Helpers ──────────────────────────────────────────────────────────
 
 def wib_now() -> datetime:
@@ -153,35 +239,50 @@ async def cmd_signal(args: list[str], chat_id: str) -> str:
 
 async def cmd_price(args: list[str], chat_id: str) -> str:
     pair = args[0].lower() if args else "gold"
-    import yfinance as yf
-    symbol_map = {"gold": "GC=F", "btc": "BTC-USD", "eth": "ETH-USD", "xauusd": "GC=F",
-                  "oil": "CL=F", "eurusd": "EURUSD=X", "bbca": "BBCA.JK"}
-    symbol = symbol_map.get(pair, pair.upper())
     display = pair.upper()
+
+    # Live price from RapidAPI (primary) or yfinance (fallback)
+    live = _get_live_price(display)
+    if live is None:
+        return f"❌ No data for {display}"
+
+    symbol_map = {"GOLD": "XAU/USD", "XAUUSD": "XAU/USD", "BTC": "BTC/USD",
+                  "BTCUSD": "BTC/USD", "ETH": "ETH/USD", "ETHUSD": "ETH/USD",
+                  "EURUSD": "EUR/USD", "USOIL": "CL=F", "OIL": "CL=F",
+                  "BBCA": "BBCA.JK", "USDIDR": "USD/IDR"}
+    source = symbol_map.get(display, pair.upper())
+
     try:
-        ticker = yf.Ticker(symbol)
-        data = ticker.history(period="1d", interval="1m")
-        if data.empty:
-            data = ticker.history(period="5d")
-        if data.empty:
-            return f"❌ No data for {display}"
-        close = float(data["Close"].iloc[-1])
-        high = float(data["High"].max())
-        low = float(data["Low"].min())
-        change = close - float(data["Close"].iloc[0])
-        pct = (change / float(data["Close"].iloc[0])) * 100
-        emoji = "🟢" if change >= 0 else "🔴"
-        return (
-            f"{emoji} <b>{display}</b> ({symbol})\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"Price: <b>{close:.4f}</b>\n"
-            f"High: {high:.4f} | Low: {low:.4f}\n"
-            f"Change: {change:+.4f} ({pct:+.2f}%)\n"
-            f"━━━━━━━━━━━━━━━━\n"
-            f"🕐 {wib_fmt()}"
-        )
-    except Exception as e:
-        return f"❌ Price error: {e}"
+        import yfinance as yf
+        ticker = yf.Ticker(symbol_map.get(display, pair.upper()))
+        data = ticker.history(period="5d")
+        if not data.empty:
+            prev_close = float(data["Close"].iloc[-2]) if len(data) >= 2 else live
+            change = live - prev_close
+            pct = (change / prev_close) * 100 if prev_close else 0
+            high = float(data["High"].max())
+            low = float(data["Low"].min())
+        else:
+            change = 0.0
+            pct = 0.0
+            high = live
+            low = live
+    except Exception:
+        change = 0.0
+        pct = 0.0
+        high = live
+        low = live
+
+    emoji = "🟢" if change >= 0 else "🔴"
+    return (
+        f"{emoji} <b>{display}</b> ({source})\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"Price: <b>{live:.4f}</b>\n"
+        f"High: {high:.4f} | Low: {low:.4f}\n"
+        f"Change: {change:+.4f} ({pct:+.2f}%)\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"🕐 {wib_fmt()}"
+    )
 
 
 async def cmd_status(args: list[str], chat_id: str) -> str:

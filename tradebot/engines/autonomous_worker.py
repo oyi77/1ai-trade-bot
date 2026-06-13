@@ -161,35 +161,58 @@ class AutonomousWorker:
 
     def _fetch_price(self, pair: str) -> Optional[float]:
         """Fetch current price with exponential backoff.
-        XAUUSD/gold: gold-api.com spot + XAUUSD_OFFSET ONLY — no yfinance fallback.
-        Other pairs: yfinance primary, gold-api secondary."""
+        Primary: RapidAPI real-time finance. Fallback: gold-api.com / yfinance."""
         pair_lower = pair.lower().strip()
+        pair_upper = pair.upper().strip()
 
-        # ── XAUUSD: EXACT SPOT ONLY, no yfinance GC=F (differs by ~$75) ──
+        # ── XAUUSD ──
         if pair_lower in ("gold", "xauusd"):
-            def _get_spot():
+            import urllib.request as _ur
+
+            def _get():
+                # Primary: RapidAPI
                 try:
-                    import urllib.request
-                    resp = urllib.request.urlopen("https://api.gold-api.com/price/XAU", timeout=5)
-                    data = json.loads(resp.read())
-                    if data.get("price"):
-                        spot = float(data["price"])
-                        if 2000 < spot < 6000:
-                            offset = float(os.environ.get("XAUUSD_PRICE_OFFSET", "0"))
-                            return round(spot + offset, 2)
+                    from tradebot.signals.rapid_finance import get_xauusd
+                    price = get_xauusd()
+                    if price and 2000 < price < 6000:
+                        return price
                 except Exception:
                     pass
-                return None  # HALT — no GC=F fallback
-            return _get_resilience().resilient_call(_get_spot, max_retries=3, base_delay=2.0)
+                # Fallback: gold-api.com
+                try:
+                    resp = _ur.urlopen("https://api.gold-api.com/price/XAU", timeout=5)
+                    data = json.loads(resp.read())
+                    if data.get("price"):
+                        return float(data["price"])
+                except Exception:
+                    pass
+                # Tertiary: MT5 bridge
+                try:
+                    resp = _ur.urlopen("http://localhost:8765/current_price", timeout=3)
+                    if resp.status == 200:
+                        data = json.loads(resp.read())
+                        price = data.get("price") or data.get("bid")
+                        if price and 2000 < float(price) < 6000:
+                            return float(price)
+                except Exception:
+                    pass
+                return None
+            return _get_resilience().resilient_call(_get, max_retries=3, base_delay=2.0)
 
-        # ── Other pairs: yfinance ──
+        # ── Other pairs ──
         def _get():
+            # Primary: RapidAPI
+            try:
+                from tradebot.signals.rapid_finance import fetch_prices
+                prices = fetch_prices([pair_upper])
+                if prices.get(pair_upper):
+                    return prices[pair_upper]
+            except Exception:
+                pass
+            # Fallback: yfinance
             try:
                 import yfinance as yf
-                yahoo_map = {
-                    "btc": "BTC-USD", "oil": "CL=F",
-                    "BTCUSD": "BTC-USD", "USOIL": "CL=F",
-                }
+                yahoo_map = {"BTC": "BTC-USD", "BTCUSD": "BTC-USD", "oil": "CL=F", "USOIL": "CL=F"}
                 sym = yahoo_map.get(pair, yahoo_map.get(pair_lower, pair))
                 ticker = yf.Ticker(sym)
                 data = ticker.history(period="1d", interval="5m")
@@ -197,17 +220,6 @@ class AutonomousWorker:
                     return float(data["Close"].iloc[-1])
             except Exception:
                 pass
-
-            # Fallback: gold-api.com
-            try:
-                import urllib.request
-                resp = urllib.request.urlopen("https://www.gold-api.com/api/XAU/USD", timeout=5)
-                data = json.loads(resp.read())
-                if data.get("price"):
-                    return float(data["price"])
-            except Exception:
-                pass
-
             return None
 
         return _get_resilience().resilient_call(_get, max_retries=3, base_delay=2.0)
