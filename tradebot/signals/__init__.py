@@ -161,4 +161,31 @@ __all__ = [
     "MarketAggregator",
     "FallbackChain",
     "resolve",
+    "IDXSource",
+    "enrich_stock",
+    "get_stock_info",
 ]
+
+# ── Lazy IDX imports (optional, no ccxt needed) ───────────────────
+
+
+def _lazy_idx_source():
+    from tradebot.signals.idx_api import fetch_company_list
+    return fetch_company_list
+
+
+def _lazy_idx_enricher():
+    from tradebot.signals.idx_enricher import enrich
+    return enrich
+
+
+def _lazy_idx_encyclopedia():
+    from tradebot.signals.idx_encyclopedia import (
+        get_name,
+        get_peers,
+        get_sector,
+        get_sub_sector,
+        is_idx_stock,
+        resolve_code,
+    )
+    return locals()
