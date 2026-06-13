@@ -1425,6 +1425,47 @@ def _send_document(chat_id, file_path, filename, caption=""):
         logger.error(f"Failed to send document {filename}: {e}")
 
 
+def tg_send_photo(chat_id, photo_bytes, caption="", reply_to=None):
+    """Send an image (PNG/JPEG bytes) via Telegram Bot API sendPhoto."""
+    if not photo_bytes:
+        return None
+    if not BOT_TOKEN:
+        return None
+    target = chat_id or CHAT_ID
+    if not target:
+        return None
+    try:
+        boundary = "----VilonaPhoto" + str(int(time.time()))
+        body = b""
+        body += f"--{boundary}\r\n".encode()
+        body += f'Content-Disposition: form-data; name="chat_id"\r\n\r\n{target}\r\n'.encode()
+        body += f"--{boundary}\r\n".encode()
+        body += f'Content-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n'.encode()
+        body += f"--{boundary}\r\n".encode()
+        body += f'Content-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode()
+        body += f"--{boundary}\r\n".encode()
+        body += b'Content-Disposition: form-data; name="photo"; filename="chart.png"\r\n'
+        body += b"Content-Type: image/png\r\n\r\n"
+        body += photo_bytes
+        body += f"\r\n--{boundary}--\r\n".encode()
+        req = urllib.request.Request(f"{TELEGRAM_API}/sendPhoto", data=body)
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        if "429" in str(e) or "Too Many Requests" in str(e):
+            for attempt in range(2):
+                wait = (attempt + 1) * 4
+                logger.warning(f"tg_send_photo rate-limited (attempt {attempt+1}/2), wait {wait}s")
+                time.sleep(wait)
+                try:
+                    return tg_send_photo(chat_id, photo_bytes, caption, reply_to)
+                except Exception:
+                    pass
+        logger.warning(f"tg_send_photo failed: {e}")
+        return None
+
+
 # ── MECHANICAL SIGNAL DETECTION ──
 def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=None):
     """Mechanical signal: Quant + FVG + Hermes → fire without AI consensus."""
@@ -6601,16 +6642,61 @@ def _no_pin_broadcast(text):
 
 def send_to_channel(text):
     """Send signal/mapping to broadcast channel. Returns tg_send result.
-    Falls back to home only if channel ID is not configured (warns in log)."""
-    if SIGNAL_CHANNEL_ID:
-        result = tg_send(text, SIGNAL_CHANNEL_ID)
+    Falls back to home only if channel ID is not configured (warns in log).
+    If chart image URL detected (chart.xobniot), download and send as sendPhoto.
+    """
+    target = SIGNAL_CHANNEL_ID or ""
+    if not target:
+        logger.warning("send_to_channel: SIGNAL_CHANNEL_ID not set — falling back to HOME")
+        target = ""
+
+    # ── Chart auto-attach ──
+    chart_b64 = ""
+    # strip quickchart.io URL from caption so it doesn't duplicate
+    caption = text
+
+    chart_url = None
+    url_prefix = "https://quickchart.io/chart?"
+    start = text.find(url_prefix)
+    if start != -1:
+        # capture whole URL up to space or end
+        end = text.find(" ", start)
+        if end == -1:
+            end = len(text)
+        chart_url = text[start:end].strip()
+        caption = (text[:start] + text[end:]).strip()
+
+    if chart_url:
+        try:
+            req = urllib.request.Request(chart_url, headers={"User-Agent": "VilonaBot/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                chart_b64 = r.read()
+        except Exception as exc:
+            logger.warning("send_to_channel: failed to download chart image: %s", exc)
+
+    if chart_b64:
+        result = tg_send_photo(target or None, chart_b64, caption=caption)
         if result is None:
-            logger.warning("send_to_channel: post failed, retrying once...")
-            time.sleep(1)
+            # fallback: send text without chart
+            if SIGNAL_CHANNEL_ID:
+                result = tg_send(caption, SIGNAL_CHANNEL_ID)
+                if result is None:
+                    logger.warning("send_to_channel: photo failed, retrying text once...")
+                    time.sleep(1)
+                    result = tg_send(caption, SIGNAL_CHANNEL_ID)
+            else:
+                result = tg_send(caption)
+    else:
+        if SIGNAL_CHANNEL_ID:
             result = tg_send(text, SIGNAL_CHANNEL_ID)
-        return result
-    logger.warning("send_to_channel: SIGNAL_CHANNEL_ID not set — falling back to HOME")
-    return tg_send(text)  # fallback to home
+            if result is None:
+                logger.warning("send_to_channel: post failed, retrying once...")
+                time.sleep(1)
+                result = tg_send(text, SIGNAL_CHANNEL_ID)
+        else:
+            logger.warning("send_to_channel: SIGNAL_CHANNEL_ID not set — falling back to HOME")
+            result = tg_send(text)  # fallback to home
+    return result
 
 
 # ── Subscription reminders (H-7/H-3/H-1) ──

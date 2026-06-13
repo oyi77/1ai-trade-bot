@@ -652,6 +652,24 @@ def format_signal_telegram(signal: dict) -> str:
     lines.append(f"   Unlock AI Signal + Grok News + /levels + SnR/FIBO")
     lines.append(f"   Jangan cuma andelin engine — kasih AI lu kerjaan beneran")
 
+    # Auto-append chart image at the bottom if chart_generator is available
+    try:
+        from scripts.chart_generator import build_chart_url
+        chart_url = build_chart_url(
+            symbol=symbol,
+            trend=action,
+            entry=float(entry),
+            sl=float(sl or 0),
+            tp1=float(tp1 or 0),
+            tp2=float(tp2 or 0),
+            confidence=float(conf or 0),
+            grade=grade,
+        )
+        if chart_url:
+            lines.append(f"{chart_url}")
+    except Exception as exc:
+        logger.debug("format_signal_telegram: chart embed skipped (%s)", exc)
+
     return "\n".join(lines)
 
 
