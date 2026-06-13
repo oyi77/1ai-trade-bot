@@ -7799,40 +7799,12 @@ def main():
                 # ── Run extraction ──
                 logger.info("📅 Weekly walk-forward analysis running...")
                 try:
-                    from scripts.pattern_extractor import run_learning_pipeline
+                    from scripts.pattern_extractor import run_learning_pipeline, format_weekly_report
                     DB = str(DATA_DIR / "members.db")
                     result = run_learning_pipeline(DB, lookback_days=14)
                     n = result.get("total_signals", 0)
                     if n > 0:
-                        # Format report
-                        tp_stats = result.get("tp_stats", {})
-                        sl_stats = result.get("sl_stats", {})
-                        weights = result.get("suggested_weights", {})
-                        lines = [
-                            "📊 <b>WEEKLY WALK-FORWARD ANALYSIS</b>",
-                            "━━━━━━━━━━━━━━━━━━━━━",
-                            f"📆 <b>14 Hari Terakhir</b>",
-                            f"  • Total Signal: <b>{n}</b>",
-                        ]
-                        for regime, stats in tp_stats.items():
-                            if stats["count"] > 0:
-                                lines.append("")
-                                lines.append(f"✅ <b>TP — {regime.upper()}</b>")
-                                lines.append(f"  • Jumlah: {stats['count']}")
-                                lines.append(f"  • Score Avg: {stats['mean_total_score']:.0%}")
-                                lines.append(f"  • MFE Eff: {stats['mfe_efficiency']:.0%}")
-                        for regime, stats in sl_stats.items():
-                            if stats["count"] > 0:
-                                lines.append("")
-                                lines.append(f"❌ <b>SL — {regime.upper()}</b>")
-                                lines.append(f"  • Jumlah: {stats['count']}")
-                        lines.append("")
-                        lines.append("⚖️ <b>WEIGHT ADJUSTMENT</b>")
-                        for regime, w in weights.items():
-                            lines.append(f"  • {regime}: SMC={w['smc']:.0%} Liq={w['liq']:.0%} Macro={w['macro']:.0%}")
-                        lines.append("")
-                        lines.append("🧠 /learn_report — Detail lengkap")
-                        msg = "\n".join(lines)
+                        msg = format_weekly_report(result)
 
                         # Post to channel + log
                         _post_to_channel(msg)

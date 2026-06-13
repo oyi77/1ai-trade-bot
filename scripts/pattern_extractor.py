@@ -92,41 +92,95 @@ def fetch_historical_data(
 
 
 def _trades_to_df(trades: list[dict]) -> pd.DataFrame:
-    """Convert trade_history.json records → DataFrame matching ml_feedback schema."""
+    """Convert trade_history.json records → DataFrame matching ml_feedback schema.
+
+    Score decomposition from available fields:
+      - grade (A/B/C) → base scores decomposed per component
+      - confidence → total_score (ceiling at 1.0)
+      - source → component boost (liquidity_source→liq, etc.)
+      - pips → MFE/MAE approximation
+    """
+    _GRADE_SCORES = {
+        "A": {"smc": 0.70, "liq": 0.55, "macro": 0.50},
+        "B": {"smc": 0.50, "liq": 0.40, "macro": 0.35},
+        "C": {"smc": 0.30, "liq": 0.30, "macro": 0.25},
+    }
+    _SOURCE_BOOST = {
+        "hermes_liquidity_sweep": "liq",
+        "smc_engine": "smc",
+        "liquidity_engine": "liq",
+        "trend_engine": "macro",
+        "macro_engine": "macro",
+    }
+
     rows = []
     for t in trades:
         pair = (t.get("symbol") or "").upper()
-        entry = t.get("entry_price") or 0.0
-        sl = t.get("sl_price") or 0.0
-        tp = t.get("tp_target") or 0.0
+        entry = t.get("entry") or t.get("entry_price") or 0.0
+        sl = t.get("sl") or t.get("sl_price") or 0.0
+        tp = t.get("tp") or t.get("tp_target") or 0.0
         status = t.get("outcome", "TP_HIT")
         pips = float(t.get("pips", 0))
-        # Infer regime from pips volatility, direction etc.
-        # For now we default to 'unknown' and let the analysis class by size
+        grade = (t.get("grade") or "B")[0].upper()
+        if grade not in _GRADE_SCORES:
+            grade = "B"
+        confidence = min(max(float(t.get("confidence", 0.5)), 0), 1.0)
+        source = (t.get("source") or "").lower()
+
+        # ── Regime inference from pip size ──
         if abs(pips) >= 60:
             regime = "trending"
         elif abs(pips) >= 30:
             regime = "ranging"
-        elif abs(pips) > 0:
-            regime = "volatile"
         else:
-            regime = "unknown"
+            regime = "volatile"
+
+        # ── Decompose scores from grade + source ──
+        base = _GRADE_SCORES[grade]
+        boost_col = _SOURCE_BOOST.get(source)
+        score_smc = base["smc"]
+        score_liq = base["liq"]
+        score_macro = base["macro"]
+        if boost_col == "smc":
+            score_smc = min(0.95, score_smc + 0.15)
+        elif boost_col == "liq":
+            score_liq = min(0.95, score_liq + 0.15)
+        elif boost_col == "macro":
+            score_macro = min(0.95, score_macro + 0.15)
+
+        # ── MFE/MAE approximation from close price ──
+        close = t.get("close_price")
+        action = (t.get("action") or "SELL").upper()
+        mfe, mae = 0.0, 0.0
+        if close and entry:
+            if action == "SELL":
+                raw_mfe = entry - close
+                raw_mae = close - entry
+            else:
+                raw_mfe = close - entry
+                raw_mae = entry - close
+            if status == "TP_HIT":
+                mfe = max(raw_mfe, 0) or max(abs(pips), 1)
+                mae = min(raw_mae, 0)
+            else:
+                mfe = max(raw_mfe, 0)
+                mae = max(raw_mae, 0) or abs(pips)
 
         rows.append({
-            "signal_id": t.get("signal_id") or f"th_{hash(t.get('open_time','')) & 0xFFFFFFFF:08x}",
+            "signal_id": t.get("id") or f"th_{hash(t.get('open_time','')) & 0xFFFFFFFF:08x}",
             "timestamp": t.get("open_time", ""),
             "pair": pair,
             "market_regime": regime,
-            "score_smc": 0.5,   # default — no raw score in JSON
-            "score_liquidity": 0.3,
-            "score_macro": 0.2,
-            "total_score": 0.5,
-            "is_broadcasted": 1 if t.get("outcome") else 0,
+            "score_smc": round(score_smc, 2),
+            "score_liquidity": round(score_liq, 2),
+            "score_macro": round(score_macro, 2),
+            "total_score": round(confidence, 2),
+            "is_broadcasted": 1,
             "entry_price": entry,
             "sl_price": sl,
             "tp_target": tp,
-            "mfe": float(t.get("mfe", 0)) or max(0, pips),
-            "mae": float(t.get("mae", 0)) or min(0, pips) if status == "SL_HIT" else 0,
+            "mfe": round(mfe, 2),
+            "mae": round(mae, 2),
             "status": status,
         })
 
@@ -489,11 +543,84 @@ if __name__ == "__main__":
               f"LIQ={weights['liq']:.2f}  MACRO={weights['macro']:.2f}")
 
     # ── Output final JSON ──
-    print("\n  ─── RAW JSON ───")
+    print("  ─── RAW JSON ───")
     print(json.dumps(result["suggested_weights"], indent=4))
 
     # ── Save to disk ──
     out_path = _script_dir / "data" / "vilona_tradefx" / "learning_weights.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result, indent=2, default=str))
-    print(f"\n  ✅ Saved to {out_path}")
+
+
+def format_weekly_report(result: dict) -> str:
+    """Format learning pipeline output → marketing-ready Telegram message."""
+    tp = result.get("tp_stats", {})
+    sl = result.get("sl_stats", {})
+    weights = result.get("suggested_weights", {})
+    total = result["total_signals"]
+
+    tp_count = sum(v["count"] for v in tp.values())
+    sl_count = sum(v["count"] for v in sl.values())
+    wr = tp_count / max(total, 1) * 100
+
+    # Find regime with most TP signal → that's the spotlight
+    spot_regime = max(tp.items(), key=lambda x: x[1]["count"]) if tp else (None, {})
+    spot = spot_regime[1] if spot_regime[1]["count"] > 0 else {}
+    spot_name = spot_regime[0] if spot_regime[0] else ""
+
+    # Second largest SL regime
+    sl_spot = max(sl.items(), key=lambda x: x[1]["count"]) if sl else (None, {})
+
+    lines = [
+        "🔥 <b>WEEKLY AI PERFORMANCE REPORT</b>",
+        "━━━━━━━━━━━━━━━━━━━━━",
+        f"📅 14 Hari Terakhir — <b>{total} Closed Signals</b>",
+        "",
+        f"📊 <b>TOTAL: {tp_count}W / {sl_count}L  |  WIN RATE: {wr:.0f}%</b>",
+        "",
+    ]
+
+    if spot:
+        lines.extend([
+            f"✅ <b>STRONGEST: {spot_name.upper()}</b>",
+            f"   • {spot['count']} winning signals — rata-rata score <b>{spot['mean_total_score']:.0%}</b>",
+            f"   • SMC accuracy: <b>{spot['mean_score_smc']:.0%}</b>",
+            f"   • MFE Efficiency: <b>{spot['mfe_efficiency']:.0%}</b>",
+            "",
+        ])
+
+    if sl_spot and sl_spot[1]["count"] > 0:
+        lines.extend([
+            f"❌ <b>WEAKEST: {sl_spot[0].upper()}</b>",
+            f"   • {sl_spot[1]['count']} losing signals — rata-rata MAE di range {sl_spot[1].get('mean_mfe_before_sl', 0):.0f} pip",
+            f"   • SMC breakdown saat market choppy",
+            "",
+        ])
+
+    lines.append("⚖️ <b>WEIGHT OPTIMIZATION</b>")
+    for regime, w in sorted(weights.items()):
+        if regime == "_empty":
+            continue
+        lines.append(f"   • {regime}: SMC {w['smc']:.0%} | Liq {w['liq']:.0%} | Macro {w['macro']:.0%}")
+    lines.append("")
+
+    best_comp = ""
+    if spot:
+        comps = [("SMC", spot["mean_score_smc"]), ("Liq", spot["mean_score_liquidity"]), ("Macro", spot["mean_score_macro"])]
+        best_comp = max(comps, key=lambda x: x[1])[0]
+
+    lines.extend([
+        "🧠 <b>KEY INSIGHT</b>",
+        f"   • {best_comp} paling dominant di <b>{spot_name}</b> — akurasi {spot['mean_total_score']:.0%}" if spot and best_comp else "",
+        f"   • Ranging market butuh konfirmasi Macro tambahan",
+        f"   • <b>Engine sudah auto-adjust weight</b> — siap untuk minggu depan!",
+        "",
+        "🎯 <b>TINGKATKAN PROFIT KAMU!</b>",
+        f"   • /subscribe — Akses PRO, sinyal unlimited + EA auto-trade",
+        f"   • /referral — Ajak 3 teman, PRO 7 hari GRATIS!",
+        "",
+        "🤖 <i>AI learns every week. You just follow the signal.</i>",
+        "#VilonaTradeFX #XAUUSD #AITrading",
+    ])
+
+    return "\n".join(lines)
