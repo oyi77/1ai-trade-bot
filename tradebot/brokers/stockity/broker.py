@@ -97,6 +97,8 @@ class StockityBroker(BaseBroker):
         self._tick_callbacks: list = []
         # Event handlers
         self._event_handlers: dict[str, list] = {}
+        # Pending topic joins: ref -> asyncio.Future
+        self._pending_joins: dict[str, asyncio.Future] = {}
     def _next_ref(self) -> str:
         self._ref_counter += 1
         return str(self._ref_counter)
@@ -131,9 +133,35 @@ class StockityBroker(BaseBroker):
         self._ws = await websockets.connect(STOCKITY_PHOENIX_WS, additional_headers=headers)
         LOG.info("✓ Connected to Phoenix Channels")
 
-        # Join essential topics
+        # Start listener FIRST to catch phx_replies
+        self._listener_task = asyncio.create_task(self._listen())
+
+        # Send ALL joins first (don't wait between them)
+        refs = []
         for topic in ["connection", "bo", "account"]:
-            await self._join_topic(topic)
+            ref = self._next_ref()
+            fut = asyncio.get_event_loop().create_future()
+            self._pending_joins[ref] = fut
+            refs.append((topic, ref, fut))
+            msg = {
+                "topic": topic,
+                "event": "phx_join",
+                "payload": {},
+                "ref": ref,
+                "join_ref": ref,
+            }
+            await self._ws.send(json.dumps(msg))
+            LOG.info("Joined topic: %s (ref=%s)", topic, ref)
+
+        # Now wait for ALL phx_replies
+        for topic, ref, fut in refs:
+            try:
+                await asyncio.wait_for(fut, timeout=15.0)
+                # LOG.debug("Join confirmed: %s", topic)
+            except asyncio.TimeoutError:
+                LOG.warning("Join timeout: %s (reply may arrive later)", topic)
+            finally:
+                self._pending_joins.pop(ref, None)
 
         # Select the active balance type (demo or real)
         await self._send_event("account", "change_type", {"type": self._deal_type})
@@ -280,8 +308,10 @@ class StockityBroker(BaseBroker):
         """Background listener for Phoenix messages."""
         if self._ws is None:
             return
+        # LOG.debug("_listen task started")
         try:
             async for raw in self._ws:
+                # LOG.debug("WS recv: %s", raw[:200])  # Debug: raw message
                 try:
                     data = json.loads(raw)
                 except json.JSONDecodeError:
@@ -325,7 +355,8 @@ class StockityBroker(BaseBroker):
             self._balance_version = payload.get("balance_version", 0)
             self._account_type = payload.get("account_type", "")
             LOG.info("Balance: %.0f %s (v%d)", self._balance_raw, self._balance_currency, self._balance_version)
-        elif topic == "account" and event == "phx_reply":
+        # Account balance from phx_reply (additional handling)
+        if topic == "account" and event == "phx_reply":
             resp_data = payload.get("response", {})
             if "balance" in resp_data:
                 self._balance_raw = resp_data.get("balance", 0)
@@ -346,6 +377,18 @@ class StockityBroker(BaseBroker):
                             try: cb(tick)
                             except Exception: pass
             return
+
+        # Resolve pending topic joins (general phx_reply)
+        elif event == "phx_reply":
+            ref = msg.get("ref")
+            # LOG.debug("phx_reply: topic=%s ref=%s", topic, ref)
+            if ref in self._pending_joins:
+                fut = self._pending_joins.pop(ref)
+                if not fut.done():
+                    fut.set_result(payload)
+                # else: pass
+                # LOG.debug("Join confirmed: %s", topic)
+            # else: pass
 
         # Event handlers (user-registered)
         key = f"{topic}:{event}"
