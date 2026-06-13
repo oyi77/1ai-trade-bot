@@ -62,7 +62,7 @@ def get_free_users():
 def get_premium_count():
     db = _get_members_db()
     row = db.execute(
-        "SELECT COUNT(*) as n FROM members WHERE status = 'paid'"
+        "SELECT COUNT(*) as n FROM members WHERE status='paid' AND tags NOT LIKE '%test%'"
     ).fetchone()
     db.close()
     return row["n"] if row else 0

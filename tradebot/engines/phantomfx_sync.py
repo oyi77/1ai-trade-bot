@@ -190,7 +190,7 @@ class PhantomSync:
             self.active_users = cur.fetchone()[0] or 0
             # Bot users = paid members with active bot usage
             cur.execute(
-                "SELECT COUNT(*) FROM members WHERE status='paid'"
+                "SELECT COUNT(*) FROM members WHERE status='paid' AND tags NOT LIKE '%test%'"
             )
             self.bot_users = cur.fetchone()[0] or 0
             conn.close()

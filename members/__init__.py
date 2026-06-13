@@ -39,7 +39,11 @@ def init_db():
             )
         """)
         # Add columns if they don't exist (migration for existing DBs)
-        for col in [("quota_used", "INTEGER DEFAULT 0"), ("quota_date", "TEXT DEFAULT ''")]:
+        for col in [
+            ("quota_used", "INTEGER DEFAULT 0"),
+            ("quota_date", "TEXT DEFAULT ''"),
+            ("tags", "TEXT DEFAULT ''"),
+        ]:
             try:
                 db.execute(f"ALTER TABLE members ADD COLUMN {col[0]} {col[1]}")
             except sqlite3.OperationalError:
@@ -112,20 +116,22 @@ def get_member(chat_id: str) -> dict | None:
 def upgrade_tier(chat_id: str, tier: str, days: int = 30, payment_ref: str = ""):
     now = datetime.now(WIB)
     expiry = (now + timedelta(days=days))
+    ref_lower = payment_ref.lower()
+    tags = "test" if any(kw in ref_lower for kw in ("test", "demo", "e2e", "dev-", "capi-", "staging")) else ""
     with _conn() as db:
         existing = db.execute(
             "SELECT chat_id FROM members WHERE chat_id = ?", (str(chat_id),)
         ).fetchone()
         if existing:
             db.execute(
-                "UPDATE members SET tier=?, status='paid', expiry=?, payment_ref=? WHERE chat_id=?",
-                (tier, expiry.isoformat(), payment_ref, str(chat_id))
+                "UPDATE members SET tier=?, status='paid', expiry=?, payment_ref=?, tags=? WHERE chat_id=?",
+                (tier, expiry.isoformat(), payment_ref, tags, str(chat_id))
             )
         else:
             db.execute(
-                "INSERT INTO members (chat_id, tier, status, expiry, payment_ref, joined_at) "
-                "VALUES (?, ?, 'paid', ?, ?, ?)",
-                (str(chat_id), tier, expiry.isoformat(), payment_ref, now.isoformat())
+                "INSERT INTO members (chat_id, tier, status, expiry, payment_ref, tags, joined_at) "
+                "VALUES (?, ?, 'paid', ?, ?, ?, ?)",
+                (str(chat_id), tier, expiry.isoformat(), payment_ref, tags, now.isoformat())
             )
 
     # NOTE: CAPI Purchase is fired exclusively from the webhook handler
@@ -233,11 +239,14 @@ def get_due_members() -> list:
 
 
 def is_premium(chat_id: str) -> bool:
-    """Check if member has active paid subscription (not expired)."""
+    """Check if member has active paid subscription (not expired, not test)."""
     member = get_member(str(chat_id))
     if member is None:
         return False
     if member.get("status") != "paid":
+        return False
+    tags = member.get("tags", "")
+    if "test" in (tags or ""):
         return False
     # ── Expiry gate: subscription must not be past expiry ──
     expiry_str = member.get("expiry", "")

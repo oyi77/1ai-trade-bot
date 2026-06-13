@@ -270,7 +270,7 @@ def get_transparency_data() -> dict:
         c.execute("SELECT COUNT(*) FROM members WHERE tier='donor'")
         total_donors = c.fetchone()[0]
 
-        c.execute("SELECT COUNT(*) FROM members WHERE tier='pro' AND status='paid'")
+        c.execute("SELECT COUNT(*) FROM members WHERE tier='pro' AND status='paid' AND tags NOT LIKE '%test%'")
         total_pro = c.fetchone()[0]
 
         c.execute("SELECT COUNT(*) FROM members WHERE tier='starter' AND status='trial'")
@@ -292,7 +292,7 @@ def get_transparency_data() -> dict:
         donation_total = float(drow[1]) if drow[1] else 0
 
         # If manually activated donors exist without payment records, estimate
-        c.execute("SELECT COUNT(*) FROM members WHERE tier='donor' AND status='paid'")
+        c.execute("SELECT COUNT(*) FROM members WHERE tier='donor' AND status='paid' AND tags NOT LIKE '%test%'")
         manual_donors = c.fetchone()[0]
         if manual_donors > donation_count:
             estimated_from_manual = (manual_donors - donation_count) * 50000  # legacy estimate

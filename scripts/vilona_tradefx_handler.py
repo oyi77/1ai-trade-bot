@@ -3631,7 +3631,9 @@ def _get_user_tier(chat_id):
                 except Exception:
                     pass
             # ── is_paid: status="paid" AND expiry not past, OR grandfathered lifetime ──
-            is_paid = (status == "paid" and not expiry_past) or tier in ("donor", "lifetime")
+            # Also exclude test-tagged accounts
+            is_test = "test" in (member.get("tags") or "")
+            is_paid = (status == "paid" and not expiry_past and not is_test) or tier in ("donor", "lifetime")
             if tier == "pro":
                 limit = TIER_LIMITS.get("pro", FREE_DAILY_LIMIT)
                 throttle = MANUAL_THROTTLE_PRO
@@ -7060,7 +7062,8 @@ def broadcast_tp_hit_and_upsell(pair: str, profit_pips: float):
                 chat_id = row["chat_id"]
                 tier = row["tier"] or "free"
                 status = row["status"] or ""
-                is_paid = status == "paid" or tier in ("pro", "elite", "lifetime", "donor")
+                is_test = "test" in (row["tags"] or "")
+                is_paid = (status == "paid" and not is_test) or tier in ("pro", "elite", "lifetime", "donor")
                 
                 if is_paid:
                     msg = (
@@ -7444,7 +7447,7 @@ def auto_analyze_loop():
                     from members import _conn as members_conn
                     with members_conn() as db:
                         rows = db.execute(
-                            "SELECT chat_id FROM members WHERE status='paid' AND tier IN ('pro','elite','lifetime')"
+                            "SELECT chat_id FROM members WHERE status='paid' AND tier IN ('pro','elite','lifetime') AND tags NOT LIKE '%test%'"
                         ).fetchall()
                     for row in rows:
                         try:
