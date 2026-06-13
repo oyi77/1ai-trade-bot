@@ -351,8 +351,10 @@ class StockityBroker(BaseBroker):
         # Event handlers (user-registered)
         key = f"{topic}:{event}"
         for handler in self._event_handlers.get(key, []):
-            try: handler(msg)
-            except Exception: pass
+            try:
+                handler(msg)
+            except Exception as exc:
+                LOG.warning("Event handler failed: %s", exc)
 
         # Position tracking
         if topic == "bo":

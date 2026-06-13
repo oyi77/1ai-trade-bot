@@ -1835,6 +1835,7 @@ def register_vilona_commands(app, bot):
         ("buykey", "_cmd_buykey"),
         ("earnings", "_cmd_earnings"),
         ("claim", "_cmd_claim"),
+        ("readings", "_cmd_engine_readings"),
         ("link", "_cmd_link"),
         ("unlink", "_cmd_unlink"),
         ("platforms", "_cmd_platforms"),
