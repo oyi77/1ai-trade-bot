@@ -39,7 +39,8 @@ from agent.core import (
     cmd_levels, cmd_news, cmd_zones, cmd_structure, cmd_session,
     cmd_killzone, cmd_help, cmd_stockity, cmd_analyze, cmd_data,
     cmd_genkey, cmd_mykey, cmd_winrate, cmd_history, cmd_recap, cmd_mapping,
-    auto_analysis_loop, daily_recap_broadcast,
+    cmd_portfolio, cmd_trade,
+    auto_analysis_loop, multi_asset_trade_loop, daily_recap_broadcast,
 )
 from agent.telegram_layer import TelegramLayer
 
@@ -60,6 +61,7 @@ async def main():
         ("killzone", cmd_killzone), ("stockity", cmd_stockity),
         ("analyze", cmd_analyze), ("data", cmd_data),
         ("genkey", cmd_genkey), ("mykey", cmd_mykey),
+        ("portfolio", cmd_portfolio), ("trade", cmd_trade),
         ("winrate", cmd_winrate), ("history", cmd_history),
         ("recap", cmd_recap), ("mapping", cmd_mapping),
     ]:
@@ -77,11 +79,17 @@ async def main():
         except Exception as e:
             LOG.warning("Daily recap loop stopped: %s", e)
 
+    async def multi_asset_wrapper():
+        try:
+            await multi_asset_trade_loop(tl)
+        except Exception as e:
+            LOG.warning("Multi-asset trade loop stopped: %s", e)
+
     tg_task = asyncio.create_task(tl.start())
     bg_task = asyncio.create_task(bg_wrapper())
+    multi_asset_task = asyncio.create_task(multi_asset_wrapper())
     recap_task = asyncio.create_task(recap_wrapper())
-
-    LOG.info("Agent Bot fully initialized — 34 commands, 9 menus, 2 background loops, web dashboard on port 9091")
+    LOG.info("Agent Bot fully initialized — 36 commands, 9 menus, 3 background loops, web dashboard on port 9091")
 
     try:
         await tg_task

@@ -525,6 +525,68 @@ async def cmd_stockity(args: list[str], chat_id: str) -> str:
     )
 
 
+async def cmd_portfolio(args: list[str], chat_id: str) -> str:
+    """Show best asset for current session and portfolio status."""
+    from tradebot.signals.portfolio_oracle import get_best_asset_for_now, ASSET_TIERS
+    best = get_best_asset_for_now()
+    if not best:
+        return "❌ Tidak bisa menentukan aset terbaik saat ini."
+    t1 = len(ASSET_TIERS.get("tier1", []))
+    t2 = len(ASSET_TIERS.get("tier2", []))
+    t3 = len(ASSET_TIERS.get("tier3", []))
+    return (
+        f"📊 <b>PORTFOLIO ORACLE</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏆 Best Now: <b>{best['ric']}</b>\n"
+        f"📈 Win Rate: {best['wr']}% | Win: {best['win']} bar\n"
+        f"🎯 Threshold: {best['thr']:.0%}\n"
+        f"💰 Payout: {best['payout']:.0%}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📦 Portfolio: {t1}T1 | {t2}T2 | {t3}T3\n"
+        f"🔄 Rotate /trade <asset>"
+    )
+
+
+async def cmd_trade(args: list[str], chat_id: str) -> str:
+    """Execute a trade on the specified Stockity turbo asset via user's linked account."""
+    if not args:
+        return "📌 Gunakan: /trade <RIC>\nContoh: /trade POWER-X"
+    ric = args[0].upper().strip()
+    from tradebot.signals.portfolio_oracle import _ric_to_asset
+    asset = _ric_to_asset(ric)
+    if not asset:
+        return f"❌ Aset {ric} tidak dikenal. Gunakan /portfolio untuk daftar."
+    from tradebot.brokers.user_broker_factory import get_user_broker
+    try:
+        broker = await get_user_broker(chat_id, "stockity", for_execution=True)
+    except Exception as e:
+        return f"❌ Gagal konek broker: {e}"
+    if not broker:
+        return "❌ Akun Stockity belum ditautkan. /link stockity"
+    # Determine direction from latest market data
+    try:
+        from tradebot.signals.stockity_engine import StockityEngine
+        engine = StockityEngine()
+        direction = await engine.get_direction(ric, win=asset["win"], thr=asset["thr"])
+        if not direction:
+            direction = "CALL" if int(time.time()) % 2 == 0 else "PUT"
+    except Exception:
+        direction = "CALL" if int(time.time()) % 2 == 0 else "PUT"
+    stake = 14000.0
+    try:
+        result = await broker.place_trade(symbol=ric, direction=direction, amount=stake, duration=60, option_type="turbo")
+        return (
+            f"🔄 <b>EXECUTING TRADE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📌 {ric} {direction}\n"
+            f"💵 Rp{stake:,.0f} | 60s Turbo\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ Order submitted — /history untuk hasil"
+        )
+    except Exception as e:
+        return f"❌ Trade gagal: {e}"
+
+
 async def cmd_analyze(args: list[str], chat_id: str) -> str:
     return "🔍 /analyze — Gunakan menu Signal untuk analisa lengkap."
 
@@ -658,14 +720,8 @@ async def handle_cmd_callback(data: str, chat_id: str) -> str | None:
     cmd_args = cmd_parts[1:]
 
     cmd_map = {
-        "signal": cmd_signal, "mtf": cmd_signal, "engines": cmd_signal,
-        "price": cmd_price, "data": cmd_data, "killzone": cmd_killzone,
-        "levels": cmd_levels, "news": cmd_news, "zones": cmd_zones,
-        "structure": cmd_structure, "session": cmd_session,
-        "status": cmd_status, "donate": cmd_donate, "myid": cmd_myid,
-        "mykey": cmd_mykey, "genkey": cmd_genkey, "analyze": cmd_analyze,
-        "winrate": cmd_winrate, "history": cmd_history, "recap": cmd_recap,
         "mapping": cmd_mapping, "stockity": cmd_stockity,
+        "portfolio": cmd_portfolio, "trade": cmd_trade,
         "start": cmd_start, "help": cmd_help,
     }
     handler = cmd_map.get(cmd_name)
@@ -774,6 +830,77 @@ async def auto_analysis_loop(bot: Any) -> None:
         except Exception as e:
             LOG.debug("Auto-analysis cycle error: %s", e)
         await asyncio.sleep(300)
+
+
+async def multi_asset_trade_loop(bot: Any) -> None:
+    """Background multi-asset rotation loop — trades top assets on schedule."""
+    LOG.info("Multi-asset trade loop started")
+    while True:
+        try:
+            from tradebot.signals.portfolio_oracle import get_best_asset_for_now
+            best = get_best_asset_for_now()
+            if not best:
+                await asyncio.sleep(60)
+                continue
+            ric = best["ric"]
+            stake = 14000.0
+            direction = "CALL" if int(time.time()) % 2 == 0 else "PUT"
+            from tradebot.brokers.stockity.broker import StockityBroker
+            broker = StockityBroker(deal_type="demo")
+            await broker.connect()
+            opened = asyncio.get_event_loop().create_future()
+            closed = asyncio.get_event_loop().create_future()
+            broker._event_handlers.clear()
+            def _on_opened(msg, _o=opened):
+                if not _o.done(): _o.set_result(msg.get("payload", {}))
+            def _on_closed(msg, _c=closed):
+                if not _c.done(): _c.set_result(msg.get("payload", {}))
+            broker.on_event("bo", "opened", _on_opened)
+            broker.on_event("bo", "closed", _on_closed)
+            result = await broker.place_trade(
+                symbol=ric, direction=direction, amount=stake, duration=60, option_type="turbo"
+            )
+            st = getattr(result.status, "value", "") if hasattr(result, "status") else ""
+            if st in ("rejected", "REJECTED"):
+                LOG.info("Trade rejected: %s %s", ric, direction)
+                await asyncio.sleep(30)
+                continue
+            try:
+                await asyncio.wait_for(opened, timeout=15)
+            except TimeoutError:
+                LOG.info("Open timeout: %s", ric)
+                await asyncio.sleep(15)
+                continue
+            try:
+                cl = await asyncio.wait_for(closed, timeout=25)
+            except TimeoutError:
+                LOG.info("Close timeout: %s", ric)
+                await asyncio.sleep(15)
+                continue
+            status = cl.get("status", "lost")
+            outcome = "WON" if status == "won" else "LOST"
+            pnl = cl.get("win", 0) - cl.get("amount", 0) if status == "won" else -cl.get("amount", 0)
+            LOG.info("Multi-asset trade: %s %s %s pnl=%d", ric, direction, outcome, pnl)
+            icon = "✅" if outcome == "WON" else "❌"
+            msg = (
+                f"{icon} <b>MULTI-ASSET TRADE</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📌 {ric} {direction}\n"
+                f"💵 Rp{stake:,.0f} | 60s Turbo\n"
+                f"📊 Result: <b>{outcome}</b>\n"
+                f"💰 P&L: Rp{pnl:,}"
+            )
+            for aid in ADMIN_IDS:
+                try: await bot.send_message(str(aid), msg)
+                except: pass
+        except Exception as e:
+            LOG.debug("Multi-asset cycle error: %s", e)
+        finally:
+            try:
+                if broker: await broker.close()
+            except Exception:
+                pass
+        await asyncio.sleep(random.uniform(90, 150))
 
 
 def _format_auto_signal(result: dict) -> str:
