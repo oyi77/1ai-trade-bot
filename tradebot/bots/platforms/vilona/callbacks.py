@@ -45,10 +45,46 @@ class CallbackHandlersMixin(BaseBot):
             await self._tg_send(response, chat_id=chat_id)
             return response
 
+
+
+        # Portfolio actions
+        if data.startswith("portfolio:"):
+            action = data.replace("portfolio:", "")
+            if action == "refresh":
+                response = await self._cmd_portfolio([], chat_id=chat_id)
+            elif action == "trade_best":
+                best = self._get_best_asset_ric()
+                if best:
+                    response = await self._cmd_trade([best], chat_id=chat_id)
+                else:
+                    response = "Tidak ada aset yang bisa ditrading saat ini."
+            if response:
+                return response
+
+        # Link actions (trigger button-followed input)
+        if data.startswith("link:"):
+            platform = data.replace("link:", "")
+            response = (
+                f"🔗 <b>LINK {platform.upper()}</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Ketik:\n"
+                f"/link {platform} &lt;credentials&gt;\n\n"
+                f"Contoh:\n"
+                f"/link stockity email@example.com password"
+            )
+            if response:
+                return response
+
+        # Autotrade toggle
+        if data.startswith("autotrade:"):
+            action = data.replace("autotrade:", "")
+            response = await self._cmd_autotrade([action], chat_id=chat_id)
+            if response:
+                return response
+
         # Trade confirmation / skip callbacks
         if data.startswith("trade:") or data.startswith("skip:"):
             return await self._handle_trade_callback(chat_id, data)
-
         # Payment callbacks
         if (
             data.startswith("pay:")

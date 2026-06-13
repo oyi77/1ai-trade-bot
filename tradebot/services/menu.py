@@ -1,17 +1,10 @@
-"""Unified menu system — categorized inline keyboard menus with role-based views.
-
-Provides menu layouts, inline keyboard builders, and navigation handlers
-for the single unified Telegram bot.
-"""
+"""Unified menu system — categorized inline keyboard menus with role-based views."""
 
 from __future__ import annotations
 
 from typing import Any
 
-# ── Menu Structure ────────────────────────────────────────────────────
-# Each menu is a list of (callback_data, label) tuples.
-# "rows" groups buttons by row.
-
+# ── Menu Structure ──
 MAIN_MENU: list[list[tuple[str, str]]] = [
     [("menu:signals", "🧠 SIGNAL SYSTEM"), ("menu:market", "📊 MARKET DATA")],
     [("menu:history", "📈 TRADE HISTORY"), ("menu:account", "👤 ACCOUNT")],
@@ -121,16 +114,29 @@ TRADE_MENU: list[list[tuple[str, str]]] = [
     [("trade:yes", "✅ Trade"), ("trade:no", "⏭ Skip")],
 ]
 
+PORTFOLIO_MENU: list[list[tuple[str, str]]] = [
+    [("portfolio:refresh", "🔄 Refresh"), ("portfolio:trade_best", "🔥 Trade Best")],
+    [("menu:link", "🔗 Link Platform"), ("menu:autotrade", "🤖 Auto-Execute")],
+    [("menu:main", "🔙 Back")],
+]
+
+LINK_MENU: list[list[tuple[str, str]]] = [
+    [("link:stockity", "📈 Stockity")],
+    [("link:deriv", "💹 Deriv")],
+    [("link:ccxt", "🔄 CCXT Exchange")],
+    [("link:mt5", "💻 MetaTrader 5")],
+    [("menu:portfolio", "🔙 Back")],
+]
+
+AUTOTRADE_MENU: list[list[tuple[str, str]]] = [
+    [("autotrade:on", "🟢 ON"), ("autotrade:off", "⚪ OFF")],
+    [("menu:portfolio", "🔙 Back")],
+]
+
 
 def build_keyboard(
     menu: list[list[tuple[str, str] | tuple[str, str, str]]],
 ) -> list[list[dict[str, str]]]:
-    """Convert menu tuples into Telegram InlineKeyboardMarkup format.
-
-    Each row item can be:
-      - (callback_data, label)           → callback button
-      - ("__url__", label, url)          → URL button (opens in browser)
-    """
     result: list[list[dict[str, str]]] = []
     for row in menu:
         buttons: list[dict[str, str]] = []
@@ -144,129 +150,62 @@ def build_keyboard(
 
 
 def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]:
-    """Get an inline keyboard for a named menu."""
-    menus: dict[str, list[list[tuple[str, str] | tuple[str, str, str]]]] = {
+    _menus: dict[str, list[list[tuple[str, str] | tuple[str, str, str]]]] = {
         "main": MAIN_MENU,
         "admin": ADMIN_MENU,
         "signals": SIGNAL_MENU,
+        "analysis": ANALYSIS_MENU,
         "market": MARKET_MENU,
         "history": HISTORY_MENU,
         "account": ACCOUNT_MENU,
-        "donate": DONATE_MENU,
+        "platforms": PLATFORMS_MENU,
+        "subscriptions": SUBSCRIPTIONS_MENU,
         "subscribe": SUBSCRIBE_MENU,
-        "analysis": ANALYSIS_MENU,
+        "donate": DONATE_MENU,
         "stockity": STOCKITY_MENU,
         "admin_panel": ADMIN_PANEL_MENU,
         "help": HELP_MENU,
         "trade": TRADE_MENU,
-        "platforms": PLATFORMS_MENU,
-        "subscriptions": SUBSCRIPTIONS_MENU,
+        "portfolio": PORTFOLIO_MENU,
+        "link": LINK_MENU,
+        "autotrade": AUTOTRADE_MENU,
     }
-    menu = menus.get(menu_name, MAIN_MENU)
+    menu = _menus.get(menu_name, MAIN_MENU)
     return {"inline_keyboard": build_keyboard(menu)}
 
 
 def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> str:
-    """Get welcome text for a specific menu."""
     texts: dict[str, str] = {
-        "main": (
-            "🔥 <b>VILONA AI — COMMAND CENTER</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Pilih menu di bawah untuk memulai:"
-        ),
-        "signals": (
-            "🧠 <b>SIGNAL SYSTEM</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "AI MTF Top-Down Analysis dengan 9 engines."
-        ),
-        "market": (
-            "📊 <b>MARKET DATA</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Harga real-time, killzone, dan data pasar."
-        ),
-        "history": (
-            "📈 <b>TRADE HISTORY</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Win rate, daily recap, dan mapping."
-        ),
-        "account": (
-            "👤 <b>ACCOUNT</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Status, subscribe, dan pengaturan."
-        ),
-        "donate": (
-            "💚 <b>DONASI PUBLIK — VILONA AI</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Dukungan Anda membantu menjaga server AI tetap aktif & cepat.\n"
-            "Silakan pilih nominal donasi di bawah ini:"
-        ),
-        "subscribe": (
-            "⭐ <b>LANGGANAN PREMIUM — VILONA AI</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Dapatkan akses eksklusif ke semua fitur premium,\n"
-            "tanpa batas kuota, dan auto-copy trading.\n"
-            "Pilih paket langganan Anda:"
-        ),
-        "analysis": (
-            "🔬 <b>TECHNICAL ANALYSIS TOOLS</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Pilih tools analisis teknis di bawah ini:"
-        ),
-        "stockity": (
-            "💰 <b>STOCKITY INSIDER</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Kami menggunakan sistem bandar (insider) untuk\n"
-            "meningkatkan akurasi sinyal. Pastikan untuk mendaftar\n"
-            "menggunakan kode referral di bawah ini!"
-        ),
-        "admin_panel": (
-            "⚙️ <b>ADMIN PANEL</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Manajemen bot dan pengguna."
-        ),
-        "help": (
-            "❓ <b>HELP</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Gunakan menu atau ketik command langsung."
-        ),
-        "platforms": (
-            "🔗 <b>PLATFORM MANAGEMENT</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Kelola akun broker Anda di sini.\n"
-            "Link akun untuk auto-trading, atau subscribe signal."
-        ),
-        "subscriptions": (
-            "💳 <b>SUBSCRIPTION PLANS</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Pilih paket langganan:\n\n"
-            "📡 <b>Signal Only</b> — Dapatkan sinyal Telegram\n"
-            "🤖 <b>Signal+Execute</b> — Sinyal + auto-trading via broker Anda"
-        ),
+        "main": "🔥 <b>VILONA AI — COMMAND CENTER</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih menu di bawah untuk memulai:",
+        "signals": "🧠 <b>SIGNAL SYSTEM</b>\n━━━━━━━━━━━━━━━━━━━━━\nAI MTF Top-Down Analysis dengan 9 engines.",
+        "market": "📊 <b>MARKET DATA</b>\n━━━━━━━━━━━━━━━━━━━━━\nHarga real-time, killzone, dan data pasar.",
+        "history": "📈 <b>TRADE HISTORY</b>\n━━━━━━━━━━━━━━━━━━━━━\nWin rate, daily recap, dan mapping.",
+        "account": "👤 <b>ACCOUNT</b>\n━━━━━━━━━━━━━━━━━━━━━\nStatus, subscribe, dan pengaturan.",
+        "donate": "💚 <b>DONASI PUBLIK — VILONA AI</b>\n━━━━━━━━━━━━━━━━━━━━━\nDukungan Anda membantu server AI tetap aktif & cepat.",
+        "subscribe": "⭐ <b>LANGGANAN PREMIUM</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih paket langganan Anda:",
+        "analysis": "🔬 <b>TECHNICAL ANALYSIS TOOLS</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih tools analisis teknis di bawah ini:",
+        "stockity": "💰 <b>STOCKITY INSIDER</b>\n━━━━━━━━━━━━━━━━━━━━━\nSistem bandar (insider) untuk akurasi sinyal maksimal.",
+        "admin_panel": "⚙️ <b>ADMIN PANEL</b>\n━━━━━━━━━━━━━━━━━━━━━\nManajemen bot dan pengguna.",
+        "help": "❓ <b>HELP</b>\n━━━━━━━━━━━━━━━━━━━━━\nGunakan menu atau ketik command langsung.",
+        "platforms": "🔗 <b>PLATFORM MANAGEMENT</b>\n━━━━━━━━━━━━━━━━━━━━━\nKelola akun broker Anda di sini.",
+        "subscriptions": "💳 <b>SUBSCRIPTION PLANS</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih paket langganan Anda:",
+        "portfolio": "📊 <b>PORTFOLIO</b>\n━━━━━━━━━━━━━━━━━━━━━\nAset terbaik, P&L, dan status akun Anda.",
+        "link": "🔗 <b>LINK PLATFORM</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih platform untuk ditautkan:",
+        "autotrade": "🤖 <b>AUTO-EXECUTE</b>\n━━━━━━━━━━━━━━━━━━━━━\nAktifkan/nonaktifkan eksekusi trading otomatis.",
     }
     return texts.get(menu_name, texts["main"])
 
 
 def is_admin(chat_id: str, admin_ids: list[str] | None = None) -> bool:
-    """Check if a chat_id has admin privileges."""
     if not admin_ids:
         return False
     return chat_id in admin_ids or str(chat_id) in admin_ids
 
 
 __all__ = [
-    "ADMIN_MENU",
-    "MAIN_MENU",
-    "SIGNAL_MENU",
-    "MARKET_MENU",
-    "HISTORY_MENU",
-    "ACCOUNT_MENU",
-    "SUBSCRIBE_MENU",
-    "STOCKITY_MENU",
-    "ADMIN_PANEL_MENU",
-    "HELP_MENU",
-    "TRADE_MENU",
-    "get_inline_keyboard",
-    "get_menu_text",
-    "is_admin",
-    "build_keyboard",
+    "ADMIN_MENU", "MAIN_MENU", "SIGNAL_MENU", "MARKET_MENU",
+    "HISTORY_MENU", "ACCOUNT_MENU", "SUBSCRIBE_MENU", "STOCKITY_MENU",
+    "ADMIN_PANEL_MENU", "HELP_MENU", "TRADE_MENU",
+    "PORTFOLIO_MENU", "LINK_MENU", "AUTOTRADE_MENU",
+    "get_inline_keyboard", "get_menu_text", "is_admin", "build_keyboard",
 ]

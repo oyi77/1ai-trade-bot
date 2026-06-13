@@ -82,11 +82,11 @@ class PlatformLinkService:
             PlatformLinkError: On invalid credentials or network failure.
         """
         try:
-            authtoken, broker_user_id = await self._stockity_login(email, password)
+            authtoken, broker_user_id, full_cookie = await self._stockity_login(email, password)
         except Exception as e:
             raise PlatformLinkError(f"Login gagal: {e}") from e
 
-        cookie = self._build_stockity_cookie(authtoken, broker_user_id)
+        cookie = full_cookie
 
         # Detect currency from balance API
         currency = await self._detect_stockity_currency(cookie)
@@ -121,8 +121,12 @@ class PlatformLinkService:
             "label": label,
         }
 
-    async def _stockity_login(self, email: str, password: str) -> tuple[str, str]:
-        """Login to Stockity and get authtoken + user_id."""
+    async def _stockity_login(self, email: str, password: str) -> tuple[str, str, str]:
+        """Login to Stockity and get authtoken + user_id + full cookie.
+
+        Returns:
+            Tuple of (authtoken, broker_user_id, full_cookie_string).
+        """
         payload = json.dumps({"email": email, "password": password}).encode()
         headers = {
             "Content-Type": "application/json",
@@ -148,13 +152,31 @@ class PlatformLinkService:
                     f"Invalid response: authtoken={'set' if authtoken else 'missing'}, "
                     f"user_id={'set' if broker_user_id else 'missing'}"
                 )
-            return authtoken, broker_user_id
-
-    def _build_stockity_cookie(self, authtoken: str, user_id: str) -> str:
-        """Build full cookie string from auth components."""
-        return (
-            f"_stockity_session_v3={authtoken}; authtoken={authtoken}; user_id={user_id}; locale=en"
-        )
+            # Build full cookie from fresh authtoken + global cookie base
+            from tradebot.config import settings as _cfg
+            base_cookie = _cfg.STOCKITY_FULL_COOKIE
+            if base_cookie:
+                # Replace authtoken in the global cookie
+                parts = base_cookie.split(";")
+                seen_authtoken = False
+                cookie_parts = []
+                for p in parts:
+                    p = p.strip()
+                    if p.startswith("authtoken="):
+                        cookie_parts.append(f"authtoken={authtoken}")
+                        seen_authtoken = True
+                    elif p.startswith("userId="):
+                        cookie_parts.append(f"userId={broker_user_id}")
+                    elif p:
+                        cookie_parts.append(p)
+                if not seen_authtoken:
+                    cookie_parts.append(f"authtoken={authtoken}")
+                full_cookie = "; ".join(cookie_parts)
+            else:
+                full_cookie = (
+                    f"authtoken={authtoken}; user_id={broker_user_id}; locale=en"
+                )
+            return authtoken, broker_user_id, full_cookie
 
     async def _detect_stockity_currency(self, cookie: str) -> str:
         """Detect account currency from Stockity balance API.
@@ -306,19 +328,23 @@ class PlatformLinkService:
 
     async def get_linked_platforms(self, user_id: str) -> list[dict[str, Any]]:
         """Get all linked platforms for a user."""
+        cols = ["id", "user_id", "platform", "label", "email", "password", "credentials",
+                "currency", "broker_user_id", "status", "linked_at", "updated_at"]
         rows = _storage().fetchall(
             "SELECT * FROM user_platforms WHERE user_id=? AND status='active' ORDER BY linked_at",
             (user_id,),
         )
-        return [dict(r) for r in rows]
+        return [dict(zip(cols, r)) for r in rows]
 
     async def get_platform_credentials(self, user_id: str, platform: str) -> dict[str, Any] | None:
         """Get stored credentials for a specific platform."""
+        cols = ["id", "user_id", "platform", "label", "email", "password", "credentials",
+                "currency", "broker_user_id", "status", "linked_at", "updated_at"]
         row = _storage().fetchone(
             "SELECT * FROM user_platforms WHERE user_id=? AND platform=? AND status='active'",
             (user_id, platform),
         )
-        return dict(row) if row else None
+        return dict(zip(cols, row)) if row else None
 
     # ── Cookie refresh ───────────────────────────────────────────────────
 
@@ -336,14 +362,14 @@ class PlatformLinkService:
             return None
 
         try:
-            authtoken, broker_user_id = await self._stockity_login(
+            authtoken, broker_user_id, full_cookie = await self._stockity_login(
                 creds["email"], creds["password"]
             )
         except Exception as e:
             LOG.error("Cookie refresh failed for user %s: %s", user_id, e)
             return None
 
-        cookie = self._build_stockity_cookie(authtoken, broker_user_id)
+        cookie = full_cookie
         store = _storage()
         sql = (
             "UPDATE user_platforms SET credentials=?, updated_at=? "

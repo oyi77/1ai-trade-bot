@@ -1795,6 +1795,12 @@ class CommandHandlersMixin(BaseBot):
             f"Rotate /trade &lt;asset&gt;"
         )
 
+    def _get_best_asset_ric(self) -> str | None:
+        """Get the best asset RIC for the current session."""
+        from tradebot.signals.portfolio_oracle import get_best_asset_for_now
+        best = get_best_asset_for_now()
+        return best["ric"] if best else None
+
     async def _cmd_trade(self, args: list[str], chat_id: str | None = None) -> str:
         """Execute a trade on the specified Stockity turbo asset."""
         if not args or not chat_id:

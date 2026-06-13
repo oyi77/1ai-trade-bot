@@ -162,20 +162,20 @@ class UnifiedBot(VilonaBot):
         # Portfolio & trading commands
         app.add_handler(CommandHandler("portfolio", self._h_portfolio))
         app.add_handler(CommandHandler("trade", self._h_trade))
+        app.add_handler(CommandHandler("link", self._h_link))
+        app.add_handler(CommandHandler("unlink", self._h_unlink))
+        app.add_handler(CommandHandler("platforms", self._h_platforms))
+        app.add_handler(CommandHandler("autotrade", self._h_autotrade))
 
         # All shared payment/affiliate commands (plans, upgrade, confirm, signals,
         # unsubscribe, affiliate, whitelabel, set_share, set_rate, set_plan)
         register_standard_commands(app)
 
-        # Callback queries — payment-flow prefixes ONLY
-        # (onboarding/trade callbacks handled exclusively by legacy handler)
+        # Callback queries — all supported prefixes
         app.add_handler(CallbackQueryHandler(
             self._h_callback,
-            pattern=r'^(plans|link|check_|cmd:settings|menu:settings|pref_|pay:|check:|pricing:|donate:|sub:|cancel_input|menu:)'
+            pattern=r'^(plans|link|check_|cmd:|menu:|pref_|pay:|check:|pricing:|donate:|sub:|cancel_input|portfolio:|autotrade:)'
         ))
-
-        LOG.info("UnifiedBot built — payment/subscription handlers only")
-        return app
 
     # ── Start / Stop ───────────────────────────────────────────────
 
@@ -317,6 +317,57 @@ class UnifiedBot(VilonaBot):
             await update.message.reply_html(resp)
         except Exception as e:
             LOG.error("_h_trade error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/link <platform> <credentials> — link broker account."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_link(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_link error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_unlink(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/unlink <platform> — unlink broker account."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_unlink(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_unlink error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_platforms(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/platforms — show linked platforms."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        try:
+            resp = await self._cmd_platforms([], chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_platforms error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_autotrade(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/autotrade [on|off] — toggle auto-execution for your linked account."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_autotrade(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_autotrade error: %s", e)
             await update.message.reply_html(f"Error: {e}")
 
     async def _h_signal(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -662,75 +713,6 @@ class UnifiedBot(VilonaBot):
 
     # ── Command: /link ───────────────────────────────────────────────────
 
-    async def _h_link(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        user_id = await self._ensure_user(update, context)
-        args = context.args
-        existing = self.db.get_linked_accounts(user_id)
-        if len(existing) >= 3:
-            await self._reply(update, "⚠️ Maximum 3 linked accounts. Use /unlink to remove one first.")
-            return
-        if not args:
-            await self._reply(
-                update,
-                "🔗 *Link Your Stockity Account*\n\n"
-                "Usage: `/link <your_auth_token>`\n\n"
-                "Get your token from stockity.com → DevTools → Application → Local Storage.",
-            )
-            return
-        auth_token = args[0].strip()
-        if len(auth_token) < 20:
-            await self._reply(
-                update,
-                "❌ That doesn't look like a valid token. Use /link without arguments for instructions.",
-            )
-            return
-        existing_link = self.db.get_linked_account_by_auth(auth_token)
-        if existing_link:
-            await self._reply(update, "⚠️ This token is already linked to another account.")
-            return
-        label = f"account_{len(existing) + 1}"
-        if len(args) >= 2:
-            label = args[1]
-        link_id = self.db.link_account(user_id, auth_token, label=label)
-        await self._reply(
-            update,
-            f"✅ *Account Linked!*\n\nLabel: `{label}`\nID: `{link_id}`\n\nYour Stockity account is now connected.",
-        )
-
-    # ── Command: /unlink ─────────────────────────────────────────────────
-
-    async def _h_unlink(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        user_id = await self._ensure_user(update, context)
-        accounts = self.db.get_linked_accounts(user_id)
-        if not accounts:
-            await self._reply(
-                update,
-                "ℹ️ You don't have any linked accounts.\nUse /link to connect your Stockity account.",
-            )
-            return
-        if context.args:
-            target = context.args[0].strip()
-            for acct in accounts:
-                if str(acct["id"]) == target or acct["account_label"] == target:
-                    self.db.unlink_account(acct["id"], user_id)
-                    await self._reply(
-                        update,
-                        f"✅ Account *{acct['account_label']}* (ID: {acct['id']}) unlinked.",
-                    )
-                    return
-            await self._reply(
-                update,
-                f"❌ No linked account matches `{target}`.\nUse /unlink to see your accounts.",
-            )
-            return
-        lines = ["🔗 *Your Linked Accounts*\n"]
-        for acct in accounts:
-            lines.append(
-                f"  `{acct['id']}` — {acct['account_label']}\n"
-                f"         Token: `{acct['stockity_auth'][:12]}...`\n"
-            )
-        lines.append("\nUse `/unlink <id>` to remove one.\nExample: `/unlink 1`")
-        await self._reply(update, "".join(lines))
 
     # ── Signal dispatch ──────────────────────────────────────────────────
 
