@@ -345,5 +345,102 @@ Penyebab paling umum:
 
 ---
 
-*Version: 1.0 — 12 June 2026*
+## 13. CHANNEL CONTENT SYSTEM — WEEKLY AUTO-POST 📡
+
+> **Setiap Sabtu 02:00 WIB — 3 postingan otomatis ke @vilonaaichanel**
+
+### 13.1 Jadwal Posting
+
+| Hari | Waktu | Konten | Sumber |
+|------|-------|--------|--------|
+| **Setiap Hari** | 20:00 WIB | Daily Recap | `trade_tracker_service.py` → `format_daily_recap()` |
+| **Sabtu** | 02:00 WIB | Learning Report | `pattern_extractor.py` → `format_learning_report()` |
+| **Sabtu** | 02:01 WIB | Educational Post | Ditarik dari `trade_history.json` |
+| **Sabtu** | 02:02 WIB | Marketing Report | `pattern_extractor.py` → `format_weekly_report()` |
+
+### 13.2 Data Source
+
+Semua analisa dari **`data/trade_history.json`** — satu source of truth.
+- Filter: outcome=TP_HIT/SL_HIT, symbol=XAUUSD, 14 hari terakhir
+- Score: decompose dari grade (A=70/50/50, B=50/40/30, C=30/30/20) + source boost
+- Killzone: dari open_time (London=07-12, NY=19-23 WIB, Asia=sisanya)
+- Empty guard: jika < 5 closed signals dalam 14 hari → skip semua
+
+### 13.3 Learning Report
+
+```
+🧠 WEEKLY LEARNING REPORT
+📆 14 Hari: N Closed | XW/ZL | WR: XX%
+
+📗 What WORKED (TP): per-regime breakdown (count, score, MFE eff, best predictor)
+📕 What FAILED (SL): per-regime breakdown (count, reversal rate, trailing SL need)
+⚖️ WEIGHT ADJUSTMENT: saved to learning_weights.json
+```
+
+### 13.4 Educational Post
+
+```
+📚 EDUKASI TRADING — XAUUSD MINGGU INI
+
+1️⃣ NY SESSION = RAJA — NY WR XX%, Asia WR XX%
+   → Jangan trading Asia!
+
+2️⃣ GRADE MATTERS — Grade A WR XX%, Grade B WR XX%
+   → Filter Grade A doang
+
+3️⃣ DIRECTION BIAS — SELL vs BUY ratio X:1
+   → Jangan fight trend
+
+4️⃣ ENGINE AI vs Hermes — AI WR XX%, Hermes WR XX%
+   → Prioritaskan AI engine
+
+💡 Actionable: trading window, grade filter, bias, engine
+```
+
+### 13.5 Marketing Report
+
+```
+🔥 WEEKLY AI PERFORMANCE REPORT
+📊 TOTAL: XW/YL | WR XX%
+✅ STRONGEST: regime | ❌ WEAKEST: regime
+⚖️ Weight optimization per regime
+🎯 /subscribe + /referral CTA
+```
+
+### 13.6 Scheduler Logic
+
+**Code:** `scripts/vilona_tradefx_handler.py` → `_weekly_learning_scheduler()`
+
+1. Sabtu 02:00 WIB → `run_learning_pipeline(lookback_days=14)`
+2. Jika total_signals ≥ 5: post learning → education → marketing ke channel + DM admin
+3. Jika < 5 → skip (data kurang)
+4. Sleep 7 hari ke Sabtu depan
+
+**Catchup:** Jika bot restart pas Sabtu jam ≥ 02:00 → langsung run.
+
+**Delivery:** HTTP POST `bot{token}/sendMessage` ke `chat_id=-1003257064212`.
+
+### 13.7 Git History
+
+| Commit | Perubahan |
+|--------|-----------|
+| `8043489` | fix: Weekly WFA scheduler — catchup on Saturday |
+| `bc75da1` | fix: Pattern extractor reads `trade_history.json` |
+| `2b2bf90` | feat: `format_learning_report()` + dual-post |
+| `858d2f4` | fix: Filter CRYPTO_IDX — Vilona-only analysis |
+
+> **PELANGGARAN**: Jangan hapus scheduler thread. Jangan ubah data source dari `trade_history.json`. Postingan channel adalah MARKETING + EDUKASI — bukan debug log.
+
+---
+
+## 14. CHANNEL POSTING SAFETY 🛡️
+
+- Max 3 post per jam ke channel — gak boleh spam
+- Error posting → retry 1x → log → skip (jangan looping)
+- Validasi pre-post: total≥5, XAUUSD only, ada TP/SL data, actionable lesson
+- Jika validasi gagal → skip, jangan post data kosong
+
+---
+
+*Version: 1.2 — 13 June 2026*
 *Owner: Vilona Engineering*
