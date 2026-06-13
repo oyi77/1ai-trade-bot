@@ -32,26 +32,114 @@ DEFAULT_WEIGHTS: dict[str, dict[str, float]] = {
 }
 
 
+_TRADE_HISTORY_PATH = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
+
+# ── In-memory cache so multiple calls in same run don't re-read JSON ──
+_cache: dict | None = None
+
+
+def _load_trade_history() -> list[dict]:
+    global _cache
+    if _cache is not None:
+        return _cache.get("trades", [])
+    try:
+        if _TRADE_HISTORY_PATH.exists():
+            with open(_TRADE_HISTORY_PATH) as f:
+                _cache = json.load(f)
+            return _cache.get("trades", [])
+    except Exception as exc:
+        logger.warning("Failed to load trade_history.json: %s", exc)
+    return []
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. DATA FETCHING
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def fetch_historical_data(
-    db_path: str,
+    db_path: str,  # kept for backward compat; no longer primary source
     lookback_days: int = 14,
 ) -> pd.DataFrame:
-    """Connect to SQLite, query closed signals, return DataFrame.
+    """Query closed signals from trade_history.json, with ml_feedback_loop fallback.
 
-    Args:
-        db_path: Path to members.db
-        lookback_days: Only fetch signals from the last N days
+    trade_history.json has ALL trades logged by the handler (daily recap data).
+    ml_feedback_loop table may have richer per-signal scores but is often sparse
+    because it's written only by the ML feedback loop, not by every signal.
 
-    Returns:
-        DataFrame with all ml_feedback_loop columns, or empty DataFrame
-        if no closed signals exist in the window.
+    Strategy:
+      1) Try trade_history.json first (most complete).
+      2) If JSON has 0 trades, fall back to ml_feedback_loop.
     """
-    cutoff = (datetime.now(WIB) - timedelta(days=lookback_days)).isoformat()
+    cutoff_date = (datetime.now(WIB) - timedelta(days=lookback_days)).strftime("%Y-%m-%d")
 
+    # ── 1. Try trade_history.json ──
+    trades = _load_trade_history()
+    closed = [
+        t for t in trades
+        if t.get("outcome") in ("TP_HIT", "SL_HIT")
+        and (t.get("open_time") or "")[:10] >= cutoff_date
+    ]
+
+    if closed:
+        logger.info("Fetched %d closed signals from trade_history.json", len(closed))
+        df = _trades_to_df(closed)
+        if not df.empty:
+            return df
+
+    # ── 2. Fallback to ml_feedback_loop ──
+    logger.info("Falling back to ml_feedback_loop...")
+    return _fetch_sqlite(db_path, cutoff_date)
+
+
+def _trades_to_df(trades: list[dict]) -> pd.DataFrame:
+    """Convert trade_history.json records → DataFrame matching ml_feedback schema."""
+    rows = []
+    for t in trades:
+        pair = (t.get("symbol") or "").upper()
+        entry = t.get("entry_price") or 0.0
+        sl = t.get("sl_price") or 0.0
+        tp = t.get("tp_target") or 0.0
+        status = t.get("outcome", "TP_HIT")
+        pips = float(t.get("pips", 0))
+        # Infer regime from pips volatility, direction etc.
+        # For now we default to 'unknown' and let the analysis class by size
+        if abs(pips) >= 60:
+            regime = "trending"
+        elif abs(pips) >= 30:
+            regime = "ranging"
+        elif abs(pips) > 0:
+            regime = "volatile"
+        else:
+            regime = "unknown"
+
+        rows.append({
+            "signal_id": t.get("signal_id") or f"th_{hash(t.get('open_time','')) & 0xFFFFFFFF:08x}",
+            "timestamp": t.get("open_time", ""),
+            "pair": pair,
+            "market_regime": regime,
+            "score_smc": 0.5,   # default — no raw score in JSON
+            "score_liquidity": 0.3,
+            "score_macro": 0.2,
+            "total_score": 0.5,
+            "is_broadcasted": 1 if t.get("outcome") else 0,
+            "entry_price": entry,
+            "sl_price": sl,
+            "tp_target": tp,
+            "mfe": float(t.get("mfe", 0)) or max(0, pips),
+            "mae": float(t.get("mae", 0)) or min(0, pips) if status == "SL_HIT" else 0,
+            "status": status,
+        })
+
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    df["market_regime"] = df["market_regime"].fillna("").replace("", "unknown")
+    _add_derived_columns(df)
+    return df
+
+
+def _fetch_sqlite(db_path: str, cutoff_date: str) -> pd.DataFrame:
+    """Original SQLite-based data fetch (ml_feedback_loop)."""
     conn: Optional[sqlite3.Connection] = None
     try:
         conn = sqlite3.connect(db_path)
@@ -64,7 +152,7 @@ def fetch_historical_data(
                FROM ml_feedback_loop
                WHERE status IN ('TP_HIT', 'SL_HIT')
                  AND timestamp >= ?""",
-            (cutoff,),
+            (cutoff_date,),
         ).fetchall()
     except sqlite3.OperationalError as exc:
         logger.error("DB query failed on %s: %s", db_path, exc)
@@ -74,29 +162,26 @@ def fetch_historical_data(
             conn.close()
 
     if not rows:
-        logger.info("No closed signals in the last %d days", lookback_days)
+        logger.info("No closed signals in ml_feedback_loop for last 14 days")
         return pd.DataFrame()
 
     df = pd.DataFrame([dict(r) for r in rows])
-
-    # ── Normalize market_regime (blank → 'unknown') ──
     df["market_regime"] = df["market_regime"].fillna("").replace("", "unknown")
+    _add_derived_columns(df)
+    return df
 
-    # ── Derived columns (pips, XAUUSD pip = 0.10) ──
+
+def _add_derived_columns(df: pd.DataFrame) -> None:
+    """Add pips, outcome, and quality flags in-place."""
     entry = df["entry_price"]
     pip_size = np.where(df["pair"].str.upper() == "XAUUSD", 0.10, 1.0)
-
     df["tp_pips"] = (abs(df["tp_target"] - entry) / pip_size).round(1)
     df["sl_pips"] = (abs(df["sl_price"] - entry) / pip_size).round(1)
     df["mfe_pips"] = (df["mfe"] / pip_size).round(1)
     df["mae_pips"] = (df["mae"].abs() / pip_size).round(1)
-
-    df["had_mfe"] = df["mfe"] > 0       # price moved in our favor at some point
-    df["had_mae"] = df["mae"] < 0       # price moved against us
+    df["had_mfe"] = df["mfe"] > 0
+    df["had_mae"] = df["mae"] < 0
     df["outcome"] = np.where(df["status"] == "TP_HIT", 1, 0)
-
-    logger.info("Fetched %d closed signals (%d days)", len(df), lookback_days)
-    return df
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
