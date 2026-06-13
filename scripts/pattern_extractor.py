@@ -74,9 +74,14 @@ def fetch_historical_data(
 
     # ── 1. Try trade_history.json ──
     trades = _load_trade_history()
+    # Only analyze Vilona-pairs: skip CRYPTO_IDX, IDX, etc.
+    def _is_vilona_pair(t: dict) -> bool:
+        sym = (t.get("symbol") or "").upper()
+        return "CRYPTO" not in sym and "IDX" not in sym
     closed = [
         t for t in trades
-        if t.get("outcome") in ("TP_HIT", "SL_HIT")
+        if _is_vilona_pair(t)
+        and t.get("outcome") in ("TP_HIT", "SL_HIT")
         and (t.get("open_time") or "")[:10] >= cutoff_date
     ]
 
