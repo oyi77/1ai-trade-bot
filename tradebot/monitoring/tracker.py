@@ -304,6 +304,12 @@ class TradeTracker:
                     trade["trade_id"],
                 ),
             )
+            try:
+                from tradebot.analytics.learning import record_trade_outcome
+                record_trade_outcome(trade, close_price)
+            except Exception as e:
+                LOG.warning("Learning record failed: %s", e)
+
 
             record = TradeRecord(
                 trade_id=trade["trade_id"],
