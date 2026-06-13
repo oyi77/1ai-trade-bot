@@ -137,7 +137,8 @@ def get_pricing_table() -> str:
 
 
 def create_tripay_payment(chat_id: str, username: str, tier: str = "pro",
-                          method: str = "QRIS", amount: int = None) -> dict:
+                          method: str = "QRIS", amount: int = None,
+                          merchant_ref: str = None) -> dict:
     """Create Tripay subscription/donation transaction.
 
     Args:
@@ -146,6 +147,8 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "pro",
         tier: 'pro', 'elite', or 'lifetime'
         method: Payment method (QRIS, BRIVA, etc.)
         amount: Override amount (uses tier default if None)
+        merchant_ref: Custom merchant_ref (e.g. BeMob click_id).
+                      If None, auto-generated as VTFX-{tier}-{chat_id}-{timestamp}
 
     Returns dict with payment_url or error.
     """
@@ -226,7 +229,8 @@ def create_tripay_payment(chat_id: str, username: str, tier: str = "pro",
     if amount < MIN_DONATION:
         return {"error": f"Minimum pembayaran Rp{MIN_DONATION:,}"}
 
-    merchant_ref = f"VTFX-{tier}-{chat_id}-{int(time.time())}"
+    if merchant_ref is None:
+        merchant_ref = f"VTFX-{tier}-{chat_id}-{int(time.time())}"
 
     # Build payload with tier metadata
     payload = {

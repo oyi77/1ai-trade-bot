@@ -133,6 +133,49 @@ def _fire_bemob_conversion(reference: str, amount: int, brand: str) -> None:
         LOG.warning("Bemob conversion failed: %s", e)
 
 
+def _fire_bemob_s2s_postback(
+    merchant_ref: str,
+    total_amount: int,
+    reference: str,
+) -> None:
+    """Fire BeMob S2S postback with click_id as cid.
+
+    Format: https://rr9u3.bemobtrcks.com/postback?cid={merchant_ref}&payout={total_amount}&txid={reference}
+
+    merchant_ref = click_id dari BeMob (ditangkap frontend, dikirim sebagai merchant_ref)
+    total_amount  = nilai transaksi dari Tripay callback (amount)
+    reference     = Tripay transaction reference
+    """
+    BEMOB_POSTBACK_BASE = os.environ.get(
+        "BEMOB_POSTBACK_URL",
+        "https://rr9u3.bemobtrcks.com/postback",
+    )
+
+    if not merchant_ref:
+        LOG.warning("BeMob S2S skipped: merchant_ref is empty")
+        return
+
+    postback_url = (
+        f"{BEMOB_POSTBACK_BASE}"
+        f"?cid={merchant_ref}"
+        f"&payout={total_amount}"
+        f"&txid={reference}"
+    )
+
+    try:
+        import urllib.request as ureq
+
+        ureq.urlopen(postback_url, timeout=10)
+        LOG.info(
+            "BeMob S2S fired: cid=%s payout=%d txid=%s",
+            merchant_ref,
+            total_amount,
+            reference,
+        )
+    except Exception as e:
+        LOG.warning("BeMob S2S postback failed: %s | url=%s", e, postback_url[:120])
+
+
 def _fire_meta_capi(chat_id: str, amount: int, brand: str) -> None:
     """Fire Meta CAPI Purchase event via FB Pixel API."""
     wl = _load_whitelabel()
@@ -371,6 +414,7 @@ class PaymentWebhookHandler(BaseHTTPRequestHandler):
         if upgrade_ok:
             _mark_processed(merchant_ref)
             _fire_bemob_conversion(merchant_ref, amount, brand)
+            _fire_bemob_s2s_postback(merchant_ref, amount, data.get("reference", ""))
             _fire_meta_capi(chat_id, amount, brand)
             _fire_capi_purchase(chat_id, amount, tier, merchant_ref)
             _track_commission(chat_id, amount, merchant_ref, brand)

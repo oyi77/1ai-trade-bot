@@ -692,13 +692,25 @@ class SignalHandler(BaseHTTPRequestHandler):
                 log.error(f"/api/donations error: {e}")
                 self._json({"total_raised": 0, "error": str(e)})
         elif path == "/api/create-payment":
-            """Create Tripay payment for LP visitor. Params: amount (int), method (str, default QRIS2)."""
+            """Create Tripay payment for LP visitor. Params: amount (int), method (str, default QRIS2).
+            POST body (optional): {"merchant_ref": "click_id_from_bemob"}"""
             try:
                 amount = int(params.get("amount", ["50000"])[0])
                 method = params.get("method", ["QRIS2"])[0]
             except ValueError:
                 self._json({"error": "Invalid amount"}, 400)
                 return
+
+            # Read merchant_ref (BeMob click_id) from POST body if provided
+            custom_merchant_ref = None
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                if content_length > 0:
+                    body_raw = self.rfile.read(content_length)
+                    body = json.loads(body_raw.decode())
+                    custom_merchant_ref = body.get("merchant_ref", "").strip() or None
+            except (json.JSONDecodeError, ValueError, KeyError):
+                pass  # No body or invalid JSON → use auto-generated ref
 
             # Map amount to tier
             if amount >= 500000:
@@ -723,6 +735,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                     tier=tier,
                     method=method,
                     amount=amount,
+                    merchant_ref=custom_merchant_ref,
                 )
                 if "error" in result:
                     self._json({"error": result["error"]}, 500)
