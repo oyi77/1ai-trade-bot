@@ -7799,20 +7799,27 @@ def main():
                 # ── Run extraction ──
                 logger.info("📅 Weekly walk-forward analysis running...")
                 try:
-                    from scripts.pattern_extractor import run_learning_pipeline, format_weekly_report, format_learning_report
+                    from scripts.pattern_extractor import run_learning_pipeline, format_weekly_report, format_learning_report, format_educational_post
                     DB = str(DATA_DIR / "members.db")
                     result = run_learning_pipeline(DB, lookback_days=14)
                     n = result.get("total_signals", 0)
                     if n > 0:
-                        # Post learning report (educational)
+                        # Post learning report (stats breakdown)
                         learn_msg = format_learning_report(result)
                         _post_to_channel(learn_msg)
                         tg_send(learn_msg, str(ADMIN_CHAT_ID or ""))
 
+                        # Post educational content (actionable lessons from data)
+                        edu_msg = format_educational_post(14)
+                        if edu_msg:
+                            time.sleep(60)  # space out posts
+                            _post_to_channel(edu_msg)
+
                         # Post marketing report (CTA + subscribe hook)
                         mkt_msg = format_weekly_report(result)
+                        time.sleep(60)
                         _post_to_channel(mkt_msg)
-                        logger.info("Weekly WFA done: %d signals, weights updated", n)
+                        logger.info("Weekly WFA done: %d signals, weights updated, 3 posts", n)
                     else:
                         logger.info("Weekly WFA skipped: no closed signals")
                 except Exception as exc:

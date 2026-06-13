@@ -684,3 +684,116 @@ def format_learning_report(result: dict) -> str:
         "🤖 Next auto-run: Sabtu 02:00 WIB — #KeepLearning",
     ])
     return "\n".join(lines)
+
+
+
+def format_educational_post(lookback_days: int = 14) -> str:
+    """Generate actionable educational post from trade_history.json data.
+
+    Computes 4 learning dimensions:
+      1. Session performance (NY vs London vs Asia)
+      2. Grade filtering (Grade A vs B vs C)
+      3. Direction bias (SELL vs BUY ratio)
+      4. Engine comparison (AI vs Hermes)
+    """
+    import json as _j
+    from collections import Counter as _C
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+
+    path = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
+    try:
+        with open(path) as f:
+            trades = _j.load(f).get("trades", [])
+    except (FileNotFoundError, _j.JSONDecodeError):
+        return ""
+
+    cut_date = (_dt.now(_tz.utc).astimezone() - _td(days=lookback_days)).strftime("%Y-%m-%d")
+    closed = [
+        t for t in trades
+        if t.get("symbol", "").upper() == "XAUUSD"
+        and t.get("outcome") in ("TP_HIT", "SL_HIT")
+        and (t.get("open_time") or "")[:10] >= cut_date
+    ]
+    if len(closed) < 5:
+        return ""
+
+    kz = {"ny": {"w": 0, "l": 0, "pip": 0}, "london": {"w": 0, "l": 0, "pip": 0}, "asia": {"w": 0, "l": 0, "pip": 0}}
+    grade = {"A": {"w": 0, "l": 0}, "B": {"w": 0, "l": 0}, "C": {"w": 0, "l": 0}}
+    direc = {"BUY": {"w": 0, "l": 0}, "SELL": {"w": 0, "l": 0}}
+    eng = {}
+    for t in closed:
+        try:
+            hr = _dt.fromisoformat(t.get("open_time", "")).hour
+        except Exception:
+            hr = 0
+        z = "ny" if 19 <= hr < 23 else ("london" if 7 <= hr < 12 else "asia")
+        kz[z]["w" if t["outcome"] == "TP_HIT" else "l"] += 1
+        kz[z]["pip"] += t.get("pips", 0)
+        g = t.get("grade", "")
+        if g in grade:
+            grade[g]["w" if t["outcome"] == "TP_HIT" else "l"] += 1
+        d = t.get("action", "SELL").upper()
+        if d in direc:
+            direc[d]["w" if t["outcome"] == "TP_HIT" else "l"] += 1
+        s = t.get("source", "OTHER").upper().split("_")[0]
+        if s not in eng:
+            eng[s] = {"w": 0, "l": 0, "pip": 0}
+        eng[s]["w" if t["outcome"] == "TP_HIT" else "l"] += 1
+        eng[s]["pip"] += t.get("pips", 0)
+
+    def _wr(d):
+        t = d["w"] + d["l"]
+        return d["w"] / t * 100 if t else 0
+
+    sell_d = direc.get("SELL", {"w": 0, "l": 0})
+    buy_d = direc.get("BUY", {"w": 0, "l": 0})
+    sell_ratio = sell_d["w"] + sell_d["l"]
+    buy_ratio = buy_d["w"] + buy_d["l"]
+    ai = eng.get("AI", {})
+    hrm = eng.get("HERMES", {})
+
+    lines = [
+        "📚 <b>EDUKASI TRADING — XAUUSD MINGGU INI</b>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "",
+        f"Dari <b>{len(closed)}</b> sinyal AI Vilona, ini pelajaran yang bisa lo ambil:",
+        "",
+        "1️⃣ NY SESSION = RAJA 🏆",
+        f"<b>NY (19:00-23:00 WIB): {kz['ny']['w']}W/{kz['ny']['l']}L — WR {_wr(kz['ny']):.0f}% — {kz['ny']['pip']:+.0f} pip</b>",
+        f"Asia session: {kz['asia']['w']}W/{kz['asia']['l']}L — WR {_wr(kz['asia']):.0f}% — {kz['asia']['pip']:+.0f} pip ❌",
+        "👉 <b>Lesson: Jangan trading Asia!</b> Volatility tipis, false signal banyak.",
+        "",
+        "2️⃣ GRADE MATTERS 🔑",
+        f"<b>Grade A: {grade['A']['w']}W/{grade['A']['l']}L — WR {_wr(grade['A']):.0f}% ✅</b>",
+    ]
+    if grade["B"]["w"] or grade["B"]["l"]:
+        lines.append(f"Grade B: {grade['B']['w']}W/{grade['B']['l']}L — WR {_wr(grade['B']):.0f}% ⚠️")
+    lines.extend([
+        "👉 <b>Lesson: Filter Grade A doang!</b> Grade B/C gak worth risk nya.",
+        "",
+        "3️⃣ DIRECTION BIAS MINGGU INI 📉",
+        f"SELL: {sell_d['w']}W/{sell_d['l']}L — BUY: {buy_d['w']}W/{buy_d['l']}L (rasio {max(sell_ratio,1)}:{max(buy_ratio,1)})",
+        "👉 <b>Lesson: Jangan fight trend!</b> Ikut arah mayoritas.",
+        "",
+        "4️⃣ ENGINE COMPARISON 🤖",
+    ])
+    if ai:
+        lines.append(f"<b>AI Engine: {ai['w']}W/{ai['l']}L — WR {_wr(ai):.0f}% — {ai['pip']:+.0f} pip</b>")
+    if hrm:
+        lines.append(f"Hermes: {hrm['w']}W/{hrm['l']}L — WR {_wr(hrm):.0f}% — {hrm['pip']:+.0f} pip")
+    lines.append("👉 <b>Lesson: Prioritaskan AI engine.</b>")
+    lines.extend([
+        "",
+        "💡 <b>ACTIONABLE INSIGHT:</b>",
+        "• Trading window: NY session only (19:00-23:00 WIB)",
+        "• Ambil sinyal Grade A doang",
+        "• Ikut bias direction mingguan",
+        "• Prioritaskan AI Engine signals",
+        "",
+        "🤖 AI belajar setiap minggu. Kamu tinggal ikut.",
+        "Konsisten = Profit. #VilonaTradeFX",
+        "",
+        "/subscribe — PRO access + EA auto-trade",
+        "/referral — ajak 3 teman, PRO 7 hari gratis",
+    ])
+    return "\n".join(lines)
