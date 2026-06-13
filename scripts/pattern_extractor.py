@@ -629,3 +629,58 @@ def format_weekly_report(result: dict) -> str:
     ])
 
     return "\n".join(lines)
+
+
+def format_learning_report(result: dict) -> str:
+    """Format learning pipeline output → detailed educational report (channel-facing)."""
+    tp = result.get("tp_stats", {})
+    sl = result.get("sl_stats", {})
+    weights = result.get("suggested_weights", {})
+    total = result["total_signals"]
+    tp_count = sum(v["count"] for v in tp.values())
+    sl_count = sum(v["count"] for v in sl.values())
+
+    lines = [
+        "🧠 <b>WEEKLY LEARNING REPORT</b>",
+        "━━━━━━━━━━━━━━━━━━━━━━━━",
+        f"📆 14 Hari: {total} Closed | {tp_count}W/{sl_count}L | WR: {tp_count/max(total,1)*100:.0f}%",
+        "",
+        "📗 <b>What WORKED (TP):</b>",
+    ]
+    for regime in sorted(tp):
+        d = tp[regime]
+        if d["count"] == 0:
+            continue
+        best = "SMC" if d["mean_score_smc"] >= d["mean_score_liquidity"] else "Liq"
+        lines.extend([
+            "",
+            f"  [{regime.upper()}] {d['count']} wins",
+            f"    • SMC: {d['mean_score_smc']:.0%}  Liq: {d['mean_score_liquidity']:.0%}  Macro: {d['mean_score_macro']:.0%}",
+            f"    • Avg score: {d['mean_total_score']:.0%}  |  MFE eff: {d['mfe_efficiency']:.0%}",
+            f"    • Best predictor: {best}  |  Avg TP: {d['mean_tp_pips']:.0f} pip",
+        ])
+    lines.extend(["", "📕 <b>What FAILED (SL):</b>"])
+    for regime in sorted(sl):
+        d = sl[regime]
+        if d["count"] == 0:
+            continue
+        lesson = "Reduce risk during news/volatile" if regime == "volatile" else "Choppy — wait Macro confirm"
+        lines.extend([
+            "",
+            f"  [{regime.upper()}] {d['count']} losses",
+            f"    • MFE before SL: {d['mean_mfe_before_sl']:.0f} pip",
+            f"    • Reversal rate: {d['reversal_rate']:.0%}  |  Trailing SL: {'⚠️ Yes' if d['need_trailing_stop'] else 'No'}",
+            f"    • Lesson: {lesson}",
+        ])
+    lines.extend(["", "⚖️ <b>WEIGHT ADJUSTMENT:</b>"])
+    for regime in sorted(weights):
+        if regime == "_empty":
+            continue
+        w = weights[regime]
+        lines.append(f"  • {regime}: SMC {w['smc']:.0%}  Liq {w['liq']:.0%}  Macro {w['macro']:.0%}")
+    lines.extend([
+        "",
+        "📁 learning_weights.json updated on disk",
+        "🤖 Next auto-run: Sabtu 02:00 WIB — #KeepLearning",
+    ])
+    return "\n".join(lines)
