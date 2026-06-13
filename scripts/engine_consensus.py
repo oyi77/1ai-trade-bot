@@ -122,7 +122,7 @@ def _bars_to_dicts(bars: list) -> list[dict]:
 
 # ════════════════════════════════════════════════════════════════
 # MTF DATA — FROM EA BRIDGE (MT5 Exness — priority) + yfinance fallback
-# ════════════════════════════════════════════════════════════════
+# MTF DATA — FROM EA BRIDGE (MT5 Exness — priority) + RapidAPI/yfinance fallback
 
 def push_mt5_ohlcv(symbol: str, tf: str, bars: list[dict]):
     """Called by bridge when EA pushes MT5 OHLCV data."""

@@ -38,12 +38,16 @@ def killzone_active_wib(now=None):
 
 def trading_allowed(symbol):
     """Check if trading is allowed for this symbol based on killzone routing."""
+    now_wib = datetime.now(WIB)
+    weekday = now_wib.weekday()  # 0=Mon … 5=Sat, 6=Sun
     if symbol in CRYPTO_PAIRS:
-        return True  # Crypto 24/7
+        return True  # Crypto 24/7 — no weekday gate
     if symbol in FOREX_METAL_PAIRS:
-        lkz, nykz = killzone_active_wib()
-        return lkz or nykz  # Only London or NY
-    return True  # Stocks, others — always allowed during weekdays
+        if weekday >= 5:
+            return False  # Forex/metals closed Sat–Sun
+        lkz, nykz = killzone_active_wib(now_wib)
+        return lkz or nykz  # Only London or NY on weekdays
+    return weekday < 5  # Stocks/others: Mon–Fri only
 
 def load_trade_log():
     path = os.path.join(PROJECT_DIR, "..", "data", "trade_log.json")

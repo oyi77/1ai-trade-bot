@@ -69,3 +69,4 @@ venv/
 strategies/vilona_tradefx/.env
 logs/*.log
 *.db
+config/rapidapi_key.json
