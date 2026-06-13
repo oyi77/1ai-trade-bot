@@ -143,6 +143,19 @@ def register_connection(key: str, account_id: str, ip: str = "") -> dict[str, An
     key_id = key_data["key_id"]
     now = int(time.time())
 
+    # First check if this account_id already connected (reconnection bypasses limit)
+    existing = _storage().fetchone(
+        "SELECT * FROM ea_connections WHERE key_id=? AND account_id=? AND status='active'",
+        (key_id, account_id),
+    )
+    if existing:
+        # Update last_seen
+        _storage().execute(
+            "UPDATE ea_connections SET last_seen=?, ip=? WHERE id=?",
+            (now, ip, existing[0]),
+        )
+        return {"success": True, "connection_id": existing[1], "reconnected": True}
+
     # Count active connections
     conns = _storage().fetchall(
         "SELECT * FROM ea_connections WHERE key_id=? AND status='active'",
@@ -155,19 +168,6 @@ def register_connection(key: str, account_id: str, ip: str = "") -> dict[str, An
             "active_connections": len(conns),
             "max_connections": max_conn,
         }
-
-    # Check if this account_id already connected
-    existing = _storage().fetchone(
-        "SELECT * FROM ea_connections WHERE key_id=? AND account_id=? AND status='active'",
-        (key_id, account_id),
-    )
-    if existing:
-        # Update last_seen
-        _storage().execute(
-            "UPDATE ea_connections SET last_seen=?, ip=? WHERE id=?",
-            (now, ip, existing[0]),
-        )
-        return {"success": True, "connection_id": existing[1], "reconnected": True}
 
     # New connection
     conn_id = f"ec_{int(time.time() * 1000)}_{secrets.token_hex(4)}"

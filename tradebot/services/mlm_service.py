@@ -142,8 +142,8 @@ def register_user(user_id: str, referral_code: str = "") -> dict[str, Any]:
             upline = store.fetchone("SELECT * FROM mlm_tree WHERE user_id=?", (upline_id,))
             if upline:
                 level = upline[3] + 1
-                if level >= len(COMMISSION_RATES):
-                    level = len(COMMISSION_RATES) - 1
+                if level >= len(POOL_DISTRIBUTION):
+                    level = len(POOL_DISTRIBUTION) - 1
 
     store.execute(
         "INSERT INTO mlm_tree (user_id, upline_id, level, joined_at) VALUES (?, ?, ?, ?)",

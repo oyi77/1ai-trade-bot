@@ -1006,7 +1006,7 @@ class TestTradeTrackerInit:
             mock_storage.return_value = mock_inst
             TradeTracker()
             mock_storage.assert_called_once_with(None)
-            mock_inst.execute.assert_called_once()
+            assert mock_inst.execute.call_count >= 5  # init_db + migration + extra tables
 
 
 class TestTradeTrackerOpenTrade:
