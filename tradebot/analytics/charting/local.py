@@ -9,13 +9,13 @@ import logging
 from typing import Any
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PIL import Image, ImageDraw, ImageFont
-
 import yfinance as yf
+from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
 

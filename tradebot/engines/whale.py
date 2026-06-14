@@ -18,10 +18,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-import numpy as np
-
 from tradebot.engines.base import Engine
-from tradebot.models import Signal, SignalGrade, SignalSource, Tick
+from tradebot.models import Signal, Tick
 
 LOG = logging.getLogger(__name__)
 
@@ -33,7 +31,8 @@ LOG = logging.getLogger(__name__)
 class WhaleSignal:
     """Whale/bandar detection result."""
     symbol: str
-    detection_type: str  # "accumulation", "distribution", "volume_spike", "whale_candle", "obv_divergence", "mfi_divergence"
+    detection_type: str  # accumulation / distribution / volume_spike / whale_candle /
+    # obv_divergence / mfi_oversold_divergence / mfi_overbought_divergence
     confidence: float  # 0.0 - 1.0
     strength: str  # "S-TIER", "A", "B", "C"
     volume_ratio: float  # current volume / avg volume
@@ -146,19 +145,25 @@ def _detect_accumulation_distribution(
                 "price_change_pct": price_change_pct,
                 "vol_change_pct": vol_change_pct,
                 "strength": strength,
-                "detail": f"Price {price_change_pct:+.1f}% with volume +{vol_change_pct:.0f}% — smart money accumulation",
+                "detail": (
+                    f"Price {price_change_pct:+.1f}% with volume "
+                    f"+{vol_change_pct:.0f}% — smart money accumulation"
+                ),
             })
 
         # Distribution: price flat/up (-1% to 6%), volume down > 30%
         if -1 <= price_change_pct <= 6 and vol_change_pct < -30:
-            strength = "A" if vol_change_pct < -60 else "B" if vol_change_pct < -45 else "C"
             signals.append({
                 "index": i,
                 "type": "distribution",
                 "price_change_pct": price_change_pct,
                 "vol_change_pct": vol_change_pct,
-                "strength": strength,
-                "detail": f"Price {price_change_pct:+.1f}% with volume {vol_change_pct:.0f}% — distribution/sell-off",
+                "strength": "A" if vol_change_pct < -60 else "B"
+                if vol_change_pct < -45 else "C",
+                "detail": (
+                    f"Price {price_change_pct:+.1f}% with volume "
+                    f"{vol_change_pct:.0f}% — distribution/sell-off"
+                ),
             })
 
     return signals
@@ -262,7 +267,7 @@ def _obv(closes: list[float], volumes: list[float]) -> list[float]:
 def _detect_obv_divergence(
     closes: list[float],
     volumes: list[float],
-    lookback: int = 14,
+    lookback: int = 20,
 ) -> list[dict[str, Any]]:
     """Detect divergence between price and On-Balance Volume.
 
@@ -276,46 +281,43 @@ def _detect_obv_divergence(
     results: list[dict[str, Any]] = []
 
     for i in range(lookback * 2, len(closes)):
-        price_slice = closes[i - lookback:i + 1]
-        obv_slice = obv_values[i - lookback:i + 1]
+        price_slice = closes[i - lookback : i + 1]
+        obv_slice = obv_values[i - lookback : i + 1]
 
         price_min = min(price_slice)
         price_max = max(price_slice)
         obv_min = min(obv_slice)
         obv_max = max(obv_slice)
 
-        # Find last occurrence of price min/max and OBV min/max in the slice
         price_low_idx = price_slice.index(price_min)
         obv_low_idx = obv_slice.index(obv_min)
         price_high_idx = price_slice.index(price_max)
         obv_high_idx = obv_slice.index(obv_max)
 
-        # Bullish divergence: price makes lower low recently, OBV made higher low earlier
+        # Bullish: price lower low, OBV higher low
         if price_low_idx > obv_low_idx and price_low_idx >= len(price_slice) - 3:
-            # Price went lower recently than before, but OBV didn't follow
             price_low = price_min
-            obv_at_price_low = obv_slice[price_low_idx]
-            obv_prev = obv_slice[obv_low_idx]
-            if obv_at_price_low > obv_prev:
-                results.append({
-                    "index": i,
-                    "type": "bullish_obv_divergence",
-                    "strength": "A",
-                    "detail": f"📈 Bullish OBV divergence — price made lower low but OBV held higher low",
-                    "price": price_low,
-                })
+            results.append({
+                "index": i,
+                "type": "bullish_obv_divergence",
+                "strength": "A",
+                "detail": ("📈 Bullish OBV divergence — price made lower low "
+                           "but OBV held higher low"),
+                "price": price_low,
+            })
 
-        # Bearish divergence: price makes higher high recently, OBV made lower high earlier
+        # Bearish: price higher high, OBV lower high
         if price_high_idx > obv_high_idx and price_high_idx >= len(price_slice) - 3:
             price_high = price_max
-            obv_at_price_high = obv_slice[price_high_idx]
+            obv_at_high = obv_slice[price_high_idx]
             obv_prev = obv_slice[obv_high_idx]
-            if obv_at_price_high < obv_prev:
+            if obv_at_high < obv_prev:
                 results.append({
                     "index": i,
                     "type": "bearish_obv_divergence",
                     "strength": "A",
-                    "detail": f"📉 Bearish OBV divergence — price made higher high but OBV failed to confirm",
+                    "detail": ("📉 Bearish OBV divergence — price made higher high "
+                               "but OBV failed to confirm"),
                     "price": price_high,
                 })
 
@@ -333,24 +335,29 @@ def _mfi(
     if len(closes) < period + 1:
         return [50.0] * len(closes)
 
-    mfi_values: list[float] = [50.0] * period
-    typical_prices = [(h + l + c) / 3 for h, l, c in zip(highs, lows, closes)]
+    typical_prices = [
+        (h + low + c) / 3
+        for h, low, c in zip(highs, lows, closes)
+    ]
     money_flow = [tp * v for tp, v in zip(typical_prices, volumes)]
+    mfi_values: list[float] = [50.0] * period
 
     for i in range(period, len(closes)):
-        positive_flow = 0.0
-        negative_flow = 0.0
-        for j in range(i - period + 1, i + 1):
-            if typical_prices[j] > typical_prices[j - 1]:
-                positive_flow += money_flow[j]
-            else:
-                negative_flow += money_flow[j]
+        pos = sum(
+            money_flow[j]
+            for j in range(i - period + 1, i + 1)
+            if typical_prices[j] > typical_prices[j - 1]
+        )
+        neg = sum(
+            money_flow[j]
+            for j in range(i - period + 1, i + 1)
+            if typical_prices[j] < typical_prices[j - 1]
+        )
 
-        if negative_flow == 0:
+        if neg == 0:
             mfi_values.append(100.0)
         else:
-            mfi_ratio = positive_flow / negative_flow
-            mfi_values.append(100.0 - (100.0 / (1.0 + mfi_ratio)))
+            mfi_values.append(100.0 - (100.0 / (1.0 + pos / neg)))
 
     return mfi_values
 
@@ -392,7 +399,8 @@ def _detect_mfi_divergence(
                 "index": i,
                 "type": "mfi_oversold_divergence",
                 "strength": "A" if mfi_slice[-1] < 20 else "B",
-                "detail": f"🟢 MFI oversold ({mfi_slice[-1]:.0f}) with bullish divergence — accumulation zone",
+                "detail": (f"🟢 MFI oversold ({mfi_slice[-1]:.0f}) with bullish "
+                           "divergence — accumulation zone"),
                 "mfi": mfi_slice[-1],
             })
 
@@ -402,7 +410,8 @@ def _detect_mfi_divergence(
                 "index": i,
                 "type": "mfi_overbought_divergence",
                 "strength": "A" if mfi_slice[-1] > 80 else "B",
-                "detail": f"🔴 MFI overbought ({mfi_slice[-1]:.0f}) with bearish divergence — distribution zone",
+                "detail": (f"🔴 MFI overbought ({mfi_slice[-1]:.0f}) with bearish "
+                           "divergence — distribution zone"),
                 "mfi": mfi_slice[-1],
             })
 
@@ -433,12 +442,14 @@ def analyze_whale_activity(
         signals.append(WhaleSignal(
             symbol=symbol,
             detection_type="volume_spike",
-            confidence=confidence,
             strength=s["severity"],
             volume_ratio=s["ratio"],
             price_change_pct=0.0,
-            detail=f"📊 Volume spike {s['ratio']:.1f}x avg ({s['severity']}) @ candle #{s['index']}",
-            metadata={"index": s["index"], "volume": s["volume"], "avg_volume": s["avg_volume"]},
+            detail=("📊 Volume spike {:.1f}x avg ({}) @ candle #{}".format(
+                s["ratio"], s["severity"], s["index"]
+            )),
+            metadata={"index": s["index"], "volume": s["volume"],
+                      "avg_volume": s["avg_volume"]},
         ))
 
     # 2. Accumulation / Distribution
@@ -528,12 +539,14 @@ def format_whale_report(symbol: str, whale_signals: list[WhaleSignal]) -> str:
 
     lines = [
         f"{header_icon} <b>{symbol}</b> — Whale/Bandar Scan",
-        f"━━━━━━━━━━━━━━━━━━",
-        f"🎯 <b>{best.detection_type.replace('_', ' ').title()}</b>",
+        "━━━━━━━━━━━━━━━━━━",
+        "🎯 <b>{}</b>".format(
+            best.detection_type.replace("_", " ").title()
+        ),
         f"📊 Confidence: {best.confidence:.0%} | Grade: <b>{best.strength}</b>",
         f"💬 {best.detail}",
-        f"",
-        f"━━━━ <b>All Signals</b> ━━━━",
+        "",
+        "━━━━ <b>All Signals</b> ━━━━",
     ]
 
     for i, ws in enumerate(whale_signals, 1):

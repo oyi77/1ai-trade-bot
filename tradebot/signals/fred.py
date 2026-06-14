@@ -10,7 +10,7 @@ Uses FRED series IDs mapped from common bond symbols.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -156,7 +156,7 @@ class FREDSource(BaseDataSource):
                 continue
 
             try:
-                dt = datetime.strptime(obs["date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                dt = datetime.strptime(obs["date"], "%Y-%m-%d").replace(tzinfo=UTC)
             except (ValueError, KeyError):
                 continue
 

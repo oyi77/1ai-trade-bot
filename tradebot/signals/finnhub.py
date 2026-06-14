@@ -7,7 +7,6 @@ Covers US stocks, forex, crypto, fundamentals.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import httpx
 
@@ -74,7 +73,12 @@ class FinnhubSource(BaseDataSource):
         try:
             resp = await client.get(
                 f"{BASE_URL}/stock/candle",
-                params={"symbol": sym, "resolution": mapped, "token": api_key, "count": min(count * 2, 500)},
+                params={
+                    "symbol": sym,
+                    "resolution": mapped,
+                    "token": api_key,
+                    "count": min(count * 2, 500),
+                },
             )
             resp.raise_for_status()
             data = resp.json()

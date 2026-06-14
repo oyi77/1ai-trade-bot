@@ -1088,6 +1088,7 @@ class SignalHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         global _keys_cache  # admin CRUD invalidates load_keys() cache
         path, params = self._get_params()
+        print(f"[BRIDGE-POST] path={path} params={list(params.keys())}", flush=True)
         api_key = params.get("api_key", [""])[0]
         account_id = params.get("account_id", [None])[0]
 
@@ -1417,8 +1418,8 @@ class SignalHandler(BaseHTTPRequestHandler):
             log.info(f"EA ack: {signal_id} | key={api_key}")
             self._json({"status": "ok", "signal_id": signal_id})
 
-        elif path.startswith("/webhook/"):
-            # Forward to payment webhook on port 8787
+        elif path.startswith("/webhook/") and not path.startswith("/webhook/tripay") and not path.startswith("/api/webhook/tripay"):
+            # Forward other webhooks to payment webhook on port 8787
             self._forward_webhook(path)
 
         elif path == "/admin/keys":
@@ -1583,6 +1584,69 @@ class SignalHandler(BaseHTTPRequestHandler):
                     self._json({"error": resp.get("message", "Tripay error")}, 400)
             except Exception as e:
                 self._json({"error": f"Payment error: {str(e)}"}, 500)
+
+        elif path == "/webhook/tripay" or path == "/api/webhook/tripay":
+            """Tripay payment callback — verify X-Callback-Signature (HMAC-SHA256), process payment, return {"success":true}."""
+            import hmac as _hmac
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b""
+            callback_sig = self.headers.get("X-Callback-Signature", "")
+            callback_event = self.headers.get("X-Callback-Event", "")
+
+            pk = os.environ.get("TRIPAY_PRIVATE_KEY", "")
+            if not pk:
+                log.error("[TRIPAY-WEBHOOK] TRIPAY_PRIVATE_KEY not set — rejecting")
+                self._json({"error": "signature verification not configured"}, 500)
+                return
+
+            expected = _hmac.new(pk.encode(), raw, hashlib.sha256).hexdigest()
+            log.info(f"[TRIPAY-WEBHOOK] raw_len={len(raw)} raw_hex={raw[:64].hex()} expected={expected[:16]}... got={callback_sig[:16]}...")
+            if not _hmac.compare_digest(expected, callback_sig):
+                log.warning(f"[TRIPAY-WEBHOOK] Invalid signature — expected={expected[:16]}... got={callback_sig[:16]}...")
+                self._json({"error": "invalid signature"}, 403)
+                return
+
+            try:
+                data = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+
+            ref = data.get("reference", "")
+            merchant_ref = data.get("merchant_ref", "")
+            status = data.get("status", "")
+            total_amount = data.get("total_amount", 0)
+            amount_received = data.get("amount_received", 0)
+            method_code = data.get("payment_method_code", "")
+            method_name = data.get("payment_method", "")
+            paid_at = data.get("paid_at")
+            is_closed = data.get("is_closed_payment", 0)
+
+            log.info(f"[TRIPAY-WEBHOOK] event={callback_event} ref={ref} merchant={merchant_ref} status={status} amount={total_amount}")
+
+            msg = (
+                f"💰 <b>TRIPAY {'✅ PAID' if status == 'PAID' else '⏳ ' + status}</b>\n\n"
+                f"📋 Ref: <code>{ref}</code>\n"
+                f"🔑 Merchant: <code>{merchant_ref}</code>\n"
+                f"💵 Amount: Rp {total_amount:,.0f} | Received: Rp {amount_received:,.0f}\n"
+                f"💳 {method_name} ({method_code})\n"
+                f"🏦 Closed: {'Yes' if is_closed else 'No'}\n"
+            )
+            send_telegram_alert(msg)
+
+            if status == "PAID":
+                try:
+                    with _DB_LOCK:
+                        _LICENSES_DB.execute(
+                            "INSERT OR REPLACE INTO licenses (api_key, active, tier, activated_at) VALUES (?, 1, ?, ?)",
+                            (merchant_ref, "platinum", int(time.time()))
+                        )
+                        _LICENSES_DB.commit()
+                    log.info(f"[TRIPAY-WEBHOOK] License activated for {merchant_ref}")
+                except Exception as e:
+                    log.error(f"[TRIPAY-WEBHOOK] DB update failed: {e}")
+
+            self._json({"success": True})
 
         else:
             self._json({"error": "not found"}, 404)
