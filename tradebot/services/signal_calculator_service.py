@@ -529,6 +529,22 @@ def update_outcome(symbol: str, entry_price: float, result: str, pips: float) ->
             break
     if updated:
         _save_feed(feed)
+        # ── Learning Engine: track outcome ──
+        try:
+            from tradebot.analytics.learning import record_trade_outcome
+            trade = {
+                "symbol": symbol.upper(),
+                "entry": entry_price,
+                "entry_price": entry_price,
+                "pips": float(pips),
+                "outcome": f"{result.upper()}_HIT" if result.upper() in ("TP", "SL") else result.upper(),
+                "action": "BUY" if float(pips) >= 0 else "SELL",
+                "grade": "B",
+                "confidence": 50,
+            }
+            record_trade_outcome(trade, current_price=0)
+        except Exception:
+            pass
 
 
 def get_signals(limit: int = 20) -> list[dict]:
