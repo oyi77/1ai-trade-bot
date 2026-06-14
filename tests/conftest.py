@@ -2,13 +2,33 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from cryptography.fernet import Fernet
 
 from tradebot.models import Tick
+
+# ---------------------------------------------------------------------------
+#  Global encryption key for tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _ensure_master_key():
+    """Ensure VILONA_MASTER_KEY is set so crypto-dependent code doesn't crash."""
+    existing = os.environ.get("VILONA_MASTER_KEY")
+    if not existing:
+        os.environ["VILONA_MASTER_KEY"] = Fernet.generate_key().decode()
+    yield
+    if not existing:
+        os.environ.pop("VILONA_MASTER_KEY", None)
+    # Reset encryptor cache between tests
+    from tradebot.security.crypto import reset_encryptor
+    reset_encryptor()
 
 # ---------------------------------------------------------------------------
 #  Tick fixtures
