@@ -52,13 +52,28 @@ CONNECTED_ACCOUNTS = {}  # api_key → {last_seen, ip, signals_polled, first_see
 # ── Smart Trailing State ──
 TRAIL_CONFIG = defaultdict(lambda: {  # instance_id → trailing config
     "enabled": False,
-    "mode": "basic",        # "basic" | "smc-swing" | "off"
-    "trail_pips": 15,       # distance behind price
-    "breakeven_pips": 10,   # trigger to move SL to entry
-    "step_pips": 5,         # min improvement before updating SL
+    "mode": "basic",         # "basic" | "smc-swing" | "off"
+    "trail_pips": 15,        # distance behind price
+    "breakeven_pips": 10,    # trigger to move SL to entry
+    "step_pips": 5,          # min improvement before updating SL
+    # Broker-specific (auto-detected or user-configured)
+    "account_type": "standard",  # "standard" | "cent" | "pro" | "zero"
+    "pip_value": 0.10,       # $ per pip for 0.01 lot (standard=0.10, cent=0.01, pro=0.10)
+    "digits": 2,             # decimal places (XAUUSD=2, some brokers=3)
+    "spread_buffer": 0.0,    # extra pips to add to breakeven for spread compensation
 })
 TRAILED_POSITIONS = {}  # instance_id → {signal_id, entry, current_sl, direction, tp, timestamp}
 TRAIL_CONFIG_FILE = os.path.join(PROJECT_DIR, "data", "vilona_tradefx", "trailing_config.json")
+
+# Pre-computed broker profiles for auto-detection
+BROKER_PROFILES = {
+    # account_type:  {pip_value, digits, spread_buffer, tick_size}
+    "standard":     {"pip_value": 0.10, "digits": 2, "spread_buffer": 0.0, "tick_size": 0.01},
+    "cent":         {"pip_value": 0.01, "digits": 2, "spread_buffer": 0.0, "tick_size": 0.01},
+    "pro":          {"pip_value": 0.10, "digits": 2, "spread_buffer": 0.0, "tick_size": 0.01},
+    "zero":         {"pip_value": 0.10, "digits": 2, "spread_buffer": 3.0, "tick_size": 0.01},
+    "raw":          {"pip_value": 0.10, "digits": 3, "spread_buffer": 0.0, "tick_size": 0.001},
+}
 
 _keys_cache = None
 _keys_cache_time = 0
@@ -315,6 +330,27 @@ class SignalHandler(BaseHTTPRequestHandler):
                     "api_key": api_key,
                     "account_id": account_id,
                 }
+                # ── Auto-detect broker params from EA query ──
+                if is_new or "account_type" not in TRAIL_CONFIG[instance_id]:
+                    acct_type = params.get("account_type", [None])[0]
+                    digits_str = params.get("digits", [None])[0]
+                    if acct_type and acct_type in BROKER_PROFILES:
+                        profile = BROKER_PROFILES[acct_type]
+                        for k, v in profile.items():
+                            TRAIL_CONFIG[instance_id][k] = v
+                        TRAIL_CONFIG[instance_id]["account_type"] = acct_type
+                        _save_trail_config()
+                        log.info(f"🔍 Auto-detected broker: {instance_id} → {acct_type}"
+                                f" (pip={profile['pip_value']}, digits={profile['digits']})")
+                    elif digits_str:
+                        try:
+                            d = int(digits_str)
+                            TRAIL_CONFIG[instance_id]["digits"] = d
+                            TRAIL_CONFIG[instance_id]["pip_value"] = 0.10 if d == 2 else 0.01
+                            _save_trail_config()
+                            log.info(f"🔍 Digits detected: {instance_id} → {d}d")
+                        except ValueError:
+                            pass
                 MASTER_INSTANCES[api_key][account_id] = instance_id
                 # Seed new instance with latest pending signal from multiple sources
                 if is_new:
@@ -988,6 +1024,18 @@ class SignalHandler(BaseHTTPRequestHandler):
                     TRAIL_CONFIG[instance_id]["breakeven_pips"] = int(body["breakeven_pips"])
                 if "step_pips" in body:
                     TRAIL_CONFIG[instance_id]["step_pips"] = int(body["step_pips"])
+                # Broker-specific overrides
+                if "account_type" in body and body["account_type"] in BROKER_PROFILES:
+                    profile = BROKER_PROFILES[body["account_type"]]
+                    for k, v in profile.items():
+                        TRAIL_CONFIG[instance_id][k] = v
+                    TRAIL_CONFIG[instance_id]["account_type"] = body["account_type"]
+                if "pip_value" in body:
+                    TRAIL_CONFIG[instance_id]["pip_value"] = float(body["pip_value"])
+                if "digits" in body:
+                    TRAIL_CONFIG[instance_id]["digits"] = int(body["digits"])
+                if "spread_buffer" in body:
+                    TRAIL_CONFIG[instance_id]["spread_buffer"] = float(body["spread_buffer"])
             _save_trail_config()
             self._json({"status": "ok", "config": dict(TRAIL_CONFIG[instance_id])})
 
@@ -1186,9 +1234,14 @@ if __name__ == "__main__":
 
     _load_trail_config()
 
+    def trail_pip_size(cfg):
+        """Return pip size in price units for this broker's digits setting."""
+        digits = cfg.get("digits", 2)
+        return 0.10 if digits == 2 else 0.01  # pips for XAUUSD: 2-digit=0.10, 3-digit=0.01
+
     def trailing_engine():
         """Background thread: monitor XAUUSD price and trail SL for active positions."""
-        log.info("🎯 Trailing engine started (10s cycle)")
+        log.info("🎯 Trailing engine started (10s cycle, broker-aware)")
         while True:
             time.sleep(10)
             try:
@@ -1214,20 +1267,27 @@ if __name__ == "__main__":
                         direction = pos["direction"]
                         tp = pos["tp"]
 
+                        pip_sz = trail_pip_size(cfg)
+                        trail_dist = cfg["trail_pips"] * pip_sz
+                        breakeven_dist = (cfg["breakeven_pips"] + cfg.get("spread_buffer", 0)) * pip_sz
+                        step_dist = cfg["step_pips"] * pip_sz
+
                         if direction == "BUY":
-                            profit_pips = (bid - entry) / 0.10
-                            new_sl = bid - cfg["trail_pips"] * 0.10
-                            breakeven_hit = profit_pips >= cfg["breakeven_pips"]
+                            profit_pips = (bid - entry) / pip_sz if pip_sz > 0 else 0
+                            new_sl = bid - trail_dist
+                            breakeven_price = entry + cfg.get("spread_buffer", 0) * pip_sz
+                            breakeven_hit = profit_pips >= (cfg["breakeven_pips"] + cfg.get("spread_buffer", 0))
                         else:  # SELL
-                            profit_pips = (entry - bid) / 0.10
-                            new_sl = bid + cfg["trail_pips"] * 0.10
-                            breakeven_hit = profit_pips >= cfg["breakeven_pips"]
+                            profit_pips = (entry - bid) / pip_sz if pip_sz > 0 else 0
+                            new_sl = bid + trail_dist
+                            breakeven_price = entry - cfg.get("spread_buffer", 0) * pip_sz
+                            breakeven_hit = profit_pips >= (cfg["breakeven_pips"] + cfg.get("spread_buffer", 0))
 
                         sl_improvement = 0
                         if direction == "BUY" and new_sl > current_sl:
-                            sl_improvement = (new_sl - current_sl) / 0.10
+                            sl_improvement = (new_sl - current_sl) / pip_sz if pip_sz > 0 else 0
                         elif direction == "SELL" and new_sl < current_sl:
-                            sl_improvement = (current_sl - new_sl) / 0.10
+                            sl_improvement = (current_sl - new_sl) / pip_sz if pip_sz > 0 else 0
 
                         # Only update if breakeven hit AND SL improved by step_pips
                         if breakeven_hit and sl_improvement >= cfg["step_pips"]:
@@ -1236,15 +1296,16 @@ if __name__ == "__main__":
                                 continue
 
                             # Move SL to breakeven on first hit
-                            if current_sl < entry if direction == "BUY" else current_sl > entry:
-                                # Not yet at breakeven — move SL to entry
-                                target_sl = entry
+                            if (direction == "BUY" and current_sl < breakeven_price) or \
+                               (direction == "SELL" and current_sl > breakeven_price):
+                                target_sl = round(breakeven_price, cfg["digits"])
                             else:
-                                target_sl = round(new_sl, 2)
+                                target_sl = round(new_sl, cfg["digits"])
 
                             pos["current_sl"] = target_sl
-                            log.info(f"🎯 TRAIL: {instance_id} | {direction} | "
-                                    f"SL {current_sl:.2f}→{target_sl:.2f} | "
+                            cfg_summary = f"{cfg['account_type']}|{cfg['digits']}d|pip={pip_sz}"
+                            log.info(f"🎯 TRAIL: {instance_id} [{cfg_summary}] | {direction} | "
+                                    f"SL {current_sl:.{cfg['digits']}f}→{target_sl:.{cfg['digits']}f} | "
                                     f"profit={profit_pips:.1f}pip")
 
                             # Push trailing update signal to instance queue
@@ -1259,7 +1320,7 @@ if __name__ == "__main__":
                                 "risk_percent": 0,
                                 "confidence": 100,
                                 "rr_ratio": 0,
-                                "comment": f"TRAIL|breakeven={profit_pips:.0f}pip",
+                                "comment": f"TRAIL|{cfg['account_type']}|be={profit_pips:.0f}pip",
                                 "source": "trailing_engine",
                                 "timestamp": time.time(),
                                 "status": "trailing",
@@ -1268,7 +1329,7 @@ if __name__ == "__main__":
                             }
                             PENDING_BY_INSTANCE[instance_id].append(trail_sig)
 
-                # Cleanup orphaned positions (instance gone > 5 min)
+                # Cleanup orphaned positions (instance gone > 1 hour)
                 now = time.time()
                 orphaned = [iid for iid in TRAILED_POSITIONS
                            if now - TRAILED_POSITIONS[iid]["timestamp"] > 3600]
