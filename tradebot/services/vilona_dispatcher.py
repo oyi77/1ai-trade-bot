@@ -134,6 +134,10 @@ class VilonaSignalDispatcher:
         # Simple dedup — last dispatch time per symbol
         self._last_dispatch: dict[str, float] = {}
 
+        # Middleware chain — validates signals BEFORE dispatch
+        from tradebot.pipeline.middleware import MiddlewareChain
+        self._middleware = MiddlewareChain()
+
     async def _ensure_http(self) -> httpx.AsyncClient:
         """Lazy-init the shared httpx client."""
         if self._http is None:
@@ -149,6 +153,25 @@ class VilonaSignalDispatcher:
             await self._http.aclose()
             self._http = None
 
+    # ── SOP 2: Middleware validation gate ────────────────────────────
+
+    async def _validate_signal(self, signal: Signal) -> bool:
+        """Run middleware chain BEFORE dispatch.
+
+        Returns False if any middleware rejects the signal.
+        This ensures RiskCheck, RateLimit, and Position Size limits
+        are enforced BEFORE any user receives the signal.
+        """
+        async def _passthrough(sig: Signal) -> Signal | None:
+            return sig
+
+        try:
+            result = await self._middleware.run(signal, _passthrough)
+            return result is not None
+        except Exception as exc:
+            LOG.warning("Middleware validation failed: %s", exc)
+            return False
+
     # ── PUBLIC API ───────────────────────────────────────────────────
 
     async def dispatch(
@@ -157,6 +180,7 @@ class VilonaSignalDispatcher:
     ) -> DispatchResult:
         """Route a signal through all three tiers.
 
+        Runs middleware validation BEFORE any user receives the signal.
         Deduplicates by symbol within the cooldown window.
         All delivery happens concurrently where possible.
         """
@@ -166,6 +190,21 @@ class VilonaSignalDispatcher:
         direction = signal.direction
         grade = signal.grade.name if hasattr(signal.grade, "name") else str(signal.grade)
         meta = signal.metadata
+
+        # ── SOP 2: Middleware gate BEFORE dispatch ──────────────────
+        # RiskCheck, RateLimit, and Position Size must validate the
+        # signal BEFORE any user sees it. If middleware rejects,
+        # nothing is sent to anyone.
+        if not await self._validate_signal(signal):
+            LOG.info(
+                "Dispatcher: %s %s rejected by middleware — HOLD",
+                direction, symbol,
+            )
+            return DispatchResult(
+                signal_id=meta.get("signal_id", ""),
+                symbol=symbol, direction=direction, grade=grade,
+                ts=datetime.now(WIB).isoformat(),
+            )
 
         # Dedup
         now_ts = datetime.now(WIB).timestamp()
