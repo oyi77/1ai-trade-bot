@@ -159,6 +159,13 @@ class UnifiedBot(VilonaBot):
         app.add_handler(CommandHandler("unlink", self._h_unlink))
         app.add_handler(CommandHandler("platforms", self._h_platforms))
         app.add_handler(CommandHandler("autotrade", self._h_autotrade))
+        # AHZ Hunt Zone commands
+        app.add_handler(CommandHandler("ahz_radar", self._h_ahz_radar))
+        app.add_handler(CommandHandler("hunt_toggle", self._h_hunt_toggle))
+        app.add_handler(CommandHandler("ahz_patterns", self._h_ahz_patterns))
+        # Referral & S-Tier
+        app.add_handler(CommandHandler("referral", self._h_referral))
+        app.add_handler(CommandHandler("stier", self._h_stier))
 
         # All shared payment/affiliate commands (plans, upgrade, confirm, signals,
         # unsubscribe, affiliate, whitelabel, set_share, set_rate, set_plan)
@@ -187,6 +194,76 @@ class UnifiedBot(VilonaBot):
         args = parts[1:]
         
         handler = self._command_handlers.get(cmd)
+
+        # ── Cross-Promotion Interceptors ────────────────────────────
+        # If user typed an IDX symbol or Stockity index, redirect them
+        # to the dedicated bot INSTEAD of trying to handle it here.
+        try:
+            from tradebot.bots.platforms.vilona.helpers import _IDX_SYMBOLS, _STOCKITY_SYMBOLS
+        except ImportError:
+            _IDX_SYMBOLS = frozenset()  # type: ignore[assignment]
+            _STOCKITY_SYMBOLS = frozenset()  # type: ignore[assignment]
+
+        # Check args first (e.g. /analyze bbca, /price ihsg)
+        symbol_check = (args[0].lower().strip() if args else "")
+
+        if cmd in ("analyze", "signal", "price", "zones", "structure",
+                    "session", "stier", "levels", "news", "mtf", "engines",
+                    "fvg", "sweep", "pulse") and symbol_check in _IDX_SYMBOLS:
+            await update.message.reply_html(
+                "🇮🇩 <b>Untuk analisa Saham Indonesia (IDX)</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Saham <b>{symbol_check.upper()}</b> tersedia dengan\n"
+                "algoritma institusi di AI Specialist kami.\n\n"
+                "👇 <b>Gunakan bot ini:</b>\n"
+                "🤖 @vilonidxbot\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 Vilona fokus Forex, Metals & Crypto."
+            )
+            return
+        if cmd in ("analyze", "signal", "price", "zones", "structure",
+                    "session", "stier", "levels", "news", "mtf", "engines",
+                    "fvg", "sweep", "pulse") and symbol_check in _STOCKITY_SYMBOLS:
+            await update.message.reply_html(
+                "📈 <b>Untuk trading di Stockity</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Indeks Stockity dengan akurasi tinggi\n"
+                "tersedia di AI Specialist kami.\n\n"
+                "👇 <b>Gunakan bot ini:</b>\n"
+                "🤖 @agent_1ai2_bot\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 Vilona fokus Forex, Metals & Crypto."
+            )
+            return
+
+        # Also catch bare symbol messages (e.g. user just types "bbca" or "ihsg")
+        if not cmd or cmd in _IDX_SYMBOLS:
+            pass  # fall through to handler or unknown
+        if cmd in _IDX_SYMBOLS:
+            await update.message.reply_html(
+                "🇮🇩 <b>Saham Indonesia (IDX)</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Vilona fokus pada Forex, Metals & Crypto.\n\n"
+                "Untuk analisa saham IDX dengan algoritma\n"
+                "institusi, silakan gunakan:\n"
+                "🤖 @vilonidxbot\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 Ketik /help untuk lihat pair yang didukung."
+            )
+            return
+        if cmd in _STOCKITY_SYMBOLS:
+            await update.message.reply_html(
+                "📈 <b>Stockity Trading</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Vilona fokus pada Forex, Metals & Crypto.\n\n"
+                "Untuk trading Stockity dengan akurasi tinggi,\n"
+                "silakan gunakan AI Specialist kami:\n"
+                "🤖 @agent_1ai2_bot\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 Ketik /help untuk lihat pair yang didukung."
+            )
+            return
+
         if handler:
             try:
                 response = await handler(args, chat_id=chat_id)
@@ -217,6 +294,7 @@ class UnifiedBot(VilonaBot):
                 BotCommand("help", "📚 Panduan & Bantuan penggunaan"),
                 BotCommand("signal", "🎯 Generate sinyal trading (CEX, Forex, dll)"),
                 BotCommand("price", "💰 Cek harga real-time (CEX, Forex, dll)"),
+                BotCommand("panduan", "📘 Panduan lengkap — analisa, EA, trailing"),
                 BotCommand("status", "🛡 Cek kuota & status akun aktif"),
                 BotCommand("subscribe", "⭐ Upgrade langganan PRO/ELITE/LIFETIME"),
                 BotCommand("dashboard", "📊 Akses Web Dashboard"),
@@ -389,6 +467,71 @@ class UnifiedBot(VilonaBot):
             await update.message.reply_html(resp)
         except Exception as e:
             LOG.error("_h_autotrade error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_ahz_radar(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/ahz_radar [pair] — Apex Hunt Radar zona AHZ aktif."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_ahz_radar(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_ahz_radar error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_hunt_toggle(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/hunt_toggle — Hunt Mode ON/OFF untuk auto-snipe AHZ."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_hunt_toggle(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_hunt_toggle error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_ahz_patterns(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/ahz_patterns [pair] — Active harmonic patterns dengan AHZ coordinates."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_ahz_patterns(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_ahz_patterns error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_referral(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/referral — Link referral & statistik Gotong Royong."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_referral(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_referral error: %s", e)
+            await update.message.reply_html(f"Error: {e}")
+
+    async def _h_stier(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """/stier [pair] — S-TIER Zone GOD TIER institutional levels."""
+        if not update.message:
+            return
+        chat_id = str(update.effective_chat.id)
+        args = context.args or []
+        try:
+            resp = await self._cmd_stier(args, chat_id=chat_id)
+            await update.message.reply_html(resp)
+        except Exception as e:
+            LOG.error("_h_stier error: %s", e)
             await update.message.reply_html(f"Error: {e}")
 
     async def _h_signal(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

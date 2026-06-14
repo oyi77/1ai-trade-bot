@@ -140,19 +140,25 @@ class VilonaBot(
 
     def _init_engines(self) -> None:
         engine_checks: dict[str, str] = {
-            "layering": "layering",
-            "quant": "quant_engine",
-            "fvg": "fvg_detector",
-            "crt": "crt_tbs_engine",
-            "smc": "smc_scalper_engine",
-            "hermes_liquidity": "hermes_liquidity_hunter",
+            "smc": "tradebot.engines.smc",
+            "fvg": "tradebot.engines.fvg",
+            "liquidity": "tradebot.engines.liquidity",
+            "sweep": "tradebot.engines.sweep",
+            "chaos": "tradebot.engines.chaos",
+            "crt_tbs": "tradebot.engines.crt_tbs",
+            "tv": "tradebot.engines.tv",
+            "quant": "tradebot.engines.quant",
+            "hermes": "tradebot.engines.hermes_liquidity",
+            "layering": "tradebot.engines.layering",
+            "session_levels": "tradebot.engines.session_levels",
+            "whale": "tradebot.engines.whale",
+            "harmonic": "tradebot.engines.harmonic",
             "learning": "learning_engine",
             "trade_tracker": "trade_tracker",
             "ultimate_smc": "ultimate_smc_engine",
             "sequoia": "sequoia_x_screener",
             "tv_engine": "tv_engine",
             "sweep_detector": "sweep_detector",
-            "signal_feed": "scripts.signal_feed",
         }
         for name, mod in engine_checks.items():
             try:
@@ -161,17 +167,6 @@ class VilonaBot(
             except ImportError:
                 self._engines[name] = False
         LOG.info("Engines loaded: %s", {k: v for k, v in self._engines.items() if v})
-
-    # ── Lifecycle ────────────────────────────────────────────────────────
-
-    async def start(self) -> None:
-        await super().start()
-        self._load_pending_signals()
-        self._load_autosync()
-        self._schedule_background(self._auto_analysis_loop())
-        self._schedule_background(self._outcome_check_loop())
-        self._schedule_background(self._autosync_loop())
-        self._schedule_background(self._reminder_loop())
 
     def _register_commands(self) -> None:
         self._command_handlers = {
@@ -211,6 +206,12 @@ class VilonaBot(
             "zones": self._cmd_zones,
             "structure": self._cmd_structure,
             "session": self._cmd_session,
+            "pulse": self._cmd_pulse,
+            "ahz_radar": self._cmd_ahz_radar,
+            "hunt_toggle": self._cmd_hunt_toggle,
+            "ahz_patterns": self._cmd_ahz_patterns,
+            "referral": self._cmd_referral,
+            "stier": self._cmd_stier,
             "restart_bot": self._cmd_restart_bot,
             "activate": self._cmd_activate,
             "trade_yes": self._cmd_trade_yes,
@@ -218,7 +219,6 @@ class VilonaBot(
             "trailing": self._cmd_trailing,
             "settrailing": self._cmd_settrailing,
             "autotrade": self._cmd_autotrade,
-            "pulse": self._cmd_pulse,
             "briefing": self._cmd_briefing,
             "reminder": self._cmd_reminder,
             "ultimatum": self._cmd_ultimatum,
@@ -227,7 +227,19 @@ class VilonaBot(
             "fvg": self._cmd_fvg,
             "sweep": self._cmd_sweep,
             "whale": self._cmd_whale,
+            "panduan": self._cmd_panduan,
+            "cara_analisa": self._cmd_cara_analisa,
+            "cara_baca": self._cmd_cara_baca,
+            "cara_pasang": self._cmd_cara_pasang,
+            "cara_ea": self._cmd_cara_ea,
+            "cara_trailing": self._cmd_cara_trailing,
+            "alasan_sinyal": self._cmd_alasan_sinyal,
         }
+        # Panduan commands handled via panduan.py dynamic lookup
+        from tradebot.bots.platforms.vilona.panduan import PANDUAN_COMMANDS
+        for _cmd in PANDUAN_COMMANDS:
+            if _cmd not in self._command_handlers:
+                self._command_handlers[_cmd] = lambda args=None, chat_id=None, _c=_cmd: PANDUAN_COMMANDS[_c]()
 
     # ── Pending signals disk persistence ────────────────────────────────
 
@@ -628,6 +640,12 @@ class VilonaBot(
 
         if chat_id in DONATION_INPUT_STATE:
             return await self._handle_donation_input(chat_id, text)
+
+        # ── Panduan / Educational Handlers ──────────────────────────
+        from tradebot.bots.platforms.vilona.panduan import PANDUAN_COMMANDS
+        panduan_cmd = cmd.lstrip("/")
+        if panduan_cmd in PANDUAN_COMMANDS:
+            return PANDUAN_COMMANDS[panduan_cmd]()
 
         fallback = (
             f"❌ Unknown command: <code>{cmd}</code>\n"

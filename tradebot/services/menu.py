@@ -8,26 +8,30 @@ from typing import Any
 MAIN_MENU: list[list[tuple[str, str]]] = [
     [("menu:signals", "🧠 SIGNAL SYSTEM"), ("menu:market", "📊 MARKET DATA")],
     [("menu:history", "📈 TRADE HISTORY"), ("menu:account", "👤 ACCOUNT")],
-    [("menu:help", "❓ HELP")],
+    [("menu:panduan", "📘 PANDUAN"), ("menu:help", "❓ HELP")],
 ]
+
+HOME_MENU = MAIN_MENU
 
 ADMIN_MENU: list[list[tuple[str, str]]] = [
     [("menu:signals", "🧠 SIGNAL SYSTEM"), ("menu:market", "📊 MARKET DATA")],
     [("menu:history", "📈 TRADE HISTORY"), ("menu:account", "👤 ACCOUNT")],
-    [("menu:admin_panel", "⚙️ ADMIN"), ("menu:help", "❓ HELP")],
+    [("menu:admin_panel", "⚙️ ADMIN"), ("menu:panduan", "📘 PANDUAN")],
+    [("menu:help", "❓ HELP")],
 ]
 
 SIGNAL_MENU: list[list[tuple[str, str]]] = [
     [("cmd:signal", "🎯 Live Signal (Multi-Market)")],
-    [("menu:analysis", "🔬 Technical Analysis Tools")],
-    [("menu:stockity", "💰 STOCKITY INSIDER")],
-    [("menu:main", "🔙 Back")],
+    [("cmd:whale", "🐋 Whale Scan")],
+    [("menu:analysis", "🔬 Technical Analysis")],
+    [("menu:market", "📊 Market Data"), ("menu:help", "❓ Help")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 ANALYSIS_MENU: list[list[tuple[str, str]]] = [
     [("cmd:mtf", "🧬 Matrix 5TF (MTF)"), ("cmd:engines", "🔧 Engine Consensus")],
     [("cmd:structure", "🏗 Market Structure"), ("cmd:pulse", "🔄 Market Pulse")],
-    [("menu:signals", "🔙 Back")],
+    [("menu:signals", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 MARKET_MENU: list[list[tuple[str, str]]] = [
@@ -36,13 +40,13 @@ MARKET_MENU: list[list[tuple[str, str]]] = [
     [("cmd:killzone", "🎯 Killzone"), ("cmd:zones", "🧲 Liquidity Zones")],
     [("cmd:levels", "🏛 S&R Levels"), ("cmd:news", "📰 Market News")],
     [("cmd:session", "🕐 Session Levels")],
-    [("menu:main", "🔙 Back")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 HISTORY_MENU: list[list[tuple[str, str]]] = [
     [("cmd:winrate", "📈 Win Rate"), ("cmd:recap", "📋 Daily Recap")],
     [("cmd:history", "📜 Trade History"), ("cmd:mapping", "🗺️ Mapping")],
-    [("menu:main", "🔙 Back")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 ACCOUNT_MENU: list[list[tuple[str, str]]] = [
@@ -51,8 +55,8 @@ ACCOUNT_MENU: list[list[tuple[str, str]]] = [
     [("cmd:earnings", "💰 Earnings"), ("cmd:buykey", "🔑 Buy EA Key")],
     [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
     [("cmd:myid", "🆔 My ID"), ("cmd:trailing", "🏃 Trailing Status")],
-    [("cmd:settrailing", "⚡ Set Trailing"), ("cmd:settings", "⚙️ Settings")],
-    [("menu:main", "🔙 Back")],
+    [("cmd:settings", "⚙️ Settings")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 PLATFORMS_MENU: list[list[tuple[str, str]]] = [
@@ -62,7 +66,7 @@ PLATFORMS_MENU: list[list[tuple[str, str]]] = [
     [("sub:signal_only:weekly", "📡 Signal Only Rp50K/mg")],
     [("sub:signal_execute:weekly", "🤖 Signal+Execute Rp75K/mg")],
     [("menu:subscriptions", "💳 All Plans")],
-    [("menu:account", "🔙 Back")],
+    [("menu:account", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 SUBSCRIPTIONS_MENU: list[list[tuple[str, str]]] = [
@@ -72,14 +76,14 @@ SUBSCRIPTIONS_MENU: list[list[tuple[str, str]]] = [
     [("sub:signal_execute:weekly", "🤖 Signal+Execute — Rp75K/mg")],
     [("sub:signal_execute:monthly", "🤖 Signal+Execute — Rp200K/bln")],
     [("sub:signal_execute:lifetime", "🤖 Signal+Execute — Rp750K")],
-    [("menu:platforms", "🔙 Back")],
+    [("menu:platforms", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 SUBSCRIBE_MENU: list[list[tuple[str, str]]] = [
     [("sub:pro", "⭐ PRO — Rp50K/bulan")],
     [("sub:elite", "👑 ELITE — Rp150K/bulan")],
     [("sub:lifetime", "💎 LIFETIME — Rp500K"), ("cancel_input", "❌ Batal")],
-    [("menu:account", "🔙 Back")],
+    [("menu:account", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 DONATE_MENU: list[list[tuple[str, str]]] = [
@@ -87,27 +91,34 @@ DONATE_MENU: list[list[tuple[str, str]]] = [
     [("pay:donate:50000", "🚀 Bensin — Rp50.000")],
     [("pay:donate:100000", "⚡ Server — Rp100.000")],
     [("cmd:donate", "💚 Nominal Bebas")],
-    [("menu:account", "🔙 Back")],
+    [("menu:account", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 STOCKITY_MENU: list[list[tuple[str, str] | tuple[str, str, str]]] = [
     [("__url__", "🚀 Daftar Stockity", "https://stockity-mr.com/auth?invite_code=7b8730c84b6450e3e0b02fd3fd864f69#SignUp")],
     [("cmd:status", "📊 Status Akun")],
-    [("menu:signals", "🔙 Back")],
+    [("menu:signals", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 ADMIN_PANEL_MENU: list[list[tuple[str, str]]] = [
     [("cmd:dashboard", "📊 Dashboard"), ("cmd:bridge_status", "🌉 Bridge")],
     [("cmd:genkey", "🔑 Gen Key"), ("cmd:activate", "⭐ Activate")],
     [("cmd:restart_bot", "🔄 Restart Bot")],
-    [("menu:main", "🔙 Back")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 HELP_MENU: list[list[tuple[str, str]]] = [
     [("cmd:start", "📖 Start"), ("cmd:help", "📚 All Commands")],
-    [("cmd:symbols", "📋 Symbols"), ("cmd:ea", "📥 Download EA")],
-    [("cmd:bridge_full_status", "🛡️ Bridge Status")],
-    [("menu:main", "🔙 Back")],
+    [("cmd:panduan", "📘 Panduan Lengkap"), ("cmd:ea", "📥 Download EA")],
+    [("cmd:symbols", "📋 Symbols"), ("cmd:bridge_full_status", "🛡️ Bridge Status")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
+]
+
+PANDUAN_MENU: list[list[tuple[str, str]]] = [
+    [("cmd:cara_analisa", "🔍 Cara Analisa"), ("cmd:cara_baca", "📖 Cara Baca Sinyal")],
+    [("cmd:cara_pasang", "🚀 Cara Pasang Posisi"), ("cmd:cara_ea", "🤖 Cara Pasang EA")],
+    [("cmd:cara_trailing", "🏃 Cara Trailing Stop"), ("cmd:alasan_sinyal", "🧠 Kenapa Sinyal Keluar?")],
+    [("menu:help", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 TRADE_MENU: list[list[tuple[str, str]]] = [
@@ -117,7 +128,7 @@ TRADE_MENU: list[list[tuple[str, str]]] = [
 PORTFOLIO_MENU: list[list[tuple[str, str]]] = [
     [("portfolio:refresh", "🔄 Refresh"), ("portfolio:trade_best", "🔥 Trade Best")],
     [("menu:link", "🔗 Link Platform"), ("menu:autotrade", "🤖 Auto-Execute")],
-    [("menu:main", "🔙 Back")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 LINK_MENU: list[list[tuple[str, str]]] = [
@@ -125,12 +136,12 @@ LINK_MENU: list[list[tuple[str, str]]] = [
     [("link:deriv", "💹 Deriv")],
     [("link:ccxt", "🔄 CCXT Exchange")],
     [("link:mt5", "💻 MetaTrader 5")],
-    [("menu:portfolio", "🔙 Back")],
+    [("menu:portfolio", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 AUTOTRADE_MENU: list[list[tuple[str, str]]] = [
     [("autotrade:on", "🟢 ON"), ("autotrade:off", "⚪ OFF")],
-    [("menu:portfolio", "🔙 Back")],
+    [("menu:portfolio", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 
@@ -152,6 +163,7 @@ def build_keyboard(
 def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]:
     _menus: dict[str, list[list[tuple[str, str] | tuple[str, str, str]]]] = {
         "main": MAIN_MENU,
+        "home": HOME_MENU,
         "admin": ADMIN_MENU,
         "signals": SIGNAL_MENU,
         "analysis": ANALYSIS_MENU,
@@ -169,6 +181,7 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
         "portfolio": PORTFOLIO_MENU,
         "link": LINK_MENU,
         "autotrade": AUTOTRADE_MENU,
+        "panduan": PANDUAN_MENU,
     }
     menu = _menus.get(menu_name, MAIN_MENU)
     return {"inline_keyboard": build_keyboard(menu)}
@@ -192,6 +205,7 @@ def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> st
         "portfolio": "📊 <b>PORTFOLIO</b>\n━━━━━━━━━━━━━━━━━━━━━\nAset terbaik, P&L, dan status akun Anda.",
         "link": "🔗 <b>LINK PLATFORM</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih platform untuk ditautkan:",
         "autotrade": "🤖 <b>AUTO-EXECUTE</b>\n━━━━━━━━━━━━━━━━━━━━━\nAktifkan/nonaktifkan eksekusi trading otomatis.",
+        "panduan": "📘 <b>PANDUAN LENGKAP</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih topik panduan yang ingin kamu pelajari:",
     }
     return texts.get(menu_name, texts["main"])
 

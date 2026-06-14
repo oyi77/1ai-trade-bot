@@ -119,6 +119,11 @@ class CommandHandlersMixin(_Base):
             "/readings — Engine readings aggregated",
             "/dashboard — Buka live dashboard web",
             "",
+            "🎯 <b>APEX HUNT ZONE (AHZ) 🔥</b>",
+            "/ahz_radar — Apex Hunt Radar — zona AHZ aktif",
+            "/hunt_toggle — Hunt Mode ON/OFF — auto-snipe 👑",
+            "/ahz_patterns — Active harmonic patterns 👑",
+            "",
             "📊 <b>MARKET DATA</b>",
             "/price &lt;pair&gt; — Harga real-time",
             "/data — Multi-asset overview",
@@ -1976,6 +1981,286 @@ class CommandHandlersMixin(_Base):
                 "Admin akan memproses dalam 1x24 jam."
             )
         return f"Gagal: {result.get('error', 'unknown')}"
+
+    # ── AHZ Hunt Mode ────────────────────────────────────────────────
+
+    @staticmethod
+    async def _fetch_ticks_for_pair(pair: str) -> list:
+        """Fetch recent M15 ticks from Binance for harmonic analysis."""
+        import httpx
+        from datetime import datetime, timezone
+        symbol_map = {
+            "BTCUSD": "BTCUSDT", "XAUUSD": "XAUUSDT", "ETHUSD": "ETHUSDT",
+            "BTC": "BTCUSDT", "GOLD": "XAUUSDT", "ETH": "ETHUSDT",
+        }
+        binance_symbol = symbol_map.get(pair.upper(), pair.upper() + "USDT")
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.binance.com/api/v3/klines",
+                    params={"symbol": binance_symbol, "interval": "15m", "limit": 200},
+                )
+                if resp.status_code != 200:
+                    return []
+                candles = resp.json()
+                from tradebot.models.market import Tick
+                ticks = []
+                for c in candles:
+                    ts = datetime.fromtimestamp(c[0] / 1000, tz=timezone.utc)
+                    ticks.append(Tick(
+                        symbol=pair,
+                        price=float(c[4]),  # close
+                        epoch=int(c[0] / 1000),
+                        timestamp=ts,
+                    ))
+                return ticks
+        except Exception:
+            return []
+
+    async def _cmd_ahz_radar(self, args: list[str], chat_id: str | None = None) -> str:
+        """📡 Apex Hunt Radar — Show active hunting zones for all patterns."""
+        from datetime import timezone as _tz, timedelta as _td
+        from tradebot.services.members_service import get_member
+        WIB = _tz(_td(hours=7))
+        member = get_member(str(chat_id or ""))
+        tier = member.get("tier", "") if member else ""
+        if tier not in ("pro", "elite", "lifetime"):
+            return (
+                "📡 <b>APEX HUNT RADAR</b> [🔒 PREMIUM]\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Lihat zona AHZ aktif untuk semua pattern harmonic:\n"
+                "🦋 Gartley | 🦇 Bat | 🦋 Butterfly | 🦀 Crab | 🕊 Cypher\n\n"
+                "🔒 Fitur ini khusus Member Premium\n\n"
+                "⚡ /subscribe — mulai dari Rp 50k/bulan"
+            )
+        pair = args[0].upper() if args else "BTCUSD"
+        try:
+            ticks = await self._fetch_ticks_for_pair(pair)
+            if not ticks:
+                return (
+                    f"📡 <b>APEX HUNT RADAR — {pair}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "⚠️ Gagal mengambil data harga. Coba lagi nanti.\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🎯 Powered by Harmonic AHZ Engine"
+                )
+            from tradebot.engines.harmonic import HarmonicEngine
+            engine = HarmonicEngine()
+            signal = await engine.analyze(ticks)
+            if signal is None or not signal.metadata.get("AHZ_Active"):
+                return (
+                    f"📡 <b>APEX HUNT RADAR — {pair}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🔍 Tidak ada Pattern Harmonic yang mendekati AHZ saat ini.\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"⏰ {datetime.now(WIB).strftime('%H:%M WIB')}\n"
+                    "🎯 Powered by Harmonic AHZ Engine"
+                )
+            meta = signal.metadata
+            entry = meta.get("ahz_mid", signal.entry_price or 0)
+            sl = meta.get("sl", 0)
+            tp1 = meta.get("tp1", 0)
+            tp2 = meta.get("tp2", 0)
+            pattern = meta.get("pattern", "Unknown")
+            hunt_state = getattr(self, "_hunt_mode_state", {}).get(str(chat_id or ""), True)
+            return (
+                f"📡 <b>APEX HUNT RADAR — {pair}</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎯 <b>1 Pattern Terdeteksi</b>\n\n"
+                f"🟢 <b>{pattern.upper()}</b>\n"
+                f"   Entry: ${entry:.2f} | SL: ${sl:.2f}\n"
+                f"   TP1: ${tp1:.2f} | TP2: ${tp2:.2f}\n\n"
+                f"🏹 Hunt Mode: <b>{'ACTIVE' if hunt_state else 'STANDBY'}</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⏰ {datetime.now(WIB).strftime('%H:%M WIB')}\n"
+                "🎯 Powered by Harmonic AHZ Engine"
+            )
+        except Exception as exc:
+            return (
+                f"📡 <b>APEX HUNT RADAR</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ Engine harmonic error: {exc}\n\n"
+                "Coba lagi dalam 60 detik."
+            )
+
+    async def _cmd_hunt_toggle(self, args: list[str], chat_id: str | None = None) -> str:
+        """🏹 Toggle Hunt Mode ON/OFF for auto-execution on AHZ zone touch."""
+        from tradebot.services.members_service import get_member
+        cid = str(chat_id or "")
+        member = get_member(cid)
+        tier = member.get("tier", "") if member else ""
+        if tier not in ("pro", "elite", "lifetime"):
+            return (
+                "🏹 <b>HUNT MODE TOGGLE</b> [🔒 PREMIUM]\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Aktifkan Auto-Sniping saat harga menyentuh zona AHZ (Apex Hunt Zone).\n"
+                "EA otomatis entry dengan SL/TP saat AHZ tervalidasi.\n\n"
+                "🔒 Fitur ini khusus Member Premium\n\n"
+                "⚡ /subscribe — mulai dari Rp 50k/bulan"
+            )
+        state = getattr(self, "_hunt_mode_state", {}).get(cid, True)
+        new_state = not state
+        if not hasattr(self, "_hunt_mode_state"):
+            self._hunt_mode_state = {}
+        self._hunt_mode_state[cid] = new_state
+        return (
+            f"🏹 <b>HUNT MODE</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Status: {'🟢 <b>ACTIVE</b>' if new_state else '⚪ <b>STANDBY</b>'}\n\n"
+            f"{'✅ Bot akan otomatis entry saat harga menyentuh AHZ.' if new_state else '⏸ Bot tidak akan auto-execute di zona AHZ (Apex Hunt Zone).'}\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎯 Hunt Mode = Auto-entry saat AHZ validated"
+        )
+
+    async def _cmd_ahz_patterns(self, args: list[str], chat_id: str | None = None) -> str:
+        """📐 Show active harmonic patterns with fib ratios and AHZ coordinates."""
+        from tradebot.services.members_service import get_member
+        member = get_member(str(chat_id or ""))
+        tier = member.get("tier", "") if member else ""
+        pair = args[0].upper() if args else "BTCUSD"
+        if tier not in ("pro", "elite", "lifetime"):
+            return (
+                "📐 <b>HARMONIC PATTERNS</b> [🔒 PREMIUM]\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Lihat pattern harmonic yang terdeteksi:\n"
+                "🦋 Gartley | 🦇 Bat | 🦋 Butterfly | 🦀 Crab | 🕊 Cypher\n\n"
+                "🔒 Fitur ini khusus Member Premium\n\n"
+                "⚡ /subscribe — mulai dari Rp 50k/bulan"
+            )
+        try:
+            ticks = await self._fetch_ticks_for_pair(pair)
+            if not ticks:
+                return (
+                    f"📐 <b>HARMONIC PATTERNS — {pair}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "⚠️ Gagal mengambil data harga.\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🎯 Cek Apex Hunt Radar untuk zona aktif."
+                )
+            from tradebot.engines.harmonic import HarmonicEngine
+            engine = HarmonicEngine()
+            signal = await engine.analyze(ticks)
+            if signal is None or not signal.metadata.get("AHZ_Active"):
+                return (
+                    f"📐 <b>HARMONIC PATTERNS — {pair}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🔍 Tidak ada harmonic pattern terdeteksi.\n\n"
+                    "Pattern muncul saat struktur XABCD terbentuk\n"
+                    "dengan Fibonacci ratio yang valid.\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🎯 Cek Apex Hunt Radar untuk zona aktif."
+                )
+            meta = signal.metadata
+            entry = meta.get("ahz_mid", signal.entry_price or 0)
+            sl = meta.get("sl", 0)
+            tp1 = meta.get("tp1", 0)
+            tp2 = meta.get("tp2", 0)
+            rr = meta.get("rr", 0)
+            pattern = meta.get("pattern", "Unknown")
+            direction = signal.direction
+            icon = "🟢" if direction.upper() in ("BULLISH", "CALL") else "🔴"
+            return (
+                f"📐 <b>HARMONIC PATTERNS — {pair}</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎯 <b>1 Active</b>\n\n"
+                f"{icon} ⚡ <b>{pattern.upper()}</b>\n"
+                f"   Direction: {direction.upper()}\n"
+                f"   Entry: ${entry:.2f} | SL: ${sl:.2f}\n"
+                f"   TP1: ${tp1:.2f} | TP2: ${tp2:.2f}\n"
+                f"   RR: 1:{rr:.1f}\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "🎯 Powered by Harmonic AHZ Engine"
+            )
+        except Exception as exc:
+            return (
+                f"📐 <b>HARMONIC PATTERNS</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ Engine harmonic error: {exc}"
+            )
+
+
+    # ── Referral System ──────────────────────────────────────────────
+
+    async def _cmd_referral(self, args: list[str], chat_id: str | None = None) -> str:
+        """🔗 Show referral link and stats for Gotong Royong program."""
+        cid = str(chat_id or "")
+        ref_link = f"https://t.me/VilonaAITradingBot?start=ref_{cid}"
+
+        import sqlite3
+        from pathlib import Path
+        DB = Path(__file__).resolve().parent.parent.parent.parent / "data" / "vilona_tradefx" / "members.db"
+        referral_count = 0
+        try:
+            conn = sqlite3.connect(str(DB))
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT referral_count FROM members WHERE chat_id = ?", [cid]
+            ).fetchone()
+            conn.close()
+            if row:
+                referral_count = row["referral_count"] or 0
+        except Exception:
+            pass
+
+        return (
+            "🤝 <b>GOTONG ROYONG — REFERRAL PROGRAM</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🔗 <b>Link Referral Kamu:</b>\n"
+            f"<code>{ref_link}</code>\n\n"
+            f"📊 <b>Statistik:</b>\n"
+            f"👥 Teman Bergabung: <b>{referral_count}</b>\n\n"
+            "🎁 <b>REWARDS:</b>\n"
+            "💰 3 Teman Gabung = <b>PRO 7 Hari GRATIS!</b>\n"
+            "💰 10 Teman Gabung = <b>ELITE 30 Hari GRATIS!</b>\n\n"
+            "📢 Share link lu ke grup trader, sosmed, dll\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🤝 Powered by Vilona AI"
+        )
+
+    # ── S-TIER Zone ──────────────────────────────────────────────────
+
+    async def _cmd_stier(self, args: list[str], chat_id: str | None = None) -> str:
+        """🏛 S-TIER Zone — GOD TIER institutional-level zones."""
+        from tradebot.services.members_service import get_member
+        member = get_member(str(chat_id or ""))
+        tier = member.get("tier", "") if member else ""
+        if tier not in ("pro", "elite", "lifetime"):
+            return (
+                "🏛 <b>S-TIER ZONE — GOD TIER</b> [🔒 PREMIUM]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Zona S-Tier adalah level institusional dengan\n"
+                "konfluensi tertinggi: Order Block + FVG + Liquidity.\n"
+                "Hanya muncul 1-3x per minggu — high RR, high probability.\n\n"
+                "🔒 Fitur ini khusus Member Premium\n\n"
+                "⚡ /subscribe — mulai dari Rp 50k/bulan"
+            )
+        pair = args[0].upper() if args else "XAUUSD"
+        from datetime import timezone, timedelta
+        WIB = timezone(timedelta(hours=7))
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker("XAUUSD=X" if pair == "XAUUSD" else f"{pair}=X")
+            df = ticker.history(period="1mo", interval="1d")
+            if df.empty:
+                return f"🏛 <b>S-TIER ZONE — {pair}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n⚠️ Data tidak tersedia."
+            close = float(df["Close"].iloc[-1])
+            high30 = float(df["High"].max())
+            low30 = float(df["Low"].min())
+            pivot = (high30 + low30 + close) / 3
+            rng = high30 - low30
+            s_tier_upper = pivot + rng * 1.618
+            s_tier_lower = pivot - rng * 1.618
+            return (
+                f"🏛 <b>S-TIER ZONE — {pair}</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "⚡ <b>GOD TIER Institutional Levels</b>\n\n"
+                f"🟢 S-Tier Resistance: <b>${s_tier_upper:.2f}</b>\n"
+                f"🔴 S-Tier Support: <b>${s_tier_lower:.2f}</b>\n\n"
+                f"📐 Range: ${s_tier_lower:.2f} — ${s_tier_upper:.2f}\n"
+                f"📏 Width: ${rng * 3.236:.2f}\n\n"
+                "💡 S-Tier = konfluensi OB + FVG + Liq Sweep.\n"
+                "Entry hanya saat price reach zone dengan confirm.\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⏰ {datetime.now(WIB).strftime('%H:%M WIB')}\n"
+                "🏛 Powered by S-Tier Engine"
+            )
+        except Exception as exc:
+            return (
+                f"🏛 <b>S-TIER ZONE — {pair}</b>\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⚠️ Gagal fetch data: {exc}"
+            )
+
+
 def register_vilona_commands(app, bot):
     """Register Vilona commands with the UnifiedBot application.
     Only essential text commands are registered — most features
@@ -2007,6 +2292,18 @@ def register_vilona_commands(app, bot):
         ("portfolio", "_cmd_portfolio"),
         ("trade", "_cmd_trade"),
         ("platforms", "_cmd_platforms"),
+        ("ahz_radar", "_cmd_ahz_radar"),
+        ("hunt_toggle", "_cmd_hunt_toggle"),
+        ("ahz_patterns", "_cmd_ahz_patterns"),
+        ("referral", "_cmd_referral"),
+        ("stier", "_cmd_stier"),
+        ("panduan", "_cmd_panduan"),
+        ("cara_analisa", "_cmd_cara_analisa"),
+        ("cara_baca", "_cmd_cara_baca"),
+        ("cara_pasang", "_cmd_cara_pasang"),
+        ("cara_ea", "_cmd_cara_ea"),
+        ("cara_trailing", "_cmd_cara_trailing"),
+        ("alasan_sinyal", "_cmd_alasan_sinyal"),
     ]
 
     def make_handler(handler_name):
