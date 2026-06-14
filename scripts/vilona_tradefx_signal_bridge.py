@@ -19,7 +19,7 @@ Usage: python3 vilona_tradefx_signal_bridge.py --port 8765 --host 0.0.0.0
   Admin keys:  GET  /admin/keys (localhost only)
   Gen key:     POST /admin/generate-key (localhost only)
   EA download: GET  /download/ea or /ea/download"""
-import hashlib, json, queue, time, threading, argparse, logging, os, sys, urllib.request
+import hashlib, json, queue, sqlite3, time, threading, argparse, logging, os, sys, urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from collections import deque, defaultdict
@@ -36,7 +36,17 @@ log = logging.getLogger("bridge")
 # ── Config paths ──
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-KEYS_FILE = os.path.join(PROJECT_DIR, "api_keys.json")
+TIERS_FILE = os.path.join(PROJECT_DIR, "data", "vilona_tiers.json")
+DB_PATH = os.path.join(PROJECT_DIR, "data", "vilona_licenses.db")
+KEYS_FILE = os.path.join(PROJECT_DIR, "api_keys.json")  # legacy — for migration only
+
+# ── License DB (SQLite Phase 2) ──
+_LICENSES_DB = None          # persistent WAL connection — opened once at startup
+_DB_LOCK = threading.Lock()  # serializes all SQLite access
+LICENSE_CACHE = {}           # api_key → {"active": bool, "tier_info": dict}
+LICENSE_CACHE_TIME = 0
+LICENSE_CACHE_TTL = 60       # seconds
+ADMIN_SECRET = os.environ.get("VILONA_ADMIN_SECRET", "")
 
 # ── Global state ──
 HISTORY = deque(maxlen=500)
@@ -101,17 +111,120 @@ TELEGRAM_BOT_TOKEN = os.environ.get("VILONA_TELEGRAM_BOT_TOKEN", "8809864647:AAH
 TELEGRAM_ALERT_CHAT_ID = os.environ.get("VILONA_ALERT_CHAT_ID", "5220170786")
 TELEGRAM_QUEUE = queue.Queue()  # thread-safe message queue
 
+# ── License Database (SQLite Phase 2) ──
+
+def init_licenses_db():
+    """Called ONCE at bridge startup. Opens persistent WAL connection, creates
+    table, migrates legacy api_keys.json if DB is empty."""
+    global _LICENSES_DB
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA cache_size=-8000")
+    conn.row_factory = sqlite3.Row
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS licenses (
+            api_key TEXT PRIMARY KEY,
+            tier TEXT NOT NULL DEFAULT 'starter',
+            label TEXT DEFAULT '',
+            rate_limit INTEGER DEFAULT 3,
+            rate_window_seconds INTEGER DEFAULT 86400,
+            expires TEXT DEFAULT '2026-12-31',
+            active INTEGER DEFAULT 1,
+            features TEXT DEFAULT '[]'
+        )
+    """)
+    conn.commit()
+
+    # ── Migration: import from api_keys.json if DB is empty ──
+    count = conn.execute("SELECT COUNT(*) as n FROM licenses").fetchone()["n"]
+    if count == 0 and os.path.exists(KEYS_FILE):
+        try:
+            with open(KEYS_FILE) as f:
+                legacy = json.load(f)
+            imported = 0
+            for k, v in legacy.get("keys", {}).items():
+                conn.execute(
+                    "INSERT OR IGNORE INTO licenses VALUES (?,?,?,?,?,?,?,?)",
+                    [k, v.get("tier", "starter"), v.get("label", ""),
+                     v.get("rate_limit", 3), v.get("rate_window_seconds", 86400),
+                     v.get("expires", "2026-12-31"), int(v.get("active", True)),
+                     json.dumps(v.get("features", []))]
+                )
+                imported += 1
+            conn.commit()
+            log.info(f"📦 Migrated {imported} keys from api_keys.json → SQLite")
+            # Also migrate tiers
+            tiers = legacy.get("tiers", {})
+            if tiers and not os.path.exists(TIERS_FILE):
+                os.makedirs(os.path.dirname(TIERS_FILE), exist_ok=True)
+                with open(TIERS_FILE, "w") as f:
+                    json.dump({"tiers": tiers, "default_tier": legacy.get("default_tier", "starter")}, f, indent=2)
+        except Exception as e:
+            log.error(f"Migration failed: {e}")
+
+    _LICENSES_DB = conn
+    log.info(f"🔐 License DB ready | WAL mode | {count} keys")
+    return conn
+
+
+def _load_tiers():
+    """Load tier definitions from vilona_tiers.json. Returns dict with defaults."""
+    try:
+        if os.path.exists(TIERS_FILE):
+            with open(TIERS_FILE) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {
+        "tiers": {
+            "starter": {"max_layers": 1, "features": []},
+            "pro": {"max_layers": 3, "features": ["trailing", "broadcast"]},
+            "elite": {"max_layers": 5, "features": ["trailing", "broadcast", "ea_download"]},
+        },
+        "default_tier": "starter",
+    }
+
+
+def _read_licenses_from_db():
+    """SELECT all active keys from SQLite → {keys: {api_key: {...}}} dict."""
+    rows = _LICENSES_DB.execute(
+        "SELECT api_key, tier, label, rate_limit, rate_window_seconds, expires, active, features FROM licenses"
+    ).fetchall()
+    keys = {}
+    for r in rows:
+        try:
+            features = json.loads(r["features"])
+        except (json.JSONDecodeError, TypeError):
+            features = []
+        keys[r["api_key"]] = {
+            "tier": r["tier"], "label": r["label"],
+            "rate_limit": r["rate_limit"],
+            "rate_window_seconds": r["rate_window_seconds"],
+            "expires": r["expires"], "active": bool(r["active"]),
+            "features": features,
+        }
+    return {"keys": keys}
+
+
 def load_keys():
+    """Return {keys: {...}, tiers: {...}, default_tier: ...} shape.
+    Caches for 60s — reads from SQLite + tiers JSON."""
     global _keys_cache, _keys_cache_time
     now = time.time()
     if _keys_cache is not None and (now - _keys_cache_time) < 60:
         return _keys_cache
     try:
-        with open(KEYS_FILE) as f:
-            config = json.load(f)
+        config = _read_licenses_from_db()
     except Exception as e:
-        log.error(f"Failed to load API keys: {e}")
-        config = {"keys": {}, "tiers": {}, "default_tier": "starter"}
+        log.error(f"Failed to load keys from SQLite: {e}")
+        config = {"keys": {}}
+    tiers = _load_tiers()
+    config["tiers"] = tiers.get("tiers", {})
+    config["default_tier"] = tiers.get("default_tier", "starter")
     _keys_cache = config
     _keys_cache_time = now
     return config
@@ -124,16 +237,53 @@ def gen_id():
 
 
 def validate_key(api_key):
-    """Returns (valid, tier_info)"""
+    """Returns (valid, tier_info). Fast path: LICENSE_CACHE. Slow path: SQLite."""
     if not api_key:
         return False, None
-    config = load_keys()
-    key_data = config["keys"].get(api_key)
-    if not key_data or not key_data.get("active"):
-        # Inactive/unknown keys are rejected
+
+    now = time.time()
+    # Fast path: in-memory cache
+    if now - LICENSE_CACHE_TIME < LICENSE_CACHE_TTL:
+        cached = LICENSE_CACHE.get(api_key)
+        if cached is not None:
+            return cached["active"], cached["tier_info"]
+
+    # Slow path: SQLite under lock
+    with _DB_LOCK:
+        row = _LICENSES_DB.execute(
+            "SELECT tier, active, features FROM licenses WHERE api_key = ?",
+            [api_key]
+        ).fetchone()
+
+    if not row or not row["active"]:
+        LICENSE_CACHE[api_key] = {"active": False, "tier_info": None}
         return False, None
-    starter = config["tiers"].get("starter", {"max_layers": 1, "features": []})
-    return True, config["tiers"].get(key_data.get("tier"), starter)
+
+    try:
+        features = json.loads(row["features"])
+    except (json.JSONDecodeError, TypeError):
+        features = []
+
+    tiers = _load_tiers()
+    tier_name = row["tier"]
+    starter = tiers.get("tiers", {}).get("starter", {"max_layers": 1, "features": []})
+    tier_info = tiers.get("tiers", {}).get(tier_name, starter)
+    tier_info = dict(tier_info)
+    tier_info.setdefault("features", features)
+
+    LICENSE_CACHE[api_key] = {"active": True, "tier_info": tier_info}
+    return True, tier_info
+
+
+def bust_license_cache(api_key=None):
+    """Invalidate cache entries. Called after admin writes.
+    Pass api_key to bust a single key; omit to bust all."""
+    global LICENSE_CACHE_TIME
+    if api_key:
+        LICENSE_CACHE.pop(api_key, None)
+    else:
+        LICENSE_CACHE.clear()
+        LICENSE_CACHE_TIME = 0
 
 
 def check_rate_limit(api_key):
@@ -192,6 +342,19 @@ class SignalHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
         return parsed.path.rstrip("/"), qs
+
+    def _admin_auth(self, params):
+        """Returns True if request is authorized for admin endpoints.
+        Checks: 1) query param admin_secret, 2) Authorization header, 3) localhost fallback."""
+        if ADMIN_SECRET:
+            if params.get("admin_secret", [None])[0] == ADMIN_SECRET:
+                return True
+            auth = self.headers.get("Authorization", "")
+            if auth == f"Bearer {ADMIN_SECRET}":
+                return True
+        if self.client_address[0] in ("127.0.0.1", "::1", "localhost"):
+            return True
+        return False
 
     def _poll_signal(self, api_key, tier, instance_id=None):
         """Poll signal for a specific user or instance. Priority:
@@ -444,14 +607,15 @@ class SignalHandler(BaseHTTPRequestHandler):
             self._json({"status": "ok", "signal_id": signal_id})
 
         elif path == "/keys" or path == "/admin/keys":
-            # Admin: list keys (simple auth — localhost only)
-            if self.client_address[0] not in ("127.0.0.1", "::1", "localhost"):
-                self._json({"error": "admin only"}, 403)
+            # Admin: list keys (SQLite-backed, admin_secret or localhost auth)
+            if not self._admin_auth(params):
+                self._json({"error": "admin only — provide ?admin_secret= or use localhost"}, 403)
                 return
             config = load_keys()
             keys_safe = {
                 k: {"tier": v["tier"], "label": v.get("label", ""),
-                    "rate_limit": v.get("rate_limit", "?"), "active": v["active"]}
+                    "rate_limit": v.get("rate_limit", "?"), "active": v["active"],
+                    "expires": v.get("expires", "")}
                 for k, v in config["keys"].items()
             }
             self._json({"keys": keys_safe, "tiers": config["tiers"]})
@@ -872,6 +1036,7 @@ class SignalHandler(BaseHTTPRequestHandler):
             self._json({"error": "webhook_failed", "detail": str(e)}, 500)
 
     def do_POST(self):
+        global _keys_cache  # admin CRUD invalidates load_keys() cache
         path, params = self._get_params()
         api_key = params.get("api_key", [""])[0]
         account_id = params.get("account_id", [None])[0]
@@ -1206,10 +1371,10 @@ class SignalHandler(BaseHTTPRequestHandler):
             # Forward to payment webhook on port 8787
             self._forward_webhook(path)
 
-        elif path == "/admin/generate-key":
-            # Admin: generate new API key (localhost only)
-            if self.client_address[0] not in ("127.0.0.1", "::1", "localhost"):
-                self._json({"error": "admin only"}, 403)
+        elif path == "/admin/keys":
+            # Admin: create or update license (SQLite-backed, admin_secret auth)
+            if not self._admin_auth(params):
+                self._json({"error": "admin only — provide ?admin_secret= or use localhost"}, 403)
                 return
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
@@ -1220,27 +1385,66 @@ class SignalHandler(BaseHTTPRequestHandler):
                 return
 
             import secrets, string
+
             tier = data.get("tier", "starter")
-            prefix = {"starter": "VT-FREE", "pro": "VT-PRO", "elite": "VT-ELITE"}.get(tier, "VT-FREE")
-            suffix = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
-            new_key = f"{prefix}-{suffix}"
+            # Auto-generate key if not provided
+            if not data.get("api_key"):
+                prefix = {"starter": "VT-FREE", "pro": "VT-PRO", "elite": "VT-ELITE"}.get(tier, "VT-FREE")
+                suffix = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+                api_key = f"{prefix}-{suffix}"
+            else:
+                api_key = data["api_key"]
 
-            config = load_keys()
-            config["keys"][new_key] = {
-                "tier": tier,
-                "label": data.get("label", f"Generated {tier}"),
-                "rate_limit": data.get("rate_limit", {"starter": 3, "pro": 50, "elite": 200}.get(tier, 3)),
-                "rate_window_seconds": 86400,
-                "expires": data.get("expires", "2026-12-31"),
-                "active": True,
-                "features": config["tiers"].get(tier, {}).get("features", []),
-            }
+            label = data.get("label", f"Generated {tier}")
+            rate_limit = data.get("rate_limit", {"starter": 3, "pro": 50, "elite": 200}.get(tier, 3))
+            rate_window = data.get("rate_window_seconds", 86400)
+            expires = data.get("expires", "2026-12-31")
+            active = int(data.get("active", True))
+            features = json.dumps(data.get("features", []))
 
-            with open(KEYS_FILE, "w") as f:
-                json.dump(config, f, indent=2)
+            with _DB_LOCK:
+                _LICENSES_DB.execute(
+                    "INSERT OR REPLACE INTO licenses VALUES (?,?,?,?,?,?,?,?)",
+                    [api_key, tier, label, rate_limit, rate_window, expires, active, features]
+                )
+                _LICENSES_DB.commit()
 
-            log.info(f"New key generated: {new_key} ({tier})")
-            self._json({"api_key": new_key, "tier": tier, "status": "created"})
+            bust_license_cache(api_key)
+            bust_license_cache()
+            _keys_cache = None  # force load_keys() refresh
+
+            log.info(f"🔑 License upserted: {api_key} ({tier}) label={label}")
+            self._json({"api_key": api_key, "tier": tier, "status": "saved"})
+
+        elif path == "/admin/keys/revoke":
+            # Admin: revoke license (set active=0, SQLite-backed)
+            if not self._admin_auth(params):
+                self._json({"error": "admin only"}, 403)
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+
+            target_key = data.get("api_key", "")
+            if not target_key:
+                self._json({"error": "api_key required"}, 400)
+                return
+
+            with _DB_LOCK:
+                _LICENSES_DB.execute(
+                    "UPDATE licenses SET active = 0 WHERE api_key = ?", [target_key]
+                )
+                _LICENSES_DB.commit()
+
+            bust_license_cache(target_key)
+            _keys_cache = None
+
+            log.info(f"🚫 License revoked: {target_key}")
+            self._json({"status": "revoked", "api_key": target_key})
 
         elif path == "/api/create-payment":
             """Create Tripay payment transaction (proxied from whitelisted IP)"""
@@ -1434,13 +1638,17 @@ if __name__ == "__main__":
                     k, v = line.split("=", 1)
                     os.environ.setdefault(k, v)
 
+    # ── Initialize SQLite license DB (Phase 2) ──
+    init_licenses_db()
+
     config = load_keys()
     log.info(f"Bridge V2 listening on {args.host}:{args.port}")
-    log.info(f"  API keys loaded: {len(config['keys'])} | tiers: {list(config['tiers'].keys())}")
+    log.info(f"  API keys loaded: {len(config['keys'])} | tiers: {list(config['tiers'].keys())} (SQLite)")
     log.info(f"  EA poll:     GET  /signal?api_key=VT-xxx&account_id=MT5-12345")
     log.info(f"  Bot signal:  POST /signal?api_key=VT-xxx  (broadcasts to instances of that key)")
-    log.info(f"  Admin keys:  GET  /admin/keys (localhost only)")
-    log.info(f"  Gen key:     POST /admin/generate-key (localhost only)")
+    log.info(f"  Admin keys:  GET  /admin/keys (?admin_secret= or localhost)")
+    log.info(f"  Create key:  POST /admin/keys")
+    log.info(f"  Revoke key:  POST /admin/keys/revoke")
     log.info(f"  EA download: GET  /download/ea or /ea/download")
     log.info(f"  Accounts:    GET  /accounts (instance-level detail)")
     log.info(f"  Trailing:    GET/POST /trailing?api_key=VT-xxx&account_id=MT5-12345")

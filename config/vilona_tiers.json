@@ -1,0 +1,28 @@
+{
+  "tiers": {
+    "starter": {
+      "max_layers": 0,
+      "features": [
+        "signal_poll"
+      ]
+    },
+    "pro": {
+      "max_layers": 3,
+      "features": [
+        "signal_poll",
+        "layering",
+        "auto_trade"
+      ]
+    },
+    "elite": {
+      "max_layers": 5,
+      "features": [
+        "signal_poll",
+        "layering",
+        "auto_trade",
+        "priority"
+      ]
+    }
+  },
+  "default_tier": "starter"
+}
