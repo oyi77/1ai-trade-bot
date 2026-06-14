@@ -677,9 +677,10 @@ class SignalHandler(BaseHTTPRequestHandler):
             with LOCK:
                 self._json({"count": len(HISTORY), "signals": list(HISTORY)})
         elif path == "/accounts":
-            # ── Require valid API key ──
-            if not validate_key(api_key)[0]:
-                self._json({"error": "api_key required"}, 403)
+            # ── Admin or valid API key ──
+            is_admin = self._admin_auth(params)
+            if not is_admin and not validate_key(api_key)[0]:
+                self._json({"error": "api_key or admin auth required"}, 403)
                 return
             with LOCK:
                 # List all instances grouped by api_key
