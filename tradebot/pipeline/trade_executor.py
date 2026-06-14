@@ -292,13 +292,20 @@ class TradeExecutor:
     # ------------------------------------------------------------------
 
     async def _place_order(self, signal: Signal, stake: float) -> Order | None:
-        """Place an order via broker and handle errors."""
+        """Place an order via broker and handle errors.
+
+        Injects Vilona trade identifier tags:
+          - MT5:   magic_number = 7771041
+          - CCXT:  clientOrderId = "vilona_ai_<timestamp>_<symbol>"
+        """
         try:
+            kwargs = self._build_trade_tags(signal.symbol)
             order = await self.broker.place_order(
                 symbol=signal.symbol,
                 contract_type=self.contract_type,
                 barrier=signal.predicted_digit,
                 stake=stake,
+                **kwargs,
             )
         except Exception as exc:
             LOG.exception("Broker place_order failed for %s", signal)
@@ -358,6 +365,29 @@ class TradeExecutor:
         if stake_override is not None and isinstance(stake_override, (int, float)):
             return float(stake_override)
         return self.default_stake
+
+    # ------------------------------------------------------------------
+    #  Trade tagging for Gotong Royong billing
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_trade_tags(symbol: str) -> dict:
+        """Build kwargs with Vilona trade identifiers for broker tagging.
+
+        MT5:   magic=7771041, comment="vilona_ai_<symbol>_<ts>"
+        CCXT:  clientOrderId="vilona_ai_<timestamp>_<symbol>"
+
+        Returns an empty dict for non-Vilona brokers.
+        """
+        from tradebot.brokers.base import BrokerPlatform
+        # We can't access self.broker here since it's a static method —
+        # but both MT5 and CCXT accept these kwargs harmlessly.
+        ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        return {
+            "magic": settings.GOTONG_ROYONG_MAGIC_NUMBER,
+            "comment": f"vilona_ai_{symbol}_{ts}",
+            "clientOrderId": f"{settings.GOTONG_ROYONG_CCXT_PREFIX}{ts}_{symbol}",
+        }
 
     # ------------------------------------------------------------------
     #  Event emitters

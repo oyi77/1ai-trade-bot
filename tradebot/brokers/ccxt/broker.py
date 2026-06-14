@@ -150,6 +150,48 @@ class CCXTBroker(BaseBroker):
 
     # ── Trade Execution ─────────────────────────────────────────────
 
+    async def place_order(
+        self,
+        symbol: str,
+        contract_type: str,
+        barrier: int,
+        stake: float,
+        **kwargs,
+    ) -> Any:
+        """Place an order — CCXT wrapper for TradeExecutor compatibility."""
+        from tradebot.brokers.base import TradeDirection
+
+        direction = TradeDirection.CALL if contract_type.upper() in ("BUY", "CALL") else TradeDirection.PUT
+
+        # Extract clientOrderId from kwargs if provided by TradeExecutor
+        client_oid = kwargs.get("clientOrderId", "")
+
+        if not self._client:
+            return None
+
+        ccxt_symbol = _get_ccxt_symbol(self._exchange_id, symbol)
+        side = "buy" if direction == TradeDirection.CALL else "sell"
+
+        try:
+            params = {}
+            if client_oid:
+                params["clientOrderId"] = client_oid
+
+            order = await self._client.create_market_order(
+                ccxt_symbol, side, stake, params=params or None,
+            )
+            return {
+                "id": str(order.get("id", "")),
+                "symbol": symbol,
+                "side": side,
+                "amount": stake,
+                "status": "FILLED",
+                "clientOrderId": client_oid,
+            }
+        except Exception as e:
+            LOG.error("CCXT place_order failed: %s", e)
+            return None
+
     async def place_trade(
         self,
         symbol: str,
