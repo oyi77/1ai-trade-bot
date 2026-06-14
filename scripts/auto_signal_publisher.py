@@ -14,7 +14,9 @@ import sys, os, json, logging, time, argparse
 from datetime import datetime, timezone, timedelta
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(PROJECT_DIR)  # project root
 sys.path.insert(0, PROJECT_DIR)
+sys.path.insert(0, ROOT_DIR)              # for tradebot.* imports
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,7 +110,9 @@ def main():
 
     try:
         from engine_consensus import run_engine_consensus
-        from signal_calculator import compute_signal, format_signal_telegram, log_signal
+        from tradebot.services.signal_calculator_service import (
+            compute_signal, format_signal_telegram, log_signal,
+        )
     except ImportError as e:
         log.error(f"Import error: {e}")
         return 1
@@ -116,6 +120,7 @@ def main():
     # ── MTF Scan — Multi-Asset + Killzone Routing ──
     assets = [
         {"symbol": "XAUUSD", "class": "forex_metal"},
+        {"symbol": "BTCUSD", "class": "crypto"},
     ]
     results = {}
     
