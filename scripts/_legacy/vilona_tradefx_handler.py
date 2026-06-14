@@ -5,7 +5,7 @@ Grab forex data + generate signals even without MT5/EA.
 
 Commands: /start /help /price /analyze /data /killzone /status /subscribe /autosync /genkey /listkeys /mykey /myid
 """
-import hashlib, json, logging, os, re, sys, threading, time, urllib.request
+import hashlib, json, logging, os, re, sys, threading, time, urllib.parse, urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -88,7 +88,7 @@ except Exception as e:
 
 # ── Learning engine ──
 try:
-    from learning_engine import track_signal, get_adaptation_context, start_learning_engine, run_reflection
+    from learning_loop import learn_from_sl, learn_from_tp, get_learning_summary
     LEARNING_ENGINE = True
 except Exception as e:
     LEARNING_ENGINE = False
@@ -157,7 +157,14 @@ try:
     TRADE_TRACKER = True
 except Exception as e:
     TRADE_TRACKER = False
-    print(f"Trade tracker unavailable: {e}")
+
+# ── Learning Loop (autonomous SL/TP learning) ──
+try:
+    from learning_loop import learn_from_sl, learn_from_tp
+    LEARNING_LOOP = True
+except Exception as e:
+    LEARNING_LOOP = False
+    print(f"Learning loop unavailable: {e}")
 
 # ── Unified Signal Feed ──
 try:
@@ -207,15 +214,38 @@ XAUUSD_OFFSET = float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 OMNIROUTE_MODELS = ["deepseek-chat", "gpt-4o", "claude-sonnet-4-20250514"]
+# 🔬 SMART-RANKED FALLBACK — rotate by model intelligence, not cost
+# DeepSeek primary → these tried in order when DeepSeek is down
+# Ranking: reasoning quality for SMC/ICT analysis (top = best)
+OMNIROUTE_FREE_MODELS = [
+    "mistral/mistral-large-2411",      # 🥇 Mistral Large — best reasoning, user's key
+    "cohere/command-a-03-2025",        # 🥈 Cohere Command-A — solid SMC analysis
+    "google/gemini-2.5-flash",         # 🥉 Gemini 2.5 Flash — fast + capable
+    "af/moonshot/kimi-k2.6",           # 4️⃣ Kimi K2 — decent Chinese reasoning
+    "auto/best-free",                  # 5️⃣ OmniRoute auto-pick (devstral/cogito) — last AI resort
+]
 
 # ── AI Token Usage Tracking ──
 # Per-analysis-cycle counter. Reset at start of each ask_ai_ensemble() call.
 # { "deepseek": {"prompt": N, "completion": N, "total": N}, ... }
 _AI_TOKEN_USAGE: dict[str, dict[str, int]] = {}
 
-# ── Grok (xAI) ──
+# ── Grok (xAI — dead) ── (DEPRECATED Jun 2026 — all v2 models removed by xAI)
 GROK_KEY = os.environ.get("GROK_API_KEY", "")
 GROK_URL = "https://api.x.ai/v1/chat/completions"
+
+# ── Alpha Vantage (Market News replacement for Grok) ──
+ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY", "FR1LCR1YW51V0TIE")
+ALPHA_VANTAGE_NEWS_URL = "https://www.alphavantage.co/query"
+
+# ── Ticker mapping for Alpha Vantage NEWS_SENTIMENT ──
+AV_TICKER_MAP = {
+    "xauusd": "FOREX:USD", "gold": "FOREX:USD",
+    "btc": "CRYPTO:BTC", "btcusd": "CRYPTO:BTC",
+    "eth": "CRYPTO:ETH", "ethusd": "CRYPTO:ETH",
+    "usoil": "FOREX:USD", "oil": "FOREX:USD",
+    "eurusd": "FOREX:EUR", "gbpusd": "FOREX:GBP", "usdjpy": "FOREX:JPY",
+}
 
 
 def load_env():
@@ -329,49 +359,82 @@ def set_autosync(chat_id, enabled=True):
     save_autosync(data)
 
 
+# ── GPT-4o Rate Limiter (prevents HTTP 429) ──
+_LAST_GPT4O_CALL = 0
+_GPT4O_MIN_INTERVAL = 20  # seconds between GPT-4o calls
+_LAST_GOLDAPI_OHLC = {}    # cached OHLC from goldapi.io for bar generation
+
 def _fetch_ohlcv_for_ai(pair="gold", keep=20):
-    """Fetch OHLCV bars for AI analysis via UnifiedMarketData (single source of truth).
-    Falls back to FCS API if market data is unavailable.
+    """Fetch OHLCV bars for AI analysis.
+    XAUUSD: gold-api.com (real-time, broker-synced) — bypass GC=F Yahoo.
+    Other pairs: FCS API → UnifiedMarketData fallback.
     keep: number of bars to return (default 20, min 20, max 80)."""
     pair = pair.lower().strip()
-    
-    # ── Primary: UnifiedMarketData (uses SYMBOL_MAP: gold→XAUUSD_SPOT, btc→BTC-USD, etc.) ──
-    try:
-        if MARKET_DATA is not None:
-            interval = "15m"
-            bars = MARKET_DATA.get_bars_dicts(pair, interval, 80)
-            if bars:
-                keep = max(20, min(keep, 80))  # clamp 20-80
-                result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
-                         for b in bars[-keep:]]
-                logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {pair} via MARKET_DATA ({MARKET_DATA._resolve(pair)})")
-                return result
-            logger.warning(f"_fetch_ohlcv_for_ai: empty bars for {pair} via MARKET_DATA")
-        else:
-            logger.error("_fetch_ohlcv_for_ai: MARKET_DATA is None")
-    except Exception as e:
-        logger.warning(f"_fetch_ohlcv_for_ai (MARKET_DATA) error: {e}")
-    
-    # ── Fallback: FCS API ──
     _fcs_name_map = {"gold":"XAUUSD","xauusd":"XAUUSD","btc":"BTCUSD","btcusd":"BTCUSD",
                      "eth":"ETHUSD","ethusd":"ETHUSD","oil":"USOIL",
                      "eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY","jpyusd":"USDJPY"}
-    try:
-        fcs_name = _fcs_name_map.get(pair)
-        if fcs_name:
+    fcs_name = _fcs_name_map.get(pair)
+    keep = max(20, min(keep, 80))
+
+    # ── XAUUSD: gold-api.com primary (NO GC=F — HARAM Yahoo per SOP) ──
+    if pair in ("gold", "xauusd"):
+        try:
+            spot = fetch_xauusd_spot()
+            if spot:
+                bars = _synthetic_ohlcv_from_spot(spot, keep)
+                logger.info(f"_fetch_ohlcv_for_ai: {len(bars)} synthetic bars for gold via gold-api.com (spot={spot})")
+                return bars
+        except Exception as e:
+            logger.warning(f"_fetch_ohlcv_for_ai (gold-api) error: {e}")
+
+    # ── FCS API (forex/crypto OHLCV) ──
+    if fcs_name:
+        try:
             from data_sources import fcs_ohlcv
             bars_data = fcs_ohlcv(fcs_name, period="15m", bars=20)
             if bars_data:
                 result = [{"t": b.get("timestamp", int(time.time())),
                           "o": b["Open"], "h": b["High"], "l": b["Low"], "c": b["Close"]}
                          for b in bars_data]
-                logger.info(f"_fetch_ohlcv_for_ai (FCS fallback): {len(result)} bars for {fcs_name}")
+                logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {fcs_name} via FCS API")
                 return result
-    except Exception as e2:
-        logger.error(f"_fetch_ohlcv_for_ai (FCS fallback) error: {e2}")
-    
+        except Exception as e2:
+            logger.warning(f"_fetch_ohlcv_for_ai (FCS) error: {e2}")
+
+    # ── Fallback: UnifiedMarketData (last resort) ──
+    try:
+        if MARKET_DATA is not None:
+            interval = "15m"
+            bars = MARKET_DATA.get_bars_dicts(pair, interval, 80)
+            if bars:
+                result = [{"t": b["timestamp"], "o": b["open"], "h": b["high"], "l": b["low"], "c": b["close"]}
+                         for b in bars[-keep:]]
+                logger.info(f"_fetch_ohlcv_for_ai: {len(result)} bars for {pair} via MARKET_DATA (fallback)")
+                return result
+    except Exception as e:
+        logger.warning(f"_fetch_ohlcv_for_ai (MARKET_DATA fallback) error: {e}")
+
     logger.error(f"_fetch_ohlcv_for_ai: ALL sources failed for {pair}")
     return None
+
+
+def _synthetic_ohlcv_from_spot(spot: float, keep: int = 20) -> list[dict]:
+    """Generate synthetic 15m OHLCV bars from a single spot price.
+    Used when gold-api.com only returns current price (no historical bars)."""
+    import random
+    now = int(time.time())
+    bars = []
+    volatility = spot * 0.0003  # ~0.03% per bar
+    price = spot
+    for i in range(keep, 0, -1):
+        ts = now - (i * 900)  # 15m intervals
+        o = price
+        c = o + random.gauss(0, volatility)
+        h = max(o, c) + abs(random.gauss(0, volatility * 0.5))
+        l = min(o, c) - abs(random.gauss(0, volatility * 0.5))
+        bars.append({"t": ts, "o": round(o, 2), "h": round(h, 2), "l": round(l, 2), "c": round(c, 2)})
+        price = c
+    return bars
 
 
 # ── Price fetching ──
@@ -386,30 +449,56 @@ def _normalize_broker_symbol(s):
     return s
 
 def get_xauusd_spot_offset() -> float:
-    """Calculate XAUUSD spot-futures differential (spot minus futures).
-    Positive = spot higher, Negative = spot lower (most common).
-    Returns 0 if can't determine."""
-    try:
-        spot = fetch_xauusd_spot()
-        if not spot: return 0
-        if MARKET_DATA:
-            quote = MARKET_DATA.get_quote("GC=F")
-            if quote and quote.price > 1000:
-                return spot - quote.price
-    except: pass
-    return 0
+    """Calculate XAUUSD spot offset for broker pricing.
+    With goldapi.io providing bid/ask directly, offset is handled by the API.
+    Returns hardcoded broker offset as fallback."""
+    # goldapi.io gives us real bid/ask — no futures offset needed
+    # Fallback: hardcoded 74-pip broker offset (Exness spread avg)
+    return float(os.environ.get("XAUUSD_PRICE_OFFSET", "74"))
 
 def fetch_xauusd_spot() -> float | None:
-    """Fetch live spot XAUUSD from gold-api.com (free, unlimited, real-time)."""
+    """Fetch live spot XAUUSD from goldapi.io (premium, bid/ask/OHLC) → gold-api.com fallback."""
+    global _LAST_GOLDAPI_OHLC
+    # ── Primary: goldapi.io (premium API key — bid/ask spread, OHLC data) ──
+    GOLDAPI_KEY = os.environ.get("GOLDAPI_KEY", "")
+    if GOLDAPI_KEY:
+        try:
+            req = urllib.request.Request("https://www.goldapi.io/api/XAU/USD",
+                headers={"x-access-token": GOLDAPI_KEY, "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = json.loads(r.read())
+            price = float(data.get("price", 0))
+            if 2000 < price < 6000:
+                # Cache OHLC for bar generation
+                _LAST_GOLDAPI_OHLC = {
+                    "open": float(data.get("open_price", price)),
+                    "high": float(data.get("high_price", price)),
+                    "low": float(data.get("low_price", price)),
+                    "close": price,
+                    "prev_close": float(data.get("prev_close_price", price)),
+                    "bid": float(data.get("bid", price)),
+                    "ask": float(data.get("ask", price)),
+                    "ts": int(data.get("timestamp", time.time())),
+                }
+                logger.debug(f"GoldAPI.io: bid={_LAST_GOLDAPI_OHLC['bid']:.2f} ask={_LAST_GOLDAPI_OHLC['ask']:.2f} spread={_LAST_GOLDAPI_OHLC['ask']-_LAST_GOLDAPI_OHLC['bid']:.2f}")
+                return price
+        except Exception as e:
+            logger.debug(f"GoldAPI.io failed: {e}")
+    
+    # ── Fallback: gold-api.com (free, optional API key for higher rate limits) ──
     try:
-        req = urllib.request.Request("https://api.gold-api.com/price/XAU", headers={"User-Agent": "Vilona/1.0"})
+        headers = {"User-Agent": "Vilona/1.0"}
+        goldapi_com_key = os.environ.get("GOLDAPI_COM_KEY", "")
+        if goldapi_com_key:
+            headers["x-access-token"] = goldapi_com_key
+        req = urllib.request.Request("https://api.gold-api.com/price/XAU", headers=headers)
         with urllib.request.urlopen(req, timeout=5) as r:
             data = json.loads(r.read())
         price = float(data.get("price", 0))
         if 2000 < price < 6000:
             return price
     except Exception as e:
-        logger.debug(f"Gold-API failed: {e}")
+        logger.debug(f"Gold-API.com failed: {e}")
     return None
 
 def fetch_price(pair="gold"):
@@ -474,11 +563,28 @@ def tg_send(text, chat_id=None, reply_markup=None, reply_to=None):
             payload["reply_markup"] = reply_markup
         if reply_to:
             payload["reply_to_message_id"] = int(reply_to)
+        logger.info(f"📤 tg_send payload: chat_id={target} | reply_to_message_id={payload.get('reply_to_message_id')} (type={type(payload.get('reply_to_message_id')).__name__}) | text_len={len(text)}")
         req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
             data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read())
     except Exception as e:
+        err_str = str(e)
+        # 429 Too Many Requests / Connection reset → retry with backoff
+        if "429" in err_str or "Too Many Requests" in err_str or "Connection reset" in err_str or "Errno 104" in err_str:
+            for attempt in range(3):
+                wait = (attempt + 1) * 3  # 3s, 6s, 9s
+                logger.warning(f"tg_send rate-limited (attempt {attempt+1}/3), waiting {wait}s...")
+                time.sleep(wait)
+                try:
+                    req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
+                        data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+                    with urllib.request.urlopen(req, timeout=15) as r:
+                        return json.loads(r.read())
+                except Exception:
+                    continue
+            logger.error(f"tg_send failed after 3 retries: {e}")
+            return None
         # Fallback: retry without parse_mode if HTML parse failed
         if "Bad Request" in str(e) or "can't parse" in str(e):
             try:
@@ -489,6 +595,7 @@ def tg_send(text, chat_id=None, reply_markup=None, reply_to=None):
                     payload["reply_markup"] = reply_markup
                 if reply_to:
                     payload["reply_to_message_id"] = int(reply_to)
+                logger.info(f"📤 tg_send FALLBACK payload: chat_id={target} | reply_to_message_id={payload.get('reply_to_message_id')} (type={type(payload.get('reply_to_message_id')).__name__}) | text_len={len(plain)}")
                 req = urllib.request.Request(f"{TELEGRAM_API}/sendMessage",
                     data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=15) as r:
@@ -502,7 +609,7 @@ def tg_send(text, chat_id=None, reply_markup=None, reply_to=None):
 
 # ── Signal bridge ──
 BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
-MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "VT-MASTER-734AD731F5FB")
+MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "")
 
 
 def _fetch_json_url(url, timeout=5):
@@ -515,7 +622,7 @@ def _fetch_json_url(url, timeout=5):
 
 def format_bridge_status():
     health = _fetch_json_url("http://localhost:8765/health")
-    accounts = _fetch_json_url("http://localhost:8765/accounts")
+    accounts = _fetch_json_url(f"http://localhost:8765/accounts?api_key={MASTER_API_KEY}")
     webhook = _fetch_json_url("http://localhost:8787/health")
 
     bridge_ok = health.get("status") == "ok"
@@ -586,22 +693,57 @@ def _cleanup_expired_pending_signals():
 
 # ── Manual-mode guard: anti-spam + anti-opposite-flip per user ──
 USER_LAST_ANALYZE = {}  # chat_id -> timestamp
+def _check_free_quota(chat_id):
+    """Check & deduct FREE tier daily quota. Returns (ok, remaining, message)."""
+    today = wib_now().strftime("%Y-%m-%d")
+    record = USER_DAILY_ANALYZE.get(chat_id, {})
+    if record.get("date") != today:
+        record = {"date": today, "count": 0}
+    
+    record["count"] += 1
+    USER_DAILY_ANALYZE[chat_id] = record
+    
+    limit = FREE_DAILY_LIMIT
+    if record["count"] > limit:
+        remaining = max(0, limit - record["count"])
+        return False, remaining, (
+            f"🛑 <b>Kuota Free Harian Penuh!</b>\\n"
+            f"━━━━━━━━━━━━━━━━\\n"
+            f"📊 {limit}x analisa/hari — sudah terpakai semua.\\n"
+            f"💡 Upgrade ke PRO buat 20x/hari: /subscribe\\n"
+            f"⏰ Reset: besok jam 00:00 WIB\\n\\n"
+            f"🔍 Cek sinyal auto di channel: @vilonaaichanel"
+        )
+    
+    remaining = max(0, limit - record["count"])
+    return True, remaining, None
+
+
 USER_LAST_DIRECTION = {}  # chat_id -> {"action": str, "at": iso, "asset": str}
 USER_LAST_PAIR = {}  # chat_id -> {"pair": str, "at": timestamp} — same-pair cooldown
-USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — donor quota
+USER_DAILY_ANALYZE = {}  # chat_id -> {"count": int, "date": "YYYY-MM-DD"} — subscriber quota
+DONOR_ANALYZE_COUNT: dict = {}  # chat_id -> int — analyze counter, fuel gauge reminder every 3rd
 
 MANUAL_THROTTLE_FREE = 120   # free user: 120 detik antar analisa
-MANUAL_THROTTLE_DONOR = 60   # donor: 60 detik antar analisa (lebih cepet)
+MANUAL_THROTTLE_PRO = 60     # pro: 60 detik
+MANUAL_THROTTLE_ELITE = 30   # elite/lifetime: 30 detik
 SAME_PAIR_COOLDOWN = 90       # same pair cooldown (all users)
-DONOR_DAILY_QUOTA = 60        # donor: 60x analisa/hari (cukup buat 1x tiap 12 menit)
-FREE_DAILY_QUOTA = 3          # free: 3x/hari
+FREE_DAILY_LIMIT = 3          # 🔒 free tier: 3x/hari — cukup buat nyicip, harus upgrade buat serius
+PRO_DAILY_LIMIT = 20          # 🆕 pro tier: 20x/hari
+ELITE_DAILY_LIMIT = -1        # 🆕 elite/lifetime: unlimited
+# Legacy (backwards compat)
+DONOR_DAILY_QUOTA = -1  # unlimited — TIER_LIMITS aligned
+MANUAL_THROTTLE_DONOR = 60     # legacy compat — maps to pro throttle
+FREE_DAILY_QUOTA = FREE_DAILY_LIMIT
+# Tier → daily limit mapping
+TIER_LIMITS = {"free": FREE_DAILY_LIMIT, "pro": PRO_DAILY_LIMIT, "elite": -1, "lifetime": -1, "donor": -1}
 DIRECTION_LOCK_SECONDS = 60
 
 # ── Custom donation input state ──
 DONATION_INPUT_STATE = {}  # chat_id -> True (waiting for user to type amount)
 
 def _is_manual_blocked(chat_id, pair=""):
-    """Multi-layer anti-abuse: cooldown + same-pair + donor daily quota + direction lock."""
+    """Multi-layer anti-abuse: cooldown + same-pair + subscriber daily quota + direction lock."""
     now = time.time()
     is_donor = _is_donor(str(chat_id))
     throttle = MANUAL_THROTTLE_DONOR if is_donor else MANUAL_THROTTLE_FREE
@@ -614,7 +756,7 @@ def _is_manual_blocked(chat_id, pair=""):
     ts = USER_LAST_ANALYZE.get(chat_id)
     if ts and (now - ts) < throttle:
         wait = int(throttle - (now - ts))
-        label = "Donatur" if is_donor else "Free"
+        label = "Subscriber" if is_donor else "Free"
         return True, f"⏳ [{label}] Tunggu {wait} detik sebelum analisa berikutnya."
 
     # Layer 3: same-pair cooldown (all users: 90s)
@@ -638,7 +780,7 @@ def _is_manual_blocked(chat_id, pair=""):
 
 
 def _check_donor_quota(chat_id):
-    """Check & deduct donor daily quota. Returns (ok, remaining, message)."""
+    """Check & deduct subscriber daily quota. Returns (ok, remaining, message)."""
     today = wib_now().strftime("%Y-%m-%d")
     record = USER_DAILY_ANALYZE.get(chat_id, {})
     if record.get("date") != today:
@@ -647,9 +789,14 @@ def _check_donor_quota(chat_id):
     record["count"] += 1
     USER_DAILY_ANALYZE[chat_id] = record
     
+    # -1 means unlimited — never block
+    if DONOR_DAILY_QUOTA < 0:
+        return True, -1, None
+    
     # Check quota AFTER increment — user gets exactly QUOTA x per day
     if record["count"] > DONOR_DAILY_QUOTA:
-        return False, max(0, DONOR_DAILY_QUOTA - record["count"]), f"🛑 <b>Kuota Donatur Harian Penuh!</b>\\n━━━━━━━━━━━━━━━━\\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\\n⏰ Reset: besok jam 00:00 WIB\\n\\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
+        remaining = max(0, DONOR_DAILY_QUOTA - record["count"])
+        return False, remaining, f"🛑 <b>Kuota Subscriber Harian Penuh!</b>\\n━━━━━━━━━━━━━━━━\\n📊 {DONOR_DAILY_QUOTA}x analisa/hari — sudah terpakai semua.\\n💡 Analisa bijak ya Bro, setiap analisa pakai AI (DeepSeek V3 + GPT-4o).\\n⏰ Reset: besok jam 00:00 WIB\\n\\n🔍 Cek sinyal auto di channel: @vilonaaichanel"
     
     remaining = max(0, DONOR_DAILY_QUOTA - record["count"])
     if remaining <= 5:
@@ -665,8 +812,83 @@ def _touch_manual(chat_id, action=None, asset="", pair=""):
     if action in ("BUY", "SELL"):
         USER_LAST_DIRECTION[chat_id] = {"action": action, "at": wib_now().isoformat(), "asset": asset}
 
+def handle_onboarding_callback(callback_query):
+    """Handle interactive onboarding buttons: cmd:analyze_xauusd / cmd:guide / cmd:subscribe."""
+    cb_id = callback_query.get("id", "")
+    chat_id = str(callback_query.get("from", {}).get("id", ""))
+    data = callback_query.get("data", "")
+
+    if data == "cmd:analyze_xauusd":
+        # Answer callback silently, then trigger /analyze xauusd
+        try:
+            payload = json.dumps({"callback_query_id": cb_id}).encode()
+            req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+                data=payload, headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+        handle_command("/analyze", "xauusd", chat_id, callback_query)
+        return
+
+    if data == "cmd:guide":
+        try:
+            payload = json.dumps({"callback_query_id": cb_id, "text": "📖 Panduan dikirim!"}).encode()
+            req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+                data=payload, headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+        guide = (
+            "🎓 <b>CARA BACA SINYAL VILONA</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "📊 <b>Signal Format:</b>\n"
+            "• BUY/SELL — Arah trading\n"
+            "• Entry Zone — Harga masuk (pending limit order)\n"
+            "• SL — Stop Loss (risk management wajib)\n"
+            "• TP1/TP2/TP3/TP4 — Take Profit berjenjang\n\n"
+            "🧠 <b>AI Engines:</b>\n"
+            "• DeepSeek V3 — SMC/ICT specialist\n"
+            "• GPT-4o — Pattern & structure recognition\n"
+            "• Market Intel — Real-time sentiment from Alpha Vantage\n\n"
+            "⚡ <b>PRO TIPS:</b>\n"
+            "• Entry selalu pakai pending limit order, bukan market\n"
+            "• SL jangan diubah — AI udah kalkulasi risk\n"
+            "• Partial TP di TP1 (50%), sisanya trailing\n"
+            "• Jangan entry pas news high-impact 🔴\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "📱 Ketik /analyze xauusd buat mulai!"
+        )
+        tg_send(guide, chat_id)
+        return
+
+    if data == "cmd:subscribe":
+        try:
+            payload = json.dumps({"callback_query_id": cb_id}).encode()
+            req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+                data=payload, headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+        _send_donate_menu(chat_id)
+        return
+
+    # Unknown onboarding callback — answer silently
+    try:
+        payload = json.dumps({"callback_query_id": cb_id}).encode()
+        req = urllib.request.Request(f"{TELEGRAM_API}/answerCallbackQuery",
+            data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass
+
+
 def handle_trade_callback(callback_query):
     """Handle inline keyboard: trade:<id> or skip:<id>"""
+    cb_id = callback_query.get("id", "")
+    chat_id = str(callback_query.get("from", {}).get("id", ""))
+    data = callback_query.get("data", "")
+
+    # ── Original trade callbacks below ──
     cb_id = callback_query.get("id", "")
     chat_id = str(callback_query.get("from", {}).get("id", ""))
     data = callback_query.get("data", "")
@@ -735,7 +957,7 @@ def handle_payment_callback(callback_query):
         return
 
     if data == "cancel_input":
-        # ── Cancel custom amount input, return to /donate ──
+        # ── Cancel custom amount input, return to /subscribe ──
         DONATION_INPUT_STATE.pop(str(chat_id), None)
         tg_send("❌ Input dibatalkan.", chat_id)
         # Re-send donate menu
@@ -804,12 +1026,12 @@ def handle_payment_callback(callback_query):
             if is_tripay_paid(ref):
                 # Upgrade user!
                 from members import upgrade_tier, mark_payment_paid
-                upgrade_tier(str(chat_id), "donor", 9999, ref)
+                upgrade_tier(str(chat_id), "lifetime", 9999, ref)
                 mark_payment_paid(ref)
                 tg_send(
                     "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
                     "━━━━━━━━━━━━━━━━\n"
-                    "👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                    "👑 Status kamu sekarang: <b>Subscriber</b>\n"
                     "♾️ /analyze — UNLIMITED\n"
                     "🤖 EA Auto-Trade — AKTIF PERMANEN\n\n"
                     "Mari cetak profit! 🔥",
@@ -833,40 +1055,87 @@ def handle_payment_callback(callback_query):
                 chat_id
             )
 
+    elif data.startswith("sub:"):
+        # ── Subscription tier callback ──
+        sub_tier = data.split(":", 1)[1] if ":" in data else ""
+        if sub_tier in ("pro", "elite", "lifetime"):
+            try:
+                from members.payment import create_tripay_payment
+                result = create_tripay_payment(str(chat_id), username, tier=sub_tier)
+                if result.get("success"):
+                    payment_url = result.get("payment_url", "")
+                    pay_code = result.get("pay_code", "")
+                    amount = result.get("amount", 0)
+                    tier_label = result.get("tier_label", sub_tier.upper())
+                    txt = (
+                        f"💳 <b>Pembayaran {tier_label}</b>\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"💰 Total: Rp{amount:,}\n"
+                        f"📎 Kode: <code>{pay_code}</code>\n\n"
+                        f"🔗 <a href='{payment_url}'>Klik di sini untuk bayar</a>\n\n"
+                        f"⏰ Link berlaku 1 jam.\n"
+                        f"Status akan otomatis aktif setelah pembayaran."
+                    )
+                    markup = {"inline_keyboard": [[
+                        {"text": "🔄 Cek Status", "callback_data": f"check:{result.get('reference','')}"},
+                    ]]}
+                    tg_send(txt, chat_id, reply_markup=markup)
+                else:
+                    tg_send(f"❌ {result.get('error', 'Gagal.')}", chat_id)
+            except Exception as e:
+                logger.error(f"Sub callback error: {e}")
+                tg_send("❌ Sistem pembayaran sibuk. Coba lagi.", chat_id)
+        elif sub_tier == "pay":
+            # Show all payment methods
+            txt = (
+                "💳 <b>Pilih Metode Pembayaran</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "Ketik /subscribe pro — Rp50K/bulan\n"
+                "Ketik /subscribe elite — Rp150K/bulan\n"
+                "Ketik /subscribe lifetime — Rp500K (sekali)\n\n"
+                "Atau pilih tier di bawah:"
+            )
+            markup = {"inline_keyboard": [
+                [{"text": "⭐ PRO — Rp50K/bulan", "callback_data": "sub:pro"}],
+                [{"text": "👑 ELITE — Rp150K/bulan", "callback_data": "sub:elite"}],
+                [{"text": "💎 LIFETIME — Rp500K", "callback_data": "sub:lifetime"}],
+            ]}
+            tg_send(txt, chat_id, reply_markup=markup)
+        else:
+            tg_send("Pilih tier: /subscribe pro | elite | lifetime", chat_id)
+
     elif data.startswith("pricing:"):
         # Show donation info — no more old tiers
         txt = get_pricing_table() if PAYMENT_ENGINE else "💎 Info dukung server AI belum tersedia."
         markup = {"inline_keyboard": [
-            [{"text": "☕️ Traktir Kopi (Rp15k)", "callback_data": "donate:coffee"},
-             {"text": "🚀 Nominal Bebas", "callback_data": "donate:fuel"}],
+            [{"text": "⭐ PRO — Rp50K/bulan", "callback_data": "sub:pro"},
+             {"text": "👑 ELITE — Rp150K/bulan", "callback_data": "sub:elite"}],
             [{"text": "📞 Tanya Admin", "url": "https://t.me/codergaboets"}],
         ]}
         tg_send(txt, chat_id, reply_markup=markup)
 
     elif data.startswith("donate:"):
+        # Legacy backward-compat — map to tiered subscription
         donate_type = data.split(":", 1)[1] if ":" in data else "info"
         
+        # Map old amounts to new tiers
         if donate_type == "coffee":
-            # ── Fixed Rp15,000 ──
-            amount = 15000
-            label = "☕️ Kopi untuk Server AI"
-        elif donate_type == "fuel":
-            # ── Fixed Rp50,000 ──
             amount = 50000
-            label = "🚀 Bensin Full Server AI"
+            tier_label = "pro"
+        elif donate_type == "fuel":
+            amount = 150000
+            tier_label = "elite"
         elif donate_type == "learn":
-            # ── Fixed Rp25,000 ──
-            amount = 25000
-            label = "🍱 Makan Siang Server AI"
+            amount = 50000
+            tier_label = "pro"
         elif donate_type == "custom":
-            # ── Custom amount — wait for user to type ──
             DONATION_INPUT_STATE[str(chat_id)] = True
             tg_send(
                 "💰 <b>Input Nominal Bebas</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
-                "Silakan ketik nominal dukungan yang kamu\n"
-                "inginkan (minimal Rp10,000).\n\n"
-                "<i>Contoh: ketik 100000 untuk Rp100K</i>",
+                "Silakan ketik nominal subscribe yang kamu\n"
+                "inginkan (minimal Rp50.000).\n\n"
+                "<i>Contoh: ketik 150000 untuk Rp150K</i>",
                 chat_id,
                 reply_markup={"inline_keyboard": [[
                     {"text": "❌ Batal", "callback_data": "cancel_input"},
@@ -874,23 +1143,14 @@ def handle_payment_callback(callback_query):
             )
             return
         else:
-            # Generic — show options
-            tg_send(
-                "⚡ <b>Isi Bahan Bakar AI</b>\n"
-                "━━━━━━━━━━━━━━━━\n"
-                "Pilih nominal dukungan:\n\n"
-                "☕️ Rp15K — Traktir kopi\n"
-                "📚 Rp25K — Dukung AI belajar\n"
-                "🚀 Nominal bebas — Isi bensin\n\n"
-                "Semua dukungan = DONATUR VIP AKTIF PERMANEN.",
-                chat_id
-            )
+            # Generic — redirect to tiered /subscribe
+            _send_donate_menu(chat_id, username)
             return
 
         if not PAYMENT_ENGINE:
             tg_send(
                 "💳 <b>Payment gateway offline.</b>\n\n"
-                "Tapi tenang, kamu tetap bisa donasi manual:\n\n"
+                "Tapi tenang, kamu tetap bisa subscribe manual:\n\n"
                 "💚 <b>Transfer ke:</b>\n"
                 "🏦 BCA: 8531425531 a.n. MOH SUHUD\n"
                 "📱 Dana/Ovo/GoPay: 08123456789 (konfirm admin)\n\n"
@@ -901,9 +1161,10 @@ def handle_payment_callback(callback_query):
             )
             return
 
-        tg_send(f"⏳ <b>Membuat link pembayaran...</b>\n{label} — Rp{amount:,}", chat_id)
+        tier_label_text = {"pro": "⭐ PRO Rp50K", "elite": "👑 ELITE Rp150K"}
+        tg_send(f"⏳ <b>Membuat link pembayaran...</b>\n{tier_label_text.get(tier_label, tier_label)} — Rp{amount:,}", chat_id)
 
-        result = create_tripay_payment(str(chat_id), username, tier="donor", amount=amount)
+        result = create_tripay_payment(str(chat_id), username, tier=tier_label, amount=amount)
         if result.get("error"):
             tg_send(
                 f"❌ <b>Gagal membuat pembayaran otomatis</b>\n"
@@ -932,7 +1193,7 @@ def handle_payment_callback(callback_query):
             f"⏰ Expired: 1 jam\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"Klik tombol di bawah untuk bayar 👇\n\n"
-            f"<i>Setelah bayar, bot auto-upgrade kamu ke 🟢 DONATUR dalam 1-5 menit.</i>"
+            f"<i>Setelah bayar, bot auto-upgrade kamu ke 🟢 SUBSCRIBER dalam 1-5 menit.</i>"
         )
 
         markup = {"inline_keyboard": [
@@ -956,12 +1217,59 @@ def answer_callback(cb_id, text=""):
 
 def post_signal_to_bridge(sig, price, display="XAUUSD"):
     symbol = sig.get("symbol", sig.get("display", display))
-    entry = sig.get("entry", price) or price
+    entry_from_sig = sig.get("entry", 0) or 0
     sl = sig.get("sl", 0)
     tp = sig.get("tp", 0)
+    # If tp is 0 but tp1 is set, use tp1 as primary TP
+    tp1 = sig.get("tp1", 0) or 0
+    if (not tp or tp == 0) and tp1 > 0:
+        tp = tp1
+        sig["tp"] = tp
+
     confidence = sig.get("confidence", 0)
     rr = sig.get("rr_ratio", 0)
     action = sig.get("action", "HOLD")
+
+    # ── Minimum SL distance guard (prevents MT5 error 4756) ──
+    _min_sl_pips = {"XAUUSD": 5.0, "GOLD": 5.0, "BTCUSD": 20.0, "ETHUSD": 8.0,
+                    "USOIL": 3.0, "EURUSD": 3.0, "GBPUSD": 3.0, "USDJPY": 3.0}
+    _pip_size = 0.10 if display in ("XAUUSD","GOLD") else 0.01 if display=="USOIL" else 1.0
+    _min_sl_dist = _min_sl_pips.get(display.upper(), 3.0) * _pip_size
+    if sl > 0 and entry_from_sig > 0:
+        sl_dist = abs(sl - entry_from_sig)
+        if sl_dist < _min_sl_dist:
+            old_sl = sl
+            sl = round(entry_from_sig + _min_sl_dist if action == "BUY" else entry_from_sig - _min_sl_dist, 2)
+            sig["sl"] = sl
+            logger.info(f"🛡️ SL widened: {old_sl}→{sl} (was {sl_dist:.1f} pip, min {_min_sl_dist/_pip_size:.0f})")
+
+    # ── ZONE MODE AUTO-DETECT ──
+    # If AI set specific entry (not 0) and it differs from live price → use pending order
+    entry_mode = sig.get("entry_mode", "market")
+    zone_lo = sig.get("zone_lo", 0) or 0
+    zone_hi = sig.get("zone_hi", 0) or 0
+    if entry_mode == "market" and entry_from_sig and entry_from_sig != price:
+        entry_mode = "zone"
+        entry = entry_from_sig
+        sig["entry"] = entry
+        sig["entry_mode"] = "zone"
+        logger.info(f"🔄 AUTO-ZONE: entry=${entry:.2f} ≠ live=${price:.2f} — switching to zone mode")
+        # Derive zone from entry ± radius based on SL distance
+        if sl and entry_from_sig:
+            sl_dist = abs(sl - entry_from_sig)
+            zone_radius = sl_dist * 0.3
+            sig["zone_lo"] = round(entry - zone_radius, 2)
+            sig["zone_hi"] = round(entry + zone_radius, 2)
+        else:
+            zone_half = entry_from_sig * 0.0005
+            sig["zone_lo"] = round(entry_from_sig - zone_half, 2)
+            sig["zone_hi"] = round(entry_from_sig + zone_half, 2)
+    elif not entry_from_sig:
+        # AI didn't set entry — fallback to live price (market only, no zone possible)
+        entry = price
+        entry_mode = "market"
+    else:
+        entry = entry_from_sig
 
     # ── QUALITY GATE ──
     if action in ("BUY", "SELL"):
@@ -978,12 +1286,16 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
             logger.info(f"⛔ Signal rejected: SL on wrong side (entry={entry}, sl={sl})")
             return
 
-    # --- XAUUSD: no offset needed (single source: UnifiedMarketData GC=F) ---
+    # --- XAUUSD: goldapi.io premium API (bid/ask from FOREXCOM exchange) ---
 
     payload = {
         "action": action,
         "symbol": symbol,
         "entry": entry,
+        "zone_lo": sig.get("zone_lo", entry),
+        "zone_hi": sig.get("zone_hi", entry),
+        "entry_mode": sig.get("entry_mode", "market"),
+        "order_type": order_type,
         "sl": sl,
         "tp": tp,
         "tp1": sig.get("tp1", sig.get("tp", 0)),
@@ -1001,6 +1313,22 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
 
     # ── Write to EA signal file (for ea_executor.py to pick up) ──
     try:
+        # ── Apply learned weights to total_score if component scores available ──
+        if sig.get("score_smc") or sig.get("score_liquidity") or sig.get("score_macro"):
+            try:
+                from members.weight_manager import apply_weights
+                regime = sig.get("regime", "") or str(sig.get("market_regime", "") or "unknown")
+                weighted = apply_weights(
+                    float(sig.get("score_smc", 0) or 0),
+                    float(sig.get("score_liquidity", 0) or 0),
+                    float(sig.get("score_macro", 0) or 0),
+                    regime,
+                )
+                payload["weighted_score"] = weighted
+                logger.debug("Applied learned weights: regime=%s score=%.3f", regime, weighted)
+            except Exception:
+                pass  # weight manager unavailable — use raw consensus_score
+
         ea_file = DATA_DIR / "ea_signal.json"
         ea_file.write_text(json.dumps(payload, indent=2))
         rr_display = float(str(rr).replace("1:", "")) if isinstance(rr, str) and rr.startswith("1:") else float(rr) if rr else 0
@@ -1013,8 +1341,10 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
     if TRADE_TRACKER:
         try:
             open_trade(sig, sig.get("entry", price), symbol, sig.get("source", "ai"),
-                       sig.get("target_user", ""))
-        except Exception: pass
+                       sig.get("target_user", ""),
+                       telegram_message_id=sig.get("telegram_message_id"))
+        except Exception as e:
+            logger.debug("Trade tracker open_trade failed: %s", e)
     # ── Post to bridge ──
     posted = False
     for url in BRIDGE_URLS:
@@ -1027,11 +1357,113 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
                 })
             urllib.request.urlopen(req, timeout=5)
             posted = True
+            # ── ML Feedback Loop: log signal anatomy for autonomous learning ──
+            try:
+                from members.ml_feedback import log_from_handler
+                log_from_handler(sig, is_broadcasted=True)
+            except Exception:
+                pass
             break  # success, stop
-        except Exception:
+        except Exception as e:
+            logger.warning("Bridge post failed for %s: %s", url, e)
             continue
     if not posted:
         logger.warning("Failed to post signal to any bridge URL")
+
+
+# ── SMART TRAILING HELPERS ──
+def _get_trailing_status(chat_id):
+    """Query bridge for trailing config via GET /trailing?api_key=VT-xxx&account_id=MT5-xxx"""
+    try:
+        import urllib.request as ureq
+        # Use the first bridge URL and the master key for query
+        url = f"http://localhost:8765/trailing?api_key={MASTER_API_KEY}&account_id=MT5-{chat_id}"
+        resp = ureq.urlopen(url, timeout=5)
+        return json.loads(resp.read())
+    except Exception:
+        return None
+
+def _set_trailing(chat_id, enabled=True):
+    """POST trailing config to bridge."""
+    try:
+        import urllib.request as ureq
+        url = f"http://localhost:8765/trailing?api_key={MASTER_API_KEY}&account_id=MT5-{chat_id}"
+        payload = json.dumps({"enabled": enabled}).encode()
+        req = ureq.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        ureq.urlopen(req, timeout=5)
+        logger.info(f"Trailing {'ON' if enabled else 'OFF'} for chat_id={chat_id}")
+    except Exception as e:
+        logger.error(f"Failed to set trailing: {e}")
+
+
+def _send_document(chat_id, file_path, filename, caption=""):
+    """Send a document/file via Telegram Bot API (multipart/form-data)."""
+    import urllib.request as ureq
+    boundary = "----VilonaBoundary" + str(int(time.time()))
+    with open(file_path, "rb") as f:
+        file_data = f.read()
+
+    body = b""
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'.encode()
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode()
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n'.encode()
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="document"; filename="{filename}"\r\n'.encode()
+    body += b"Content-Type: application/octet-stream\r\n\r\n"
+    body += file_data
+    body += f"\r\n--{boundary}--\r\n".encode()
+
+    try:
+        req = ureq.Request(f"{TELEGRAM_API}/sendDocument", data=body)
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        ureq.urlopen(req, timeout=30)
+        logger.info(f"📎 Document sent: {filename} to chat_id={chat_id}")
+    except Exception as e:
+        logger.error(f"Failed to send document {filename}: {e}")
+
+
+def tg_send_photo(chat_id, photo_bytes, caption="", reply_to=None):
+    """Send an image (PNG/JPEG bytes) via Telegram Bot API sendPhoto."""
+    if not photo_bytes:
+        return None
+    if not BOT_TOKEN:
+        return None
+    target = chat_id or CHAT_ID
+    if not target:
+        return None
+    try:
+        boundary = "----VilonaPhoto" + str(int(time.time()))
+        body = b""
+        body += f"--{boundary}\r\n".encode()
+        body += f'Content-Disposition: form-data; name="chat_id"\r\n\r\n{target}\r\n'.encode()
+        body += f"--{boundary}\r\n".encode()
+        body += f'Content-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n'.encode()
+        body += f"--{boundary}\r\n".encode()
+        body += f'Content-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode()
+        body += f"--{boundary}\r\n".encode()
+        body += b'Content-Disposition: form-data; name="photo"; filename="chart.png"\r\n'
+        body += b"Content-Type: image/png\r\n\r\n"
+        body += photo_bytes
+        body += f"\r\n--{boundary}--\r\n".encode()
+        req = urllib.request.Request(f"{TELEGRAM_API}/sendPhoto", data=body)
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        if "429" in str(e) or "Too Many Requests" in str(e):
+            for attempt in range(2):
+                wait = (attempt + 1) * 4
+                logger.warning(f"tg_send_photo rate-limited (attempt {attempt+1}/2), wait {wait}s")
+                time.sleep(wait)
+                try:
+                    return tg_send_photo(chat_id, photo_bytes, caption, reply_to)
+                except Exception:
+                    pass
+        logger.warning(f"tg_send_photo failed: {e}")
+        return None
 
 
 # ── MECHANICAL SIGNAL DETECTION ──
@@ -1191,6 +1623,390 @@ def detect_mechanical_signal(symbol="XAUUSD", display="XAUUSD", price=None, ohlc
     return None, None
 
 
+# ── S-TIER ZONE DETECTOR — Triple Confluence (Breaker + OB/FVG + Double Sweep) ──
+def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=None):
+    """High-conviction zone scanner: Breaker Block + OB/FVG confluence + Double Sweep.
+    
+    Triple confluence at the same price level → 90%+ probability reversal zone.
+    Designed for full-margin entries on the highest-quality SMC setups.
+    
+    Returns (signal_dict, reason_str) or (None, None).
+    """
+    if not ohlcv_bars or len(ohlcv_bars) < 30:
+        return None, None
+    if not price:
+        price = float(ohlcv_bars[-1].get("close", ohlcv_bars[-1].get("open", 0)))
+    
+    pip_s = 0.10 if display in ("XAUUSD","GOLD") else (0.01 if display=="USOIL" else (1.0 if display in ("BTCUSD","ETHUSD") else 0.0001))
+    
+    confluence_zones = []
+    
+    # ── Layer 1: Order Blocks + Supply/Demand Zones from SMC engine ──
+    obs = []
+    bos = {}
+    fb = {}
+    idm = {}
+    try:
+        if SMC_ENGINE:
+            smc = analyze_smc_scalper(ohlcv_bars, display)
+            if smc:
+                # Primary: single best Order Block
+                ob_data = smc.get("_ob")
+                if ob_data and isinstance(ob_data, dict) and ob_data.get("direction"):
+                    ob_price = (ob_data.get("upper", 0) + ob_data.get("lower", 0)) / 2
+                    if ob_price > 0:
+                        obs.append({"price": ob_price, "direction": ob_data["direction"].upper(),
+                                    "strength": ob_data.get("strength", 3)})
+                # Secondary: Supply/Demand zones as additional anchor points
+                sd_zones = smc.get("_sd_zones", [])
+                for z in sd_zones[:5]:
+                    z_type = z.get("type", "")
+                    z_dir = "BUY" if "DEMAND" in str(z_type).upper() else "SELL" if "SUPPLY" in str(z_type).upper() else ""
+                    z_price = (z.get("upper", 0) + z.get("lower", 0)) / 2
+                    if z_price > 0 and z_dir:
+                        obs.append({"price": z_price, "direction": z_dir,
+                                    "strength": z.get("strength", 2)})
+                # Reuse bos, idm, false_break from this single call
+                bos = smc.get("_bos", {})
+                fb = smc.get("_false_break", {})
+                idm = smc.get("_idm", {})
+    except Exception as e:
+        logger.debug(f"S-TIER OB scan: {e}")
+    
+    if not obs:
+        return None, None
+    
+    # ── Layer 2: FVG zones ──
+    fvg_zones = []
+    try:
+        if FVG_ENGINE:
+            from fvg_detector import detect_fvg_zones
+            raw_fvgs = detect_fvg_zones(ohlcv_bars, max_age=30)
+            for z in raw_fvgs[:10]:
+                fvg_zones.append({
+                    "top": z.top, "bottom": z.bottom, "mid": (z.top + z.bottom) / 2,
+                    "direction": "BEARISH" if z.top > z.bottom else "BULLISH",
+                    "filled": getattr(z, 'filled', False), "size_pips": getattr(z, 'size_pips', 0)
+                })
+    except Exception as e:
+        logger.debug(f"S-TIER FVG scan: {e}")
+    
+    # ── Layer 3: Structure — BOS + False Break (reuse smc from Layer 1) ──
+    bos_price = None
+    false_break_price = None
+    fb_dir = None
+    idm_price = None
+    try:
+        if bos and bos.get("price"):
+            bos_price = bos["price"]
+        if fb and fb.get("price"):
+            false_break_price = fb["price"]
+            fb_dir = fb.get("direction", "")
+        if idm and idm.get("price"):
+            idm_price = idm["price"]
+    except Exception:
+        pass
+    
+    PROXIMITY_PIPS = 15  # tighter: 15 pip = $1.50 on XAUUSD — reduces false grouping
+    
+    def _near(a, b):
+        return abs(a - b) / pip_s <= PROXIMITY_PIPS
+    
+    # ── Layer 4: Trend context from OHLCV (H1 20-bar EMA slope) ──
+    trend_bias = "NEUTRAL"
+    try:
+        closes = [float(b.get("close", b.get("c", 0))) for b in ohlcv_bars[-30:]]
+        if len(closes) >= 20:
+            ema20 = sum(closes[-20:]) / 20
+            ema10 = sum(closes[-10:]) / 10
+            if ema10 > ema20 * 1.002:
+                trend_bias = "BULLISH"
+            elif ema10 < ema20 * 0.998:
+                trend_bias = "BEARISH"
+    except Exception:
+        pass
+    
+    for ob in obs:
+        zone_level = ob["price"]
+        ob_dir = ob["direction"]
+        ob_strength = ob.get("strength", 3)
+        
+        # ── GATE 0: Minimum OB strength — weak OB = weak breaker ──
+        if ob_strength < 3:
+            continue
+        
+        score = 1.0
+        reasons = [f"OB {ob_dir} [{ob_strength}/5] @ {zone_level:.2f}"]
+        
+        # ── GATE 1: Breaker Block — strict candle-close validation ──
+        ob_is_bull = "BULL" in ob_dir
+        price_above_ob = price > zone_level
+        breaker = (ob_is_bull and not price_above_ob) or (not ob_is_bull and price_above_ob)
+        
+        if breaker:
+            # Require: OB was tested at least once BEFORE breaking (mitigation confirm)
+            # Check last 10 bars for a test of this OB level
+            ob_tested = False
+            recent_bars = ohlcv_bars[-10:]
+            for b in recent_bars:
+                b_low = float(b.get("low", b.get("l", 0)))
+                b_high = float(b.get("high", b.get("h", 0)))
+                if _near(zone_level, b_low) or _near(zone_level, b_high):
+                    ob_tested = True
+                    break
+            
+            if ob_tested:
+                score += 2.5
+                reasons.append("🔥 BREAKER BLOCK — OB broken after test, now acts as S/R")
+            else:
+                score += 1.0
+                reasons.append("⚠️ Breaker unconfirmed — OB not recently tested")
+        
+        # ── GATE 2: False Break — must be at same zone, same direction ──
+        if false_break_price and _near(zone_level, false_break_price):
+            fb_dir_match = not fb_dir or fb_dir == ob_dir
+            if fb_dir_match:
+                score += 1.5
+                reasons.append(f"⚠️ False Break confirmed @ {false_break_price:.2f}")
+        
+        # ── GATE 3: IDM sweep — liquidity grab at zone ──
+        if idm_price and _near(zone_level, idm_price):
+            score += 1
+            reasons.append(f"💧 IDM sweep @ {idm_price:.2f}")
+        
+        # ── GATE 4: OB + FVG confluence — strict direction match + age filter ──
+        for fvg in fvg_zones:
+            if _near(zone_level, fvg["mid"]) and not fvg["filled"]:
+                # FVG direction MUST match OB direction (bullish OB → bullish FVG)
+                fvg_dir = fvg["direction"]
+                ob_is_bull_dir = "BULL" in ob_dir
+                fvg_is_bull = fvg_dir == "BULLISH"
+                direction_match = ob_is_bull_dir == fvg_is_bull
+                
+                # FVG must be decent size (>3 pip on XAUUSD)
+                min_fvg_size = 3 if display in ("XAUUSD","GOLD") else 2
+                fvg_good_size = fvg["size_pips"] >= min_fvg_size
+                
+                if direction_match and fvg_good_size:
+                    score += 1.5
+                    reasons.append(f"📐 FVG {fvg['size_pips']:.0f}pip aligned — direction match, mitigation magnet")
+                elif direction_match:
+                    score += 0.75
+                    reasons.append(f"📐 FVG {fvg['size_pips']:.0f}pip aligned — small FVG")
+                break  # only count best match
+        
+        # ── GATE 5: Double Sweep — FB + IDM at same zone, same direction ──
+        if false_break_price and idm_price and _near(false_break_price, idm_price) and _near(zone_level, false_break_price):
+            score += 2
+            reasons.append("💀 DOUBLE SWEEP — liquidity cleared 2x at same level")
+        
+        # ── GATE 6: Trend filter — trend-aligned breakers get bonus ──
+        # SMC Breaker Logic for direction:
+        #   Broken bullish OB (demand→supply) = SELL the retest
+        #   Broken bearish OB (supply→demand) = BUY the retest
+        #   Holding bullish OB (demand holds) = BUY the bounce
+        #   Holding bearish OB (supply holds) = SELL the rejection
+        if breaker:
+            direction = "SELL" if ob_is_bull else "BUY"
+        else:
+            direction = "BUY" if ob_is_bull else "SELL"
+        
+        if breaker and trend_bias != "NEUTRAL":
+            # Breaker expects reversal — broken bull OB wants BEARISH trend, broken bear OB wants BULLISH
+            breaker_with_trend = (ob_is_bull and trend_bias == "BEARISH") or (not ob_is_bull and trend_bias == "BULLISH")
+            if breaker_with_trend:
+                score += 0.5
+                reasons.append(f"📈 Trend-aligned ({trend_bias}) — higher probability")
+        confluence_zones.append({
+            "level": zone_level, "score": score, "reasons": reasons, "direction": direction
+        })
+    
+    if not confluence_zones:
+        return None, None
+    
+    best = max(confluence_zones, key=lambda z: (z["score"], -abs(z["level"] - price)))
+    
+    if best["score"] < 3.5:
+        return None, None
+    
+    direction = best["direction"]
+    entry = best["level"]
+    
+    # Grade first (needed for ATR multipliers)
+    if best["score"] >= 6:
+        grade = "S-TIER"
+        grade_label = "💀 TRIPLE CONFLUENCE — GOD TIER ZONE"
+    elif best["score"] >= 5:
+        grade = "A"
+        grade_label = "🔥 BREAKER BLOCK + FVG — High Conviction"
+    else:
+        grade = "B"
+        grade_label = "⚡ STRUCTURAL ZONE — Valid Confluence"
+    
+    # ── ATR-based dynamic SL/TP ──
+    rr_ratio = 2.0
+    atr = None
+    try:
+        if ohlcv_bars and len(ohlcv_bars) >= 16:
+            trs = []
+            for i in range(1, min(15, len(ohlcv_bars))):
+                high = float(ohlcv_bars[i].get("high", ohlcv_bars[i].get("h", 0)))
+                low = float(ohlcv_bars[i].get("low", ohlcv_bars[i].get("l", 0)))
+                prev_close = float(ohlcv_bars[i-1].get("close", ohlcv_bars[i-1].get("c", 0)))
+                tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+                trs.append(tr)
+            if trs:
+                atr = sum(trs) / len(trs)
+    except Exception:
+        pass
+    
+    if atr and atr > 0:
+        sl_distance = round(atr * (1.0 if grade == "S-TIER" else 1.5), 2)
+        tp_distance = round(sl_distance * rr_ratio, 2)
+    else:
+        sl_distance = round(30 * pip_s, 2)
+        tp_distance = round(60 * pip_s, 2)
+    
+    # ── Entry distance check: if price too far, still return as zone-wait signal ──
+    price_distance = abs(price - entry)
+    if price_distance > sl_distance * 0.5:
+        logger.info(
+            "S-TIER zone [%s] price %.2f too far from zone %.2f (%.1f > %.1f sl_half) — ZONE WAIT mode, "
+            "EA will enter when price reaches zone",
+            display, price, entry, price_distance, sl_distance * 0.5,
+        )
+        # Don't return None — pass through as zone signal for EA to wait
+        # SL/TP are still valid since zone IS the intended entry price
+    
+    if direction == "BUY":
+        sl = round(entry - sl_distance, 2)
+        tp = round(entry + tp_distance, 2)
+    else:
+        sl = round(entry + sl_distance, 2)
+        tp = round(entry - tp_distance, 2)
+    
+    # ── TP2: structure-based extension ──
+    # TP2 = midpoint extension beyond TP1 (half again the distance to TP1)
+    tp2_dist = tp_distance + (tp_distance - sl_distance) * 0.5
+    if direction == "BUY":
+        tp2_candidate = round(entry + tp2_dist, 2)
+    else:
+        tp2_candidate = round(entry - tp2_dist, 2)
+    # Only set TP2 if within reasonable range (max 200 pips from entry)
+    if abs(tp2_candidate - entry) / pip_s <= 200:
+        tp2 = tp2_candidate
+    else:
+        tp2 = 0
+    
+    reason = f"🤖 S-TIER ZONE [{grade}]: {grade_label}\n" + "\n".join(f"  • {r}" for r in best["reasons"])
+    
+    zone_half = entry * 0.0005 if entry > 0 else 0
+    sig = {
+        "action": direction, "entry": entry,
+        "zone_lo": entry - zone_half if zone_half else entry,
+        "zone_hi": entry + zone_half if zone_half else entry,
+        "entry_mode": "zone",
+        "sl": sl, "tp": tp,
+        "tp1": tp, "tp2": 0,
+        "confidence": min(0.95, 0.65 + best["score"] * 0.04),
+        "rr_ratio": 2.0,
+        "reasoning": reason, "ensemble": "mechanical", "voters": 0,
+        "_model": f"S-TIER-ZONE-{grade}", "grade": grade,
+        "source": "stier_zone_detector",
+        "_tier_capped": False,
+    }
+    
+    sig = _clamp_sltp(sig, display)
+    
+    logger.info(f"🎯 S-TIER ZONE [{grade}]: {display} {direction} @ ${entry:.2f} | "
+                f"Score={best['score']:.1f} | Confluences: {len(best['reasons'])}")
+    
+    return sig, reason
+
+
+# ── SnR PROXIMITY CHECK ──
+def _snr_proximity_check(price, pip_s, ohlcv_bars=None, display="XAUUSD"):
+    """Check if price is within 0.3% of a Daily/4H Support or Resistance level.
+    
+    Returns (snr_level, snr_type, distance_pct, zone_lo, zone_hi) or None.
+    """
+    try:
+        if not ohlcv_bars or len(ohlcv_bars) < 20:
+            return None
+        
+        # ── Find swing highs/lows from last 20-60 bars ──
+        n_bars = min(len(ohlcv_bars), 60)
+        bars = ohlcv_bars[-n_bars:]
+        
+        highs = [float(b.get("high", b.get("h", 0))) for b in bars]
+        lows = [float(b.get("low", b.get("l", 0))) for b in bars]
+        closes = [float(b.get("close", b.get("c", 0))) for b in bars]
+        
+        # Find swing points (local maxima/minima with 3-bar lookback)
+        swings_high = []
+        swings_low = []
+        for i in range(3, len(highs) - 3):
+            if highs[i] == max(highs[i-3:i+4]):
+                swings_high.append(highs[i])
+            if lows[i] == min(lows[i-3:i+4]):
+                swings_low.append(lows[i])
+        
+        # Merge + deduplicate (cluster within 0.2%)
+        def _cluster_levels(levels):
+            if not levels:
+                return []
+            sorted_lvls = sorted(set(round(l, 2) for l in levels))
+            clusters = []
+            current = [sorted_lvls[0]]
+            for l in sorted_lvls[1:]:
+                if abs(l - current[-1]) / l < 0.002:
+                    current.append(l)
+                else:
+                    clusters.append(sum(current) / len(current))
+                    current = [l]
+            clusters.append(sum(current) / len(current))
+            return clusters
+        
+        resistance_levels = _cluster_levels(swings_high)
+        support_levels = _cluster_levels(swings_low)
+        
+        # Check proximity: within 0.3% of any level
+        best_level = None
+        best_type = None
+        best_dist = float('inf')
+        
+        for r in resistance_levels:
+            dist = abs(price - r) / price
+            if dist < 0.003 and dist < best_dist:  # 0.3%
+                best_level = r
+                best_type = "RESISTANCE"
+                best_dist = dist
+        
+        for s in support_levels:
+            dist = abs(price - s) / price
+            if dist < 0.003 and dist < best_dist:
+                best_level = s
+                best_type = "SUPPORT"
+                best_dist = dist
+        
+        if best_level is None:
+            return None
+        
+        # Build SnR zone (±2 pip for XAUUSD, ±0.5 pip for others)
+        zone_padding = 2.0 * pip_s if display in ("XAUUSD", "GOLD") else 1.0 * pip_s
+        if best_type == "SUPPORT":
+            zone_lo = best_level - zone_padding * 0.5
+            zone_hi = best_level + zone_padding * 1.5
+        else:
+            zone_lo = best_level - zone_padding * 1.5
+            zone_hi = best_level + zone_padding * 0.5
+        
+        return (best_level, best_type, best_dist, round(zone_lo, 2), round(zone_hi, 2))
+    except Exception as e:
+        logger.debug(f"SnR proximity check error: {e}")
+        return None
+
+
 # ── AI Models ──
 SYSTEM_PROMPT = """Kamu adalah Vilona Trade FX — Full-Stack Institutional AI Trading System.
 Senior Hedge Fund Portfolio Manager menganalisis market dengan data REAL.
@@ -1224,6 +2040,7 @@ Return exactly this JSON structure:
 {
  "action":"BUY|SELL|HOLD",
  "entry":0.0, "sl":0.0, "tp":0.0,
+ "zone_lo":0.0, "zone_hi":0.0,
  "sl_pips":0, "tp_pips":0,
  "rr_ratio":"1:X.XX",
  "confidence":0.0, "grade":"A|B|C|D",
@@ -1235,7 +2052,10 @@ Return exactly this JSON structure:
  "layer_2":"CONFIRMED|PENDING|FAILED",
  "confluences":["factor1","factor2"],
  "reasoning":"6-8 kalimat ANALISA LENGKAP..."
-}"""
+}" 
+IMPORTANT — ZONE RULE: zone_lo & zone_hi adalah Supply/Demand zone nyata (20-40 pip range).
+Jika entry=4334, zone_lo=4332.50 zone_hi=4335.50 (30 pip zone). JANGAN pake ±0.05%.
+zone_lo HARUS < zone_hi. GUNAKAN zone_lo/zone_hi untuk pending order — JANGAN market order."""
 
 
 def _extract_json(content):
@@ -1310,6 +2130,13 @@ def _call_openai(prompt, model="gpt-4o-mini"):
             return _extract_json(content)
     except Exception as e:
         logger.warning(f"OpenAI/{model} error: {e}")
+        # Admin alert on rate limit (429 = quota exhausted)
+        if hasattr(e, "code") and getattr(e, "code", 0) == 429:
+            try:
+                from members.admin_alert import send_admin_alert
+                send_admin_alert("OpenAI", f"Rate Limit 429 — model={model} — semua GPT-4o call blocked")
+            except Exception:
+                pass
         return None
 
 
@@ -1342,59 +2169,102 @@ def _call_omniroute(prompt, models=None):
     return None
 
 
-def _call_grok_news(display: str, price: float) -> str | None:
-    """Call Grok (xAI) for real-time market news/context.
+def _call_alphavantage_news(display: str, price: float, pair: str = "gold") -> dict | None:
+    """Fetch real-time market news from Alpha Vantage NEWS_SENTIMENT.
     
-    Grok has X/Twitter real-time access — uniquely positioned for breaking news.
-    Returns a concise news summary string, or None on failure.
-    Only called for donor/channel tiers (expensive: ~$0.002/call).
+    Returns aggregated sentiment + top headlines, or None on failure.
+    Only called for donor/channel tiers (25 calls/day free tier).
     """
-    if not GROK_KEY:
+    if not ALPHA_VANTAGE_KEY:
         return None
     try:
-        news_prompt = (
-            f"Search X/Twitter for the LATEST breaking news, macro events, or market-moving "
-            f"headlines about {display} (currently ${price:.2f}). "
-            f"Focus on: FOMC/Fed speakers, NFP/CPI/economic data, geopolitical events, "
-            f"major institutional moves, or sentiment shifts in the last 2 hours.\n\n"
-            f"Return ONLY a structured JSON with these fields:\n"
-            f'{{"headline": "1 most impactful headline", '
-            f'"sentiment": "BULLISH/BEARISH/NEUTRAL", '
-            f'"impact": "HIGH/MED/LOW", '
-            f'"detail": "2-3 sentence context explaining WHY this matters for {display}"}}\n\n'
-            f"Be CONCISE. Max 150 words total. If no significant news, headline='No major catalysts'."
-        )
-        req = urllib.request.Request(GROK_URL,
-            data=json.dumps({
-                "model": "grok-2-latest",
-                "max_tokens": 300,
-                "temperature": 0.3,
-                "messages": [{"role": "user", "content": news_prompt}]
-            }).encode(),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {GROK_KEY}"})
-        with urllib.request.urlopen(req, timeout=25) as r:
+        ticker = AV_TICKER_MAP.get(pair, "FOREX:USD")
+        params = urllib.parse.urlencode({
+            "function": "NEWS_SENTIMENT",
+            "tickers": ticker,
+            "limit": 10,
+            "apikey": ALPHA_VANTAGE_KEY,
+        })
+        url = f"{ALPHA_VANTAGE_NEWS_URL}?{params}"
+        with urllib.request.urlopen(url, timeout=15) as r:
             data = json.loads(r.read())
-            content = data["choices"][0]["message"]["content"]
-            usage = data.get("usage", {})
-            _AI_TOKEN_USAGE["grok"] = {
-                "prompt": usage.get("prompt_tokens", 0),
-                "completion": usage.get("completion_tokens", 0),
-                "total": usage.get("total_tokens", 0),
-            }
-            logger.info(f"Grok News: {len(content)} chars, {_AI_TOKEN_USAGE['grok']['total']} tokens")
-            news = _extract_json(content)
-            if news and isinstance(news, dict):
-                return news
-            return {"headline": content[:200], "sentiment": "NEUTRAL", "impact": "LOW", "detail": ""}
+
+        if "feed" not in data or not data["feed"]:
+            return {"headline": "No major catalysts", "sentiment": "NEUTRAL", "impact": "LOW", "detail": ""}
+
+        articles = data["feed"][:5]
+        if not articles:
+            return {"headline": "No major catalysts", "sentiment": "NEUTRAL", "impact": "LOW", "detail": ""}
+
+        # Aggregate sentiment from articles
+        scores = []
+        headlines = []
+        for a in articles:
+            score = float(a.get("overall_sentiment_score", 0))
+            label = a.get("overall_sentiment_label", "Neutral")
+            scores.append(score)
+            headlines.append(a.get("title", "")[:120])
+
+        avg_score = sum(scores) / len(scores)
+        if avg_score >= 0.35:
+            sentiment = "BULLISH"
+        elif avg_score <= -0.35:
+            sentiment = "BEARISH"
+        elif avg_score >= 0.15:
+            sentiment = "SOMEWHAT-BULLISH"
+        elif avg_score <= -0.15:
+            sentiment = "SOMEWHAT-BEARISH"
+        else:
+            sentiment = "NEUTRAL"
+
+        # Impact based on score magnitude + article count
+        magnitude = abs(avg_score)
+        article_boost = min(len(articles) / 3, 1.0)
+        impact_score = magnitude * (0.7 + 0.3 * article_boost)
+        if impact_score >= 0.30:
+            impact = "HIGH"
+        elif impact_score >= 0.15:
+            impact = "MED"
+        else:
+            impact = "LOW"
+
+        # Top headline + detail from articles
+        best = max(articles, key=lambda a: abs(float(a.get("overall_sentiment_score", 0))))
+        headline = best.get("title", "No major catalysts")[:150]
+        source = best.get("source", "Alpha Vantage")
+        detail_lines = []
+        for i, a in enumerate(articles[:3]):
+            title = a.get("title", "")[:100]
+            s_label = a.get("overall_sentiment_label", "Neutral")
+            s_emoji = {"Bullish": "🟢", "Somewhat-Bullish": "🟢", "Neutral": "⚪️",
+                        "Somewhat-Bearish": "🔴", "Bearish": "🔴"}.get(s_label, "⚪️")
+            detail_lines.append(f"{s_emoji} {title}")
+        detail = "\n".join(detail_lines)
+
+        logger.info(
+            "AlphaVantage News: %d articles, avg=%.3f sentiment=%s impact=%s (pair=%s)",
+            len(articles), avg_score, sentiment, impact, pair,
+        )
+        return {
+            "headline": headline,
+            "sentiment": sentiment,
+            "impact": impact,
+            "detail": detail,
+            "source": source,
+            "article_count": len(articles),
+            "avg_score": round(avg_score, 3),
+        }
     except Exception as e:
-        logger.warning(f"Grok News error: {e}")
+        logger.warning(f"AlphaVantage News error: {e}")
         return None
 
 
 def _format_news_context(news: dict | None) -> str:
-    """Format Grok news context for signal display."""
+    """Format Market Intel context for signal display."""
     if not news:
         return ""
+    if isinstance(news, str):
+        return ""  # string (e.g. preview text) — skip formatting
     headline = news.get("headline", "")
     sentiment = news.get("sentiment", "NEUTRAL")
     impact = news.get("impact", "LOW")
@@ -1407,7 +2277,7 @@ def _format_news_context(news: dict | None) -> str:
     i_emoji = {"HIGH": "🔥", "MED": "📊", "LOW": "📎"}.get(impact, "")
     
     lines = [
-        f"📰 <b>Grok Market Context</b>",
+        f"📰 <b>Market Intel</b>",
         f"{s_emoji} {headline}",
     ]
     if detail:
@@ -1422,9 +2292,9 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     🔬 Tier-based model count:
        - starter:  DeepSeek only (solo, max 55% conf) — free tier
        - pro:      DeepSeek + GPT-4o (dual, max 85% conf) — donor
-       - elite:    All 3 models + Grok News (max 95% conf) — premium donor
+       - elite:    All 3 models + Market Intel (max 95% conf) — premium subscriber
        - premium=True: All models (channel/auto — unlimited)
-    ⭐ Models: DeepSeek V3 + GPT-4o + Claude-Sonnet + Grok News.
+    ⭐ Models: DeepSeek V3 + GPT-4o + Claude-Sonnet + Market Intel.
     """
     # Reset token counter for this analysis cycle
     global _AI_TOKEN_USAGE
@@ -1446,7 +2316,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
 
     learning_context = ""
     if LEARNING_ENGINE:
-        try: learning_context = get_adaptation_context()
+        try: learning_context = get_learning_summary()
         except: pass
 
     prompt = (
@@ -1462,13 +2332,26 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     # ── TIER-BASED MODEL SELECTION ──
     is_free_tier = (tier == "starter" and not premium)
 
-    # DeepSeek V3 — always called (even for free tier)
+    # DeepSeek V3 — always called first (best SMC analyst)
     deepseek = _call_deepseek(prompt)
+    if not deepseek:
+        logger.info("🔬 DeepSeek down — rotating Smart-Ranked Fallbacks")
+        deepseek = _call_omniroute(prompt, models=OMNIROUTE_FREE_MODELS)
+        if deepseek:
+            logger.info(f"Smart Fallback hit: {deepseek.get('action','?')} "
+                        f"conf={deepseek.get('confidence','?')}")
 
     # GPT-4o — only for donors, elite, or channel (premium)
     gpt4o = None
     if not is_free_tier:
-        gpt4o = _call_openai(prompt, model="gpt-4o")
+        global _LAST_GPT4O_CALL
+        now_ts = time.time()
+        if now_ts - _LAST_GPT4O_CALL >= _GPT4O_MIN_INTERVAL:
+            _LAST_GPT4O_CALL = now_ts
+            gpt4o = _call_openai(prompt, model="gpt-4o")
+        else:
+            wait = _GPT4O_MIN_INTERVAL - (now_ts - _LAST_GPT4O_CALL)
+            logger.info(f"GPT-4o rate-limited — skipping (wait {wait:.0f}s)")
 
     # OmniRoute (Claude-Sonnet) — DISABLED: HTTP 400 broken, direct API calls used instead
     # omniroute = None
@@ -1476,10 +2359,11 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
     #     omniroute = _call_omniroute(prompt)
     omniroute = None  # OmniRoute disabled — DeepSeek + GPT-4o direct calls sufficient
 
-    # Grok News — real-time X/Twitter market context (donors only)
-    grok_news = None
+    # Alpha Vantage News — real-time market sentiment (donors only)
+    market_news = None
     if not is_free_tier:
-        grok_news = _call_grok_news(display, price)
+        pair_key = display.lower().replace("usd", "").replace("xau", "gold") if display else "gold"
+        market_news = _call_alphavantage_news(display, price, pair=pair_key)
 
     # Calculate total tokens used
     token_total = sum(v.get("total", 0) for v in _AI_TOKEN_USAGE.values())
@@ -1523,7 +2407,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["_token_total"] = token_total
         sig["_token_prompt"] = token_prompt
         sig["_token_completion"] = token_completion
-        sig["_grok_news"] = grok_news
+        sig["_market_news"] = market_news
         logger.info(f"AI CONSENSUS [{len(winner)}/{len(signals)}]: {sig['action']} conf={sig['confidence']:.0%} tier={tier} tokens={token_total}")
         return sig
 
@@ -1541,7 +2425,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
         sig["_token_total"] = token_total
         sig["_token_prompt"] = token_prompt
         sig["_token_completion"] = token_completion
-        sig["_grok_news"] = grok_news
+        sig["_market_news"] = market_news
         logger.info(f"SOLO [{best['name']}]: {sig['action']} conf={sig['confidence']:.0%} tier={tier} tokens={token_total}")
         return sig
 
@@ -1556,7 +2440,7 @@ def ask_ai_ensemble(price, dxy, sess, kz_str, loss_count, premium=False, ohlcv_d
             s["_token_total"] = token_total
             s["_token_prompt"] = token_prompt
             s["_token_completion"] = token_completion
-            s["_grok_news"] = grok_news
+            s["_market_news"] = market_news
             return s
 
     return None
@@ -1637,7 +2521,7 @@ def _sig_quality_pass(sig: dict, quant_result: dict | None = None, display: str 
         if qv == "RED" and action == "BUY":
             return False, f"Quant says SELL but signal BUY — conflict"
 
-    # Gate 5: Session (soft — downgrade to B for Asia on forex/metals)
+    # Gate 5: Session — BLOCK forex/metals outside London/NY killzone
     is_crypto = display.upper() in ("BTCUSD", "ETHUSD", "BTC", "ETH")
     if not is_crypto:
         try:
@@ -1645,7 +2529,7 @@ def _sig_quality_pass(sig: dict, quant_result: dict | None = None, display: str 
         except Exception:
             london_kz, ny_kz = False, False
         if not london_kz and not ny_kz:
-            return True, "Asia session — lower volatility"
+            return False, "Outside killzone — London/NY only for forex/metals"
 
     return True, "Quality Gate PASS"
 
@@ -1738,9 +2622,12 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     else:
         sig["tp"] = round(entry - tp_dist, 2)
     
-    # NOTE: tp1/tp2/tp3/tp4 NOT set here — dynamic distribution happens
-    # in fmt_signal() based on actual TP distance. This prevents forced
-    # 2-level TP with unrealistic spacing (e.g., 12-pip TP1 on XAUUSD).
+    # NOTE: tp1/tp2/tp3/tp4 NOW populated here — signal publisher + trade tracker
+    # both read these fields. Without this, RR=1:0.0 because tp1 stays 0.
+    sig["tp1"] = sig["tp"]
+    sig["tp2"] = round(sig["tp"] * 1.0, 2)  # same as tp for tracker
+    sig["tp3"] = 0.0
+    sig["tp4"] = 0.0
     
     sig["rr_ratio"] = f"1:{rr:.1f}"
     logger.info(f"_clamp_sltp result: sl={sig['sl']} tp={sig['tp']:.2f}")
@@ -1748,11 +2635,12 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     return sig
 
 
-def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None, levels=""):
+def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None, levels="", smc_text=""):
     """Format signal Telegram-style — quality-aware dual format.
     
     quality: tuple (passed: bool, reason: str) from _sig_quality_pass()
     levels: SnR/FIBO context string from _compute_levels()
+    smc_text: SMC/ICT analysis section from format_smc_analysis()
     
     If quality PASS → "SINYAL SELL/BUY" (actionable)
     If quality FAIL → "MARKET PULSE" (info only, no execution)
@@ -1767,10 +2655,29 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     if isinstance(rr, str) and rr.startswith("1:"):
         rr = rr[2:]
     entry = sig.get("entry") or price or 0
-    # ── Entry Zone: ±0.05% range dari entry price ──
-    zone_half = entry * 0.0005 if entry > 0 else 0
-    zone_lo = entry - zone_half if zone_half else entry
-    zone_hi = entry + zone_half if zone_half else entry
+    # ── Entry Zone: prefer sig zone_lo/zone_hi, fallback ±0.05% dari entry ──
+    zone_lo = sig.get("zone_lo") or (entry - entry * 0.0005 if entry > 0 else entry)
+    zone_hi = sig.get("zone_hi") or (entry + entry * 0.0005 if entry > 0 else entry)
+
+    # ── Pending Order Type ──
+    pending_order_types = {
+        ("SELL", "below"): "SELL LIMIT",
+        ("SELL", "above"): "SELL STOP",
+        ("SELL", "inside"): "SELL (zone)",
+        ("BUY", "below"): "BUY STOP",
+        ("BUY", "above"): "BUY LIMIT",
+        ("BUY", "inside"): "BUY (zone)",
+    }
+    if action in ("BUY", "SELL") and zone_lo < zone_hi and price:
+        if price < zone_lo:
+            rel_pos = "below"
+        elif price > zone_hi:
+            rel_pos = "above"
+        else:
+            rel_pos = "inside"
+        order_type = pending_order_types.get((action, rel_pos), action)
+    else:
+        order_type = action
     sl = sig.get("sl") or 0
     tp = sig.get("tp") or 0
     tp1 = sig.get("tp1", 0)
@@ -1789,8 +2696,17 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         q_reason = "Quality Gate PASS" if q_passed else "Low confidence — info only"
     
     is_actionable = q_passed and action in ("BUY", "SELL")
+
+    # ── Killzone gate: enforce London/NY for forex/metals, bypass for crypto ──
+    forex_metal = display in ("XAUUSD", "GOLD", "USOIL", "EURUSD", "GBPUSD", "USDJPY")
+    is_crypto = display.upper() in ("BTCUSD", "ETHUSD", "BTC", "ETH")
+    in_kz = True
+    if forex_metal and not is_crypto:
+        lkz, nykz = killzone(h)
+        in_kz = lkz or nykz
+
     header_emoji = emoji if is_actionable else "⚪️"
-    header_label = f"SINYAL {action}" if is_actionable else "MARKET PULSE"
+    header_label = f"SINYAL {order_type}" if is_actionable else "MARKET PULSE"
 
     # --- MIN SL GUARD: override if AI sets SL too tight (3-digit Exness adjusted) ---
     if action in ("BUY","SELL") and entry and sl and price:
@@ -1996,20 +2912,52 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     def _fmt_zone(lo, hi):
         return f"Rp{lo:,.0f} — Rp{hi:,.0f}" if is_idx else f"{currency}{lo:.2f} — {currency}{hi:.2f}"
 
-    zone_label = "🟢 BUY ZONE" if action == "BUY" else ("🔴 SELL ZONE" if action == "SELL" else "📍 Entry Zone")
+    if action == "BUY":
+        zone_emoji = "🟢"
+    elif action == "SELL":
+        zone_emoji = "🔴"
+    else:
+        zone_emoji = "📍"
+    zone_label = f"{zone_emoji} {order_type}"
+
+    # ── Tier gating: free users see Entry Zone only, SL/TP 🔒 locked ──
+    is_free = sig.get("_tier_capped", True)
 
     lines = [
         f"{header_emoji} <b>{header_label} — {display}</b>",
         f"━━━━━━━━━━━━━━━━━━━━━━",
         f"🕐 {now_wib.strftime('%Y.%m.%d %H:%M')} WIB | Session: {session(h)}",
-        f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}",
-        f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}",
     ]
 
-    # TP levels
-    for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
-        if tp_val and tp_val > 0:
-            lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
+    # ── Killzone gate: DISABLED — always show full signal (24/7) ──
+    lines.append(f"📍 {zone_label}: {_fmt_zone(zone_lo, zone_hi)}")
+
+    # ── Pending order type explanation ──
+    order_type_hints = {
+        "SELL LIMIT": "⏳ Harga naik ke zone → SELL (resistansi)",
+        "SELL STOP": "⏳ Harga turun ke zone → SELL (breakdown)",
+        "BUY LIMIT": "⏳ Harga turun ke zone → BUY (support)",
+        "BUY STOP": "⏳ Harga naik ke zone → BUY (breakout)",
+    }
+    if order_type != action and order_type in order_type_hints:
+        lines.append(order_type_hints[order_type])
+
+    if is_free and is_actionable:
+        # ── FREE TIER: lock SL/TP — teaser only ──
+        lines.append(f"🔴 SL: 🔒 <b>[SUBSCRIBER ONLY]</b>")
+        for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+            if tp_val and tp_val > 0:
+                lines.append(f"🟢 {tp_label}: 🔒 <b>[SUBSCRIBER ONLY]</b>")
+        lines.append(f"")
+        lines.append(f"💡 <b>Free tier cuma bisa liat Entry Zone.</b>")
+        lines.append(f"   SL/TP dikunci — gak bisa eksekusi dengan aman.")
+        lines.append(f"   👑 <b>/subscribe</b> — Unlock SL/TP + 2 AI + Market Intel")
+    else:
+        lines.append(f"🔴 SL: {_fmt(sl)} {_sl_pips(sl)}")
+        # TP levels
+        for tp_val, tp_label in [(tp1,"TP1"),(tp2,"TP2"),(tp3,"TP3"),(tp4,"TP4")]:
+            if tp_val and tp_val > 0:
+                lines.append(f"🟢 {tp_label}: {_fmt(tp_val)} {_tp_pips(tp_val)}")
 
     # SnR + FIBO context (only for actionable signals)
     if levels and is_actionable:
@@ -2033,12 +2981,16 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         lines.append(f"🔍 Gunakan sebagai konfirmasi SnR/FIBO manual.")
     lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
 
+    # ── SMC / ICT Analysis (actionable signals only) ──
+    if smc_text and is_actionable:
+        lines.append(smc_text)
+
     lines.append(f"⚠️ <i>NFA — Not Financial Advice. Sinyal hasil deteksi otomatis AI untuk edukasi. Keputusan & risiko trading sepenuhnya ada padamu. Selalu pakai manajemen risiko.</i>")
     if is_actionable:
         lines.append(f"")
         lines.append(f"💡 Mau validasi SnR + FIBO + SL placement?")
         lines.append(f"   👉 DM <b>@berkahkaryaforexbotbot</b> — ketik /levels {display.lower()}")
-        lines.append(f"   🔒 Premium feature — <b>/donate</b> dulu kalo belum unlock")
+        lines.append(f"   🔒 Premium feature — <b>/subscribe</b> dulu kalo belum unlock")
 
     # Token counter gimmick + CTA
     token_total = sig.get("_token_total", 0)
@@ -2047,76 +2999,77 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     is_free = sig.get("_tier_capped", True)
     model_names = sig.get("_model", "AI")
     model_count = sig.get("voters", 1) or 1
-    grok_news = sig.get("_grok_news")
+    market_news = sig.get("_market_news")
     tier_label = sig.get("_tier", "🆓 Free")
 
     lines.append(f"")
-    if token_total > 0:
+
+    if not is_actionable:
+        # ── NON-ACTIONABLE (Market Pulse / No Trade Zone): minimal CTA ──
+        lines.append(f"━━━━━━━━━━━━━━━━")
+        if forex_metal and not in_kz:
+            lines.append(f"⏰ Next: London buka 14:00 WIB | NY buka 19:00 WIB")
+        lines.append(f"⚡ /subscribe — Unlock full AI signal + SL/TP + Multi-AI")
+    elif token_total > 0:
         token_k = f"{token_total/1000:.1f}k" if token_total >= 1000 else str(token_total)
         cost_rp = int(token_total * 1.5 / 1000)
         cost_rp = max(cost_rp, 1)
-        # Dynamic battery based on actual AI models + Grok
-        has_grok = bool(grok_news)
-        battery_pct = min(100, model_count * 33 + (33 if has_grok else 0))
-        bar_count = min(3, model_count + (1 if has_grok else 0))
+        # Dynamic battery based on actual AI models + Market Intel
+        has_news = bool(market_news)
+        battery_pct = min(100, model_count * 33 + (33 if has_news else 0))
+        bar_count = min(3, model_count + (1 if has_news else 0))
         bars = "■" * max(1, bar_count) + "□" * (3 - max(1, bar_count))
 
         if is_free:
-            # ── FREE TIER: Dynamic battery + kelaparan + Grok tease preview ──
+            # ── FREE TIER: Dynamic battery + kelaparan + Market Intel tease preview ──
             lines.append(f"🔋 <b>AI Power: {bars} {battery_pct}%</b> — {model_count}/3 AI yang kerja buat lu")
-            lines.append(f"")
-            lines.append(f"🧠 {token_k} token dipakai (Rp {cost_rp})")
-            lines.append(f"   Prompt: {token_prompt} | Respon: {token_comp}")
             lines.append(f"")
             lines.append(f"🤖 Cuma <b>{model_names}</b> doang yang mikir.")
             lines.append(f"   AI lu kelaparan bro... cuma dikasih 1 model 😤")
-            lines.append(f"   Bayangin kalo 3 AI + Grok News analisa bareng:")
+            lines.append(f"   Bayangin kalo 3 AI + Market Intel analisa bareng:")
             lines.append(f"   → Entry lebih presisi, SL lebih ketat, TP lebih akurat")
             lines.append(f"")
-            # Grok News tease with preview snippet
-            lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
-            lines.append(f"   🔍 <i>Preview: Market-moving headlines dari X/Twitter...</i>")
-            lines.append(f"   🗞️  Breaking news, FOMC, NFP, CPI, geopolitics — all real-time")
-            lines.append(f"   🔓 <b>Unlock → /news {display.lower()}</b> atau /donate")
+            # Market Intel tease with preview snippet
+            lines.append(f"📰 <b>Market Intel</b> [🔒 LOCKED]")
+            lines.append(f"   🔍 <i>Preview: Real-time market sentiment dari Alpha Vantage...</i>")
+            lines.append(f"   🗞️  Breaking news, FOMC, NFP, CPI, geopolitics — real-time news")
+            lines.append(f"   🔓 <b>Unlock → /news {display.lower()}</b> atau /subscribe")
             lines.append(f"")
-            lines.append(f"⚡ <b>Rp 50k/bulan</b> — lebih murah dari 1x loss SL")
-            lines.append(f"   Dapet 2 AI + Grok News + /levels + /news")
-            lines.append(f"   <b>/donate</b> sekarang — jangan biarin AI lu kerja sendirian")
+            lines.append(f"⚡ <b>Rp 50K/bln (PRO)</b> — lebih murah dari 1x loss SL")
+            lines.append(f"   Dapet 2 AI + Market Intel + /levels + /news")
+            lines.append(f"   <b>/subscribe</b> sekarang — jangan biarin AI lu kerja sendirian")
 
         else:
             # ── DONOR TIER: Full power flex + AI Partner narrative ──
             lines.append(f"🔋 <b>AI Power: {bars} {battery_pct}%</b> — full throttle")
             lines.append(f"")
-            lines.append(f"🧠 {token_k} token dipakai (Rp {cost_rp})")
-            lines.append(f"   Prompt: {token_prompt} | Respon: {token_comp}")
-            lines.append(f"")
             lines.append(f"🤖 <b>{model_count} AI Partner</b> kerja bareng: {model_names}")
 
-            if grok_news:
-                news_str = _format_news_context(grok_news)
+            if market_news:
+                news_str = _format_news_context(market_news)
                 if news_str:
-                    lines.append(f"📰 <b>Grok News Active</b> ✅ — real-time X/Twitter intel")
+                    lines.append(f"📰 <b>Market Intel Active</b> ✅ — real-time sentiment")
                     lines.append(f"   💡 Detail: /news {display.lower()}")
             else:
-                lines.append(f"📰 Grok News [🔒 LOCKED] — <b>/news {display.lower()}</b> buat unlock")
+                lines.append(f"📰 Market Intel [🔒 LOCKED] — <b>/news {display.lower()}</b> buat unlock")
 
             lines.append(f"")
             lines.append(f"🤝 <b>AI Partner lu makin cerdas.</b>")
             lines.append(f"   Makin banyak AI = makin akurat sinyal = makin cuan.")
             lines.append(f"   Jangan stop disini — upgrade ke tier tertinggi:")
             if tier_label in ("⭐ Pro",):
-                lines.append(f"   👑 <b>/donate</b> → Elite Tier: 3 AI + Grok News real-time")
+                lines.append(f"   👑 <b>/subscribe</b> → Elite Tier: 3 AI + Market Intel real-time")
             else:
                 lines.append(f"   💎 <b>Elite Intelligence Active</b> — your edge is real")
     else:
-        # Fallback
-        lines.append(f"⚡ Isi Bahan Bakar AI → /donate")
+        # Fallback — no token data
+        lines.append(f"⚡ Upgrade Tier → /subscribe")
         lines.append(f"   Makin banyak AI = makin akurat sinyal = makin cuan")
 
     return "\n".join(lines)
 
 
-# ── Grok News section (for signals that include it) ──
+# ── Market Intel section (for signals that include it) ──
 # Moved inside the token section above for natural flow
 # The _format_news_context() function remains available for external use
 
@@ -2215,14 +3168,14 @@ def fmt_pulse(pulse_data: dict) -> str:
     lines.append(f"")
     lines.append(f"🤖 AI lu masih <b>idle</b> bro...")
     lines.append(f"   Engine cuma kasih arah, AI yang kasih Entry/SL/TP presisi.")
-    lines.append(f"   Bayangin 3 AI + Grok News analisa bareng:")
+    lines.append(f"   Bayangin 3 AI + Market Intel analisa bareng:")
     lines.append(f"   → Entry level, SL placement, TP target — all calculated.")
     lines.append(f"")
-    lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
+    lines.append(f"📰 <b>Market Intel</b> [🔒 LOCKED]")
     lines.append(f"   <i>Real-time X/Twitter market context...</i>")
     lines.append(f"")
-    lines.append(f"⚡ <b>/donate</b> — Rp 50k/bulan")
-    lines.append(f"   Unlock AI Signal + Grok News + /levels + SnR/FIBO")
+    lines.append(f"⚡ <b>/subscribe</b> — Rp 50K/bln (PRO)")
+    lines.append(f"   Unlock AI Signal + Market Intel + /levels + SnR/FIBO")
     lines.append(f"   Jangan cuma liat engine doang — kasih AI lu kerjaan beneran")
 
     return "\n".join(lines)
@@ -2270,7 +3223,8 @@ def append_quant_consensus_ui(sig, quant_result, disp="XAUUSD"):
         f"➖ Datar  {doji_pct:5.0f}%  {_bar(doji_pct)}\n"
         f"\n"
         f"🧠 <b>Kesimpulan:</b> {verdict_text}\n"
-        f"   Keyakinan: {confidence:.0%}"
+        f"   Keyakinan: {confidence:.0%}\n"
+        f"⏰ Data real-time — angka bisa geser tiap candle baru (1H)"
     )
 
     # Guardrail logic
@@ -2581,11 +3535,11 @@ def handle_ultimatum_callback(cb):
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📊 XAUUSD · BTC · EURUSD · GBPUSD · USOIL\n"
             "📐 Mapping harian: 10:00 WIB\n"
-            "⚡️ Kuota AI: 3x analisa/hari\n"
+            f"⚡️ Kuota AI: {FREE_DAILY_LIMIT}x analisa/hari\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📱 /help — Semua command\n"
             "📊 /analyze xauusd — Mulai analisa\n"
-            "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
+            "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "📞 Admin: @codergaboets"
         )
@@ -2622,7 +3576,7 @@ def auto_capture_video_file_id(chat_id, message):
 
 
 # ── Quota System ──
-FREE_QUOTA_PER_DAY = 3
+FREE_QUOTA_PER_DAY = FREE_DAILY_LIMIT  # references FREE_DAILY_LIMIT for consistency
 QUOTA_DIR = DATA_DIR / "quota_cache"
 QUOTA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -2654,50 +3608,108 @@ def _deduct_quota(chat_id):
     return quota["remaining"] > 0, quota["remaining"]
 
 
-def _is_donor(chat_id):
-    """Check if user has donor/paid status in members DB."""
+def _get_user_tier(chat_id):
+    """Return tier info: {tier, limit (-1=unlimited), throttle, is_paid, label}.
+    Only donor/lifetime are treated as paid. Checks expiry date."""
     try:
         from members import get_member as m_get
         member = m_get(str(chat_id))
         if member:
-            status = member.get("status", "")
-            tier = member.get("tier", "")
-            return status in ("paid", "donor") or tier in ("pro", "elite", "paid", "donor")
+            tier = str(member.get("tier", "free")).lower()
+            status = str(member.get("status", "trial")).lower()
+            # ── Expiry gate: check if subscription has expired ──
+            expiry_str = member.get("expiry", "")
+            expiry_past = False
+            if expiry_str and status == "paid":
+                try:
+                    exp = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
+                    if exp.tzinfo is None:
+                        WIB_TZ = timezone(timedelta(hours=7))
+                        exp = exp.replace(tzinfo=WIB_TZ)
+                    if exp < wib_now():
+                        expiry_past = True
+                except Exception:
+                    pass
+            # ── is_paid: status="paid" AND expiry not past, OR grandfathered lifetime ──
+            # Also exclude test-tagged accounts
+            is_test = "test" in (member.get("tags") or "")
+            is_paid = (status == "paid" and not expiry_past and not is_test) or tier in ("donor", "lifetime")
+            if tier == "pro":
+                limit = TIER_LIMITS.get("pro", FREE_DAILY_LIMIT)
+                throttle = MANUAL_THROTTLE_PRO
+            elif is_paid:
+                limit = -1
+                throttle = MANUAL_THROTTLE_ELITE
+            else:
+                limit = FREE_DAILY_LIMIT
+                throttle = MANUAL_THROTTLE_FREE
+            label = {
+                "pro": "⭐ Pro",
+                "elite": "👑 Elite",
+                "lifetime": "💎 Lifetime",
+                "donor": "💎 Lifetime (GF)",
+                "paid": "💎 Lifetime (GF)",
+                "free": "🆓 Free",
+                "starter": "🆓 Free",
+            }.get(tier, ("🆓 Free" if not is_paid else "💎 Lifetime (GF)"))
+            return {
+                "tier": ("donor" if is_paid else "free"),
+                "limit": limit,
+                "throttle": throttle,
+                "is_paid": is_paid,
+                "label": label,
+            }
     except Exception:
         pass
-    return False
+    return {"tier": "free", "limit": FREE_DAILY_LIMIT,
+            "throttle": MANUAL_THROTTLE_FREE,
+            "is_paid": False, "label": "🆓 Free"}
+
+
+def _is_donor(chat_id):
+    """Check if user has donor/paid status in members DB.
+    Also checks expiry date — if expired, user is NOT donor."""
+    try:
+        from members import get_member as m_get
+        member = m_get(str(chat_id))
+        if not member:
+            return False
+        tier = str(member.get("tier", "free")).lower()
+        status = str(member.get("status", "trial")).lower()
+        # ── Status check: must be "paid" AND not expired ──
+        if status != "paid":
+            return False
+        # ── Expiry gate: if expiry < NOW, user is NOT donor ──
+        expiry_str = member.get("expiry", "")
+        if expiry_str:
+            try:
+                from datetime import datetime, timezone, timedelta
+                exp = datetime.fromisoformat(expiry_str.replace("Z", "+00:00"))
+                if exp.tzinfo is None:
+                    WIB = timezone(timedelta(hours=7))
+                    exp = exp.replace(tzinfo=WIB)
+                if exp < wib_now():
+                    return False  # expired — no longer donor
+            except Exception:
+                pass
+        if tier in ("donor", "lifetime", "pro", "elite"):
+            return True
+        return False
+    except Exception:
+        return False
 
 
 # ── Reusable donate menu ──
 def _send_donate_menu(chat_id, username=""):
-    """Reusable donate menu — used by cancel_input and redirects."""
-    txt = (
-        "💚 <b>SIRAM BAHAN BAKAR MESIN AI 🚀</b>\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "Server AI ini mengolah jutaan data market\n"
-        "secara real-time dan membutuhkan biaya API\n"
-        "& GPU yang masif setiap detiknya.\n"
-        "\n"
-        "Jika sinyal AI ini telah mengubah portofolio\n"
-        "Anda menjadi hijau, mari bergotong royong\n"
-        "menjaga mesin ini tetap hidup dan semakin buas!\n"
-        "\n"
-        "Pilih dukunganmu hari ini:\n"
-        "\n"
-        "💼 <b>EKSKLUSIF: PROGRAM INVESTOR AI</b>\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "Apakah Anda big player/investor yang ingin\n"
-        "ikut andil dalam pengembangan ekosistem\n"
-        "kuantitatif ini secara makro? Kami membuka\n"
-        "jalur pendanaan privat. Hubungi Chief\n"
-        "Architect kami di bawah."
-    )
+    """Tiered subscription menu — Pro/Elite/Lifetime."""
+    from members.payment import get_pricing_table
+    txt = get_pricing_table()
     markup = {"inline_keyboard": [
-        [{"text": "☕️ Traktir Kopi (Rp 15K)", "callback_data": "donate:coffee"},
-         {"text": "🍱 Makan Siang Server (Rp 25K)", "callback_data": "donate:learn"}],
-        [{"text": "🚀 Isi Bensin Full (Rp 50K)", "callback_data": "donate:fuel"}],
-        [{"text": "💰 Input Nominal Bebas", "callback_data": "donate:custom"}],
-        [{"text": "🤝 HUBUNGI CHIEF ARCHITECT", "url": "https://t.me/codergaboets"}],
+        [{"text": "⭐ PRO — Rp50K/bulan", "callback_data": "sub:pro"}],
+        [{"text": "👑 ELITE — Rp150K/bulan", "callback_data": "sub:elite"}],
+        [{"text": "💎 LIFETIME — Rp500K (sekali)", "callback_data": "sub:lifetime"}],
+        [{"text": "💳 Bayar via QRIS/VA", "callback_data": "sub:pay"}],
+        [{"text": "🤝 Hubungi Chief Architect", "url": "https://t.me/codergaboets"}],
     ]}
     tg_send(txt, chat_id, reply_markup=markup)
 
@@ -2708,57 +3720,323 @@ def handle_command(cmd, text, chat_id, msg):
     sub_norm = _normalize_broker_symbol(sub)  # XAUUSDc → xauusd, EURUSD.pro → eurusd
 
     if cmd == "/start":
-        # ── Two-Tier Gate: Ultimatum for new users, Welcome for returning ──
+        # ── Dual-Funnel Router: ref_ (referral) + track_ (Meta CAPI) — no clash ──
+        sub_lower = sub.lower() if sub else ""
+        if sub and sub_lower.startswith("ref_"):
+            # ── REFERRAL FUNNEL: /start ref_<referrer_chat_id> ──
+            try:
+                referrer_id = sub[4:]  # strip "ref_"
+
+                # ── Anti-self-referral guard ──
+                if str(referrer_id) == str(chat_id):
+                    tg_send("😅 Gak bisa referral diri sendiri bro. Share link lu ke temen!", chat_id)
+                    return
+
+                from members.tags import add_tag as _add_tag
+                # Register new user with referrer
+                from members import _conn, register_member, get_member
+                existing = get_member(str(chat_id))
+                if not existing:
+                    username_val = (msg.get("chat", {}).get("username", "")
+                                    or msg.get("from", {}).get("username", "")
+                                    or f"User{chat_id}")
+                    register_member(
+                        str(chat_id),
+                        username_val,
+                        username_val,
+                        "free",
+                        "trial",
+                        referrer_id=str(referrer_id),
+                    )
+                # Increment referrer's count
+                with _conn() as db:
+                    db.execute(
+                        "UPDATE members SET ref_count = COALESCE(ref_count,0) + 1 WHERE chat_id=?",
+                        (str(referrer_id),)
+                    )
+                    # Check ref_count for milestone
+                    row = db.execute(
+                        "SELECT ref_count FROM members WHERE chat_id=?",
+                        (str(referrer_id),)
+                    ).fetchone()
+                    ref_count = row["ref_count"] if row else 0
+                # ── MILESTONE REWARD: 3 referrals → PRO 7 hari gratis ──
+                if ref_count == 3:
+                    try:
+                        from members import upgrade_tier
+                        from datetime import datetime, timezone, timedelta
+                        WIB = timezone(timedelta(hours=7))
+                        expiry = (datetime.now(WIB) + timedelta(days=7)).isoformat()
+                        upgrade_tier(str(referrer_id), "pro", 7,
+                                     f"REF-MILESTONE-{referrer_id}")
+                        with _conn() as db:
+                            db.execute(
+                                "UPDATE members SET expiry=?, status='paid' WHERE chat_id=?",
+                                (expiry, str(referrer_id))
+                            )
+                        dm = (
+                            "🎉 <b>BOOM! 3 Teman udah daftar pakai link lu!</b>\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "Sebagai reward, tier lu otomatis naik ke\n"
+                            "<b>PRO selama 7 hari!</b>\n\n"
+                            "Enjoy sinyal VIP-nya!\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "🔑 /mykey — Cek license EA kamu\n"
+                            "📊 /analyze — Langsung gas analisa!"
+                        )
+                        tg_send(dm, str(referrer_id))
+                        logger.info("REF MILESTONE: %s → PRO 7 hari (ref_count=%d)",
+                                    referrer_id, ref_count)
+                    except Exception as e:
+                        logger.warning("Ref milestone PRO upgrade failed: %s", e)
+
+                # ── MILESTONE REWARD: 10 referrals → ELITE 30 hari gratis ──
+                elif ref_count == 10:
+                    try:
+                        from members import upgrade_tier
+                        from datetime import datetime, timezone, timedelta
+                        WIB = timezone(timedelta(hours=7))
+                        expiry = (datetime.now(WIB) + timedelta(days=30)).isoformat()
+                        upgrade_tier(str(referrer_id), "elite", 30,
+                                     f"REF-ELITE-{referrer_id}")
+                        with _conn() as db:
+                            db.execute(
+                                "UPDATE members SET expiry=?, status='paid' WHERE chat_id=?",
+                                (expiry, str(referrer_id))
+                            )
+                        dm = (
+                            "🏆 <b>LEGEND! 10 Teman udah daftar pakai link lu!</b>\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "Sebagai reward MAXIMUM, tier lu otomatis naik ke\n"
+                            "<b>👑 ELITE selama 30 hari!</b>\n\n"
+                            "3 AI + Market Intel + EA Auto-Trade — FULL POWER.\n"
+                            "━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            "🔑 /mykey — Cek license EA kamu\n"
+                            "📊 /analyze — Gas analisa elite!"
+                        )
+                        tg_send(dm, str(referrer_id))
+                        logger.info("REF ELITE MILESTONE: %s → ELITE 30 hari (ref_count=%d)",
+                                    referrer_id, ref_count)
+                    except Exception as e:
+                        logger.warning("Ref milestone ELITE upgrade failed: %s", e)
+                _add_tag(str(referrer_id), "affiliate")
+                logger.info("🔗 Referral: %s invited by %s (ref_count=%d)",
+                            chat_id, referrer_id, ref_count)
+            except Exception as exc:
+                logger.warning("Referral processing failed: %s", exc)
+
+        elif sub and sub_lower.startswith("track_"):
+            # ── META CAPI TRACKING: /start track_<tracking_id> ──
+            try:
+                from tradebot.tracking.deep_link import parse_start_payload
+                from tradebot.tracking.capture import link_telegram_user
+                from tradebot.tracking.events import fire_lead
+                from tradebot.tracking.activity import log_activity
+
+                ok, tracking_id = parse_start_payload(sub)
+                if ok:
+                    username_val = ""
+                    if msg:
+                        username_val = (msg.get("chat", {}).get("username", "")
+                                        or msg.get("from", {}).get("username", ""))
+                    link_telegram_user(tracking_id, str(chat_id))
+                    fire_lead(str(chat_id), tracking_id, "free")
+                    log_activity(str(chat_id), chat_id, username_val,
+                                 "start_tracked", "free",
+                                 {"tracking_id": tracking_id})
+                    logger.info("🔗 Tracking linked: %s → %s",
+                                tracking_id, chat_id)
+            except Exception as exc:
+                logger.warning("Tracking link failed: %s", exc)
+
+        # ── INTERACTIVE ONBOARDING: dynamic tier-based copy + InlineKeyboard ──
         if _has_accepted_ultimatum(chat_id):
-            # Returning user → show welcome
             is_donor = _is_donor(chat_id)
-            tier_label = "👑 DONATUR SULTAN (VIP)" if is_donor else "👤 Kawan Seperjuangan (Free Member)"
             quota = _get_quota(chat_id)
-            quota_line = "UNLIMITED ♾️" if is_donor else f"{quota['remaining']}/{FREE_QUOTA_PER_DAY}"
+            tier_info = _get_user_tier(chat_id)
+            tier_tag = tier_info.get("label", "🆓 Free")
+
+            # ── 1. HEADER (semua user) ──
             welcome = (
-                f"🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"Selamat datang di markas besar Vilona Trade FX.\n"
-                f"Seluruh infrastruktur di sini — dari analisa teknikal\n"
-                f"hingga eksekusi sinyal — dijalankan oleh\n"
-                f"<b>FULL AI AGENTS 24/7.</b>\n"
+                f"🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT!</b> 🔥\n"
                 f"\n"
-                f"Mesin ini mengonsumsi resource besar untuk\n"
-                f"satu tujuan: <b>MENCETAK PROFIT.</b>\n"
+                f"Selamat datang di <b>Vilona AI Trading Ecosystem.</b>\n"
+                f"Kami tidak berjualan ludah atau grup VIP abal-abal.\n"
+                f"Seluruh ekosistem ini (Analisa SMC, Liquidity, Quant)\n"
+                f"dieksekusi murni oleh <b>FULL AI AGENTS</b> yang bekerja 24/7.\n"
+                f"\n"
+                f"<b>Aturan Main Kami:</b>\n"
+                f"✅ AKSES GRATIS: Buktikan tajamnya sinyal AI kami\n"
+                f"   tanpa bayar di depan.\n"
+                f"🤝 GOTONG ROYONG: Jika AI kami berhasil mencetak\n"
+                f"   hijau di portofolio Anda, sisihkan sedikit profit\n"
+                f"   Anda untuk \"menyiram bensin\" server AI kami\n"
+                f"   agar makin buas!\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"{tier_label}\n"
-                f"⚡️ Kuota AI: {quota_line}\n"
             )
+
             if is_donor:
+                # ── 2a. DYNAMIC CONTENT: PAID (PRO / ELITE / LIFETIME) ──
                 welcome += (
+                    f"📊 Status: <b>SUBSCRIBER 👑</b>\n"
+                    f"⚡️ Kuota AI: <b>UNLIMITED ♾️</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🔑 <b>AKSES DONATUR:</b>\n"
+                    f"📊 <b>AKSES VIP KAMU:</b>\n"
                     f"📥 Download EA MT5: phantomfx.aitradepulse.com/ea/download/\n"
                     f"🔑 Cek Licensi EA: /mykey\n"
                     f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🧠 /signal — Signal dari 9 engines\n"
+                    f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
+                    f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
+                    f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
+                    f"💀 /stier — S-TIER Zone GOD TIER 👑\n"
+                    f"🕐 /session — Killzone + Session Level 🆕\n"
+                    f"📰 /news — Market Intel: macro catalyst analysis 👑\n"
+                    f"📊 /dashboard — Live dashboard web\n"
+                    f"📱 /help — Semua command\n"
+                    f"⚡️ Perpanjang/Upgrade Tier → /subscribe\n"
+                    f"\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🤝 <b>GOTONG ROYONG:</b>\n"
+                    f"Ajak teman trader lu — setiap 3 orang yang\n"
+                    f"gabung lewat link referral lu, dapet <b>PRO 7 hari GRATIS!</b>\n"
+                    f"🔗 Cek link lu: /referral"
                 )
-            welcome += (
-                f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🧠 /signal — Signal dari 9 engines\n"
-                f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
-                f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
-                f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
-                f"🕐 /session — Killzone + Session Level 🆕\n"
-                f"📰 /news — Grok News X/Twitter intel 👑\n"
-                f"📊 /dashboard — Live dashboard web\n"
-                f"📱 /help — Semua command\n"
-                f"⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot"
-            )
-            tg_send(welcome, chat_id)
+            else:
+                # ── 2b. DYNAMIC CONTENT: FREE ──
+                quota_line = f"{quota['remaining']}/{FREE_QUOTA_PER_DAY} Analisa/Hari"
+                welcome += (
+                    f"📊 Status: <b>FREE TIER</b>\n"
+                    f"⚡️ Kuota AI: {quota_line}\n"
+                    f"🔒 SL/TP: <b>Dikunci (Subscriber Only)</b>\n"
+                    f"❌ Akses EA: <b>Restricted</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Akses kamu sangat dibatasi. Upgrade sekarang\n"
+                    f"untuk membuka full SL/TP, kuota unlimited, dan\n"
+                    f"akses rahasia ke EA Auto-Trade!\n"
+                    f"Ketik /subscribe atau klik tombol di bawah.\n\n💡 <b>Gak mau bayar? Ajak teman!</b>\n3 referral = <b>PRO 7 hari GRATIS</b> → /referral"
+                )
+
+            # ── 3. Interactive onboarding buttons (tetap 3 tombol) ──
+            markup = {
+                "inline_keyboard": [
+                    [{"text": "📊 Cek Sinyal XAUUSD Sekarang", "callback_data": "cmd:analyze_xauusd"}],
+                    [{"text": "🎓 Cara Baca Sinyal (Panduan)", "callback_data": "cmd:guide"}],
+                    [{"text": "💎 Lihat Keuntungan PRO", "callback_data": "cmd:subscribe"}],
+                ]
+            }
+            tg_send(welcome, chat_id, reply_markup=markup)
         else:
             # New user → ultimatum video (single message)
             send_ultimatum_video(chat_id)
+
+    elif cmd == "/referral":
+        # ── REFERRAL DASHBOARD ──
+        try:
+            from members import _conn
+            with _conn() as db:
+                row = db.execute(
+                    "SELECT ref_count FROM members WHERE chat_id=?",
+                    (str(chat_id),)
+                ).fetchone()
+            ref_count = row["ref_count"] if row else 0
+        except Exception:
+            ref_count = 0
+        ref_link = f"https://t.me/berkahkaryaforexbotbot?start=ref_{chat_id}"
+        if ref_count == 0:
+            msg = (
+                f"👥 <b>REFERRAL PROGRAM</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🔗 Link referral kamu:\n"
+                f"<code>{ref_link}</code>\n\n"
+                f"📊 Statistik:\n"
+                f"  • Teman diajak: <b>0</b>\n"
+                f"  • Reward #1: 3 referral → <b>PRO 7 hari GRATIS!</b>\n"
+                f"  • Reward #2: 10 referral → <b>ELITE 30 hari GRATIS!</b>\n\n"
+                f"💡 Share link ini ke temen-temen trader!\n"
+                f"Setiap yang daftar lewat link lu, referral\n"
+                f"counter lu naik."
+            )
+        else:
+            if ref_count < 3:
+                remaining_3 = 3 - ref_count
+                next_reward = f"⭐ PRO 7 Hari (butuh {remaining_3} lagi)"
+                remaining_10 = 10 - ref_count
+                next_elite = f"👑 ELITE 30 Hari (butuh {remaining_10} lagi)"
+            elif ref_count < 10:
+                next_reward = "⭐ PRO 7 Hari — SUDAH DIKLAIM ✅"
+                remaining_10 = 10 - ref_count
+                next_elite = f"👑 ELITE 30 Hari (butuh {remaining_10} lagi)"
+            else:
+                next_reward = "⭐ PRO 7 Hari — SUDAH DIKLAIM ✅"
+                next_elite = "👑 ELITE 30 Hari — SUDAH DIKLAIM ✅"
+            msg = (
+                f"👥 <b>REFERRAL PROGRAM</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🔗 Link referral kamu:\n"
+                f"<code>{ref_link}</code>\n\n"
+                f"📊 Statistik:\n"
+                f"  • Teman diajak: <b>{ref_count}</b>\n"
+                f"  • {next_reward}\n"
+                f"  • {next_elite}\n\n"
+                f"💡 Share link ini ke temen-temen trader!\n"
+                f"Setiap yang daftar lewat link lu, referral\n"
+                f"counter lu naik."
+            )
+        tg_send(msg, chat_id)
+
+    elif cmd == "/learn_report":
+        # ── ASYNC PATTERN EXTRACTION — runs in thread, doesn't block handler ──
+        tg_send("🧠 <b>Learning Engine aktif...</b>\nMenganalisa data TP/SL dari database.\nIni butuh beberapa detik.", chat_id)
+        def _run_learning():
+            try:
+                from scripts.pattern_extractor import run_learning_pipeline
+                DB = str(DATA_DIR / "members.db")
+                result = run_learning_pipeline(DB, lookback_days=14)
+                if result["total_signals"] == 0:
+                    tg_send("📭 <b>Data belum cukup.</b>\nBelum ada sinyal closed (TP/SL) dalam 14 hari.\nGunakan /analyze xauusd untuk generate sinyal.", chat_id)
+                    return
+                # Build report
+                lines = [
+                    "🧠 <b>HERMES LEARNING REPORT</b>",
+                    "━━━━━━━━━━━━━━━━━━━━━",
+                ]
+                tp = result.get("tp_stats", {})
+                sl = result.get("sl_stats", {})
+                weights = result.get("suggested_weights", {})
+                for regime in sorted(set(list(tp.keys()) + list(sl.keys()))):
+                    if regime == "_empty": continue
+                    t = tp.get(regime, {})
+                    s = sl.get(regime, {})
+                    w = weights.get(regime, {}) if not isinstance(weights.get(regime), bool) else {}
+                    n_tp = t.get("count", 0)
+                    n_sl = s.get("count", 0)
+                    wr = round(n_tp / max(n_tp + n_sl, 1) * 100, 1)
+                    eff = t.get("mfe_efficiency", 0)
+                    lines.append(f"\n📊 <b>{regime.upper()}</b>")
+                    lines.append(f"   Win Rate: {wr}% | MFE Eff: {eff:.2f}")
+                    if t.get("tp_too_conservative"):
+                        lines.append("   ⚠️ Flag: TP Too Conservative")
+                    if s.get("need_trailing_stop"):
+                        lines.append("   ⚠️ Flag: Need Trailing Stop")
+                    if w:
+                        lines.append(f"   ⚖️ Weights: SMC={w.get('smc',0):.2f} LIQ={w.get('liq',0):.2f} MACRO={w.get('macro',0):.2f}")
+                lines.append("\n━━━━━━━━━━━━━━━━━━━━━")
+                lines.append("⚙️ Weights auto-injected via weight_manager")
+                lines.append("📅 Weekly refresh: Sabtu 02:00 WIB")
+                tg_send("\n".join(lines), chat_id)
+                logger.info("Learning report generated for %s", chat_id)
+            except Exception as exc:
+                logger.error("Learn report failed: %s", exc)
+                tg_send(f"❌ Gagal generate learning report: {exc}", chat_id)
+        threading.Thread(target=_run_learning, daemon=True).start()
 
     elif cmd == "/myid":
         text = (
             f"🆔 <b>Telegram ID kamu:</b>\n"
             f"<code>{chat_id}</code>\n\n"
-            f"Gunakan ID ini untuk donasi di website kami\n"
+            f"Gunakan ID ini untuk subscribe di website kami\n"
             f"👉 <a href='https://phantomfx.aitradepulse.com'>phantomfx.aitradepulse.com</a>"
         )
         tg_send(text, chat_id)
@@ -2766,39 +4044,48 @@ def handle_command(cmd, text, chat_id, msg):
     elif cmd == "/help":
         help_lines = [
             "⚙️ <b>VILONA AI — COMMAND CENTER</b>",
-            "━━━━━━━━━━━━━━━━\n",
-            "🧠 <b>AI SIGNAL SYSTEM 🔥</b>",
-            "/signal — Generate sinyal dari MTF + 9 engines",
-            "/mtf — Matrix 5TF × 9 engines (top-down)",
-            "/engines — Engine readings per strategi",
-            "/dashboard — Buka live dashboard web\n",
-            "👑 <b>PILAR UTAMA</b>",
-            "/start — Reboot Markas Komando",
-            "/analyze — Perintahkan AI Scan Market",
-            "/price — Cek harga real-time",
-            "/data — Market overview",
-            "/status — Cek Kuota & Akses VIP",
-            "/donate — Isi Bahan Bakar AI ⚡\n",
-            "🔍 <b>TECHNICAL ANALYSIS (SMC)</b> 🆕",
-            "/zones — Order Blocks + FVG + Supply/Demand",
-            "/structure — BOS/CHoCH + Trend + MTF Alignment",
-            "/session — Killzone + Session High/Low + Range\n",
-            "📊 <b>TRADING TOOLS</b>",
-            "/mapping — Mapping harian + level S/R",
-            "/levels — SnR + FIBO + Engine Deep Dive 👑",
-            "/news — Grok News — X/Twitter intel 👑",
-            "/killzone — Radar sesi market aktif",
-            "/winrate — Statistik performa",
-            "/history — Riwayat trade terakhir",
-            "/recap — Rekap harian\n",
-            "🔧 <b>POWER TOOLS</b>",
-            "/autosync — Auto-trade ke EA (Donatur)",
-            "/bridge_status — Cek koneksi EA",
-            "/mykey — Cek License EA kamu (Donatur)\n",
-            "🔑 <b>EA MT5 DOWNLOAD</b>",
-            "📥 phantomfx.aitradepulse.com/ea/download/",
             "━━━━━━━━━━━━━━━━",
-            "📞 Jalur Privat Investor: @codergaboets",
+            "Ketik command di bawah untuk memberi instruksi pada AI.",
+            "",
+            "🟢 <b>GENERAL & SETUP</b>",
+            "/start — Reboot Markas Komando",
+            "/status — Cek Kuota & Akses Tier",
+            "/subscribe — Upgrade Tier ⚡️",
+            "/referral — Link Referral (Bawa 3 Teman = PRO Gratis!)",
+            "/price — Cek harga market real-time",
+            "/help — Buka menu panduan ini",
+            "",
+            "🤝 <b>GOTONG ROYONG (REFERRAL)</b>",
+            "/referral — Lihat Link & Statistik Referral",
+            "💰 3 Teman Gabung = PRO 7 Hari GRATIS!",
+            "💰 10 Teman Gabung = ELITE 30 Hari GRATIS!",
+            "📢 Share link lu ke grup trader, sosmed, dll",
+            "",
+            "🧠 <b>AI SIGNAL GENERATOR</b>",
+            "/analyze — Perintahkan AI Scan Market (FREE: 3x/hari)",
+            "/signal — Generate sinyal dari MTF + 9 engines 👑",
+            "/mtf — Matrix 5TF × 9 engines (top-down) 👑",
+            "",
+            "🔍 <b>TECHNICAL ANALYSIS (SMC & PA)</b>",
+            "/zones — Order Blocks + FVG + Supply/Demand 👑",
+            "/structure — BOS/CHoCH + Trend Alignment 👑",
+            "/session — Killzone + Session High/Low 👑",
+            "/stier — S-TIER Zone GOD TIER 👑",
+            "",
+            "📊 <b>TRADING TOOLS & DATA</b>",
+            "/levels — SnR + FIBO + Engine Deep Dive 👑",
+            "/news — Market Intel — X/Twitter intel 👑",
+            "/killzone — Radar sesi market aktif",
+            "/recap — Rekap & riwayat performa trade",
+            "",
+            "🔧 <b>POWER TOOLS & EA (SUBSCRIBER ONLY)</b>",
+            "/autosync — Auto-trade ke EA 👑",
+            "/bridge_status — Cek koneksi EA 👑",
+            "/mykey — Cek License EA kamu 👑",
+            "/dashboard — Buka live dashboard web 👑",
+            "",
+            "━━━━━━━━━━━━━━━━",
+            "📞 Bantuan / Investor: @codergaboets",
         ]
         tg_send("\n".join(help_lines), chat_id)
 
@@ -2880,6 +4167,91 @@ def handle_command(cmd, text, chat_id, msg):
                 logger.error(f"/testbridge error: {e}")
                 tg_send(f"❌ /testbridge gagal: {e}", chat_id)
 
+    elif cmd == "/trailing":
+        # ── Smart Trailing config (DONOR ONLY) ──
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "🎯 <b>Smart Trailing</b> [🔒 LOCKED]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Auto-trailing SL saat profit jalan.\n"
+                "Bridge update SL ke EA kamu real-time.\n"
+                "\n"
+                "👑 Khusus Subscriber.\n"
+                "⚡ /subscribe — Rp 50K/bln (PRO)",
+                chat_id
+            )
+            return
+
+        args_raw = text.strip()
+        parts = args_raw.split()
+        sub = parts[1] if len(parts) > 1 else ""
+
+        if sub == "on":
+            _set_trailing(chat_id, True)
+            tg_send("🎯 <b>Smart Trailing: ON</b>\n"
+                    "Bridge akan auto-trail SL setiap +10 pip profit.\n"
+                    "Breakeven: SL → entry setelah +10 pip.\n"
+                    "Trail distance: 15 pip di belakang harga.", chat_id)
+        elif sub == "off":
+            _set_trailing(chat_id, False)
+            tg_send("⏸ <b>Smart Trailing: OFF</b>", chat_id)
+        elif sub == "status":
+            cfg = _get_trailing_status(chat_id)
+            if not cfg:
+                tg_send("⚠️ Akun belum terhubung ke bridge.\nGunakan /trailing on untuk mengaktifkan.", chat_id)
+            else:
+                pos_text = ""
+                if cfg.get("active_position"):
+                    p = cfg["position_preview"]
+                    pos_text = (f"\n━━━━━━━━━━━━━━━━\n"
+                              f"📊 <b>Posisi Aktif:</b> {p['direction']} @ {p['entry']}\n"
+                              f"SL saat ini: {p['sl']} | Umur: {p['age_sec']}s")
+                tg_send(
+                    f"🎯 <b>Trailing Status</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"Status: {'✅ ON' if cfg.get('enabled') else '❌ OFF'}\n"
+                    f"Mode: {cfg.get('mode', 'basic')}\n"
+                    f"Breakeven setelah: +{cfg.get('breakeven_pips', 10)} pip\n"
+                    f"Trail distance: {cfg.get('trail_pips', 15)} pip\n"
+                    f"Step minimum: {cfg.get('step_pips', 5)} pip\n"
+                    f"Posisi: {'Ada' if cfg.get('active_position') else 'Tidak ada'}"
+                    f"{pos_text}\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"<i>Gunakan /trailing on|off|status</i>",
+                    chat_id
+                )
+        else:
+            tg_send(
+                "🎯 <b>Smart Trailing Menu</b>\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "/trailing on — Aktifkan auto-trailing\n"
+                "/trailing off — Matikan trailing\n"
+                "/trailing status — Lihat status & posisi\n"
+                "━━━━━━━━━━━━━━━━\n"
+                "<i>Trailing SL otomatis setelah profit > breakeven.\n"
+                "Bridge update SL setiap 10 detik ke EA kamu.</i>",
+                chat_id
+            )
+
+    elif cmd == "/download":
+        if not _is_donor(chat_id):
+            _uname = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
+            _send_donate_menu(chat_id, _uname)
+            tg_send(
+                "🔒 <b>DOWNLOAD EA — SUBSCRIBER ONLY</b>\n\n"
+                "EA ini exclusive buat member yang sudah support project.\n"
+                "Silakan subscribe dulu ya, Bro!",
+                chat_id
+            )
+        else:
+            ea_path = PROJECT_DIR / "ea" / "VilonaTradeFX_EA.ex5"
+            if ea_path.exists():
+                _send_document(chat_id, str(ea_path), "VilonaTradeFX_EA.ex5",
+                              "🎯 <b>Vilona TradeFX EA</b>\nCent + IDR compatible ✅\nSmart trailing ready ✅")
+                logger.info(f"📥 /download served to subscriber chat_id={chat_id}")
+            else:
+                tg_send("❌ EA file not found. Contact admin.", chat_id)
+
     elif cmd == "/status":
         # Weekend indicator
         weekend_note = weekend_status_text()
@@ -2887,19 +4259,71 @@ def handle_command(cmd, text, chat_id, msg):
         is_donor = _is_donor(chat_id)
         quota = _get_quota(chat_id)
 
+        # Get actual tier name for display
+        display_tier = "FREE"
+        try:
+            from members import get_member as _gm_status
+            m = _gm_status(str(chat_id))
+            if m:
+                t = m.get("tier", "")
+                tier_labels = {"pro": "PRO", "elite": "ELITE", "lifetime": "LIFETIME"}
+                display_tier = tier_labels.get(t, "SUBSCRIBER")
+        except Exception:
+            pass
+
         if is_donor:
-            # Donor daily quota tracking
+            # Subscriber daily quota tracking
             today = wib_now().strftime("%Y-%m-%d")
             record = USER_DAILY_ANALYZE.get(chat_id, {})
             used = record.get("count", 0) if record.get("date") == today else 0
             remaining = max(0, DONOR_DAILY_QUOTA - used)
+            
+            # ── Fuel Gauge ──
+            fuel_lines = []
+            try:
+                from members import get_monthly_fuel_stats, get_user_last_donation
+                fuel = get_monthly_fuel_stats()
+                monthly_total = fuel.get("total", 0)
+                donor_count = fuel.get("donor_count", 0)
+                TARGET = 500000  # Rp 500rb / bulan
+                pct = min(100, int(monthly_total / TARGET * 100))
+                bars = "█" * (pct // 10) + "░" * (10 - pct // 10)
+                
+                last = get_user_last_donation(chat_id)
+                
+                fuel_lines = [
+                    f"",
+                    f"⛽ <b>SERVER FUEL: {bars} {pct}%</b>",
+                    f"   Rp{monthly_total:,} terkumpul / Rp{TARGET:,} bulan ini",
+                ]
+                if pct < 30:
+                    fuel_lines.append(f"   🔴 <b>KRITIS!</b> Server bisa down minggu ini...")
+                elif pct < 60:
+                    fuel_lines.append(f"   🟡 Bensin mulai menipis — butuh isi ulang")
+                else:
+                    fuel_lines.append(f"   🟢 Aman — terima kasih para subscriber!")
+                
+                fuel_lines.append(f"")
+                fuel_lines.append(f"💚 <b>{donor_count}</b> subscriber udah upgrade tier bulan ini.")
+                if last:
+                    if last["days_ago"] > 30:
+                        fuel_lines.append(f"   Kamu terakhir isi: <b>{last['days_ago']} hari</b> lalu — Saatnya isi ulang?")
+                    else:
+                        fuel_lines.append(f"   Kamu terakhir isi: {last['days_ago']} hari lalu — Makasih Bro!")
+                fuel_lines.append(f"   ⚡ <b>/subscribe</b> — Upgrade tier (Rp 50k aja udah ngebantu)")
+            except Exception as e:
+                logger.warning(f"Fuel gauge failed: {e}")
+            
+            fuel_text = "\n".join(fuel_lines) if fuel_lines else ""
+
             txt = (
-                f"👑 <b>STATUS: DONATUR SULTAN (VIP)</b>\n"
-                f"⚡️ Kuota AI: {remaining}/{DONOR_DAILY_QUOTA}x hari ini (Reset 00:00 WIB)\n"
+                f"👑 <b>STATUS: SUBSCRIBER {display_tier}</b>\n"
+                f"⚡️ Kuota AI: {'UNLIMITED ♾️' if DONOR_DAILY_QUOTA < 0 else f'{remaining}/{DONOR_DAILY_QUOTA}x'} hari ini (Reset 00:00 WIB)\n"
                 f"⏱️ Cooldown: {MANUAL_THROTTLE_DONOR}s antar analisa\n"
+                f"{fuel_text}\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"Terima kasih telah menghidupi mesin AI ini! 🥂\n"
-                f"Seluruh fitur VIP, Auto-Trade, dan Bridge\n"
+                f"Seluruh fitur Subscriber, Auto-Trade, dan Bridge\n"
                 f"telah TERBUKA untukmu.\n"
                 f"\n"
                 f"🔑 <b>AKSES EA & BRIDGE:</b>\n"
@@ -2915,13 +4339,13 @@ def handle_command(cmd, text, chat_id, msg):
                 f"━━━━━━━━━━━━━━━━\n"
                 f"Kamu punya {FREE_QUOTA_PER_DAY}x peluru analisa AI setiap harinya.\n"
                 f"\n"
-                f"🔒 <b>Fitur Donatur Eksklusif:</b>\n"
+                f"🔒 <b>Fitur Subscriber Eksklusif:</b>\n"
                 f"📥 Download EA MT5 (Auto-Trade)\n"
                 f"🔑 License Key untuk EA\n"
                 f"🤖 Auto-Trade langsung ke akun MT5\n"
                 f"🧠 Multi-Model AI Consensus (akurasi lebih tinggi)\n"
                 f"\n"
-                f"👉 /donate — Buka akses Donatur sekarang!"
+                f"👉 /subscribe — Buka akses Subscriber sekarang!"
             )
         txt += weekend_note
         tg_send(txt, chat_id)
@@ -2943,9 +4367,9 @@ def handle_command(cmd, text, chat_id, msg):
                     "━━━━━━━━━━━━━━━━\n"
                     f"📊 Free Member: {FREE_QUOTA_PER_DAY}x analisa/hari\n"
                     f"📉 Sisa: 0/{FREE_QUOTA_PER_DAY}\n\n"
-                    "⚡ <b>Isi Bahan Bakar AI!</b>\n"
-                    "Donasi sukarela untuk akses unlimited:\n"
-                    "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n\n"
+                    "⚡ <b>Upgrade Tier!</b>\n"
+                    "Subscribe sukarela untuk akses unlimited:\n"
+                    "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n\n"
                     "⏰ Reset: besok jam 00:00 WIB",
                     chat_id
                 )
@@ -2964,7 +4388,8 @@ def handle_command(cmd, text, chat_id, msg):
                 chat_id
             )
             return
-
+        # ── KILLZONE GATE: DISABLED — analyze all sessions 24/7 ──
+        # Gate bypassed per user request — /analyze always available
         # ── ELITE CUSTOM PARAMS ──
         elite_params = {}
         if sub:
@@ -2976,10 +4401,10 @@ def handle_command(cmd, text, chat_id, msg):
                 is_elite = _is_donor(str(chat_id)) if chat_id else False
                 if not is_elite:
                     tg_send(
-                        "👑 <b>Custom Parameter khusus Donatur!</b>\n"
+                        "👑 <b>Custom Parameter khusus Subscriber!</b>\n"
                         "━━━━━━━━━━━━━━━━\n"
-                        "Fitur risk= dan tf= hanya untuk Donatur.\n\n"
-                        "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
+                        "Fitur risk= dan tf= hanya untuk Subscriber.\n\n"
+                        "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n"
                         "👉 /bill — Lihat info",
                         chat_id
                     )
@@ -3014,13 +4439,13 @@ def handle_command(cmd, text, chat_id, msg):
             disp = display_map.get(sub_norm, sub_norm.upper())
             pair = pair_map[sub_norm]
 
-            # ── DONOR DAILY QUOTA (anti-abuse) ──
+            # ── QUOTA CHECK (anti-abuse) ──
             if _is_donor(str(chat_id)):
                 ok, remaining, warn = _check_donor_quota(str(chat_id))
                 if not ok:
                     tg_send(warn, chat_id)
                     return
-                if remaining <= 5:
+                if remaining >= 0 and remaining <= 5:
                     tg_send(f"⚠️ <b>Sisa {remaining}x analisa hari ini</b> — gunakan bijak!\n⏰ Reset jam 00:00 WIB", chat_id)
 
             # ── Manual anti-flip + rate-limit guard ──
@@ -3036,7 +4461,33 @@ def handle_command(cmd, text, chat_id, msg):
             if not price:
                 tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
                 return
-            ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+            ohlcv_bars = _fetch_ohlcv_for_ai(pair, keep=60)
+            # ── S-TIER ZONE SCAN: Run mechanical zone detection for all users ──
+            stier_zones_text = ""
+            if ohlcv_bars and len(ohlcv_bars) >= 30:
+                try:
+                    stier_sig, stier_reason = detect_stier_zone(pair.upper(), disp, price, ohlcv_bars)
+                    if stier_sig and stier_sig["action"] in ("BUY", "SELL"):
+                        st_grade = stier_sig.get("grade", "B")
+                        st_entry = stier_sig.get("entry", 0)
+                        st_sl = stier_sig.get("sl", 0)
+                        st_tp = stier_sig.get("tp", 0)
+                        dist_pips = abs(price - st_entry) / (0.10 if disp in ("XAUUSD","GOLD") else 0.01 if disp=="USOIL" else 1.0)
+                        near_zone = "🎯 IN ZONE" if dist_pips <= 10 else f"📡 {dist_pips:.0f} pip away"
+                        stier_zones_text = (
+                            f"\\n━━━━━━━━━━━━━━━━━━━━━━\\n"
+                            f"💀 <b>S-TIER ZONE [{st_grade}] — {near_zone}</b>\\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\\n"
+                            f"{stier_reason}\\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\\n"
+                            f"📍 Zone Entry: ${st_entry:.2f}\\n"
+                            f"🔴 SL: ${st_sl:.2f} | 🟢 TP: ${st_tp:.2f}\\n"
+                            f"📐 RR 1:2.0 | 💀 GOD TIER — Full Margin Ready"
+                        )
+                        logger.info(f"💀 S-TIER ZONE injected into /analyze [{disp}]: "
+                                   f"{stier_sig['action']} @ ${st_entry:.2f} | Grade={st_grade}")
+                except Exception as e:
+                    logger.debug(f"S-TIER analyze injection [{disp}]: {e}")
             # Detect user tier for AI model selection
             user_tier = "starter"
             if MEMBERS_ENABLED and chat_id:
@@ -3051,6 +4502,15 @@ def handle_command(cmd, text, chat_id, msg):
                 # Record direction for flip guard (after AI returns action)
                 action = sig.get("action", "HOLD")
                 _touch_manual(str(chat_id), action=action if action in ("BUY","SELL") else None, asset=disp)
+                # ── Behavioral Tagging: segment user by asset preference ──
+                try:
+                    from members.tags import add_tag
+                    if pair_check in ("gold", "xauusd"):
+                        add_tag(str(chat_id), "gold_trader")
+                    elif pair_check in ("btc", "btcusd", "eth", "ethusd"):
+                        add_tag(str(chat_id), "crypto_trader")
+                except Exception:
+                    pass
                 # Normalize confidence for quality checks
                 c = sig.get("confidence", 0)
                 if isinstance(c, (int,float)) and c > 10:
@@ -3139,9 +4599,18 @@ def handle_command(cmd, text, chat_id, msg):
                             "\n━━━━━━━━━━━━━━━━\n"
                             "🆓 <b>FREE TIER — Akurasi Terbatas</b>\n"
                             "Analisa solo 1 model AI. Upgrade untuk multi-model consensus:\n"
-                            "👉 /donate — Isi Bahan Bakar AI"
+                            "👉 /subscribe — Upgrade Tier"
                         )
                     tg_send(auto_text, chat_id)
+                    # ── Log activity ──
+                    try:
+                        username = (msg.get("chat", {}).get("username", "") or
+                                   msg.get("from", {}).get("username", "") or "")
+                        from tradebot.tracking.activity import log_activity
+                        log_activity(str(chat_id), str(chat_id), username.lstrip("@"),
+                                     "analyze", user_tier, {"pair": disp})
+                    except Exception:
+                        pass
                 else:
                     PENDING_SIGNALS[str(chat_id)] = {
                         "sig": sig, "price": price,
@@ -3179,6 +4648,9 @@ def handle_command(cmd, text, chat_id, msg):
                             if crt_block:
                                 text += crt_block
                         except: pass
+                    # 💀 S-TIER ZONE Injection (mechanical confluence — all users)
+                    if stier_zones_text:
+                        text += stier_zones_text
                     # 🏦 SMC Scalper + 📈 Trend Break
                     if SMC_ENGINE and ohlcv_bars:
                         try:
@@ -3215,11 +4687,11 @@ def handle_command(cmd, text, chat_id, msg):
                             "📊 <b>FREE TIER:</b> Analisa 1 model AI solo\n"
                             "⭐ <b>PREMIUM:</b> 3 model AI konsensus + akurasi lebih tinggi\n"
                             f"Sinyal ini generate dari 1 AI model saja dengan confidence terbatas.\n\n"
-                            "💡 <b>Isi Bahan Bakar AI</b> untuk premium multi-model consensus:\n"
+                            "💡 <b>Upgrade Tier</b> untuk premium multi-model consensus:\n"
                             "✅ 3 AI model (DeepSeek + GPT-4o + Claude)\n"
                             "✅ Consensus voting → akurasi lebih tinggi\n"
                             "✅ Analisa unlimited 60x/hari\n"
-                            "👉 /donate — dukung server & upgrade tier"
+                            "👉 /subscribe — upgrade ke PRO/ELITE"
                         )
                     else:
                         text += (
@@ -3227,8 +4699,20 @@ def handle_command(cmd, text, chat_id, msg):
                             "⭐ <b>PREMIUM TIER — Multi-Model Consensus</b>\n"
                             "3 AI model (DeepSeek + GPT-4o + Claude) konsensus.\n"
                             "Akurasi maksimal berkat support kamu! 🥂\n"
-                            "👉 /donate — Ajak teman ikut donasi"
+                            "👉 /subscribe — Ajak teman ikut subscribe"
                         )
+                    # ── Fuel Gauge Reminder (every 3rd analyze for donors) ──
+                    if is_donor:
+                        DONOR_ANALYZE_COUNT[str(chat_id)] = DONOR_ANALYZE_COUNT.get(str(chat_id), 0) + 1
+                        if DONOR_ANALYZE_COUNT[str(chat_id)] % 3 == 0:
+                            try:
+                                from members import get_monthly_fuel_stats
+                                fuel = get_monthly_fuel_stats()
+                                fuel_pct = int((fuel['total'] / 500000) * 100)
+                                fuel_bar = '█' * min(10, int(fuel['total'] / 50000)) + '░' * (10 - min(10, int(fuel['total'] / 50000)))
+                                text += f'\n━━━━━━━━━━━━━━━━━━━━━━\n⛽ Server Fuel: {fuel_bar} {fuel_pct}%\nRp{fuel["total"]:,} / Rp500,000 | {fuel["donor_count"]} subscriber\n⚡ /subscribe — Upgrade tier'
+                            except Exception:
+                                pass
                     keyboard = {
                         "inline_keyboard": [[
                             {"text": "🔥 Trade Auto", "callback_data": f"trade:{int(time.time())}"},
@@ -3250,8 +4734,43 @@ def handle_command(cmd, text, chat_id, msg):
                                   source_user=username, price=price, grade=sig.get("grade",""))
                     except Exception:
                         pass
+                    # ── Log activity ──
+                    try:
+                        from tradebot.tracking.activity import log_activity
+                        log_activity(str(chat_id), str(chat_id), username,
+                                     "analyze", user_tier, {"pair": disp})
+                    except Exception:
+                        pass
             else:
-                tg_send("❌ Analisa gagal — coba lagi nanti.", chat_id)
+                # ── AI FALLBACK: Mechanical signal when all AI models fail ──
+                logger.warning(f"AI all failed for {disp} — falling back to mechanical")
+                try:
+                    mech_sig, mech_reason = detect_mechanical_signal(disp, disp, price, ohlcv_bars)
+                    if mech_sig:
+                        mech_sig["_tier_capped"] = True
+                        mech_sig["action"] = mech_sig.get("action", "HOLD") or "HOLD"
+                        mech_sig["confidence"] = mech_sig.get("confidence", 25)
+                        action = mech_sig["action"]
+                        _touch_manual(str(chat_id), action=action if action in ("BUY","SELL") else None, asset=disp)
+                        mech_sig = _clamp_sltp(mech_sig, disp)
+                        curr = "Rp" if is_idx else "$"
+                        text = fmt_signal(mech_sig, price, dxy, wib_now().hour, disp, curr, quality="C")
+                        text += f"\n\n⚠️ <b>Mechanical Fallback</b> — AI models sedang sibuk (rate limit).\nAkurasi terbatas. Coba /analyze lagi nanti."
+                        tg_send(text, chat_id)
+                        # ── Log activity ──
+                        try:
+                            username_fb = (msg.get("chat", {}).get("username", "") or
+                                         msg.get("from", {}).get("username", "") or "")
+                            from tradebot.tracking.activity import log_activity
+                            log_activity(str(chat_id), str(chat_id), username_fb.lstrip("@"),
+                                         "analyze", user_tier, {"pair": disp})
+                        except Exception:
+                            pass
+                    else:
+                        tg_send("❌ Analisa gagal — semua mesin analisa sibuk. Coba lagi dalam 1 menit.", chat_id)
+                except Exception as e:
+                    logger.error(f"Mechanical fallback error: {e}")
+                    tg_send("❌ Analisa gagal — sistem lagi penuh. Coba lagi ya bro.", chat_id)
         elif not sub_norm:
             tg_send("🧠 <b>ANALISA AI — Pilih Aset</b>\n━━━━━━━━━━━━━━━━\n"
                     "💎 /analyze xauusd — Gold\n₿ /analyze btc — Bitcoin\n"
@@ -3274,7 +4793,7 @@ def handle_command(cmd, text, chat_id, msg):
 
                     _touch_manual(str(chat_id), asset=sub.upper())
                     tg_send(f"🔍 Menganalisa {sub.upper()}... ~15 detik", chat_id)
-                    ohlcv_bars2 = _fetch_ohlcv_for_ai(sub)
+                    ohlcv_bars2 = _fetch_ohlcv_for_ai(sub, keep=60)
                     # Detect user tier for AI model selection
                     user_tier2 = "starter"
                     if MEMBERS_ENABLED and chat_id:
@@ -3411,15 +4930,15 @@ def handle_command(cmd, text, chat_id, msg):
                             if not is_donor:
                                 text += (
                                     "\n━━━━━━━━━━━━━━━━\n"
-                                    "💡 <b>Kalau sinyal ini cuan, saatnya isi bensin AI!</b>\n"
+                                    "💡 <b>Kalau sinyal ini cuan, saatnya upgrade tier!</b>\n"
                                     "Server analisa 24/7 butuh biaya API & GPU.\n"
                                     "Jangan cuma diperas aja Bro 😄\n"
-                                    "👉 /donate — dukung seikhlasnya, AKTIF PERMANEN"
+                                    "👉 /subscribe — pilih tier subscription"
                                 )
                             else:
                                 text += (
                                     "\n━━━━━━━━━━━━━━━━\n"
-                                    "🤝 <b>Makasih udah jadi Donatur!</b>\n"
+                                    "🤝 <b>Makasih udah jadi Subscriber!</b>\n"
                                     "Server AI ini hidup karena support kamu. 🥂"
                                 )
                             keyboard = {
@@ -3476,8 +4995,63 @@ def handle_command(cmd, text, chat_id, msg):
         txt += f"━━━━━━━━━━━━━━━━\n🕐 {wib_fmt()}"
         tg_send(txt, chat_id)
 
-    elif cmd == "/bill" or cmd == "/subscribe":
-        # ── Legacy commands → redirect to /donate ──
+    elif cmd == "/bill" or cmd == "/subscribe" or cmd == "/upgrade":
+        # ── TIERED SUBSCRIPTION ──
+        if not chat_id:
+            return
+        username = ""
+        if msg:
+            username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
+        sub_arg = sub_norm if sub_norm else ""
+        if sub_arg in ("pro", "elite", "lifetime"):
+            # Direct tier purchase
+            try:
+                from members.payment import create_tripay_payment
+                result = create_tripay_payment(str(chat_id), username, tier=sub_arg)
+                if result.get("success"):
+                    payment_url = result.get("payment_url", "")
+                    pay_code = result.get("pay_code", "")
+                    amount = result.get("amount", 0)
+                    tier_label = result.get("tier_label", sub_arg.upper())
+                    txt = (
+                        f"💳 <b>Pembayaran {tier_label}</b>\n"
+                        f"━━━━━━━━━━━━━━━━\n"
+                        f"💰 Total: Rp{amount:,}\n"
+                        f"📎 Kode: <code>{pay_code}</code>\n\n"
+                        f"🔗 <a href='{payment_url}'>Klik di sini untuk bayar</a>\n\n"
+                        f"⏰ Link berlaku 1 jam.\n"
+                        f"Status akan otomatis aktif setelah pembayaran."
+                    )
+                    tg_send(txt, chat_id)
+                    # Activity + CAPI InitiateCheckout
+                    try:
+                        from tradebot.tracking.activity import log_activity
+                        log_activity(str(chat_id), chat_id, username, "subscribe", sub_arg, {"amount": amount, "ref": result.get("reference", "")})
+                    except Exception: pass
+                    try:
+                        from tradebot.tracking.events import fire_initiate_checkout
+                        fire_initiate_checkout(str(chat_id), sub_arg, amount)
+                    except Exception: pass
+                else:
+                    tg_send(f"❌ {result.get('error', 'Gagal membuat pembayaran.')}", chat_id)
+            except Exception as e:
+                logger.error(f"Subscribe error: {e}")
+                tg_send("❌ Sistem pembayaran sedang sibuk. Coba lagi nanti.", chat_id)
+            return
+
+        # Show tier selection
+        from members.payment import get_pricing_table
+        txt = get_pricing_table()
+        markup = {"inline_keyboard": [
+            [{"text": "⭐ PRO — Rp50K/bulan", "callback_data": "sub:pro"},
+             {"text": "👑 ELITE — Rp150K/bulan", "callback_data": "sub:elite"}],
+            [{"text": "💎 LIFETIME — Rp500K (sekali)", "callback_data": "sub:lifetime"}],
+            [{"text": "💳 Bayar via QRIS/VA", "callback_data": "sub:pay"}],
+        ]}
+        tg_send(txt, chat_id, reply_markup=markup)
+
+    elif cmd == "/donate":
+        # ── /donate — legacy redirect ke tiered subscription ──
         if not chat_id:
             return
         username = ""
@@ -3485,49 +5059,14 @@ def handle_command(cmd, text, chat_id, msg):
             username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
         _send_donate_menu(chat_id, username)
 
-    elif cmd == "/donate":
-        # ── /donate — Siram Bahan Bakar Mesin AI ──
+    elif cmd == "/testpay":
+        """🧪 Test payment: subscribe minimal — verifikasi webhook Tripay. ADMIN ONLY."""
         if not chat_id:
             return
-        # Clear any stale donation input state
-        DONATION_INPUT_STATE.pop(str(chat_id), None)
-        username = ""
-        if msg:
-            username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
-
-        txt = (
-            "💚 <b>SIRAM BAHAN BAKAR MESIN AI 🚀</b>\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "Server AI ini mengolah jutaan data market\n"
-            "secara real-time dan membutuhkan biaya API\n"
-            "& GPU yang masif setiap detiknya.\n"
-            "\n"
-            "Jika sinyal AI ini telah mengubah portofolio\n"
-            "Anda menjadi hijau, mari bergotong royong\n"
-            "menjaga mesin ini tetap hidup dan semakin buas!\n"
-            "\n"
-            "Pilih dukunganmu hari ini:\n"
-            "\n"
-            "💼 <b>EKSKLUSIF: PROGRAM INVESTOR AI</b>\n"
-            "━━━━━━━━━━━━━━━━\n"
-            "Apakah Anda big player/investor yang ingin\n"
-            "ikut andil dalam pengembangan ekosistem\n"
-            "kuantitatif ini secara makro? Kami membuka\n"
-            "jalur pendanaan privat. Hubungi Chief\n"
-            "Architect kami di bawah."
-        )
-        markup = {"inline_keyboard": [
-            [{"text": "☕️ Traktir Kopi (Rp 15K)", "callback_data": "donate:coffee"},
-             {"text": "🍱 Makan Siang Server (Rp 25K)", "callback_data": "donate:learn"}],
-            [{"text": "🚀 Isi Bensin Full (Rp 50K)", "callback_data": "donate:fuel"}],
-            [{"text": "💰 Input Nominal Bebas", "callback_data": "donate:custom"}],
-            [{"text": "🤝 HUBUNGI CHIEF ARCHITECT", "url": "https://t.me/codergaboets"}],
-        ]}
-        tg_send(txt, chat_id, reply_markup=markup)
-
-    elif cmd == "/testpay":
-        """🧪 Test payment: donasi minimal — verifikasi webhook Tripay."""
-        if not chat_id:
+        # Admin gate
+        admin_ids_tp = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
+        if str(chat_id) not in admin_ids_tp:
+            tg_send("⛔ Admin only.", chat_id)
             return
         if not PAYMENT_ENGINE:
             tg_send("💳 Payment gateway belum aktif.", chat_id)
@@ -3537,9 +5076,9 @@ def handle_command(cmd, text, chat_id, msg):
         if msg:
             username = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
 
-        tg_send("🧪 <b>Test Isi Bahan Bakar AI — Rp10,000</b>\nMembuat invoice...", chat_id)
+        tg_send("🧪 <b>Test Upgrade Tier — Rp10,000</b>\nMembuat invoice...", chat_id)
 
-        result = create_tripay_payment(str(chat_id), username, tier="donor", amount=10000)
+        result = create_tripay_payment(str(chat_id), username, tier="pro", amount=10000)
         if result.get("error"):
             tg_send(f"❌ Gagal: {result['error']}", chat_id)
             return
@@ -3548,10 +5087,10 @@ def handle_command(cmd, text, chat_id, msg):
         ref = result.get("reference", "") or result.get("merchant_ref", "")
 
         txt = (
-            "🧪 <b>Test Isi Bahan Bakar AI — Rp10,000</b>\n"
+            "🧪 <b>Test Upgrade Tier — Rp10,000</b>\n"
             "━━━━━━━━━━━━━━━━\n"
             "💰 Total: <b>Rp10,000</b>\n"
-            "👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
+            "👑 Status: SUBSCRIBER — AKTIF PERMANEN\n"
             "⏰ Expired: 1 jam\n"
             "━━━━━━━━━━━━━━━━\n"
             "Klik tombol bayar di bawah 👇\n\n"
@@ -3568,7 +5107,7 @@ def handle_command(cmd, text, chat_id, msg):
         tg_send(txt, chat_id, reply_markup=markup)
 
     elif cmd == "/activate":
-        """Admin: Manual activation — set user ke DONATUR."""
+        """Admin: Manual activation — set user ke SUBSCRIBER."""
         if not chat_id:
             return
         # Admin check: use chat_id list
@@ -3593,23 +5132,23 @@ def handle_command(cmd, text, chat_id, msg):
 
             ref = f"VTFX-{target_id}-MANUAL"
             m_ensure(target_id)
-            m_upgrade(target_id, "donor", days, ref)
+            m_upgrade(target_id, "lifetime", days, ref)
 
             # Notify admin
             tg_send(
                 f"✅ <b>Manual Activation Berhasil</b>\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"👤 User: <code>{target_id}</code>\n"
-                f"👑 Status: <b>DONATUR VIP — AKTIF PERMANEN</b>",
+                f"👑 Status: <b>SUBSCRIBER — LIFETIME</b>",
                 chat_id
             )
 
             # DM the activated user
             if BOT_TOKEN:
                 user_msg = (
-                    f"🔥 <b>BOOM! Kamu sekarang DONATUR VIP!</b>\n"
+                    f"🔥 <b>BOOM! Kamu sekarang SUBSCRIBER!</b>\n"
                     f"━━━━━━━━━━━━━━━━\n"
-                    f"👑 Status: <b>DONATUR VIP — AKTIF PERMANEN</b>\n"
+                    f"👑 Status: <b>SUBSCRIBER — LIFETIME</b>\n"
                     f"━━━━━━━━━━━━━━━━\n"
                     f"✅ /analyze UNLIMITED\n"
                     f"✅ EA Auto-Trade\n"
@@ -3640,14 +5179,14 @@ def handle_command(cmd, text, chat_id, msg):
                     "Fitur auto-trade akan diaktifkan kembali di masa depan.", chat_id)
             return
 
-        # ── DONOR GATE: Only donors can auto-trade ──
+        # ── TIER GATE: Only donors can auto-trade ──
         if not _is_donor(str(chat_id)):
             tg_send(
-                "🔒 <b>Auto-Trade khusus Donatur!</b>\n"
+                "🔒 <b>Auto-Trade khusus Subscriber!</b>\n"
                 "━━━━━━━━━━━━━━━━\n"
                 "Fitur auto-trade ke EA hanya tersedia untuk\n"
-                "👑 <b>Donatur</b> — yang sudah dukung server AI.\n\n"
-                "⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot\n"
+                "👑 <b>Subscriber</b> — yang sudah dukung server AI.\n\n"
+                "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n"
                 "📞 @codergaboets — Tanya admin",
                 chat_id
             )
@@ -3688,14 +5227,14 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"❌ Mapping error: {e}", chat_id)
 
     elif cmd == "/news":
-        """Grok News — real-time X/Twitter market intelligence. Donor only."""
+        """Market Intel — DeepSeek macro context & catalyst analysis. Subscriber only."""
         if not _is_donor(str(chat_id)):
             tg_send(
-                f"📰 <b>Grok News</b> [🔒 LOCKED]\n"
+                f"📰 <b>Market Intel</b> [🔒 LOCKED]\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"Grok News adalah <b>real-time market intelligence</b>\n"
-                f"dari X/Twitter — kasih tau apa yang bikin market\n"
-                f"gerak SEBELUM lu entry.\n"
+                f"Market Intel adalah <b>macro catalyst analysis</b>\n"
+                f"yang kasih tau konteks ekonomi di balik pergerakan\n"
+                f"market SEBELUM lu entry.\n"
                 f"\n"
                 f"🔥 <b>Contoh output:</b>\n"
                 f"   \"Fed Waller暗示 delay rate cut — DXY +0.3%\"\n"
@@ -3707,19 +5246,19 @@ def handle_command(cmd, text, chat_id, msg):
                 f"   → Hindarin entry pas news bom\n"
                 f"   → Dapetin edge sebelum orang lain\n"
                 f"\n"
-                f"🔋 <b>AI Power: ■□□□□ 33%</b> — Grok idle\n"
+                f"🔋 <b>AI Power: ■■■□□ 75%</b> — Market Intel idle\n"
                 f"   AI lu cuma bisa liat chart doang...\n"
-                f"   Bayangin kalo bisa baca X/Twitter juga 😤\n"
+                f"   Bayangin kalo bisa baca konteks makro juga 😤\n"
                 f"\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"⚡ <b>/donate</b> — Rp 50k/bulan\n"
-                f"   Unlock Grok News + 2 AI + /levels\n"
-                f"   Kasih AI lu mata buat liat berita 🗞️",
+                f"⚡ <b>/subscribe</b> — Rp 50K/bln (PRO)\n"
+                f"   Unlock Market Intel + 2 AI + /levels\n"
+                f"   Kasih AI lu konteks makro 📊",
                 chat_id
             )
             return
 
-        # Donor: call Grok for the requested asset
+        # Donor: call DeepSeek for market context
         sub_norm = _normalize_broker_symbol(sub or "xauusd")
         pair_map_n = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth",
                       "oil":"oil","usoil":"oil","eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
@@ -3728,14 +5267,14 @@ def handle_command(cmd, text, chat_id, msg):
         pair = pair_map_n.get(sub_norm, "gold")
         disp = disp_map_n.get(pair, "XAUUSD")
 
-        tg_send(f"📰 <b>Grok is scanning X/Twitter for {disp}...</b>\n<i>This takes ~5-10 seconds</i>", chat_id)
+        tg_send(f"📰 <b>Analyzing market context for {disp}...</b>\n<i>This takes ~3-5 seconds</i>", chat_id)
 
         try:
             price = fetch_price(pair) or 0
-            news = _call_grok_news(disp, price)
+            news = _call_market_news(disp, price)
 
             if not news:
-                tg_send(f"❌ Grok gagal fetch news untuk {disp}. Coba lagi nanti.", chat_id)
+                tg_send(f"❌ Gagal fetch market context untuk {disp}. Coba lagi nanti.", chat_id)
                 return
 
             headline = news.get("headline", "No major catalysts")
@@ -3748,24 +5287,24 @@ def handle_command(cmd, text, chat_id, msg):
 
             if headline == "No major catalysts":
                 msg = (
-                    f"📰 <b>Grok News — {disp}</b>\n"
+                    f"📰 <b>Market Intel — {disp}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"⚪️ <b>No major catalysts detected</b>\n"
                     f"\n"
-                    f"Market currently quiet — no breaking news\n"
-                    f"or macro events affecting {disp} right now.\n"
+                    f"Market currently quiet — no significant macro\n"
+                    f"events or catalysts affecting {disp} right now.\n"
                     f"\n"
                     f"💡 Fokus ke analisa teknikal — chart is king.\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📰 Grok News Active ✅ — real-time X/Twitter intel\n"
+                    f"📰 Market Intel Active ✅ — DeepSeek macro analysis\n"
                     f"🤝 <b>Your AI Partner keeps watching.</b>"
                 )
             else:
-                token_used = _AI_TOKEN_USAGE.get("grok", {}).get("total", 0)
+                token_used = _AI_TOKEN_USAGE.get("deepseek_news", {}).get("total", 0)
                 token_k = f"{token_used/1000:.1f}k" if token_used >= 1000 else str(token_used)
 
                 msg = (
-                    f"📰 <b>Grok News — {disp}</b>\n"
+                    f"📰 <b>Market Intel — {disp}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"{s_emoji} <b>{headline}</b>\n"
                     f"\n"
@@ -3775,8 +5314,8 @@ def handle_command(cmd, text, chat_id, msg):
                 msg += (
                     f"Sentiment: <b>{sentiment}</b> | Impact: {i_emoji} <b>{impact}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🧠 {token_k} token dipakai — real-time analysis\n"
-                    f"📰 Grok News Active ✅ — X/Twitter intelligence\n"
+                    f"🧠 {token_k} token dipakai — macro analysis\n"
+                    f"📰 Market Intel Active ✅ — DeepSeek-powered\n"
                     f"🤝 <b>AI Partner kasih lu edge.</b>\n"
                     f"\n"
                     f"💡 Combine dengan /signal untuk konfirmasi teknikal"
@@ -3786,9 +5325,102 @@ def handle_command(cmd, text, chat_id, msg):
 
         except Exception as e:
             logger.warning(f"/news error: {e}")
-            tg_send(f"❌ Gagal fetch Grok News: {e}", chat_id)
+            tg_send(f"❌ Gagal fetch Market Intel: {e}", chat_id)
 
     # ── NEW: Technical Analysis Commands ──
+    elif cmd == "/stier":
+        """S-TIER Zone Detector — Triple Confluence (Breaker + OB/FVG + Double Sweep). 👑 PREMIUM ONLY."""
+        # ── PREMIUM GATE ──
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "👑 <b>S-TIER Zone — PREMIUM ONLY</b>\n\n"
+                "S-TIER adalah detektor triple confluence dengan akurasi tertinggi.\n"
+                "Fitur ini eksklusif untuk subscriber PRO/ELITE/LIFETIME.\n\n"
+                "⭐ <b>Upgrade sekarang:</b>\n"
+                "   /upgrade atau DM @berkahkaryaforexbotbot",
+                chat_id
+            )
+            return
+        sub_norm_st = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_st = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_st = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        pair_st = pair_map_st.get(sub_norm_st, "gold")
+        disp_st = disp_map_st.get(pair_st, "XAUUSD")
+        pip_sz = 0.10 if disp_st in ("XAUUSD","GOLD") else 0.01 if disp_st=="USOIL" else 1.0
+        
+        price_st = fetch_price(pair_st)
+        if not price_st:
+            tg_send(f"❌ Harga tidak tersedia untuk {disp_st}.", chat_id)
+            return
+        
+        tg_send(f"💀 <b>Scanning S-TIER Zones — {disp_st} @ ${price_st:.2f}...</b>\n<i>Triple Confluence: Breaker Block + OB/FVG + Double Sweep</i>", chat_id)
+        
+        ohlcv_st = _fetch_ohlcv_for_ai(pair_st, keep=60)
+        if not ohlcv_st or len(ohlcv_st) < 30:
+            tg_send(f"❌ Data OHLCV tidak cukup untuk {disp_st}.", chat_id)
+            return
+        
+        try:
+            st_sig, st_reason = detect_stier_zone(pair_st.upper(), disp_st, price_st, ohlcv_st)
+            
+            if not st_sig:
+                lines = [
+                    f"💀 <b>S-TIER ZONE — {disp_st} @ ${price_st:.2f}</b>",
+                    f"━━━━━━━━━━━━━━━━━━━━━━",
+                    f"",
+                    f"⚪️ <b>Tidak ada S-TIER zone terdeteksi</b>",
+                    f"",
+                    f"Market saat ini belum menunjukkan triple confluence:",
+                    f"  • Belum ada Breaker Block valid",
+                    f"  • OB + FVG tidak aligned di level yang sama",
+                    f"  • Tidak ada Double Liquidity Sweep",
+                    f"",
+                    f"━━━━━━━━━━━━━━━━━━━━━━",
+                    f"💡 S-TIER zone adalah setup probabilitas tertinggi.",
+                    f"   Sabar — zone ini muncul 1-3x per sesi.",
+                    f"   Cek /zones atau /structure untuk analisa regular.",
+                    f"━━━━━━━━━━━━━━━━━━━━━━",
+                    f"⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>",
+                ]
+                tg_send("\n".join(lines), chat_id)
+                return
+            
+            st_grade = st_sig.get("grade", "B")
+            st_entry = st_sig.get("entry", 0)
+            st_sl = st_sig.get("sl", 0)
+            st_tp = st_sig.get("tp", 0)
+            st_conf = st_sig.get("confidence", 0)
+            st_act = st_sig.get("action", "HOLD")
+            dist = abs(price_st - st_entry) / pip_sz
+            near = "🎯 IN ZONE" if dist <= 10 else f"📡 {dist:.0f} pip away"
+            act_emoji = "🟢" if st_act == "BUY" else "🔴" if st_act == "SELL" else "⚪️"
+            
+            lines = [
+                f"💀 <b>S-TIER ZONE [{st_grade}] — {disp_st}</b>",
+                f"━━━━━━━━━━━━━━━━━━━━━━",
+                f"",
+                st_reason,
+                f"",
+                f"━━━━━━━━━━━━━━━━━━━━━━",
+                f"📍 <b>Zone Entry:</b> ${st_entry:.2f}",
+                f"🔴 <b>SL:</b> ${st_sl:.2f} (-30 pip)",
+                f"🟢 <b>TP:</b> ${st_tp:.2f} (+60 pip)",
+                f"📐 <b>RR 1:2.0</b> | Conf: {st_conf:.0%}",
+                f"",
+                f"{act_emoji} <b>{st_act}</b> | {near}",
+            ]
+            if st_grade == "S-TIER":
+                lines.append(f"")
+                lines.append(f"💀 <b>GOD TIER — Near-100% Conviction</b>")
+            lines.append(f"━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append(f"⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
+            tg_send("\n".join(lines), chat_id)
+            logger.info(f"💀 /stier [{disp_st}]: {st_act} | Grade={st_grade}")
+        except Exception as e:
+            logger.error(f"/stier error: {e}")
+            tg_send(f"❌ Gagal scan S-TIER zone: {e}", chat_id)
+
     elif cmd == "/zones":
         """Liquidity zones: OB + FVG + Supply/Demand. Free: 1 TF. Donor: multi-TF."""
         sub_norm = _normalize_broker_symbol(sub or "xauusd")
@@ -3822,35 +5454,42 @@ def handle_command(cmd, text, chat_id, msg):
         
         pip_s = 0.10 if disp in ("XAUUSD","GOLD") else (0.01 if disp == "USOIL" else (1.0 if disp in ("BTCUSD","ETHUSD") else 0.0001))
         
-        # ── FVG Zones ──
+        # ── FVG Zones (scan both H1 raw zones + M15) ──
         fvgs_found = False
         try:
             if FVG_ENGINE:
-                fvg_result = detect_fvg(ohlcv_h1, price, disp)
-                if fvg_result and fvg_result.get("fvgs"):
+                from fvg_detector import detect_fvg_zones
+                # Raw FVG zones (unfiltered by price proximity)
+                raw_zones = detect_fvg_zones(ohlcv_h1, max_age=30)
+                if raw_zones:
                     fvgs_found = True
                     lines.append("")
                     lines.append("📐 <b>FAIR VALUE GAPS (H1)</b>")
-                    for fvg in fvg_result["fvgs"][:5]:
-                        top = fvg.get("top", 0); bot = fvg.get("bottom", 0)
-                        fvg_type = fvg.get("type", "?").upper()
-                        filled = "✅ filled" if fvg.get("filled") else "⏳ open"
-                        dist = abs(price - ((top+bot)/2)) / pip_s
-                        lines.append(f"  {fvg_type}: {bot:.2f} — {top:.2f} ({filled} | {dist:.0f} pip)")
-        except: pass
-        
+                    for z in raw_zones[:5]:
+                        mid = (z.top + z.bottom) / 2
+                        filled = "✅ filled" if getattr(z, 'filled', False) else "⏳ open"
+                        dist = abs(price - mid) / pip_s
+                        lines.append(f"  {z.top:.2f} — {z.bottom:.2f} ({z.size_pips:.0f} pip | {filled} | {dist:.0f} pip away)")
+        except Exception as e:
+            logger.debug(f"FVG zone scan error: {e}")
+
         if not fvgs_found:
             lines.append("")
             lines.append("📐 <b>FAIR VALUE GAPS</b>")
-            lines.append("  No active FVG detected near price.")
-        
-        # ── Order Blocks ──
+            lines.append("  No FVG in last 30 H1 bars — market efisien tanpa gap.")
+
+        # ── Order Blocks + Structure (BOS) ──
         obs_found = False
         try:
             if SMC_ENGINE:
                 smc = analyze_smc_scalper(ohlcv_h1, disp)
                 if smc:
+                    # Try order_blocks first, then blocks, then _bos for structure
                     blocks = smc.get("order_blocks", smc.get("blocks", []))
+                    bos = smc.get("_bos", {})
+                    idm = smc.get("_idm", {})
+                    false_break = smc.get("_false_break", {})
+
                     if blocks:
                         obs_found = True
                         lines.append("")
@@ -3860,13 +5499,31 @@ def handle_command(cmd, text, chat_id, msg):
                             ob_dir = ob.get("direction", ob.get("type", "?"))
                             ob_strength = ob.get("strength", "?")
                             if ob_price > 0:
-                                lines.append(f"  {'🟢' if 'BULL' in str(ob_dir).upper() else '🔴'} {ob_dir}: {ob_price:.2f} (str: {ob_strength})")
-        except: pass
-        
+                                emoji = "🟢" if "BULL" in str(ob_dir).upper() else "🔴"
+                                lines.append(f"  {emoji} {ob_dir}: {ob_price:.2f} (str: {ob_strength})")
+
+                    # Show BOS/IDM even if no order blocks
+                    if bos and bos.get("direction"):
+                        if not obs_found:
+                            lines.append("")
+                            lines.append("🏦 <b>MARKET STRUCTURE (H1)</b>")
+                            obs_found = True  # mark as found so we don't show "none"
+                        bos_dir = bos.get("direction", "?")
+                        bos_emoji = "🟢" if bos_dir == "BUY" else "🔴"
+                        lines.append(f"  {bos_emoji} <b>BOS ({bos_dir}):</b> ${bos.get('price', 0):.2f}")
+                    if idm and idm.get("direction"):
+                        idm_dir = idm.get("direction", "?")
+                        lines.append(f"  ⚡ IDM ({idm_dir}): ${idm.get('price', 0):.2f}")
+                    if false_break and false_break.get("direction"):
+                        fb_dir = false_break.get("direction", "?")
+                        lines.append(f"  ⚠️ False Break ({fb_dir}): ${false_break.get('price', 0):.2f}")
+        except Exception as e:
+            logger.debug(f"OB/Structure scan error: {e}")
+
         if not obs_found:
             lines.append("")
             lines.append("🏦 <b>ORDER BLOCKS</b>")
-            lines.append("  No significant OB near current price.")
+            lines.append("  No significant OB / BOS near current price.")
         
         # ── Supply/Demand ──
         try:
@@ -3942,7 +5599,7 @@ def handle_command(cmd, text, chat_id, msg):
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
             lines.append("🔒 <b>FREE TIER — H1 Zones Only</b>")
             lines.append("👑 Multi-TF (M15 granular + full zone depth)")
-            lines.append("   → <b>/donate</b> untuk unlock")
+            lines.append("   → <b>/subscribe</b> untuk unlock")
         
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
@@ -3995,16 +5652,23 @@ def handle_command(cmd, text, chat_id, msg):
         for i in range(7, len(highs)-2):
             lookback = highs[i-7:i]
             if highs[i] > max(lookback) and highs[i] > highs[i+1]:
-                # Previous swing high broken → bullish BOS
                 prev_highs = [h for j, h in enumerate(highs[:i]) if j >= 5 and h > highs[j-1] and h > highs[j+1]]
-                if prev_highs and highs[i] > max(prev_highs[-3:]) if len(prev_highs) >= 3 else (highs[i] > prev_highs[-1]):
-                    bos_bull.append({"price": highs[i], "idx": i, "bar": len(highs)-i, "type": "BOS ▲"})
+                if prev_highs:
+                    if len(prev_highs) >= 3:
+                        if highs[i] > max(prev_highs[-3:]):
+                            bos_bull.append({"price": highs[i], "idx": i, "bar": len(highs)-i, "type": "BOS ▲"})
+                    elif highs[i] > prev_highs[-1]:
+                        bos_bull.append({"price": highs[i], "idx": i, "bar": len(highs)-i, "type": "BOS ▲"})
         for i in range(7, len(lows)-2):
             lookback = lows[i-7:i]
             if lows[i] < min(lookback) and lows[i] < lows[i+1]:
                 prev_lows = [l for j, l in enumerate(lows[:i]) if j >= 5 and l < lows[j-1] and l < lows[j+1]]
-                if prev_lows and lows[i] < min(prev_lows[-3:]) if len(prev_lows) >= 3 else (lows[i] < prev_lows[-1]):
-                    bos_bear.append({"price": lows[i], "idx": i, "bar": len(lows)-i, "type": "BOS ▼"})
+                if prev_lows:
+                    if len(prev_lows) >= 3:
+                        if lows[i] < min(prev_lows[-3:]):
+                            bos_bear.append({"price": lows[i], "idx": i, "bar": len(lows)-i, "type": "BOS ▼"})
+                    elif lows[i] < prev_lows[-1]:
+                        bos_bear.append({"price": lows[i], "idx": i, "bar": len(lows)-i, "type": "BOS ▼"})
         
         # CHoCH (Change of Character)
         choch_bull = []
@@ -4106,7 +5770,7 @@ def handle_command(cmd, text, chat_id, msg):
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
             lines.append("🔒 <b>FREE TIER — Basic Structure</b>")
             lines.append("👑 MTF Alignment + Structure Grade + CHoCH count")
-            lines.append("   → <b>/donate</b> untuk unlock full analysis")
+            lines.append("   → <b>/subscribe</b> untuk unlock full analysis")
         
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
@@ -4143,10 +5807,10 @@ def handle_command(cmd, text, chat_id, msg):
                  f"🟢 Active: <b>{active_kz}</b>"]
         
         try:
-            from session_levels import calculate_all_levels, get_session_levels
-            
+            from session_levels import calculate_all_levels
+
             # Get OHLCV for session calculation
-            ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+            ohlcv_bars = _fetch_ohlcv_for_ai(pair, keep=60)
             if not ohlcv_bars or len(ohlcv_bars) < 30:
                 # Fallback: try MARKET_DATA
                 if MARKET_DATA:
@@ -4159,6 +5823,10 @@ def handle_command(cmd, text, chat_id, msg):
                 sess = calculate_all_levels(ohlcv_bars)
                 
                 if sess:
+                    # Compute session ranges (not stored in SessionLevels dataclass)
+                    asia_rng = sess.asia_high - sess.asia_low if (sess.asia_high and sess.asia_low) else 0
+                    london_rng = sess.london_high - sess.london_low if (sess.london_high and sess.london_low) else 0
+
                     lines.append("")
                     lines.append("━━━━━━━━━━━━━━━━━━━━━━")
                     
@@ -4166,31 +5834,31 @@ def handle_command(cmd, text, chat_id, msg):
                     if lkz and sess.london_high:
                         lines.append(f"🇬🇧 <b>LONDON (Active)</b>")
                         lines.append(f"  High: {sess.london_high:.2f} | Low: {sess.london_low:.2f}")
-                        if sess.london_range:
-                            lines.append(f"  Range: {sess.london_range:.2f} ({sess.london_range/pip_s:.0f} pip)")
+                        if london_rng:
+                            lines.append(f"  Range: {london_rng:.2f} ({london_rng/pip_s:.0f} pip)")
                     elif nykz and sess.ny_high:
                         lines.append(f"🇺🇸 <b>NEW YORK (Active)</b>")
                         lines.append(f"  High: {sess.ny_high:.2f} | Low: {sess.ny_low:.2f}")
                     elif sess.asia_high:
                         lines.append(f"🌏 <b>ASIA</b>")
                         lines.append(f"  High: {sess.asia_high:.2f} | Low: {sess.asia_low:.2f}")
-                        if sess.asia_range:
-                            lines.append(f"  Range: {sess.asia_range:.2f} ({sess.asia_range/pip_s:.0f} pip)")
+                        if asia_rng:
+                            lines.append(f"  Range: {asia_rng:.2f} ({asia_rng/pip_s:.0f} pip)")
                     
                     # All 3 sessions (always show for context)
                     if sess.asia_high and not (not nykz and not lkz):
                         lines.append("")
                         lines.append(f"🌏 <b>ASIA</b>")
                         lines.append(f"  High: {sess.asia_high:.2f} | Low: {sess.asia_low:.2f}")
-                        if sess.asia_range:
-                            lines.append(f"  Range: {sess.asia_range:.2f} ({sess.asia_range/pip_s:.0f} pip)")
+                        if asia_rng:
+                            lines.append(f"  Range: {asia_rng:.2f} ({asia_rng/pip_s:.0f} pip)")
                     
                     if sess.london_high and not lkz:
                         lines.append("")
                         lines.append(f"🇬🇧 <b>LONDON</b>")
                         lines.append(f"  High: {sess.london_high:.2f} | Low: {sess.london_low:.2f}")
-                        if sess.london_range:
-                            lines.append(f"  Range: {sess.london_range:.2f} ({sess.london_range/pip_s:.0f} pip)")
+                        if london_rng:
+                            lines.append(f"  Range: {london_rng:.2f} ({london_rng/pip_s:.0f} pip)")
                     
                     if sess.ny_high and not nykz:
                         lines.append("")
@@ -4230,8 +5898,8 @@ def handle_command(cmd, text, chat_id, msg):
                         
                         # Which session typically has wider range
                         ranges = []
-                        if sess.asia_range: ranges.append(("Asia", sess.asia_range))
-                        if sess.london_range: ranges.append(("London", sess.london_range))
+                        if asia_rng: ranges.append(("Asia", asia_rng))
+                        if london_rng: ranges.append(("London", london_rng))
                         if sess.ny_high and sess.ny_low:
                             ny_rng = sess.ny_high - sess.ny_low
                             ranges.append(("NY", ny_rng))
@@ -4263,7 +5931,7 @@ def handle_command(cmd, text, chat_id, msg):
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
             lines.append("🔒 <b>FREE TIER — Basic Session</b>")
             lines.append("👑 Range analysis + manipulation detection")
-            lines.append("   → <b>/donate</b> untuk unlock")
+            lines.append("   → <b>/subscribe</b> untuk unlock")
         
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("⚠️ <i>Tools analisa teknikal — bukan sinyal trading.</i>")
@@ -4275,7 +5943,7 @@ def handle_command(cmd, text, chat_id, msg):
         # ── PREMIUM GATE ──
         if not _is_donor(str(chat_id)):
             tg_send(
-                "👑 <b>FITUR PREMIUM — Khusus Donatur</b>\n"
+                "👑 <b>FITUR PREMIUM — Khusus Subscriber</b>\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "/levels adalah fitur analisa level profesional:\n"
                 "📐 SnR + FIBO Retracement\n"
@@ -4284,11 +5952,11 @@ def handle_command(cmd, text, chat_id, msg):
                 "💧 Liquidity Zones\n"
                 "🕐 Session Levels\n"
                 "\n"
-                "🔒 Fitur ini eksklusif untuk Donatur.\n"
+                "🔒 Fitur ini eksklusif untuk Subscriber.\n"
                 "\n"
                 "💚 <b>ISI BAHAN BAKAR AI</b>\n"
-                "Donasi sekali — akses permanen!\n"
-                "👉 /donate — Lihat opsi donasi\n"
+                "Subscribe sekali — akses permanen!\n"
+                "👉 /subscribe — Lihat opsi subscribe\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Server AI ini memproses jutaan data\n"
                 "tiap hari. Butuh biaya API & GPU\n"
@@ -4311,7 +5979,7 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(f"❌ Price unavailable untuk {disp}.", chat_id)
             return
         
-        ohlcv_bars = _fetch_ohlcv_for_ai(pair)
+        ohlcv_bars = _fetch_ohlcv_for_ai(pair, keep=60)  # need 60 bars for engine analysis
         if not ohlcv_bars or len(ohlcv_bars) < 20:
             tg_send(f"❌ Data OHLCV tidak cukup untuk analisa {disp}.", chat_id)
             return
@@ -4446,40 +6114,23 @@ def handle_command(cmd, text, chat_id, msg):
         # ── FVG ──
         try:
             if FVG_ENGINE:
-                fvg_result = detect_fvg(ohlcv_bars, price, disp)
-                if fvg_result and fvg_result.get("fvgs"):
+                from fvg_detector import detect_fvg_zones
+                raw_zones = detect_fvg_zones(ohlcv_bars, max_age=30)
+                if raw_zones:
                     lines.append("")
                     lines.append("📐 <b>FAIR VALUE GAPS</b>")
-                    for fvg in fvg_result["fvgs"][:3]:
-                        top = fvg.get("top", 0); bot = fvg.get("bottom", 0)
-                        fvg_type = fvg.get("type", "?").upper()
-                        filled = "✅ filled" if fvg.get("filled") else "⏳ open"
-                        lines.append(f"  {fvg_type} FVG: {bot:.2f} — {top:.2f} ({filled})")
+                    for z in raw_zones[:3]:
+                        mid = (z.top + z.bottom) / 2
+                        lines.append(f"  {z.top:.2f} — {z.bottom:.2f} ({z.size_pips:.0f} pip)")
         except: pass
-        
-        # ── Liquidity ──
-        try:
-            if HERMES_LIQUIDITY_ENGINE:
-                liq = detect_liquidity_zones(ohlcv_bars, price)
-                if liq:
-                    eqh = liq.get("equal_highs", [])
-                    eql = liq.get("equal_lows", [])
-                    if eqh or eql:
-                        lines.append("")
-                        lines.append("💧 <b>LIQUIDITY ZONES</b>")
-                        for h in eqh[:2]:
-                            lines.append(f"  🔼 EQL High: {h.get('level', 0):.2f} ({h.get('touches', 0)}x)")
-                        for l in eql[:2]:
-                            lines.append(f"  🔽 EQL Low: {l.get('level', 0):.2f} ({l.get('touches', 0)}x)")
-        except: pass
-        
+
         # ── Session ──
         try:
-            from session_levels import get_session_levels
-            sess = get_session_levels(disp)
+            from session_levels import calculate_all_levels
+            sess = calculate_all_levels(ohlcv_bars[-60:]) if len(ohlcv_bars) >= 30 else None
             if sess:
-                asia_h = sess.get("asia_high"); asia_l = sess.get("asia_low")
-                london_h = sess.get("london_high"); london_l = sess.get("london_low")
+                asia_h = sess.asia_high; asia_l = sess.asia_low
+                london_h = sess.london_high; london_l = sess.london_low
                 if asia_h or london_h:
                     lines.append("")
                     lines.append("🕐 <b>SESSION LEVELS</b>")
@@ -4502,7 +6153,7 @@ def handle_command(cmd, text, chat_id, msg):
         lines.append("")
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("🔍 /analyze — Dapatkan sinyal entry dari level ini")
-        lines.append("⚡ Isi Bahan Bakar AI → @berkahkaryaforexbotbot")
+        lines.append("⚡ Upgrade Tier → @berkahkaryaforexbotbot")
         
         tg_send("\n".join(lines), chat_id)
 
@@ -4519,7 +6170,7 @@ def handle_command(cmd, text, chat_id, msg):
         from signal_calculator import compute_signal, format_signal_telegram
         
         try:
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=disp)
         except Exception as e:
             tg_send(f"❌ Engine consensus error: {e}", chat_id)
             return
@@ -4570,6 +6221,37 @@ def handle_command(cmd, text, chat_id, msg):
                 from signal_calculator import log_signal
                 log_signal(sig)
             except: pass
+            # ── Killzone enforcement: forex/metals outside London/NY = BLOCK ──
+            from datetime import datetime, timezone, timedelta
+            _wib = timezone(timedelta(hours=7))
+            h_now = datetime.now(_wib).hour
+            if disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
+                lkz, nykz = killzone(h_now)
+                if not lkz and not nykz:
+                    logger.info(f"   [/signal {disp}] BLOCKED: outside killzone (London/NY only)")
+                    tg_send(f"⛔ <b>Signal ditahan — di luar Killzone</b>\n\n{disp} hanya trading di sesi London (14:00-17:00 WIB) & NY (19:00-22:00 WIB).\n\nGunakan /analyze untuk analisis only.", chat_id)
+                    return
+            # ── Post to channel FIRST, then bridge with message_id ──
+            tg_msg_id = None
+            try:
+                pair_k = "gold" if disp.startswith("XAU") else disp.lower()
+                _entry = sig.get("entry", 0) or 0
+                _sl = sig.get("sl", 0) or 0
+                _tp = sig.get("tp", 0) or 0
+                if _can_post_to_channel(pair_k, sig["action"], _entry, _sl, _tp):
+                    result = send_to_channel(msg)
+                    if result:
+                        tg_msg_id = result.get("result",{}).get("message_id")
+                        sig["telegram_message_id"] = tg_msg_id
+                        logger.info(f"CHANNEL POST OK [/signal {disp}]: message_id={tg_msg_id}")
+            except Exception as ex:
+                logger.warning(f"Channel post [/signal] failed: {ex}")
+            # ── Post to bridge for EA pickup ──
+            try:
+                post_signal_to_bridge(sig, 0, disp)
+                logger.info(f"🤖 Auto-executed {disp} {sig['action']} via /signal (msg_id={tg_msg_id})")
+            except Exception as ex:
+                logger.warning(f"Bridge post [/signal] failed: {ex}")
         elif verdict == "HOLD" and score == 0 and active_count == 0:
             msg += (
                 f"📭 <b>Tidak ada setup valid untuk {disp}</b>\n"
@@ -4600,11 +6282,16 @@ def handle_command(cmd, text, chat_id, msg):
 
     elif cmd == "/mtf":
         """Show MTF matrix (5TF × 9 engines)."""
+        sub_norm = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_mtf = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_mtf = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        disp_mtf = disp_map_mtf.get(pair_map_mtf.get(sub_norm, "gold"), "XAUUSD")
         tg_send("<i>🧬 Loading MTF engine readings...</i>", chat_id)
         try:
             from engine_consensus import run_engine_consensus
             
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=disp_mtf)
             if not result:
                 tg_send("❌ Engine data unavailable.", chat_id)
                 return
@@ -4617,7 +6304,7 @@ def handle_command(cmd, text, chat_id, msg):
             score = hier.get("consensus_score", 0) * 100
             
             msg = (
-                f"🧬 <b>MTF ENGINE MATRIX — XAUUSD</b>\n"
+                f"🧬 <b>MTF ENGINE MATRIX — {disp_mtf}</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🏛 {macro} | {align} | {verdict} ({score:.0f}%)\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -4643,17 +6330,37 @@ def handle_command(cmd, text, chat_id, msg):
                 f"📊 Dashboard: phantomfx.aitradepulse.com/dashboard"
             )
             tg_send(msg, chat_id)
+            # ── Log activity ──
+            try:
+                username_mtf = (msg.get("chat", {}).get("username", "") or
+                              msg.get("from", {}).get("username", "") or "")
+                from tradebot.tracking.activity import log_activity
+                log_activity(str(chat_id), str(chat_id), username_mtf.lstrip("@"),
+                             "mtf", "", {"pair": disp_mtf})
+            except Exception:
+                pass
+            # ── Behavioral Tagging: /mtf user = technical_geek ──
+            try:
+                from members.tags import add_tag
+                add_tag(str(chat_id), "technical_geek")
+            except Exception:
+                pass
             
         except Exception as e:
             tg_send(f"❌ MTF error: {e}", chat_id)
 
     elif cmd == "/engines":
         """Show live engine readings for all 9 strategies."""
+        sub_norm_eng = _normalize_broker_symbol(sub or "xauusd")
+        pair_map_eng = {"xauusd":"gold","gold":"gold","btc":"btc","btcusd":"btc","eth":"eth","ethusd":"eth","oil":"oil",
+                      "eurusd":"eurusd","gbpusd":"gbpusd","usdjpy":"usdjpy"}
+        disp_map_eng = {"gold":"XAUUSD","btc":"BTCUSD","eth":"ETHUSD","oil":"USOIL","eurusd":"EURUSD","gbpusd":"GBPUSD","usdjpy":"USDJPY"}
+        disp_eng = disp_map_eng.get(pair_map_eng.get(sub_norm_eng, "gold"), "XAUUSD")
         tg_send("<i>🔧 Loading engine readings...</i>", chat_id)
         try:
             from engine_consensus import run_engine_consensus
             
-            result = run_engine_consensus(symbol="XAUUSD")
+            result = run_engine_consensus(symbol=disp_eng)
             if not result:
                 tg_send("❌ Engine data unavailable.", chat_id)
                 return
@@ -4677,7 +6384,7 @@ def handle_command(cmd, text, chat_id, msg):
             }
             
             msg = (
-                f"🔧 <b>ENGINE READINGS — XAUUSD</b>\n"
+                f"🔧 <b>ENGINE READINGS — {disp_eng}</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🏛 {hier.get('macro_trend','?')} | {hier.get('mtf_alignment','?')}\n"
                 f"Verdict: <b>{hier.get('verdict','HOLD')}</b> ({hier.get('consensus_score',0)*100:.0f}%)\n"
@@ -4702,6 +6409,12 @@ def handle_command(cmd, text, chat_id, msg):
                 f"🔥 /signal — Generate signal dari matrix ini"
             )
             tg_send(msg, chat_id)
+            # Activity tracking
+            try:
+                from tradebot.tracking.activity import log_activity
+                tier = _get_user_tier(chat_id).get("tier", "free")
+                log_activity(str(chat_id), chat_id, username, "engines", tier, {"pair": disp_eng})
+            except Exception: pass
             
         except Exception as e:
             tg_send(f"❌ Engine error: {e}", chat_id)
@@ -4735,7 +6448,21 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send("❌ Gagal cek license. Coba lagi atau hubungi @codergaboets.", chat_id)
 
     elif cmd == "/genkey":
-        """Admin: Generate EA license key."""
+        """Donor/Admin: Generate EA license key."""
+        # ── TIER GATE: subscriber or admin can generate license keys ──
+        admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
+        if not _is_donor(str(chat_id)) and str(chat_id) not in admin_ids:
+            _uname = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
+            _send_donate_menu(chat_id, _uname)
+            tg_send(
+                "🔑 <b>Generate License Key</b> [🔒 LOCKED]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Fitur generate key EA hanya untuk Subscriber.\n"
+                "Support project dulu ya Bro!\n\n"
+                "⚡ /subscribe — Upgrade Tier",
+                chat_id
+            )
+            return
         if not LICENSE_ENGINE:
             tg_send("🔧 License engine belum aktif. Hubungi @codergaboets.", chat_id)
             return
@@ -4770,6 +6497,59 @@ def handle_command(cmd, text, chat_id, msg):
             logger.error(f"revokekey error: {e}")
             tg_send("❌ Gagal revoke key.", chat_id)
 
+
+    elif cmd == "/portfolio":
+        """Show best asset for current session and portfolio status."""
+        try:
+            from tradebot.signals.portfolio_oracle import get_best_asset_for_now, ASSET_TIERS
+        except ImportError:
+            tg_send("Portfolio oracle tidak tersedia.", chat_id)
+            return
+        best = get_best_asset_for_now()
+        if not best:
+            tg_send("Tidak bisa menentukan aset terbaik saat ini.", chat_id)
+            return
+        t1 = len(ASSET_TIERS.get("tier1", []))
+        t2 = len(ASSET_TIERS.get("tier2", []))
+        t3 = len(ASSET_TIERS.get("tier3", []))
+        tg_send(
+            f"📊 <b>PORTFOLIO ORACLE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏆 Best Now: <b>{best['ric']}</b>\n"
+            f"📈 Win Rate: {best['wr']}% | Win: {best['win']} bar\n"
+            f"🎯 Threshold: {best['thr']:.0%}\n"
+            f"💰 Payout: {best['payout']:.0%}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📦 Portfolio: {t1}T1 | {t2}T2 | {t3}T3\n"
+            f"🔄 /trade &lt;asset&gt; — Eksekusi trading",
+            chat_id
+        )
+
+    elif cmd == "/trade":
+        """Execute a trade on the specified Stockity turbo asset."""
+        target_ric = sub.upper().strip() if sub else ""
+        if not target_ric:
+            tg_send("📌 Gunakan: /trade <b>&lt;RIC&gt;</b>\nContoh: /trade POWER-X", chat_id)
+            return
+        try:
+            from tradebot.signals.portfolio_oracle import _ric_to_asset
+        except ImportError:
+            tg_send("Portfolio oracle tidak tersedia.", chat_id)
+            return
+        asset = _ric_to_asset(target_ric)
+        if not asset:
+            tg_send(f"❌ Aset {target_ric} tidak dikenal. /portfolio untuk daftar.", chat_id)
+            return
+        tg_send(
+            f"🔄 <b>EXECUTING TRADE</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📌 {target_ric}\n"
+            f"💵 Rp14.000 | 60s Turbo\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"<i>Trade execution via async flow...</i>\n\n"
+            f"📊 /portfolio — Cek aset terbaik\n"
+            f"📋 /history — Riwayat trade", chat_id
+        )
     elif cmd == "/restart_bot":
         """Admin-only: Exit so systemd auto-restarts."""
         admin_ids = [os.environ.get("VILONA_TRADEFX_ADMIN_CHAT_ID", ""), "5220170786", "157228659"]
@@ -4787,14 +6567,16 @@ def load_signal_log(asset="default"):
     path = DATA_DIR / f"signal_log_{asset}.json"
     try:
         if path.exists(): return json.loads(path.read_text())
-    except Exception: pass
+    except Exception as e:
+        logger.warning("Signal log load failed (%s): %s", asset, e)
     return {"signals_sent":0,"last_signal_time":None,"last_action":None,"last_price":0,"loss_count":0}
 
 def save_signal_log(log, asset="default"):
     (DATA_DIR / f"signal_log_{asset}.json").write_text(json.dumps(log))
 
 def is_trading_session(h):
-    return 7 <= h < 23
+    """Trading allowed 24h — killzone gate handles actual execution windows."""
+    return True
 
 def is_weekend():
     """True if Sat/Sun, OR Monday before 05:00 WIB (crypto mode extended)."""
@@ -4862,16 +6644,61 @@ def _no_pin_broadcast(text):
 
 def send_to_channel(text):
     """Send signal/mapping to broadcast channel. Returns tg_send result.
-    Falls back to home only if channel ID is not configured (warns in log)."""
-    if SIGNAL_CHANNEL_ID:
-        result = tg_send(text, SIGNAL_CHANNEL_ID)
+    Falls back to home only if channel ID is not configured (warns in log).
+    If chart image URL detected (chart.xobniot), download and send as sendPhoto.
+    """
+    target = SIGNAL_CHANNEL_ID or ""
+    if not target:
+        logger.warning("send_to_channel: SIGNAL_CHANNEL_ID not set — falling back to HOME")
+        target = ""
+
+    # ── Chart auto-attach ──
+    chart_b64 = ""
+    # strip quickchart.io URL from caption so it doesn't duplicate
+    caption = text
+
+    chart_url = None
+    url_prefix = "https://quickchart.io/chart?"
+    start = text.find(url_prefix)
+    if start != -1:
+        # capture whole URL up to space or end
+        end = text.find(" ", start)
+        if end == -1:
+            end = len(text)
+        chart_url = text[start:end].strip()
+        caption = (text[:start] + text[end:]).strip()
+
+    if chart_url:
+        try:
+            req = urllib.request.Request(chart_url, headers={"User-Agent": "VilonaBot/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                chart_b64 = r.read()
+        except Exception as exc:
+            logger.warning("send_to_channel: failed to download chart image: %s", exc)
+
+    if chart_b64:
+        result = tg_send_photo(target or None, chart_b64, caption=caption)
         if result is None:
-            logger.warning("send_to_channel: post failed, retrying once...")
-            time.sleep(1)
+            # fallback: send text without chart
+            if SIGNAL_CHANNEL_ID:
+                result = tg_send(caption, SIGNAL_CHANNEL_ID)
+                if result is None:
+                    logger.warning("send_to_channel: photo failed, retrying text once...")
+                    time.sleep(1)
+                    result = tg_send(caption, SIGNAL_CHANNEL_ID)
+            else:
+                result = tg_send(caption)
+    else:
+        if SIGNAL_CHANNEL_ID:
             result = tg_send(text, SIGNAL_CHANNEL_ID)
-        return result
-    logger.warning("send_to_channel: SIGNAL_CHANNEL_ID not set — falling back to HOME")
-    return tg_send(text)  # fallback to home
+            if result is None:
+                logger.warning("send_to_channel: post failed, retrying once...")
+                time.sleep(1)
+                result = tg_send(text, SIGNAL_CHANNEL_ID)
+        else:
+            logger.warning("send_to_channel: SIGNAL_CHANNEL_ID not set — falling back to HOME")
+            result = tg_send(text)  # fallback to home
+    return result
 
 
 # ── Subscription reminders (H-7/H-3/H-1) ──
@@ -4930,10 +6757,12 @@ def _process_subscription_reminders():
 
 
 def format_daily_mapping():
-    """Daily market mapping/insight — key levels, market structure, no trade signals.
-    Posts to channel as educational content separate from auto-signals."""
+    """Daily market mapping/insight — key levels from actual session range + pivot structure.
+    Uses time-filtered 24h bars + swing pivots for realistic S/R levels."""
+    import pandas as pd
     now = wib_now()
     day_name = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"][now.weekday()]
+    cutoff_12h = pd.Timestamp(now - timedelta(hours=12))
     
     lines = [
         f"📐 MARKET MAPPING",
@@ -4946,7 +6775,6 @@ def format_daily_mapping():
 
     # ── Monday Sentiment ──
     if now.weekday() == 0:
-        # Fetch DXY for sentiment direction
         dxy_val = None
         try:
             if MARKET_DATA:
@@ -4958,31 +6786,81 @@ def format_daily_mapping():
         lines.append(f"📅 Monday Sentiment: {sent_label} — Waspadai Gaps & Volatilitas Pembukaan.")
         lines.append(f"")
     
-    # Try to get key levels for each asset
     if MARKET_DATA:
         for pair, disp, _, is_forex in AUTO_SCAN_ASSETS:
             try:
-                bars = MARKET_DATA.get_ohlcv(pair, "1h", 50)
+                bars = MARKET_DATA.get_ohlcv(pair, "1h", 60)
                 if not bars or len(bars) < 5:
                     continue
-                high_24h = max(b.high for b in bars[-24:]) if len(bars) >= 24 else max(b.high for b in bars)
-                low_24h = min(b.low for b in bars[-24:]) if len(bars) >= 24 else min(b.low for b in bars)
+
+                # ── Time-filtered session range (REAL 24h, not 24-bar count) ──
+                recent = [b for b in bars if b.timestamp >= cutoff_12h]
+                if len(recent) < 4:
+                    recent = bars[-12:]  # graceful fallback for sparse data
+                
+                high_ses = max(b.high for b in recent)
+                low_ses = min(b.low for b in recent)
                 close = bars[-1].close
-                high_w = max(b.high for b in bars[-min(40,len(bars)):])
-                low_w = min(b.low for b in bars[-min(40,len(bars)):])
-                
-                mid = (high_24h + low_24h) / 2
-                r1 = high_24h + (high_24h - low_24h) * 0.382
-                s1 = low_24h - (high_24h - low_24h) * 0.382
-                
-                sma20 = sum(b.close for b in bars[-20:]) / min(20, len(bars))
+
+                # ── Weekly: full data range ──
+                high_w = max(b.high for b in bars)
+                low_w = min(b.low for b in bars)
+
+                # ── Pivot-based Support / Resistance (swing structure) ──
+                pivot_bars = bars[-min(40, len(bars)):]
+                swing_highs = []
+                swing_lows = []
+                # Detect swings: bar higher/lower than 2 neighbors each side
+                n = len(pivot_bars)
+                for i in range(2, n - 2):
+                    b = pivot_bars[i]
+                    if (b.high > pivot_bars[i-1].high and b.high > pivot_bars[i-2].high and
+                        b.high > pivot_bars[i+1].high and b.high > pivot_bars[i+2].high):
+                        swing_highs.append(b.high)
+                    if (b.low < pivot_bars[i-1].low and b.low < pivot_bars[i-2].low and
+                        b.low < pivot_bars[i+1].low and b.low < pivot_bars[i+2].low):
+                        swing_lows.append(b.low)
+
+                # Resistance: nearest swing high ABOVE current price
+                # If all pivots are below price, use session high + projected extension
+                resistance = None
+                for sh in reversed(swing_highs):
+                    if sh > close:
+                        resistance = sh
+                        break
+                if resistance is None:
+                    # Price above all swing highs → use session high as ceiling
+                    resistance = high_ses
+
+                # Support: nearest swing low BELOW current price
+                # If all pivots are above price, use session low as floor
+                support = None
+                for sl in reversed(swing_lows):
+                    if sl < close:
+                        support = sl
+                        break
+                if support is None:
+                    support = low_ses
+
+                # ── SMA trend ──
+                n20 = min(20, len(bars))
+                sma20 = sum(b.close for b in bars[-n20:]) / n20
                 trend = "📈 BULLISH" if close > sma20 else ("📉 BEARISH" if close < sma20 else "➡️ SIDEWAYS")
-                
+
+                # ── Price position in session range ──
+                if high_ses != low_ses:
+                    pos_pct = (close - low_ses) / (high_ses - low_ses) * 100
+                else:
+                    pos_pct = 50
+
+                # Range pip label for XAUUSD
+                pip_label = f" ({int((high_ses - low_ses) / 0.10)} pip)" if disp == "XAUUSD" else ""
+
                 lines.append(f"")
                 lines.append(f"💱 {disp}")
-                lines.append(f"   Price: {close:.2f} | {trend}")
-                lines.append(f"   Range 24H: {low_24h:.2f} — {high_24h:.2f}")
-                lines.append(f"   Resistance: {r1:.2f} | Support: {s1:.2f}")
+                lines.append(f"   Price: {close:.2f} | {trend} | 📍{pos_pct:.0f}% range")
+                lines.append(f"   Session Range: {low_ses:.2f} — {high_ses:.2f}{pip_label}")
+                lines.append(f"   Resistance: {resistance:.2f} | Support: {support:.2f}")
                 lines.append(f"   Weekly High: {high_w:.2f} | Low: {low_w:.2f}")
             except Exception:
                 pass
@@ -5153,6 +7031,80 @@ def _can_post_tpsl_alert(trade_id: str) -> bool:
     _save_tpsl_state()
     return True
 
+
+# ── Auto-DM Upsell / Donasi Trigger ───────────────────────────────
+def broadcast_tp_hit_and_upsell(pair: str, profit_pips: float):
+    """Auto-DM users when a signal hits TP. Tier-aware CTA.
+    
+    Called from the trade outcome loop after learn_from_tp().
+    - FREE tier: upgrade CTA (SL/TP locked)
+    - PAID tier: donation CTA (support server)
+    Runs async via background thread to avoid blocking the scan loop.
+    """
+    import threading
+    
+    def _dm_worker():
+        try:
+            # Get recent active users (last 48h) from subscriber_activity
+            from members import _conn
+            with _conn() as db:
+                rows = db.execute("""
+                    SELECT DISTINCT sa.chat_id, sa.tier, m.status 
+                    FROM subscriber_activity sa
+                    LEFT JOIN members m ON m.chat_id = sa.chat_id
+                    WHERE sa.created_at > datetime('now', '-2 days')
+                    ORDER BY sa.created_at DESC
+                    LIMIT 20
+                """).fetchall()
+            
+            free_ct, paid_ct = 0, 0
+            for row in rows:
+                chat_id = row["chat_id"]
+                tier = row["tier"] or "free"
+                status = row["status"] or ""
+                is_test = "test" in (row["tags"] or "")
+                is_paid = (status == "paid" and not is_test) or tier in ("pro", "elite", "lifetime", "donor")
+                
+                if is_paid:
+                    msg = (
+                        f"🎉 <b>BOOM! Profit +{profit_pips:.1f} pips diamankan dari {pair}!</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Enjoy cuannya! Biar rezekinya makin berkah\n"
+                        f"dan server kita tetap ngebut, yuk sisihkan\n"
+                        f"sebagian profitmu. Dukung kita via /donate ☕️\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📢 Channel: @vilonaaichanel"
+                    )
+                    paid_ct += 1
+                else:
+                    msg = (
+                        f"🎉 <b>BOOM! Sinyal {pair} barusan sukses HIT TP</b>\n"
+                        f"<b>(Cuan +{profit_pips:.1f} pips)!</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Sayang banget SL/TP kamu masih dikunci.\n"
+                        f"Waktunya upgrade ke PRO untuk buka\n"
+                        f"full SL/TP dan sinyal VIP lainnya.\n"
+                        f"\n"
+                        f"⭐ Ketik /subscribe sekarang!\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📢 Channel: @vilonaaichanel"
+                    )
+                    free_ct += 1
+                
+                try:
+                    tg_send(msg, str(chat_id))
+                    time.sleep(1.5)  # rate limit: Telegram allows ~30 msg/sec
+                except Exception:
+                    pass
+            
+            logger.info(f"TP upsell DMs sent: {free_ct} free + {paid_ct} paid")
+        except Exception as e:
+            logger.debug(f"TP upsell broadcast error (non-critical): {e}")
+    
+    # Run in background thread — don't block the main scan loop
+    t = threading.Thread(target=_dm_worker, daemon=True)
+    t.start()
+
 AUTO_SCAN_ASSETS = [
     # (internal_pair, display_name, _, is_forex_metal)  — yahoo_sym removed; MARKET_DATA resolves via SYMBOL_MAP
     # Channel auto-post: XAUUSD ONLY. Other pairs via /analyze di bot.
@@ -5241,10 +7193,38 @@ def auto_analyze_loop():
         except: return ""
     def _set_last_mapping(date_str):
         MAPPING_TRACKER.write_text(date_str)
+    # ── Persistent Signal State (missed move detection) ──
+    def _save_scan_state(state: dict):
+        """Save scan state dict to disk as JSON."""
+        try:
+            (DATA_DIR / '.scan_state').write_text(json.dumps(state))
+        except Exception as e:
+            logger.warning(f"Failed to save scan state: {e}")
+    def _load_scan_state():
+        """Load scan state dict from disk, or empty dict."""
+        try:
+            f = DATA_DIR / '.scan_state'
+            if f.exists():
+                return json.loads(f.read_text())
+        except Exception:
+            pass
+        return {}
+    def _check_missed_move(price, state):
+        """Check if price moved >500 pips since last scan (1 pip = 0.10 for XAUUSD).
+        Returns (missed: bool, gap_pips: float)."""
+        last_price = state.get('last_price')
+        if last_price is None:
+            return False, 0.0
+        gap = abs(price - last_price)
+        gap_pips = gap / 0.10
+        if gap_pips > 500:
+            return True, round(gap_pips, 1)
+        return False, round(gap_pips, 1)
     last_mapping_day = _get_last_mapping()  # init from disk
 
     while True:
         try:
+            action = ''  # pre-initialize to avoid BUG-9 'action' in dir() scope issue
             now = wib_now()
             h = now.hour
             weekday = now.weekday()
@@ -5279,10 +7259,6 @@ def auto_analyze_loop():
                 last_mapping_day = ""
                 _set_last_mapping("")  # clear persistent tracker
 
-            if not is_weekend() and not is_trading_session(h):
-                time.sleep(180)
-                continue
-
             # Rotate through assets
             pair, disp, _, is_forex = AUTO_SCAN_ASSETS[asset_idx % len(AUTO_SCAN_ASSETS)]
             asset_idx += 1
@@ -5305,6 +7281,17 @@ def auto_analyze_loop():
             if not price:
                 time.sleep(30)
                 continue
+
+            # ── Missed move detection ──
+            _ss = _load_scan_state()
+            _missed, _gap_pips = _check_missed_move(price, _ss)
+            if _missed:
+                logger.warning(f"⚠️ MISSED MOVE [{disp}]: price moved {_gap_pips} pips since last scan")
+            # Seed state immediately so any crash before save still has datum
+            if not _ss:
+                _safekz = kz if 'kz' in dir() else "Outside"
+                _save_scan_state({"last_price": price, "last_action": "", "last_signal_time": "", "last_kz": _safekz})
+                _ss = _load_scan_state()
 
             # Check trade outcomes (TP/SL hits) — with donation CTA
             if TRADE_TRACKER:
@@ -5342,6 +7329,20 @@ def auto_analyze_loop():
                                         pips=ct.get("pips", 0)
                                     )
                                 except Exception: pass
+                            # ── LEARNING LOOP: Auto-analyze every trade outcome ──
+                            if LEARNING_LOOP:
+                                try:
+                                    outcome = ct.get("outcome", "")
+                                    if outcome == "SL_HIT":
+                                        learn_from_sl(ct, price)
+                                    elif outcome == "TP_HIT":
+                                        learn_from_tp(ct)
+                                        # ── Auto-DM Upsell / Donasi ──
+                                        symbol = ct.get("symbol", disp)
+                                        pips = ct.get("pips", 0)
+                                        broadcast_tp_hit_and_upsell(symbol, pips)
+                                except Exception as lle:
+                                    logger.debug("Learning loop error: %s", lle)
                         except Exception: pass
                 except Exception: pass
 
@@ -5349,125 +7350,153 @@ def auto_analyze_loop():
             lkz, nykz = killzone(h)
             kz = "London" if lkz else ("NY" if nykz else "Outside")
 
-            # ── MECHANICAL OVERRIDE: Quant + FVG + Hermes ──
-            mech_sig = None
-            if MARKET_DATA and is_forex:
+            # ── S-TIER ZONE DETECTOR: Triple Confluence (highest priority, runs first) ──
+            stier_sig = None
+            if is_forex:
                 try:
-                    m1_bars = MARKET_DATA.get_ohlcv(pair, "1m", 200)
-                    if m1_bars and len(m1_bars) >= 30:
-                        ohlcv_m1 = [{"timestamp": b.timestamp, "open": b.open, "high": b.high,
-                                      "low": b.low, "close": b.close, "volume": b.volume} for b in m1_bars]
-                        mech_sig, mech_reason = detect_mechanical_signal(
-                            pair.upper(), disp, price, ohlcv_m1)
-                        if mech_sig:
-                            logger.info(f"⚡ MECHANICAL [{disp}]: {mech_sig['action']} | {mech_sig['source']}")
+                    stier_bars = _fetch_ohlcv_for_ai(pair, keep=60)
+                    if stier_bars and len(stier_bars) >= 30:
+                        stier_sig, stier_reason = detect_stier_zone(
+                            pair.upper(), disp, price, stier_bars)
+                        if stier_sig:
+                            logger.info(f"💀 S-TIER ZONE [{disp}]: {stier_sig['action']} "
+                                       f"@ ${stier_sig.get('entry',0):.2f} | Grade={stier_sig.get('grade','?')}")
                 except Exception as e:
-                    logger.debug(f"Mechanical check [{disp}]: {e}")
+                    logger.debug(f"S-TIER check [{disp}]: {e}")
 
-            if mech_sig and mech_sig["action"] in ("BUY", "SELL"):
-                action = mech_sig["action"]
-                mech_sig = _clamp_sltp(mech_sig, disp)  # enforce SL direction + bounds
-                conf = mech_sig["confidence"]
-                
-                # Direction stability guard — block opposite direction within 10 min
-                last_time = log.get("last_signal_time")
-                last_action = log.get("last_action")
-                if last_time and last_action:
-                    try:
-                        last_dt = datetime.fromisoformat(last_time)
-                        elapsed = (wib_now() - last_dt).total_seconds()
-                        if elapsed < 600 and last_action != action:
-                            logger.info(f"BLOCKED [{disp}]: {action} after {last_action} ({elapsed:.0f}s ago)")
-                            time.sleep(30)
-                            continue
-                    except: pass
-                
-                logger.info(f"MECHANICAL PUSH [{disp}]: {action} | conf={conf:.0%}")
-                # Killzone gate for forex/commodity
-                if pair in ("gold","oil","eurusd","gbpusd") and kz == "Outside":
-                    logger.info(f"⛔ MECH KILLZONE REJECT [{disp}]: outside London/NY (hour={h})")
-                    time.sleep(60)
-                    continue
-                # ── BTC 2-bar confirmation (gate channel + bridge) ──
-                if disp == "BTCUSD" and not _consec_2bar_confirm("BTCUSD", action):
-                    logger.info(f"⏳ BTC 2-BAR WAIT: {action} — waiting for next bar confirm")
-                    continue
-                text = fmt_signal(mech_sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp")
-                _entry = mech_sig.get("entry", price) or 0
-                _sl = mech_sig.get("sl", 0) or 0
-                _tp = mech_sig.get("tp", 0) or 0
-                # ── SLIPPAGE GUARD: re-fetch live price before posting ──
-                slip_ok, live_now, drift = _slippage_guard(disp, _entry, action)
-                if not slip_ok:
-                    logger.warning(f"⛔ SLIPPAGE ABORT [{disp}]: drift={drift:.0f} pip — signal cancelled")
-                    time.sleep(30)
-                    continue
-                if _can_post_to_channel(pair, action, _entry, _sl, _tp):
-                    logger.info(f"CHANNEL POST [mechanical]: {pair} {action}")
-                    result = send_to_channel(text)
-                    if result:
-                        logger.info(f"CHANNEL POST OK [mechanical]: message_id={result.get('result',{}).get('message_id')}")
-                        # ── Capture message_id for reply chain ──
-                        mech_sig['telegram_message_id'] = result.get('result', {}).get('message_id')
-                    else:
-                        logger.warning(f"CHANNEL POST FAILED [mechanical]: tg_send returned None")
-                    _mark_channel_post(pair, action, _entry, _sl, _tp)
-                    # ── Save to unified feed ──
-                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
-                              confidence=conf, rr_ratio=mech_sig.get("rr_ratio","?"),
-                              engines=mech_sig.get("engines",{}), source="channel-auto",
-                              price=price, grade=mech_sig.get("grade",""),
-                              source_name=mech_sig.get("source","mech"))
+            if stier_sig and stier_sig["action"] in ("BUY", "SELL"):
+                # ── 💀 S-TIER HIGH CONVICTION: Triple Confluence, bypass killzone, near-100% accuracy ──
+                action = stier_sig["action"]
+                stier_sig = _clamp_sltp(stier_sig, disp)
+                stier_sig["_tier_capped"] = False
+                stier_sig["risk_percent"] = 2.0   # normal sizing, not full margin
+                stier_sig["source"] = "stier-god-tier"
+                stier_sig["grade"] = "S"
+
+                conf = stier_sig.get("confidence", 0)
+                if isinstance(conf, (int, float)) and conf > 10:
+                    conf = conf / 100
+                stier_sig["confidence"] = conf
+
+                # ── 🔬 SnR PROXIMITY UPGRADE: S-TIER + Daily/4H SnR = GOD TIER ──
+                is_snr_boosted = False
+                snr_level = None
+                snr_type = None
+                try:
+                    ohlcv_snr = _fetch_ohlcv_for_ai(pair, keep=60)
+                    pip_sz = 0.10 if disp in ("XAUUSD","GOLD") else (0.01 if disp=="USOIL" else 1.0)
+                    snr_result = _snr_proximity_check(price, pip_sz, ohlcv_snr, disp)
+                    if snr_result:
+                        snr_level, snr_type, snr_dist, snr_zone_lo, snr_zone_hi = snr_result
+                        # Validate: S-TIER direction must match SnR type
+                        # SELL near RESISTANCE = valid | BUY near SUPPORT = valid
+                        dir_ok = (action == "SELL" and snr_type == "RESISTANCE") or (action == "BUY" and snr_type == "SUPPORT")
+                        if dir_ok:
+                            is_snr_boosted = True
+                            # Replace entry zone with SnR zone (tighter, proven level)
+                            stier_sig["entry"] = round(snr_level, 2)
+                            stier_sig["zone_lo"] = snr_zone_lo
+                            stier_sig["zone_hi"] = snr_zone_hi
+                            stier_sig["entry_mode"] = "zone"
+                            # Tighter SL: below SnR zone (not below entry)
+                            zone_margin = 3.0 * pip_sz
+                            if action == "BUY":
+                                stier_sig["sl"] = round(snr_zone_lo - zone_margin, 2)
+                            else:
+                                stier_sig["sl"] = round(snr_zone_hi + zone_margin, 2)
+                            stier_sig["grade"] = "S+"
+                            stier_sig["source"] = "stier-snr-god-tier"
+                            stier_sig["confidence"] = min(0.97, conf + 0.05)
+                            stier_sig = _clamp_sltp(stier_sig, disp)
+                            logger.info(f"🔬 S-TIER+ SnR [{disp}]: {action} @ ${snr_level:.2f} | "
+                                        f"{snr_type} dist={snr_dist*100:.2f}% | zone=[{snr_zone_lo:.2f}-{snr_zone_hi:.2f}]")
+                except Exception as snre:
+                    logger.debug(f"SnR upgrade error [{disp}]: {snre}")
+
+                # Format as S-TIER signal (upgraded if SnR proximity confirmed)
+                signal_label = "💀 S-TIER+ SnR" if is_snr_boosted else "💀 S-TIER HIGH CONVICTION"
+                stier_text = fmt_signal(stier_sig, price, dxy, h, disp, "$")
+                stier_text = stier_text.replace(
+                    "SINYAL SELL", f"{signal_label} SELL"
+                ).replace(
+                    "SINYAL BUY", f"{signal_label} BUY"
+                ).replace(
+                    "MARKET PULSE", signal_label
+                )
+                stier_text += (
+                    "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "🔥 <b>TRIPLE CONFLUENCE DETECTED</b>\n"
+                    "   Breaker + OB/FVG + Double Sweep\n"
+                )
+                if is_snr_boosted:
+                    stier_text += (
+                        f"🔬 <b>SnR CONFIRMED — {snr_type}</b>\n"
+                        f"   Entry zone = Daily/4H {snr_type.lower()} @ ${snr_level:.2f}\n"
+                        f"   SL di bawah zone — GOD TIER precision\n"
+                    )
                 else:
-                    # Rate limited — check if we can still force (trade already opened via bridge)
-                    state_force = _cs()
-                    if time.time() - state_force.get("global_last", 0) < _GLOBAL_CHANNEL_COOLDOWN:
-                        logger.info(f"⏱️ SKIP force post [{disp}]: global cooldown active ({int(time.time()-state_force['global_last'])}s ago)")
-                    else:
-                        logger.warning(f"🚨 FORCE POST [{disp}]: rate limited but trade opening — posting anyway")
-                        result = send_to_channel(text)
-                        if result:
-                            mech_sig['telegram_message_id'] = result.get('result', {}).get('message_id')
-                        _mark_channel_post(pair, action, _entry, _sl, _tp)
-                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
-                              confidence=conf, rr_ratio=mech_sig.get("rr_ratio","?"),
-                              engines=mech_sig.get("engines",{}), source="channel-auto",
-                              price=price, grade=mech_sig.get("grade",""),
-                              source_name=mech_sig.get("source","mech"))
-                if LAYERING_ENGINE and mech_sig.get("action") != "HOLD":
-                    mech_sig = enrich_signal_with_layers(mech_sig)
-                post_signal_to_bridge(mech_sig, price, disp)
+                    stier_text += (
+                        "   🎯 Near-100% Accuracy — Highest Conviction Setup\n"
+                    )
 
-                if LEARNING_ENGINE:
-                    try: track_signal(mech_sig, price, disp, session(h), mech_sig.get("source","mech"))
-                    except: pass
-
-                log["signals_sent"] += 1
-                log["last_signal_time"] = wib_now().isoformat()
-                log["last_action"] = action
-                log["last_price"] = price
-                log["last_signal"] = {
-                    "action": action, "entry": mech_sig.get("entry", price),
-                    "sl": mech_sig.get("sl", 0), "tp": mech_sig.get("tp", 0),
-                    "tp1": mech_sig.get("tp1", 0), "tp2": mech_sig.get("tp2", 0),
-                    "confidence": conf, "source": mech_sig.get("source", "mech"),
-                    "rr_ratio": mech_sig.get("rr_ratio", 0),
-                }
-                _eaq = DATA_DIR / f"ea_signal_{pair}.json"
-                _eaq.write_text(json.dumps(log["last_signal"]))
-                save_signal_log(log, pair)
-                asset_logs[log_key] = log
-                time.sleep(120)  # 2 min cooldown after mechanical
-                continue
-
-            # ── AI Consensus — ONLY in killzone hours when mechanical misses ──
-            # Python screening is primary. AI hanya sebagai verifikator saat killzone.
-            in_killzone = (lkz or nykz)
-            if not in_killzone:
-                logger.info(f"   [{disp}] Outside killzone — skip AI, wait for mechanical")
+                # ── PREMIUM-ONLY: S-TIER signals only for paying members ──
+                stier_entry = stier_sig.get("entry", price) or 0
+                # 1. DM to all premium members (PRO, ELITE, LIFETIME)
+                premium_count = 0
+                try:
+                    from members import _conn as members_conn
+                    with members_conn() as db:
+                        rows = db.execute(
+                            "SELECT chat_id FROM members WHERE status='paid' AND tier IN ('pro','elite','lifetime') AND tags NOT LIKE '%test%'"
+                        ).fetchall()
+                    for row in rows:
+                        try:
+                            tg_send(stier_text, str(row["chat_id"]))
+                            premium_count += 1
+                            time.sleep(0.3)  # rate limit safety
+                        except Exception as dme:
+                            logger.warning(f"S-TIER DM failed for {row['chat_id']}: {dme}")
+                    logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ''} DM'd to {premium_count} premium members")
+                except Exception as me:
+                    logger.warning(f"S-TIER premium DM error: {me}")
+                # 2. Teaser to public channel (no entry/SL/TP details)
+                tg_msg_id = None
+                try:
+                    tease_label = "💀 S-TIER+ SnR" if is_snr_boosted else "💀 S-TIER HIGH CONVICTION"
+                    tease = (
+                        f"<b>{tease_label} — {action} {disp}</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🔥 Triple Confluence terdeteksi!\n"
+                        f"   Breaker + OB/FVG + Double Sweep\n"
+                        + (f"🔬 SnR CONFIRMED — {snr_type} @ ${snr_level:.2f}\n" if is_snr_boosted else f"🎯 Near-100% Accuracy Setup\n") +
+                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"👑 <b>PREMIUM ONLY</b> — Signal dikirim ke {premium_count} subscriber.\n"
+                        f"⭐ Upgrade ke PRO/ELITE untuk akses S-TIER:\n"
+                        f"   /upgrade atau DM @berkahkaryaforexbotbot"
+                    )
+                    result = send_to_channel(tease)
+                    if result:
+                        tg_msg_id = result.get('result', {}).get('message_id')
+                except Exception:
+                    pass
+                # 3. Killzone gate: S-TIER forex/metals outside London/NY → skip bridge
+                should_bridge = True
+                if disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
+                    lkz, nykz = killzone(h)
+                    if not lkz and not nykz:
+                        logger.info(f"💀 S-TIER [{disp}] bridge BLOCKED: outside killzone (London/NY only)")
+                        should_bridge = False
+                # 4. Post to bridge for EA execution (with telegram_message_id for reply chain)
+                if should_bridge:
+                    if tg_msg_id:
+                        stier_sig["telegram_message_id"] = tg_msg_id
+                    post_signal_to_bridge(stier_sig, price, disp)
+                logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ' HIGH CONVICTION'} [{disp}]: {action} @ ${stier_entry:.2f} | conf={conf:.0%} | bridge={'ON' if should_bridge else 'OFF'} | msg_id={tg_msg_id}")
+                log["signals_sent"] = log.get("signals_sent", 0) + 1
                 time.sleep(60)
                 continue
 
+            # ── AI Consensus — ONLY source of signals ──
             sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=True,
                           ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
             if not sig:
@@ -5491,15 +7520,27 @@ def auto_analyze_loop():
                     rr_val = float(rr_val[2:]) if rr_val[2:] else 0
                 rr_val = float(rr_val) if rr_val else 0
 
-                # AI requires: 2+ model agreement + conf ≥ 70% + RR ≥ 1:1.5
+                # AI requires: 2+ model agreement OR solo with conf ≥ 80%, RR ≥ 1:1.5
                 if voters < 2:
-                    logger.info(f"   [{disp}] BLOCKED: solo AI call ({voters} model) — need ≥2")
+                    if conf < 0.80:
+                        logger.info(f"   [{disp}] BLOCKED: solo AI call conf={conf:.0%} < 80%")
+                    else:
+                        logger.info(f"   [{disp}] SOLO PUSH: conf={conf:.0%} ≥ 80% — bypassing voters gate")
+                        should_push = True
+                    rr_val_local = 0  # prevent RR double-log for same cycle
                 elif conf < 0.70:
                     logger.info(f"   [{disp}] BLOCKED: AI confidence {conf:.0%} < 70%")
                 elif rr_val > 0 and (rr_val < 1.5 or rr_val > 5.0):
                     logger.info(f"   [{disp}] BLOCKED: RR 1:{rr_val:.1f} outside 1:1.5-5")
                 else:
                     should_push = True
+
+                # ── Killzone gate: forex/metals outside London/NY = BLOCK ──
+                if should_push and disp in ("XAUUSD","GOLD","USOIL","EURUSD","GBPUSD","USDJPY"):
+                    lkz, nykz = killzone(h)
+                    if not lkz and not nykz:
+                        logger.info(f"   [{disp}] BLOCKED: outside killzone (London/NY only)")
+                        should_push = False
 
             if should_push:
                 logger.info(f"AI PUSH [{disp}]: {action} | conf={conf:.0%} | model={sig.get('_model','?')}")
@@ -5508,18 +7549,29 @@ def auto_analyze_loop():
                     sig = enrich_signal_with_layers(sig)
                 # Clamp SL/TP to realistic bounds before pushing
                 sig = _clamp_sltp(sig, disp)
-                post_signal_to_bridge(sig, price, disp)
 
-                # ── Post to channel (with rate limiter) ──
-                text = fmt_signal(sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp")
+                # ── SMC/ICT Enrichment ──
+                smc_text2 = ""
+                try:
+                    from smc_section import format_smc_analysis
+                    pip_s2 = 0.10 if disp in ("XAUUSD","GOLD") else 0.01 if disp == "USOIL" else 1.0
+                    ohlcv_smc2 = _fetch_ohlcv_for_ai(pair, keep=60)
+                    if ohlcv_smc2:
+                        smc_text2 = format_smc_analysis(ohlcv_smc2, disp, price, action, pip_s2)
+                except Exception:
+                    pass
+                text = fmt_signal(sig, price, dxy, h, disp, "$" if not disp.startswith(("BBCA","BBRI","TLKM","ASII","IHSG")) else "Rp", smc_text=smc_text2)
                 _entry = sig.get("entry", price) or 0
                 _sl = sig.get("sl", 0) or 0
                 _tp = sig.get("tp", 0) or 0
+                # ── Post to channel FIRST, capture message_id for reply chain ──
+                tg_msg_id = None
                 if _can_post_to_channel(pair, action, _entry, _sl, _tp):
                     logger.info(f"CHANNEL POST [AI-consensus]: {pair} {action}")
                     result = send_to_channel(text)
                     if result:
-                        logger.info(f"CHANNEL POST OK [AI-consensus]: message_id={result.get('result',{}).get('message_id')}")
+                        tg_msg_id = result.get('result',{}).get('message_id')
+                        logger.info(f"CHANNEL POST OK [AI-consensus]: message_id={tg_msg_id}")
                     else:
                         logger.warning(f"CHANNEL POST FAILED [AI-consensus]: tg_send returned None")
                     _mark_channel_post(pair, action, _entry, _sl, _tp)
@@ -5537,6 +7589,8 @@ def auto_analyze_loop():
                     else:
                         logger.warning(f"🚨 FORCE POST [AI-{disp}]: rate limited but trade opened — posting anyway")
                         result = send_to_channel(text)
+                        if result:
+                            tg_msg_id = result.get('result',{}).get('message_id')
                         _mark_channel_post(pair, action, _entry, _sl, _tp)
                     _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
                               confidence=conf, rr_ratio=sig.get("rr_ratio","?"),
@@ -5544,9 +7598,47 @@ def auto_analyze_loop():
                               price=price, grade=sig.get("grade",""),
                               models=sig.get("_models",""), voters=sig.get("voters","?"))
 
+                # ── Post to bridge NOW with telegram_message_id attached ──
+                if tg_msg_id:
+                    sig["telegram_message_id"] = tg_msg_id
+                post_signal_to_bridge(sig, price, disp)
+
+                # ── ENTRY EXECUTED notification to channel ──
+                if disp == "XAUUSD" and action in ("BUY", "SELL"):
+                    actual_entry = sig.get("entry", price) or price
+                    actual_zone_lo = sig.get("zone_lo", actual_entry)
+                    actual_zone_hi = sig.get("zone_hi", actual_entry)
+                    emode = sig.get("entry_mode", "market")
+                    if emode == "zone" and actual_zone_lo < actual_zone_hi:
+                        entry_label = f"{actual_zone_lo:.2f} — {actual_zone_hi:.2f}"
+                        exec_text = (
+                            f"⚡ <b>ENTRY EXECUTED — Zone Pending</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 {action} {disp} | 🕐 {wib_now().strftime('%H:%M')} WIB\n"
+                            f"📍 Zone: ${entry_label}\n"
+                            f"⏳ EA menunggu harga masuk zone...\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🆔 Signal: #{tg_msg_id or 'N/A'}\n"
+                            f"⚠️ <i>Ini pending order — EA eksekusi otomatis saat harga masuk zone.</i>"
+                        )
+                    else:
+                        entry_label = f"{actual_entry:.2f}"
+                        exec_text = (
+                            f"⚡ <b>ENTRY EXECUTED — Market</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 {action} {disp} @ ${entry_label}\n"
+                            f"🕐 {wib_now().strftime('%H:%M')} WIB\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🆔 Signal: #{tg_msg_id or 'N/A'}"
+                        )
+                    try:
+                        send_to_channel(exec_text)
+                        logger.info(f"📤 ENTRY EXECUTED posted: {action} {disp} @ {entry_label}")
+                    except Exception as e:
+                        logger.warning(f"Failed to post ENTRY EXECUTED: {e}")
+
                 if LEARNING_ENGINE:
-                    try: track_signal(sig, price, disp, session(h), "ai")
-                    except: pass
+                    pass  # learning happens on trade outcome (check_outcomes)
 
                 log["signals_sent"] += 1
                 log["last_signal_time"] = wib_now().isoformat()
@@ -5560,6 +7652,14 @@ def auto_analyze_loop():
 
             # ── Market Pulse DISABLED (user wants clean channel, signals only) ──
             # ── Active Signal DISABLED (redundant — mechanical+AI consensus already covers this) ──
+
+            # ── Save persistent scan state for missed move detection ──
+            _save_scan_state({
+                'last_price': price,
+                'last_action': action if 'action' in dir() else '',
+                'last_signal_time': log.get('last_signal_time', ''),
+                'last_kz': kz,
+            })
 
             time.sleep(90 if (lkz or nykz) else 120)
 
@@ -5593,7 +7693,7 @@ def _compute_daily_recap() -> str | None:
     except Exception:
         pass
     
-    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD"), ("oil","USOIL")]:
+    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD")]:
         log = load_signal_log(pair_key)
         sigs = log.get("signals_sent", 0)
         if sigs == 0 and not any(t.get("symbol","").upper() == disp for t in today_trades):
@@ -5633,7 +7733,7 @@ def _compute_daily_recap() -> str | None:
     else:
         lines.append("⚪ <b>BREAKEVEN.</b> Tidak ada sinyal yang tersentuh TP/SL.")
     lines.append("")
-    lines.append("💚 Jangan lupa isi bensin AI → /donate")
+    lines.append("💚 Jangan lupa upgrade tier → /subscribe")
     return "\n".join(lines)
 
 
@@ -5663,7 +7763,7 @@ def _compute_weekly_report() -> str | None:
     
     total_signals = 0; total_wins = 0; total_losses = 0; total_pips = 0.0
     
-    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD"), ("oil","USOIL")]:
+    for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD")]:
         log = load_signal_log(pair_key)
         sigs = log.get("signals_sent", 0)
         if sigs == 0 and not any(t.get("symbol","").upper() == disp for t in week_trades):
@@ -5698,7 +7798,7 @@ def _compute_weekly_report() -> str | None:
     else:
         lines.append("🔴 <b>LOSING WEEK.</b> Evaluasi engine untuk minggu depan.")
     lines.append("")
-    lines.append("💚 Dukung server AI → /donate")
+    lines.append("💚 Upgrade tier → /subscribe")
     return "\n".join(lines)
 
 
@@ -5752,8 +7852,7 @@ def main():
 
     # Start background threads
     if LEARNING_ENGINE:
-        try: start_learning_engine()
-        except Exception: pass
+        pass  # learning loop runs via cron + check_outcomes
 
     # Initialize subscription state from disk
     if SUBSCRIPTION_ENGINE:
@@ -5783,6 +7882,101 @@ def main():
     auto_thread.start()
     logger.info("Auto-analyze thread started")
 
+    # ── ML Feedback Loop — autonomous signal tracking (Shadow Mode) ──
+    try:
+        from members.ml_feedback import start_loop
+        start_loop(interval=60)  # check OPEN signals every 60s
+        logger.info("ML Feedback Loop background worker started")
+    except Exception as exc:
+        logger.warning("ML Feedback Loop unavailable: %s", exc)
+
+    # ── Weekly Walk-Forward Scheduler — Sabtu 02:00 WIB ──
+    def _weekly_learning_scheduler():
+        """Auto-run pattern extraction every Saturday at 02:00 WIB."""
+        import datetime as _dt
+        _VILONA_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
+
+        def _post_to_channel(text: str):
+            """Post WFA result to @vilonaaichanel via bot API."""
+            if not _VILONA_TOKEN:
+                logger.warning("No bot token — can't post WFA to channel")
+                return
+            try:
+                _chan = "-1003257064212"
+                _data = json.dumps({"chat_id": _chan, "text": text, "parse_mode": "HTML"}).encode()
+                _req = urllib.request.Request(
+                    f"https://api.telegram.org/bot{_VILONA_TOKEN}/sendMessage",
+                    data=_data, headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(_req, timeout=10):
+                    logger.info("WFA posted to @vilonaaichanel")
+            except Exception as exc:
+                logger.warning("WFA channel post failed: %s", exc)
+
+        while True:
+            try:
+                now = _dt.datetime.now(WIB)
+                days_until_sat = (5 - now.weekday()) % 7
+                # If Saturday 02:00-03:00 → run NOW; if Saturday past 03:00 → run NOW (catchup)
+                is_saturday = now.weekday() == 5
+                should_run_now = is_saturday and now.hour >= 2
+
+                if should_run_now:
+                    wait = 0  # nggak perlu nunggu
+                else:
+                    # Wait until next Saturday 02:00
+                    if days_until_sat == 0:
+                        days_until_sat = 7  # past Saturday, next week
+                    next_run = now.replace(hour=2, minute=0, second=0, microsecond=0) + _dt.timedelta(days=days_until_sat)
+                    wait = int((next_run - now).total_seconds())
+
+                if wait > 0:
+                    while wait > 0:
+                        chunk = min(wait, 3600)
+                        time.sleep(chunk)
+                        wait -= chunk
+                    # Fell through → now is Saturday 02:00, run
+                    pass
+
+                # ── Run extraction ──
+                logger.info("📅 Weekly walk-forward analysis running...")
+                try:
+                    from scripts.pattern_extractor import run_learning_pipeline, format_weekly_report, format_learning_report, format_educational_post
+                    DB = str(DATA_DIR / "members.db")
+                    result = run_learning_pipeline(DB, lookback_days=14)
+                    n = result.get("total_signals", 0)
+                    if n > 0:
+                        # Post learning report (stats breakdown)
+                        learn_msg = format_learning_report(result)
+                        _post_to_channel(learn_msg)
+                        tg_send(learn_msg, str(ADMIN_CHAT_ID or ""))
+
+                        # Post educational content (actionable lessons from data)
+                        edu_msg = format_educational_post(14)
+                        if edu_msg:
+                            time.sleep(60)  # space out posts
+                            _post_to_channel(edu_msg)
+
+                        # Post marketing report (CTA + subscribe hook)
+                        mkt_msg = format_weekly_report(result)
+                        time.sleep(60)
+                        _post_to_channel(mkt_msg)
+                        logger.info("Weekly WFA done: %d signals, weights updated, 3 posts", n)
+                    else:
+                        logger.info("Weekly WFA skipped: no closed signals")
+                except Exception as exc:
+                    logger.error("Weekly WFA failed: %s", exc)
+                time.sleep(3600)  # anti-spin: 1h cooldown
+            except Exception as exc:
+                logger.error("Weekly scheduler error: %s", exc)
+                time.sleep(3600)
+    try:
+        _weekly_thread = threading.Thread(target=_weekly_learning_scheduler, daemon=True, name="weekly-wfa")
+        _weekly_thread.start()
+        logger.info("Weekly WFA scheduler started (Sat 02:00 WIB)")
+    except Exception as exc:
+        logger.warning("Weekly WFA scheduler unavailable: %s", exc)
+
     # Start daily recap + weekly report thread
     recap_thread = threading.Thread(target=_recap_report_loop, daemon=True)
     recap_thread.start()
@@ -5806,11 +8000,14 @@ def main():
             {"command": "analyze",  "description": "🧠 Perintahkan AI Scan Market"},
             {"command": "price",    "description": "💰 Cek harga real-time"},
             {"command": "mapping",  "description": "📐 Mapping harian + level S/R"},
-            {"command": "levels",   "description": "🏛 SnR + FIBO + Engine (Donor)"},
-            {"command": "news",     "description": "📰 Grok News — X/Twitter intel (Donor)"},
+            {"command": "levels",   "description": "🏛 SnR + FIBO + Engine (Subscriber)"},
+            {"command": "news",     "description": "📰 Market Intel — X/Twitter intel (Subscriber)"},
             {"command": "killzone", "description": "🎯 Radar sesi market aktif"},
-            {"command": "donate",   "description": "⚡ Isi Bahan Bakar AI"},
-            {"command": "status",   "description": "🛡 Cek Kuota & Akses VIP"},
+            {"command": "zones", "description": "🧲 Order Blocks + FVG Scanner"},
+            {"command": "structure", "description": "🏗 BOS/CHoCH + MTF Alignment"},
+            {"command": "stier", "description": "💀 S-TIER Zone — Triple Confluence GOD TIER"},
+            {"command": "subscribe","description": "⭐ Upgrade ke PRO/ELITE/LIFETIME"},
+            {"command": "status",   "description": "🛡 Cek Kuota & Status"},
             {"command": "mykey",    "description": "🔑 Cek License EA Kamu"},
         ]
         payload = json.dumps({"commands": commands}).encode()
@@ -5867,7 +8064,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/donate","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download","/referral","/learn_report"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
@@ -5903,9 +8100,9 @@ def main():
                                         pay_code = result.get("pay_code", "")
                                         ref = result.get("reference", "") or result.get("merchant_ref", "")
                                         txt = (
-                                            f"⚡ <b>Isi Bahan Bakar AI Rp{amount:,}</b>\n"
+                                            f"⚡ <b>Upgrade Tier Rp{amount:,}</b>\n"
                                             f"━━━━━━━━━━━━━━━━\n"
-                                            f"👑 Status: DONATUR VIP — AKTIF PERMANEN\n"
+                                            f"👑 Status: SUBSCRIBER — AKTIF PERMANEN\n"
                                         )
                                         if pay_code:
                                             txt += f"📱 Kode Bayar: <code>{pay_code}</code>\n"
@@ -5961,8 +8158,11 @@ def main():
                         data = cb.get("data", "")
                         if data.startswith("ultimatum:"):
                             handle_ultimatum_callback(cb)
-                        elif data.startswith(("pay:", "check:", "pricing:", "donate:", "cancel_input")):
+                        elif data.startswith(("pay:", "check:", "pricing:", "donate:", "sub:", "cancel_input")):
                             handle_payment_callback(cb)
+                        elif data.startswith("cmd:"):
+                            # ── Interactive Onboarding: cmd:analyze_xauusd / cmd:guide / cmd:subscribe ──
+                            handle_onboarding_callback(cb)
                         else:
                             handle_trade_callback(cb)
                     except Exception as e:

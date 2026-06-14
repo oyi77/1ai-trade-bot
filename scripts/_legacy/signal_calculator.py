@@ -571,7 +571,7 @@ def _get_order_type(action: str, entry: float, price: float, threshold: float = 
 
 
 def format_signal_telegram(signal: dict) -> str:
-    """Format signal for Telegram channel — Vilona aggressive style."""
+    """Format signal for Telegram — engine-driven with AI Partner funnel."""
     if not signal:
         return ""
 
@@ -621,10 +621,10 @@ def format_signal_telegram(signal: dict) -> str:
         f"🕐 {wib} WIB",
         f"{grade_label} | <b>Conf {conf*100:.0f}%</b>",
         f"",
-        f"🎯 <b>Entry:</b> <code>${entry:.2f}</code>",
-        f"🛑 <b>SL:</b> <code>${sl:.2f}</code> | -{pips_sl}pt",
-        f"✅ <b>TP1:</b> <code>${tp1:.2f}</code> | +{pips_target}pt",
-        f"✅ <b>TP2:</b> <code>${tp2:.2f}</code> | +{pips_target*2}pt",
+        f"📍 <b>Entry:</b> <b>${entry:.2f}</b>",
+        f"🔴 <b>SL:</b> <b>${sl:.2f}</b> | -{pips_sl} pip",
+        f"🟢 <b>TP1:</b> <b>${tp1:.2f}</b> | +{pips_target} pip",
+        f"🟢 <b>TP2:</b> <b>${tp2:.2f}</b> | +{pips_target*2} pip",
         f"{rr_label}",
         f"",
         f"━━━━━━━━━━━━━━━━━━━━━━",
@@ -634,8 +634,41 @@ def format_signal_telegram(signal: dict) -> str:
         f"{callout}",
         f"",
         f"⚠️ <i>Risk 1% per trade. Full AI — verify sendiri.</i>",
-        f"💚 Server GRATIS → /donate | @berkahkaryaforexbotbot",
+        f"━━━━━━━━━━━━━━━━━━━━━━",
+        f"",
     ]
+
+    # Battery + AI Partner funnel — engine signal = basic, AI = premium
+    lines.append(f"🔋 <b>Engine Power: ■■□□□ 67%</b> — 8 engine analisa teknikal")
+    lines.append(f"")
+    lines.append(f"🤖 Tapi ini <b>Engine Signal</b> — belum AI Consensus.")
+    lines.append(f"   Engine kasih arah, AI yang kasih Entry/SL/TP presisi.")
+    lines.append(f"   Dengan 2-3 AI + Grok News, signal lu lebih akurat.")
+    lines.append(f"")
+    lines.append(f"📰 <b>Grok News</b> [🔒 LOCKED]")
+    lines.append(f"   <i>Real-time X/Twitter market context...</i>")
+    lines.append(f"")
+    lines.append(f"⚡ <b>/subscribe</b> — Rp 50k/bulan")
+    lines.append(f"   Unlock AI Signal + Grok News + /levels + SnR/FIBO")
+    lines.append(f"   Jangan cuma andelin engine — kasih AI lu kerjaan beneran")
+
+    # Auto-append chart image at the bottom if chart_generator is available
+    try:
+        from scripts.chart_generator import build_chart_url
+        chart_url = build_chart_url(
+            symbol=symbol,
+            trend=action,
+            entry=float(entry),
+            sl=float(sl or 0),
+            tp1=float(tp1 or 0),
+            tp2=float(tp2 or 0),
+            confidence=float(conf or 0),
+            grade=grade,
+        )
+        if chart_url:
+            lines.append(f"{chart_url}")
+    except Exception as exc:
+        logger.debug("format_signal_telegram: chart embed skipped (%s)", exc)
 
     return "\n".join(lines)
 
