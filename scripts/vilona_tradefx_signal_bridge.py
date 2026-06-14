@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Vilona Trade FX Signal Bridge V2 — Multi-User Commercial Edition.
-- API key authentication + tier-based rate limiting
-- Signal queue per user / per instance (account_id-based)
-- Instance Identity: tracks per {api_key}:{account_id}
-- Broadcast mode: duplicates signals to all instances of a key
-- Compatible with VilonaTradeFX_EA.mq5 (Commercial)
+|- API key authentication + tier-based rate limiting
+|- Signal queue per user / per instance (account_id-based)
+|- Instance Identity: tracks per {api_key}:{account_id}
+|- Broadcast mode: duplicates signals to all instances of a key
+|- MT5 Daemon protocol: POST /daemon/register + /trade-status callback
+|- Trailing engine: broker-aware, daemon-routed SL modifications
+|- Telegram alerts: rejection/error/drift notifications (@vilonatradebot)
+|- Reconciliation: 5-min cycle cross-check against broker reality
+|- Compatible with VilonaTradeFX_EA.mq5 (Commercial)
 
 Usage: python3 vilona_tradefx_signal_bridge.py --port 8765 --host 0.0.0.0
   EA poll:     GET  /signal?api_key=VT-xxx&account_id=MT5-12345
+  Daemon poll: GET  /signal?mode=trailing&daemon_id=xxx
   Bot signal:  POST /signal?api_key=VT-xxx
+  Trade status:POST /trade-status  (daemon callback)
+  Daemon reg:  POST /daemon/register
   Admin keys:  GET  /admin/keys (localhost only)
   Gen key:     POST /admin/generate-key (localhost only)
-  EA download: GET  /download/ea or /ea/download
-"""
+  EA download: GET  /download/ea or /ea/download"""
 import hashlib, json, queue, time, threading, argparse, logging, os, sys, urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
