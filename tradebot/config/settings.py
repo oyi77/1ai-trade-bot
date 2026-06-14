@@ -214,6 +214,12 @@ class Settings(BaseSettings):
 
     FCS_API_KEY: str = ""
 
+    #  STOCK DATA — Free API Sources (add keys in .env to enable)
+    FINNHUB_API_KEY: str = ""
+    ALPHA_VANTAGE_API_KEY: str = ""
+    FRED_API_KEY: str = ""
+
+
     YAHOO_MIN_INTERVAL: float = 20.0
 
     BINANCE_BASE_URL: str = "https://api.binance.com"
@@ -241,9 +247,10 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     GROK_API_KEY: str = ""
+    GROQ_API_KEY: str = ""  # Free tier, ultra-fast Llama inference
     GEMINI_BACKUP_KEYS: str = ""  # comma-separated fallback keys
 
-    LLM_PREFERRED: str = "openai"  # "openai" | "deepseek" | "gemini"
+    LLM_PREFERRED: str = "groq"  # "groq" | "openai" | "deepseek" | "gemini" | "grok"
     LLM_MODEL: str = ""  # override default model
     LLM_TEMPERATURE: float = 0.1
     PAYMENT_STORE_PATH: str = str(

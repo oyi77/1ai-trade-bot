@@ -49,6 +49,7 @@ class VilonaBot(
         self.claude_key = os.environ.get("CLAUDE_API_KEY", "")
         self.fcs_api_key = os.environ.get("FCS_API_KEY", "")
         self.grok_api_key = os.environ.get("GROK_API_KEY", "")
+        self.groq_api_key = os.environ.get("GROQ_API_KEY", "")
         self.omniroute_url = os.environ.get(
             "OMNIROUTE_URL", "http://localhost:20128/v1/chat/completions"
         )
@@ -225,6 +226,7 @@ class VilonaBot(
             "elite_params": self._cmd_elite_params,
             "fvg": self._cmd_fvg,
             "sweep": self._cmd_sweep,
+            "whale": self._cmd_whale,
         }
 
     # ── Pending signals disk persistence ────────────────────────────────
@@ -514,6 +516,33 @@ class VilonaBot(
                     LOG.error("tg_send fallback failed: %s", e2)
             else:
                 LOG.error("tg_send failed to %s: %s", target, e)
+            return False
+
+    async def _tg_send_photo(
+        self,
+        photo_bytes: bytes,
+        caption: str = "",
+        chat_id: str | None = None,
+        reply_markup: dict[str, Any] | None = None,
+    ) -> bool:
+        target = chat_id or self.chat_id
+        if not target or not self.bot_token:
+            return False
+
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendPhoto"
+        data: dict[str, Any] = {"chat_id": target, "caption": caption, "parse_mode": "HTML"}
+        if reply_markup:
+            data["reply_markup"] = json.dumps(reply_markup)
+
+        files = {"photo": ("chart.png", photo_bytes, "image/png")}
+
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(url, data=data, files=files, timeout=30.0)
+                return resp.status_code == 200
+        except Exception as e:
+            LOG.warning("Failed to send photo: %s", e)
             return False
 
     async def _tg_send_video_file(self, chat_id: str, video: str) -> bool:

@@ -20,6 +20,12 @@ LOG = logging.getLogger("tradebot.agents.llm")
 # Provider config: (env_key, base_url, default_model)
 PROVIDERS: list[dict[str, str]] = [
     {
+        "name": "groq",
+        "env_key": "GROQ_API_KEY",
+        "base_url": "https://api.groq.com/openai/v1",
+        "default_model": "llama-3.3-70b-versatile",
+    },
+    {
         "name": "openai",
         "env_key": "OPENAI_API_KEY",
         "base_url": "",  # default
