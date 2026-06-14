@@ -243,6 +243,7 @@ class Settings(BaseSettings):
     GOTONG_ROYONG_PAYMENT_URL: str = ""  # Tripay link for fee collection
     GOTONG_ROYONG_MAGIC_NUMBER: int = 7771041  # MT5 EA magic number for Vilona trades
     GOTONG_ROYONG_CCXT_PREFIX: str = "vilona_ai_"  # CCXT clientOrderId prefix
+    VILONA_WEBHOOK_SECRET: str = ""  # HMAC-SHA256 secret for EA trade-close webhook
 
     DUITKU_MERCHANT_CODE: str = "D1821"
     DUITKU_API_KEY: str = ""
