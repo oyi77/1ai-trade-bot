@@ -36,7 +36,7 @@ log = logging.getLogger("bridge")
 # ── Config paths ──
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
-TIERS_FILE = os.path.join(PROJECT_DIR, "data", "vilona_tiers.json")
+TIERS_FILE = os.path.join(PROJECT_DIR, "config", "vilona_tiers.json")
 DB_PATH = os.path.join(PROJECT_DIR, "data", "vilona_licenses.db")
 KEYS_FILE = os.path.join(PROJECT_DIR, "api_keys.json")  # legacy — for migration only
 
