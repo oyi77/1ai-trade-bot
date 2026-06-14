@@ -430,35 +430,23 @@ class VilonaSignalDispatcher:
     # ── BROKER PLATFORM DISCOVERY ──────────────────────────────────
 
     async def _get_user_platforms(self, chat_id: str) -> list[str]:
-        """Return platforms linked by a user (ordered by priority)."""
-        import sqlite3
-        from pathlib import Path
+        """Return platforms linked by a user (ordered by priority).
 
-        DB_PATH = Path(__file__).resolve().parent.parent / "data" / "tradebot.db"
+        Uses PlatformLinkService for decryption transparency.
+        """
+        from tradebot.services.platform_link_service import PlatformLinkService
 
-        def _query():
-            try:
-                conn = sqlite3.connect(str(DB_PATH))
-                conn.row_factory = sqlite3.Row
-                rows = conn.execute(
-                    "SELECT platform, credentials FROM user_platforms "
-                    "WHERE user_id = ? AND status = 'active'",
-                    (chat_id,),
-                ).fetchall()
-                conn.close()
+        svc = PlatformLinkService()
+        linked = await svc.get_linked_platforms(chat_id)
 
-                # Prioritize: stockity > deriv > ccxt > mt5
-                order = {"stockity": 0, "deriv": 1, "ccxt": 2, "mt5": 3}
-                platforms: list[str] = [
-                    r["platform"] for r in rows
-                    if r["credentials"] and r["credentials"] != "{}"
-                ]
-                platforms.sort(key=lambda p: order.get(p, 99))
-                return platforms
-            except Exception:
-                return []
-
-        return await asyncio.get_event_loop().run_in_executor(None, _query)
+        # Prioritize: stockity > deriv > ccxt > mt5
+        order = {"stockity": 0, "deriv": 1, "ccxt": 2, "mt5": 3}
+        platforms = [
+            p["platform"] for p in linked
+            if p.get("credentials") and p["credentials"] != "{}"
+        ]
+        platforms.sort(key=lambda p: order.get(p, 99))
+        return platforms
 
     # ── TELEGRAM SEND UTILITY ──────────────────────────────────────
 

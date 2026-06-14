@@ -27,6 +27,7 @@ from typing import Any
 
 import httpx
 
+from tradebot.security.crypto import get_encryptor
 from tradebot.storage.repository import get_repo
 
 LOG = logging.getLogger("tradebot.services.platform_link")
@@ -50,6 +51,28 @@ class PlatformLinkError(Exception):
 
 class PlatformLinkService:
     """Account linking service for all supported platforms."""
+
+    _ENCRYPTED_COLS = frozenset({"email", "password", "credentials"})
+
+    @staticmethod
+    def _encrypt_creds(data: dict[str, str]) -> dict[str, str]:
+        """Encrypt sensitive fields in a row dict before storage."""
+        enc = get_encryptor()
+        out = dict(data)
+        for col in PlatformLinkService._ENCRYPTED_COLS:
+            if col in out and out[col]:
+                out[col] = enc.encrypt_string(out[col])
+        return out
+
+    @staticmethod
+    def _decrypt_row(row: dict[str, Any]) -> dict[str, Any]:
+        """Decrypt sensitive fields in a row after retrieval."""
+        enc = get_encryptor()
+        out = dict(row)
+        for col in PlatformLinkService._ENCRYPTED_COLS:
+            if col in out and out[col]:
+                out[col] = enc.decrypt_string(out[col])
+        return out
 
     # ── Stockity ─────────────────────────────────────────────────────────
 
@@ -92,8 +115,13 @@ class PlatformLinkService:
         currency, balances = await self._detect_stockity_currency(cookie)
         LOG.info("Stockity currency detected: %s for user %s", currency, user_id)
 
-        # Save to user_platforms table
+        # Save to user_platforms table (encrypted at rest)
         store = _storage()
+        row_data = self._encrypt_creds({
+            "email": email,
+            "password": password,
+            "credentials": json.dumps({"cookie": cookie}),
+        })
         store.execute(
             """INSERT OR REPLACE INTO user_platforms
                (user_id, platform, label, email, password, credentials,
@@ -103,9 +131,9 @@ class PlatformLinkService:
                 user_id,
                 "stockity",
                 label,
-                email,
-                password,
-                json.dumps({"cookie": cookie}),
+                row_data["email"],
+                row_data["password"],
+                row_data["credentials"],
                 currency,
                 broker_user_id,
                 _now(),
@@ -264,6 +292,9 @@ class PlatformLinkService:
     ) -> dict[str, Any]:
         """Link a Deriv account via APP_ID and secret."""
         store = _storage()
+        creds_enc = self._encrypt_creds({
+            "credentials": json.dumps({"app_id": app_id, "secret": secret}),
+        })
         store.execute(
             """INSERT OR REPLACE INTO user_platforms
                (user_id, platform, label, credentials, currency,
@@ -273,7 +304,7 @@ class PlatformLinkService:
                 user_id,
                 "deriv",
                 label,
-                json.dumps({"app_id": app_id, "secret": secret}),
+                creds_enc["credentials"],
                 _now(),
                 _now(),
             ),
@@ -297,6 +328,9 @@ class PlatformLinkService:
     ) -> dict[str, Any]:
         """Link a CCXT exchange account."""
         store = _storage()
+        creds_enc = self._encrypt_creds({
+            "credentials": json.dumps({"exchange": exchange, "api_key": api_key, "api_secret": api_secret}),
+        })
         store.execute(
             """INSERT OR REPLACE INTO user_platforms
                (user_id, platform, label, credentials, currency,
@@ -306,7 +340,7 @@ class PlatformLinkService:
                 user_id,
                 "ccxt",
                 label,
-                json.dumps({"exchange": exchange, "api_key": api_key, "api_secret": api_secret}),
+                creds_enc["credentials"],
                 _now(),
                 _now(),
             ),
@@ -329,6 +363,9 @@ class PlatformLinkService:
     ) -> dict[str, Any]:
         """Link an MT5 account via EA bridge generated key."""
         store = _storage()
+        creds_enc = self._encrypt_creds({
+            "credentials": json.dumps({"ea_key": ea_key}),
+        })
         store.execute(
             """INSERT OR REPLACE INTO user_platforms
                (user_id, platform, label, credentials, currency,
@@ -338,7 +375,7 @@ class PlatformLinkService:
                 user_id,
                 "mt5",
                 label,
-                json.dumps({"ea_key": ea_key}),
+                creds_enc["credentials"],
                 _now(),
                 _now(),
             ),
@@ -365,24 +402,24 @@ class PlatformLinkService:
     # ── Query ────────────────────────────────────────────────────────────
 
     async def get_linked_platforms(self, user_id: str) -> list[dict[str, Any]]:
-        """Get all linked platforms for a user."""
+        """Get all linked platforms for a user (credentials decrypted in-memory)."""
         cols = ["id", "user_id", "platform", "label", "email", "password", "credentials",
                 "currency", "broker_user_id", "status", "linked_at", "updated_at"]
         rows = _storage().fetchall(
             "SELECT * FROM user_platforms WHERE user_id=? AND status='active' ORDER BY linked_at",
             (user_id,),
         )
-        return [dict(zip(cols, r)) for r in rows]
+        return [self._decrypt_row(dict(zip(cols, r))) for r in rows]
 
     async def get_platform_credentials(self, user_id: str, platform: str) -> dict[str, Any] | None:
-        """Get stored credentials for a specific platform."""
+        """Get stored credentials for a specific platform (decrypted in-memory)."""
         cols = ["id", "user_id", "platform", "label", "email", "password", "credentials",
                 "currency", "broker_user_id", "status", "linked_at", "updated_at"]
         row = _storage().fetchone(
             "SELECT * FROM user_platforms WHERE user_id=? AND platform=? AND status='active'",
             (user_id, platform),
         )
-        return dict(zip(cols, row)) if row else None
+        return self._decrypt_row(dict(zip(cols, row))) if row else None
 
     # ── Cookie refresh ───────────────────────────────────────────────────
 
@@ -409,11 +446,14 @@ class PlatformLinkService:
 
         cookie = full_cookie
         store = _storage()
+        creds_enc = self._encrypt_creds({
+            "credentials": json.dumps({"cookie": cookie}),
+        })
         sql = (
             "UPDATE user_platforms SET credentials=?, updated_at=? "
             "WHERE user_id=? AND platform='stockity'"
         )
-        store.execute(sql, (json.dumps({"cookie": cookie}), _now(), user_id))
+        store.execute(sql, (creds_enc["credentials"], _now(), user_id))
 
         LOG.info("Cookie refreshed for user %s", user_id)
         return cookie
