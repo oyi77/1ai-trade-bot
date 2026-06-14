@@ -47,6 +47,7 @@ LICENSE_CACHE = {}           # api_key → {"active": bool, "tier_info": dict}
 LICENSE_CACHE_TIME = 0
 LICENSE_CACHE_TTL = 60       # seconds
 ADMIN_SECRET = os.environ.get("VILONA_ADMIN_SECRET", "")
+DASHBOARD_DIR = "/var/www/phantomfx-dashboard/dist"
 
 # ── Global state ──
 HISTORY = deque(maxlen=500)
@@ -338,6 +339,58 @@ class SignalHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
+    _MIME = {
+        ".html": "text/html; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".js": "application/javascript; charset=utf-8",
+        ".json": "application/json",
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".woff2": "font/woff2",
+        ".ico": "image/x-icon",
+    }
+
+    def _serve_static(self, prefix="/dashboard"):
+        """Serve static files from DASHBOARD_DIR for SPA paths.
+        - /dashboard/assets/foo.js → file on disk
+        - /dashboard, /dashboard/anything → index.html (SPA fallback)"""
+        _, params = self._get_params()
+        parsed = urlparse(self.path)
+        req_path = parsed.path  # keep trailing slash for directory handling
+
+        # Strip the prefix to get the relative file path
+        rel = req_path
+        if rel.startswith(prefix):
+            rel = rel[len(prefix):]
+        if not rel or rel == "/":
+            rel = "/index.html"
+
+        file_path = os.path.normpath(os.path.join(DASHBOARD_DIR, rel.lstrip("/")))
+        # Security: ensure we don't escape DASHBOARD_DIR
+        if not file_path.startswith(os.path.normpath(DASHBOARD_DIR)):
+            self._json({"error": "forbidden"}, 403)
+            return
+
+        if not os.path.isfile(file_path):
+            # SPA fallback — all routes serve index.html
+            file_path = os.path.join(DASHBOARD_DIR, "index.html")
+
+        try:
+            with open(file_path, "rb") as f:
+                body = f.read()
+            ext = os.path.splitext(file_path)[1].lower()
+            content_type = self._MIME.get(ext, "application/octet-stream")
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "public, max-age=3600")
+            self.end_headers()
+            self.wfile.write(body)
+        except FileNotFoundError:
+            self._json({"error": "not found"}, 404)
+        except Exception:
+            self._json({"error": "static serve error"}, 500)
+
     def _get_params(self):
         parsed = urlparse(self.path)
         qs = parse_qs(parsed.query)
@@ -345,15 +398,13 @@ class SignalHandler(BaseHTTPRequestHandler):
 
     def _admin_auth(self, params):
         """Returns True if request is authorized for admin endpoints.
-        Checks: 1) query param admin_secret, 2) Authorization header, 3) localhost fallback."""
+        Checks: 1) query param admin_secret, 2) Authorization Bearer header."""
         if ADMIN_SECRET:
             if params.get("admin_secret", [None])[0] == ADMIN_SECRET:
                 return True
             auth = self.headers.get("Authorization", "")
             if auth == f"Bearer {ADMIN_SECRET}":
                 return True
-        if self.client_address[0] in ("127.0.0.1", "::1", "localhost"):
-            return True
         return False
 
     def _poll_signal(self, api_key, tier, instance_id=None):
@@ -475,12 +526,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                     self.wfile.write(page_content.encode())
                 except FileNotFoundError:
                     self._json({"error": "page not found"}, 404)
-        elif path == "/dashboard":
-            # 301 redirect to landing page
-            self.send_response(301)
-            self.send_header("Location", "/")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
+        elif path == "/dashboard" or path.startswith("/dashboard/"):
+            self._serve_static()
         elif path == "/status":
             with LOCK:
                 daemon_count = len([d for d in DAEMONS.values()
