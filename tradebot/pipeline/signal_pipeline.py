@@ -32,6 +32,7 @@ from tradebot.events import bus as event_bus
 from tradebot.exceptions import PipelineError
 from tradebot.logging import get_logger
 from tradebot.models import Signal, Tick
+from tradebot.services.vilona_dispatcher import VilonaSignalDispatcher
 
 from .middleware import MiddlewareChain
 
@@ -182,6 +183,9 @@ class SignalPipeline:
         self._mtf_timeout = mtf_timeout
         self._harmonic_timeout = harmonic_timeout
 
+        # ── Signal dispatcher (NEW) ──
+        self.dispatcher: VilonaSignalDispatcher | None = None
+
         # Event callbacks
         self._on_signal = on_signal
         self._on_error = on_error
@@ -292,6 +296,21 @@ class SignalPipeline:
                 self.metrics.signals_accepted,
                 self.metrics.signals_received,
             )
+            # ── Stage 3.5: Signal Dispatch (NEW) ──
+            if self.dispatcher is not None:
+                try:
+                    dispatch_result = await self.dispatcher.dispatch(result)
+                    LOG.info(
+                        "Dispatcher: %d delivered (showroom=%s trial=%d/%d prem=%d/%d exec=%d/%d)",
+                        dispatch_result.total_delivered,
+                        dispatch_result.showroom_sent,
+                        dispatch_result.trial_sent, dispatch_result.trial_total,
+                        dispatch_result.premium_dm_sent, dispatch_result.premium_total,
+                        dispatch_result.premium_executed, dispatch_result.premium_total,
+                    )
+                except Exception:
+                    LOG.exception("Dispatcher failed — signal still valid")
+
             await self._emit_signal(result)
         else:
             self.metrics.signals_rejected += 1
@@ -542,6 +561,7 @@ class SignalPipeline:
             f"SignalPipeline(engines={len(self.consensus._engines)}, "
             f"middleware={len(self.middleware.items)}, "
             f"orchestrator={'on' if self.orchestrator_enabled else 'off'}, "
+            f"dispatcher={'on' if self.dispatcher else 'off'}, "
             f"timeout={self.stage_timeout}s, "
             f"metrics={{accepted={self.metrics.signals_accepted}, "
             f"rejected={self.metrics.signals_rejected}}})"
