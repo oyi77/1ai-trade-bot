@@ -13,10 +13,16 @@ Usage: python3 vilona_tradefx_signal_bridge.py --port 8765 --host 0.0.0.0
   Gen key:     POST /admin/generate-key (localhost only)
   EA download: GET  /download/ea or /ea/download
 """
-import hashlib, json, time, threading, argparse, logging, os, sys, urllib.request
+import hashlib, json, queue, time, threading, argparse, logging, os, sys, urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from collections import deque, defaultdict
 from urllib.parse import urlparse, parse_qs
+
+
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    """Thread-per-request HTTP server — no head-of-line blocking."""
+    daemon_threads = True
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("bridge")
@@ -83,6 +89,11 @@ DAEMONS = {}  # daemon_id → {account_id, api_key, last_seen, hostname, mt5_ver
 DAEMON_SL_QUEUE = defaultdict(lambda: deque(maxlen=10))  # daemon_id → pending SL modifications
 TRADE_REPORTS = deque(maxlen=200)  # history of /trade-status reports
 RECONCILE_LOG = deque(maxlen=100)  # reconciliation reports
+
+# ── Telegram Alert Worker ──
+TELEGRAM_BOT_TOKEN = os.environ.get("VILONA_TELEGRAM_BOT_TOKEN", "8809864647:AAHU713FWspyWskwdLjGMhsEo7GqJnS-440")
+TELEGRAM_ALERT_CHAT_ID = os.environ.get("VILONA_ALERT_CHAT_ID", "5220170786")
+TELEGRAM_QUEUE = queue.Queue()  # thread-safe message queue
 
 def load_keys():
     global _keys_cache, _keys_cache_time
@@ -1094,15 +1105,34 @@ class SignalHandler(BaseHTTPRequestHandler):
                         DAEMONS[daemon_id]["active_ticket"] = ticket
 
                 if instance_id and instance_id in TRAILED_POSITIONS:
+                    pos = TRAILED_POSITIONS[instance_id]
                     if status == "ok":
-                        TRAILED_POSITIONS[instance_id]["current_sl"] = actual_sl
+                        pos["current_sl"] = actual_sl
                         log.info(f"📊 Trade status: {instance_id} ticket={ticket} SL→{actual_sl}")
-                    elif status == "rejected":
-                        log.warning(f"⚠️ SL rejected: {instance_id} ticket={ticket} "
+                    elif status in ("rejected", "error"):
+                        error_type = "REQUOTE" if "10016" in reason or "requote" in reason.lower() \
+                                else "INVALID_STOPS" if "10019" in reason or "invalid" in reason.lower() \
+                                else "ERROR"
+                        action = "RETRY3x" if error_type == "REQUOTE" else "RE-FETCH" if error_type == "INVALID_STOPS" else "HOLD"
+                        log.warning(f"⚠️ SL {status}: {instance_id} ticket={ticket} "
                                    f"reason={reason} — SL NOT updated in bridge")
+                        send_telegram_alert(
+                            f"⚠️ <b>SL MODIFICATION {status.upper()}</b>\n"
+                            f"<b>Instance:</b> <code>{instance_id}</code>\n"
+                            f"<b>Ticket:</b> {ticket}\n"
+                            f"<b>Error:</b> {error_type} — {reason}\n"
+                            f"<b>Bridge Action:</b> {action}\n"
+                            f"<i>SL in bridge memory is NOT updated. State remains in sync.</i>"
+                        )
                     elif status == "closed":
                         del TRAILED_POSITIONS[instance_id]
                         log.info(f"🏁 Position closed: {instance_id} ticket={ticket}")
+                        send_telegram_alert(
+                            f"🏁 <b>POSITION CLOSED</b>\n"
+                            f"<b>Instance:</b> <code>{instance_id}</code>\n"
+                            f"<b>Ticket:</b> {ticket}\n"
+                            f"<i>Removed from trailing engine.</i>"
+                        )
 
                 if status == "reconciliation":
                     RECONCILE_LOG.append({
@@ -1111,7 +1141,22 @@ class SignalHandler(BaseHTTPRequestHandler):
                         "tp": body.get("actual_tp", 0), "profit": body.get("profit", 0),
                     })
                     if instance_id and instance_id in TRAILED_POSITIONS:
-                        TRAILED_POSITIONS[instance_id]["current_sl"] = actual_sl
+                        bridge_sl = TRAILED_POSITIONS[instance_id]["current_sl"]
+                        if abs(actual_sl - bridge_sl) > 0.001:
+                            log.warning(f"🔍 DRIFT: {instance_id} bridge={bridge_sl} broker={actual_sl} — forcing sync")
+                            TRAILED_POSITIONS[instance_id]["current_sl"] = actual_sl
+                            send_telegram_alert(
+                                f"🔍 <b>SILENT DRIFT DETECTED</b>\n"
+                                f"<b>Instance:</b> <code>{instance_id}</code>\n"
+                                f"<b>Ticket:</b> {ticket}\n"
+                                f"<b>Bridge SL:</b> {bridge_sl}\n"
+                                f"<b>Broker SL:</b> {actual_sl}\n"
+                                f"<b>Delta:</b> {abs(actual_sl - bridge_sl):.3f}\n"
+                                f"<i>State forced to broker reality. Reconciliation applied.</i>"
+                            )
+                        else:
+                            log.debug(f"🔍 Reconcile OK: {instance_id} SL={actual_sl} (no drift)")
+                            TRAILED_POSITIONS[instance_id]["current_sl"] = actual_sl
 
             self._json({"status": "ok", "report_id": len(TRADE_REPORTS)})
 
@@ -1284,6 +1329,87 @@ class SignalHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         log.debug(format % args)
+
+
+# ── Telegram Alert System ──
+
+def _send_telegram_raw(message):
+    """POST HTML-formatted message to Telegram bot API. Uses urllib only."""
+    payload = json.dumps({
+        "chat_id": TELEGRAM_ALERT_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }).encode()
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    req = urllib.request.Request(url, data=payload,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        resp.read()
+
+
+def telegram_worker():
+    """Background daemon: drain TELEGRAM_QUEUE and POST to Telegram API.
+    Catches all errors silently — this thread must never die."""
+    log.info("📨 Telegram alert worker started")
+    while True:
+        try:
+            message = TELEGRAM_QUEUE.get()
+            if message is None:
+                break
+            _send_telegram_raw(message)
+        except Exception:
+            pass
+
+
+def send_telegram_alert(message):
+    """Non-blocking: push message to queue. Worker drains and sends."""
+    TELEGRAM_QUEUE.put(message)
+
+
+def reconciliation_loop():
+    """Every 5 minutes: cross-check bridge TRAILED_POSITIONS against broker reality.
+    Requests reconciliation from active daemons. Detects and alerts on silent drift."""
+    log.info("🔍 Reconciliation loop started (5-min cycle)")
+    while True:
+        time.sleep(300)
+        try:
+            with LOCK:
+                now = time.time()
+                for instance_id, pos in list(TRAILED_POSITIONS.items()):
+                    # Find the daemon responsible for this instance
+                    matched_did = None
+                    for did, d in DAEMONS.items():
+                        d_inst = f"{d.get('api_key', '')}:{d.get('account_id', '')}"
+                        if d_inst == instance_id:
+                            matched_did = did
+                            break
+
+                    if not matched_did:
+                        continue  # no daemon to reconcile against — skip
+
+                    # Check last /trade-status report for this instance
+                    last_report_ago = None
+                    for report in reversed(TRADE_REPORTS):
+                        if report.get("instance_id") == instance_id:
+                            last_report_ago = now - report.get("time", 0)
+                            break
+
+                    # If no report in 10 minutes, request reconciliation from daemon
+                    if last_report_ago is None or last_report_ago > 600:
+                        reconcile_sig = {
+                            "action": "RECONCILE",
+                            "signal_id": pos["signal_id"],
+                            "ticket": DAEMONS[matched_did].get("active_ticket", 0),
+                            "instance_id": instance_id,
+                            "bridge_sl": pos["current_sl"],
+                            "timestamp": now,
+                        }
+                        DAEMON_SL_QUEUE[matched_did].append(reconcile_sig)
+                        log.info(f"🔍 Reconcile request → {instance_id} "
+                                f"(last report {int((last_report_ago or 999)/60)}min ago)")
+        except Exception as e:
+            log.error(f"Reconciliation loop error: {e}")
 
 
 if __name__ == "__main__":
@@ -1487,7 +1613,13 @@ if __name__ == "__main__":
     cleanup_thread = threading.Thread(target=cleanup_stale_instances, daemon=True)
     cleanup_thread.start()
 
-    server = HTTPServer((args.host, args.port), SignalHandler)
+    telegram_thread = threading.Thread(target=telegram_worker, daemon=True, name="telegram-worker")
+    telegram_thread.start()
+
+    reconcile_thread = threading.Thread(target=reconciliation_loop, daemon=True, name="reconcile-loop")
+    reconcile_thread.start()
+
+    server = ThreadingHTTPServer((args.host, args.port), SignalHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
