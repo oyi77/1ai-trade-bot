@@ -235,6 +235,15 @@ class Settings(BaseSettings):
     TRIPAY_CALLBACK_URL: str = ""
     TRIPAY_DEFAULT_METHOD: str = "QRIS2"
 
+    # ═══════════════════════════════════════════════════════════════
+    #  GOTONG ROYONG — Performance Fee Billing
+    # ═══════════════════════════════════════════════════════════════
+
+    GOTONG_ROYONG_FEE_RATE: float = 0.20  # 20% of profit above HWM
+    GOTONG_ROYONG_PAYMENT_URL: str = ""  # Tripay link for fee collection
+    GOTONG_ROYONG_MAGIC_NUMBER: int = 7771041  # MT5 EA magic number for Vilona trades
+    GOTONG_ROYONG_CCXT_PREFIX: str = "vilona_ai_"  # CCXT clientOrderId prefix
+
     DUITKU_MERCHANT_CODE: str = "D1821"
     DUITKU_API_KEY: str = ""
     DUITKU_BASE_URL: str = "https://passport.duitku.com/webapi"
