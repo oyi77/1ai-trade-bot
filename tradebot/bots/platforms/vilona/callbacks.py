@@ -9,9 +9,30 @@ from tradebot.bots.base import BaseBot
 from tradebot.bots.platforms.vilona.helpers import DONATION_INPUT_STATE
 
 LOG = logging.getLogger("tradebot.bots.vilona.callbacks")
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    class _BotProtocol(BaseBot):
+        async def _tg_send(self, text: str, chat_id: str | None = None, reply_markup: dict | None = None, reply_to: int | None = None) -> bool: ...
+        async def _tg_send_photo(self, photo_bytes: bytes, caption: str = "", chat_id: str | None = None, reply_markup: dict | None = None) -> bool: ...
+        async def _tg_answer_callback(self, cb_id: str, text: str = "", show_alert: bool = False) -> bool: ...
+        _default_pair: str
+        _pending_signals: dict
+        
+        async def _cmd_analyze(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_engines(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_portfolio(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_trade(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_autotrade(self, args: list[str], chat_id: str | None = None) -> str: ...
+        def _get_best_asset_ric(self) -> str: ...
+
+    _BaseCB = _BotProtocol
+else:
+    _BaseCB = BaseBot
 
 
-class CallbackHandlersMixin(BaseBot):
+
+class CallbackHandlersMixin(_BaseCB):
     """Mixin providing callback query handlers for VilonaBot."""
 
     async def _handle_callback(self, callback_query: dict[str, Any]) -> str | None:

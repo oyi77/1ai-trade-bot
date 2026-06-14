@@ -21,9 +21,30 @@ from tradebot.bots.platforms.vilona.helpers import (
 )
 
 LOG = logging.getLogger("tradebot.bots.vilona.analysis")
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    class _BotProtocol(BaseBot):
+        async def _tg_send(self, text: str, chat_id: str | None = None, reply_markup: dict | None = None, reply_to: int | None = None) -> bool: ...
+        async def _tg_send_photo(self, photo_bytes: bytes, caption: str = "", chat_id: str | None = None, reply_markup: dict | None = None) -> bool: ...
+        async def _tg_answer_callback(self, cb_id: str, text: str = "", show_alert: bool = False) -> bool: ...
+        _default_pair: str
+        _pending_signals: dict
+        _user_last_analyze: dict
+        _engines: dict
+        _market_data: dict
+        _posted_signals: dict
+        _scan_interval_sec: int
+        
+        async def _detect_mechanical_signal(self, symbol: str) -> dict | None: ...
+
+    _BaseAN = _BotProtocol
+else:
+    _BaseAN = BaseBot
 
 
-class AnalysisHandlersMixin(BaseBot):
+
+class AnalysisHandlersMixin(_BaseAN):
     """Mixin providing AI analysis and auto-scanning methods for VilonaBot."""
 
     async def _auto_analysis_loop(self) -> None:
@@ -35,7 +56,7 @@ class AnalysisHandlersMixin(BaseBot):
         LOG.info("Auto-analysis loop started")
         while self._running:
             try:
-                for pair in SUPPORTED_PAIRS[:5]:
+                for pair in SUPPORTED_PAIRS:
                     if not self._running:
                         break
                     sig, reason = self._detect_mechanical_signal(pair)
@@ -108,9 +129,12 @@ class AnalysisHandlersMixin(BaseBot):
             grade = sig.get("grade", "?")
             rr = sig.get("rr_ratio", sig.get("rr", 0))
 
+            from tradebot.pipeline.quality_gate import ASSET_CONFIG, DEFAULT_CONFIG
+            pip_value = ASSET_CONFIG.get(display, DEFAULT_CONFIG).get("pip_value", 0.01)
+
             icon = "🟢" if action == "BUY" else "🔴"
-            sl_pips = abs(entry - sl) if sl else 0
-            tp_pips = abs(tp - entry) if tp else 0
+            sl_pips = abs(entry - sl) / pip_value if sl else 0
+            tp_pips = abs(tp - entry) / pip_value if tp else 0
 
             msg = (
                 f"{icon} <b>SINYAL {action} — {display}</b>\n"
@@ -125,10 +149,28 @@ class AnalysisHandlersMixin(BaseBot):
                 f"⚠️ NFA — Not Financial Advice"
             )
 
+            try:
+                from tradebot.analytics.charting import generate_signal_chart
+                chart_bytes = await generate_signal_chart(
+                    symbol=display,
+                    timeframe="15m",
+                    trend=action,
+                    entry=entry,
+                    sl=sl,
+                    tp1=tp,
+                    tp2=sig.get("tp2", 0.0)
+                )
+            except Exception as e:
+                LOG.warning("Failed to generate chart for broadcast: %s", e)
+                chart_bytes = None
+
             sent = 0
             for uid in all_uids:
                 try:
-                    await self._tg_send(msg, chat_id=uid)
+                    if chart_bytes:
+                        await self._tg_send_photo(photo_bytes=chart_bytes, caption=msg, chat_id=uid)
+                    else:
+                        await self._tg_send(msg, chat_id=uid)
                     sent += 1
                 except Exception:
                     LOG.debug("Broadcast failed to %s", uid)
@@ -168,7 +210,7 @@ class AnalysisHandlersMixin(BaseBot):
 
         # ── Priority 1: S-TIER Zone (mechanical, highest conviction) ──
         try:
-            from scripts.vilona_tradefx_handler import detect_stier_zone
+            from tradebot.bots.platforms.vilona.stier import detect_stier_zone
 
             stier_sig, stier_reason = detect_stier_zone(display, display, price, ohlcv_bars)
             if stier_sig and stier_sig.get("action") in ("BUY", "SELL"):
@@ -420,7 +462,7 @@ class AnalysisHandlersMixin(BaseBot):
             if not ohlcv or len(ohlcv) < 30:
                 return 1.0, None
             try:
-                from scripts.vilona_tradefx_handler import detect_stier_zone
+                from tradebot.bots.platforms.vilona.stier import detect_stier_zone
 
                 v_sig, _ = detect_stier_zone(display, display, price_f, ohlcv)
                 if v_sig and v_sig.get("action") in ("BUY", "SELL"):

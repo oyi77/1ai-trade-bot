@@ -122,11 +122,13 @@ def _print_table(title: str, columns: list[str], rows: list[list[str]]) -> None:
 
 def _print_json(data: Any) -> None:
     if _HAS_RICH:
-        _console().print(Syntax(
-            json.dumps(data, indent=2, default=str),
-            "json",
-            theme="monokai",
-        ))
+        _console().print(
+            Syntax(
+                json.dumps(data, indent=2, default=str),
+                "json",
+                theme="monokai",
+            )
+        )
     else:
         print(json.dumps(data, indent=2, default=str))
 
@@ -172,12 +174,14 @@ async def cmd_test(symbol: str) -> int:
 
     if _HAS_RICH:
         con = _console()
-        con.print(Panel(
-            f"[bold]Balance:[/]  [green]${bal or 0.0:.2f}[/]\n"
-            f"[bold]Symbols:[/]  {len(symbols)} active",
-            title="Connection Test",
-            border_style="green",
-        ))
+        con.print(
+            Panel(
+                f"[bold]Balance:[/]  [green]${bal or 0.0:.2f}[/]\n"
+                f"[bold]Symbols:[/]  {len(symbols)} active",
+                title="Connection Test",
+                border_style="green",
+            )
+        )
         tick_table = Table(title=f"{symbol} — Last {len(ticks)} Ticks", box=box.SIMPLE)
         tick_table.add_column("#", style="dim")
         tick_table.add_column("Digit", style="cyan")
@@ -187,12 +191,14 @@ async def cmd_test(symbol: str) -> int:
         con.print(tick_table)
 
         if result:
-            con.print(Panel(
-                f"[bold]Carrier:[/] {result.carrier}   "
-                f"[bold]Confidence:[/] {result.confidence * 100:.0f}%",
-                title="Momen Pattern",
-                border_style="cyan",
-            ))
+            con.print(
+                Panel(
+                    f"[bold]Carrier:[/] {result.carrier}   "
+                    f"[bold]Confidence:[/] {result.confidence * 100:.0f}%",
+                    title="Momen Pattern",
+                    border_style="cyan",
+                )
+            )
         else:
             con.print("[yellow]No Momen pattern found[/]")
 
@@ -211,7 +217,7 @@ async def cmd_test(symbol: str) -> int:
         for i, t in enumerate(ticks[-10:], 1):
             print(f"  {i:2d}.  digit={t.digit}  ${t.price:.4f}")
         if result:
-            print(f"\nMomen:  carrier={result.carrier}  conf={result.confidence*100:.0f}%")
+            print(f"\nMomen:  carrier={result.carrier}  conf={result.confidence * 100:.0f}%")
         else:
             print("\nNo Momen pattern found")
         print(f"\n── {_bold('Digit Distribution (last 100)')} ──")
@@ -274,8 +280,9 @@ async def cmd_stream(symbol: str, duration: int = 30) -> int:
         count += 1
         captured.append((tick.digit, tick.price))
         if _HAS_RICH:
-            con.print(f"  [dim]{count:3d}.[/]  digit=[cyan]{tick.digit}[/]  "
-                       f"$[yellow]{tick.price:.4f}[/]")
+            con.print(
+                f"  [dim]{count:3d}.[/]  digit=[cyan]{tick.digit}[/]  $[yellow]{tick.price:.4f}[/]"
+            )
         else:
             print(f"  {count:3d}.  digit={tick.digit}  ${tick.price:.4f}")
 
@@ -306,12 +313,12 @@ async def cmd_backtest(symbol: str, pattern: str, count: int) -> int:
 
     if _HAS_RICH and hasattr(summary, "to_dict"):
         rows = [
-            ["Symbol", getattr(summary, 'symbol', symbol)],
-            ["Strategy", getattr(summary, 'strategy', pattern)],
-            ["Total ticks", str(getattr(summary, 'total_ticks', count))],
-            ["Total trades", str(getattr(summary, 'total_trades', 0))],
-            ["Wins", str(getattr(summary, 'wins', 0))],
-            ["Losses", str(getattr(summary, 'losses', 0))],
+            ["Symbol", getattr(summary, "symbol", symbol)],
+            ["Strategy", getattr(summary, "strategy", pattern)],
+            ["Total ticks", str(getattr(summary, "total_ticks", count))],
+            ["Total trades", str(getattr(summary, "total_trades", 0))],
+            ["Wins", str(getattr(summary, "wins", 0))],
+            ["Losses", str(getattr(summary, "losses", 0))],
             ["Win rate", f"{getattr(summary, 'win_rate', 0):.1%}"],
             ["Net PnL", f"${getattr(summary, 'net_pnl', 0):+,.2f}"],
         ]
@@ -334,8 +341,11 @@ def cmd_bridge(port: int) -> int:
     )
     if _HAS_RICH:
         _console().print(
-            Panel(f"Bridge listening on [bold]{settings.BRIDGE_HOST}:{port}[/]",
-                  title="Signal Bridge", border_style="green")
+            Panel(
+                f"Bridge listening on [bold]{settings.BRIDGE_HOST}:{port}[/]",
+                title="Signal Bridge",
+                border_style="green",
+            )
         )
     else:
         print(f"\nBridge listening on {settings.BRIDGE_HOST}:{port}")
@@ -443,11 +453,13 @@ async def cmd_health() -> int:
             HealthStatus.DOWN: "red",
         }.get(report.status, "white")
 
-        con.print(Panel(
-            f"Overall: [bold {status_color}]{report.status.value}[/]",
-            title="Health Check",
-            border_style=status_color,
-        ))
+        con.print(
+            Panel(
+                f"Overall: [bold {status_color}]{report.status.value}[/]",
+                title="Health Check",
+                border_style=status_color,
+            )
+        )
 
         check_table = Table(box=box.ROUNDED, header_style="bold cyan")
         check_table.add_column("Check", style="cyan")
@@ -520,15 +532,17 @@ async def cmd_analytics() -> int:
             "BULLISH": "green",
             "BEARISH": "red",
         }.get(mapping.momentum, "yellow")
-        con.print(Panel(
-            f"Date:     [bold]{mapping.date}[/]\n"
-            f"Session:  [cyan]{mapping.current_session}[/]\n"
-            f"Momentum: [{momentum_color}]{mapping.momentum}[/]\n"
-            f"DXY:      {f'${mapping.dxy:.2f}' if mapping.dxy else 'N/A'}\n"
-            f"NFP Fri:  {'Yes' if mapping.is_nfp_friday else 'No'}",
-            title="Daily Market Mapping",
-            border_style="blue",
-        ))
+        con.print(
+            Panel(
+                f"Date:     [bold]{mapping.date}[/]\n"
+                f"Session:  [cyan]{mapping.current_session}[/]\n"
+                f"Momentum: [{momentum_color}]{mapping.momentum}[/]\n"
+                f"DXY:      {f'${mapping.dxy:.2f}' if mapping.dxy else 'N/A'}\n"
+                f"NFP Fri:  {'Yes' if mapping.is_nfp_friday else 'No'}",
+                title="Daily Market Mapping",
+                border_style="blue",
+            )
+        )
 
         if mapping.prices:
             px_table = Table(title="Key Prices", box=box.SIMPLE, header_style="bold cyan")
@@ -593,8 +607,11 @@ def cmd_bot(action: str, name: str) -> int:
             LOG.info("%s bot module loaded (%s)", name, module_path)
             if _HAS_RICH:
                 _console().print(
-                    Panel(f"[bold green]{name}[/] bot loaded\nModule: {module_path}",
-                          title="Bot Manager", border_style="green")
+                    Panel(
+                        f"[bold green]{name}[/] bot loaded\nModule: {module_path}",
+                        title="Bot Manager",
+                        border_style="green",
+                    )
                 )
             else:
                 print(f"\n{name} bot loaded (module: {module_path})")
@@ -605,8 +622,11 @@ def cmd_bot(action: str, name: str) -> int:
         LOG.info("%s bot stop requested", name)
         if _HAS_RICH:
             _console().print(
-                Panel(f"[bold yellow]{name}[/] bot stop requested",
-                      title="Bot Manager", border_style="yellow")
+                Panel(
+                    f"[bold yellow]{name}[/] bot stop requested",
+                    title="Bot Manager",
+                    border_style="yellow",
+                )
             )
         else:
             print(f"\n{name} bot stop requested")
@@ -633,8 +653,7 @@ def cmd_config(show_path: bool = False) -> int:
             if os.path.isfile(resolved):
                 if _HAS_RICH:
                     _console().print(
-                        Panel(f"[cyan]{resolved}[/]", title="Config Path",
-                              border_style="blue")
+                        Panel(f"[cyan]{resolved}[/]", title="Config Path", border_style="blue")
                     )
                 else:
                     print(f"Config path: {resolved}")
@@ -664,11 +683,13 @@ def cmd_config(show_path: bool = False) -> int:
 
     if _HAS_RICH:
         con = _console()
-        con.print(Panel(
-            f"[bold]Settings loaded[/]  ({len(settings.model_fields)} fields)",
-            title="Configuration",
-            border_style="blue",
-        ))
+        con.print(
+            Panel(
+                f"[bold]Settings loaded[/]  ({len(settings.model_fields)} fields)",
+                title="Configuration",
+                border_style="blue",
+            )
+        )
         for prefix, fields in sorted(grouped.items()):
             table = Table(title=f"[{prefix}]", box=box.SIMPLE, header_style="bold cyan")
             table.add_column("Key")
@@ -703,13 +724,15 @@ def cmd_version(json_output: bool = False) -> int:
     if json_output:
         _print_json(data)
     elif _HAS_RICH:
-        _console().print(Panel(
-            f"[bold cyan]tradebot[/]  v[bold yellow]{__version__}[/]\n"
-            f"Python  [dim]{sys.version.split()[0]}[/]\n"
-            f"Rich    [dim]{'yes' if _HAS_RICH else 'no'}[/]",
-            title="Version",
-            border_style="cyan",
-        ))
+        _console().print(
+            Panel(
+                f"[bold cyan]tradebot[/]  v[bold yellow]{__version__}[/]\n"
+                f"Python  [dim]{sys.version.split()[0]}[/]\n"
+                f"Rich    [dim]{'yes' if _HAS_RICH else 'no'}[/]",
+                title="Version",
+                border_style="cyan",
+            )
+        )
     else:
         print(f"\ntradebot  v{__version__}  (python {sys.version.split()[0]})")
 
@@ -720,11 +743,15 @@ def cmd_version(json_output: bool = False) -> int:
 
 
 def _json_result(success: bool, data: Any, error: str | None = None) -> str:
-    return json.dumps({
-        "success": success,
-        "data": data,
-        "error": error,
-    }, indent=2, default=str)
+    return json.dumps(
+        {
+            "success": success,
+            "data": data,
+            "error": error,
+        },
+        indent=2,
+        default=str,
+    )
 
 
 # ── Subcommand dispatcher ──
@@ -738,50 +765,70 @@ def _build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "-v", "--verbose", action="store_true",
+        "-v",
+        "--verbose",
+        action="store_true",
         help="Enable DEBUG-level logging",
     )
     parser.add_argument(
-        "--json", action="store_true",
+        "--json",
+        action="store_true",
         help="Output results as JSON (for programmatic use)",
     )
     parser.add_argument(
-        "-c", "--config", action="store_true",
+        "-c",
+        "--config",
+        action="store_true",
         help="Show config file path and exit",
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
     # test
     p_test = sub.add_parser("test", help="Connection + pattern test")
-    p_test.add_argument("symbol", nargs="?", default=None,
-                        help=f"Trading symbol (default: {DEFAULT_SYMBOL})")
+    p_test.add_argument(
+        "symbol", nargs="?", default=None, help=f"Trading symbol (default: {DEFAULT_SYMBOL})"
+    )
 
     # trade
     p_trade = sub.add_parser("trade", help="One live trade cycle")
-    p_trade.add_argument("symbol", nargs="?", default=None,
-                         help=f"Trading symbol (default: {DEFAULT_SYMBOL})")
+    p_trade.add_argument(
+        "symbol", nargs="?", default=None, help=f"Trading symbol (default: {DEFAULT_SYMBOL})"
+    )
 
     # stream
     p_stream = sub.add_parser("stream", help="Live tick stream (30s)")
-    p_stream.add_argument("symbol", nargs="?", default=None,
-                          help=f"Trading symbol (default: {DEFAULT_SYMBOL})")
-    p_stream.add_argument("-d", "--duration", type=int, default=30,
-                          help="Stream duration in seconds (default: 30)")
+    p_stream.add_argument(
+        "symbol", nargs="?", default=None, help=f"Trading symbol (default: {DEFAULT_SYMBOL})"
+    )
+    p_stream.add_argument(
+        "-d", "--duration", type=int, default=30, help="Stream duration in seconds (default: 30)"
+    )
 
     # backtest
     p_bt = sub.add_parser("backtest", help="Tick-by-tick historical backtest")
-    p_bt.add_argument("symbol", nargs="?", default=None,
-                      help=f"Trading symbol (default: {DEFAULT_SYMBOL})")
-    p_bt.add_argument("pattern", nargs="?", default="Momen",
-                      choices=["Momen", "Adjacency", "Streak"],
-                      help="Pattern type (default: Momen)")
-    p_bt.add_argument("count", nargs="?", type=int, default=500,
-                      help="Number of ticks to fetch (default: 500)")
+    p_bt.add_argument(
+        "symbol", nargs="?", default=None, help=f"Trading symbol (default: {DEFAULT_SYMBOL})"
+    )
+    p_bt.add_argument(
+        "pattern",
+        nargs="?",
+        default="Momen",
+        choices=["Momen", "Adjacency", "Streak"],
+        help="Pattern type (default: Momen)",
+    )
+    p_bt.add_argument(
+        "count", nargs="?", type=int, default=500, help="Number of ticks to fetch (default: 500)"
+    )
 
     # bridge
     p_br = sub.add_parser("bridge", help="HTTP signal bridge server")
-    p_br.add_argument("port", nargs="?", type=int, default=settings.BRIDGE_PORT,
-                      help=f"HTTP port (default: {settings.BRIDGE_PORT})")
+    p_br.add_argument(
+        "port",
+        nargs="?",
+        type=int,
+        default=settings.BRIDGE_PORT,
+        help=f"HTTP port (default: {settings.BRIDGE_PORT})",
+    )
 
     # signals
     sub.add_parser("signals", help="Show latest market signal")
@@ -791,26 +838,58 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # monitor — NEW
     p_mon = sub.add_parser("monitor", help="Start HealthProbe HTTP server")
-    p_mon.add_argument("-p", "--port", type=int, default=settings.MONITORING_PROMETHEUS_PORT,
-                       help=f"HTTP port (default: {settings.MONITORING_PROMETHEUS_PORT})")
+    p_mon.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=settings.MONITORING_PROMETHEUS_PORT,
+        help=f"HTTP port (default: {settings.MONITORING_PROMETHEUS_PORT})",
+    )
 
     # analytics — NEW
     sub.add_parser("analytics", help="Daily mapping + session levels report")
 
     # bot — NEW
     p_bot = sub.add_parser("bot", help="Manage a trading bot (start/stop)")
-    p_bot.add_argument("action", choices=["start", "stop"],
-                       help="Action to perform")
-    p_bot.add_argument("name", choices=list(_KNOWN_BOTS),
-                       help="Bot name (vilona, subscription, stockity)")
+    p_bot.add_argument("action", choices=["start", "stop"], help="Action to perform")
+    p_bot.add_argument(
+        "name", choices=list(_KNOWN_BOTS), help="Bot name (vilona, subscription, stockity)"
+    )
 
     # config — NEW
     p_cfg = sub.add_parser("config", help="Show sanitised configuration")
-    p_cfg.add_argument("-p", "--path", action="store_true",
-                       help="Show config file path only")
+    p_cfg.add_argument("-p", "--path", action="store_true", help="Show config file path only")
 
     # version — NEW
     sub.add_parser("version", help="Show tradebot version")
+
+    # blast
+    p_blast = sub.add_parser("blast", help="Marketing blast (weekly, flash, freetier, referral)")
+    p_blast.add_argument(
+        "--type",
+        choices=["weekly", "flash", "freetier", "referral"],
+        required=True,
+        help="Blast type",
+    )
+    p_blast.add_argument("--dry-run", action="store_true", help="Print only, don't send")
+
+    # learn
+    p_learn = sub.add_parser("learn", help="Run autonomous learning pipeline")
+    p_learn.add_argument("--lookback", type=int, default=14, help="Lookback days (default: 14)")
+
+    # broadcast
+    p_brc = sub.add_parser("broadcast", help="Scheduled Telegram broadcasts")
+    p_brc.add_argument(
+        "--type",
+        choices=["levels", "ta", "btc-chart", "winrate"],
+        required=True,
+        help="Broadcast type",
+    )
+    p_brc.add_argument("--dry-run", action="store_true", help="Print only, don't send")
+
+    # maintenance
+    p_maint = sub.add_parser("maintenance", help="Maintenance utilities")
+    p_maint.add_argument("--action", choices=["backup"], required=True, help="Action to perform")
 
     return parser
 
@@ -861,6 +940,42 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_config(show_path=getattr(args, "path", False))
     elif command == "version":
         return cmd_version()
+    elif command == "blast":
+        from tradebot.services.marketing_service import MarketingService
+
+        asyncio.run(MarketingService().execute_blast(args.type, getattr(args, "dry_run", False)))
+        return 0
+    elif command == "learn":
+        import json
+        from pathlib import Path
+
+        from tradebot.analytics.learning import format_learning_report, run_learning_pipeline
+
+        db_path = str(Path(settings.DATA_DIR) / "vilona_tradefx" / "members.db")
+        res = run_learning_pipeline(db_path, args.lookback)
+        print(format_learning_report(res))
+        print("\nSuggested Weights:", json.dumps(res.get("suggested_weights"), indent=2))
+        return 0
+    elif command == "broadcast":
+        from tradebot.services.broadcast_service import BroadcastService
+
+        svc = BroadcastService()
+        if args.type == "levels":
+            asyncio.run(svc.broadcast_levels(getattr(args, "dry_run", False)))
+        elif args.type == "ta":
+            asyncio.run(svc.broadcast_tech_analysis(getattr(args, "dry_run", False)))
+        elif args.type == "btc-chart":
+            asyncio.run(svc.broadcast_btc_chart(getattr(args, "dry_run", False)))
+        elif args.type == "winrate":
+            asyncio.run(svc.broadcast_weekly_winrate(getattr(args, "dry_run", False)))
+        return 0
+    elif command == "maintenance":
+        if args.action == "backup":
+            from tradebot.services.backup_service import execute_backup
+
+            asyncio.run(execute_backup())
+        return 0
+
     else:
         parser.print_help()
         return 1
@@ -869,23 +984,30 @@ def main(argv: list[str] | None = None) -> int:
 def _json_mode(command: str, args: argparse.Namespace) -> int:
     """Run a command in JSON-only output mode and print JSON to stdout."""
     if command == "health":
+
         async def _h():
             h = HealthService()
             r = await h.run_all()
             print(_json_result(r.ok, r.to_dict()))
             return 0
+
         return asyncio.run(_h())
 
     elif command == "version":
-        print(_json_result(True, {
-            "version": __version__,
-            "python": sys.version.split()[0],
-            "rich": _HAS_RICH,
-        }))
+        print(
+            _json_result(
+                True,
+                {
+                    "version": __version__,
+                    "python": sys.version.split()[0],
+                    "rich": _HAS_RICH,
+                },
+            )
+        )
         return 0
 
     elif command == "config":
-        SECRET_KEYS={ "COOKIE", "AUTH", "TOKEN"}  # noqa: N806
+        SECRET_KEYS = {"COOKIE", "AUTH", "TOKEN"}  # noqa: N806
         safe: dict[str, Any] = {}
         for field_name in settings.model_fields:
             value = getattr(settings, field_name)

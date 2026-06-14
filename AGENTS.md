@@ -77,7 +77,7 @@ The codebase has been unified. The principle is:
 - **Signal caching:** `run_engine_consensus()` results cached via `TieredCache` (120s TTL) — multiple users in the same time window share the same signal without re-running expensive AI.
 
 ### When to update AGENTS.md
-- Test counts change (currently 1098 — update if you change this)
+- Test counts change (currently 1110 — update if you change this)
 - New pattern is established and used in 3+ files
 - New guardrail rule learned from a bug or anti-pattern incident
 - A section is wrong (correct it; don't leave stale info)
@@ -152,7 +152,7 @@ Telegram (VilonaBot — single unified bot with button menus)
 | `tradebot/exceptions/` | TradebotError exception hierarchy |
 | `tradebot/saas/` | SaaS subscription layer |
 | `tradebot/cli.py` | Unified CLI (argparse, 15 subcommands) |
-| `tests/` | 1098 tests across 30 files |
+| `tests/` | 1110 tests across 30 files |
 | `scripts/` | Legacy standalone scripts (~70 files) — most absorbed into `tradebot` package. `scripts/_legacy/` is archive; do not import from scripts/ in tradebot/ package code. |
 | `.omo/` | AI agent scratch space (gitignored) — plans, todo lists, internal notes |
 | `docs/` | API reference, ops runbook, ownership protocol |

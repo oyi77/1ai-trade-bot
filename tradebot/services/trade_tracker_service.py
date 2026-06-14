@@ -98,12 +98,11 @@ def _pip_value(symbol: str) -> float:
 
 def _pip_size(symbol: str) -> float:
     s = symbol.upper()
-    if s in ("XAUUSD", "GOLD"):
-        return 0.10
-    if s.endswith("JPY"):
-        return 0.01
-    if s in ("USOIL", "OIL", "CL"):
-        return 0.01
+    if s in ("XAUUSD", "GOLD"): return 0.10
+    if s in ("BTCUSD", "BTC"): return 1.0
+    if s.endswith("JPY"): return 0.01
+    if s in ("USOIL", "OIL", "CL"): return 0.01
+    if s.endswith(".JK") or s.isalpha() and len(s) <= 5: return 0.01
     return 0.0001
 
 

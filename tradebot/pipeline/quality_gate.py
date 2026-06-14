@@ -245,12 +245,11 @@ class QualityGate:
 
         cfg = ASSET_CONFIG.get(symbol, DEFAULT_CONFIG)
         tfs = meta.get("timeframes", {})
-
         # ── Get ATR from M5 → M15 → H1 fallback ──
         atr_val = self._get_atr(tfs)
         if not atr_val or atr_val <= 0:
-            atr_val = _ATR_FALLBACK.get(symbol, 1.0)
-            LOG.info("%s: ATR not found in engines, using fallback=%.2f", symbol, atr_val)
+            atr_val = _ATR_FALLBACK.get(symbol) or (price * 0.005 if price else 1.0)
+            LOG.info("%s: ATR not found in engines, using dynamic fallback=%.2f", symbol, atr_val)
 
         # ── Entry = current market price (EA market execution) ──
         entry = price

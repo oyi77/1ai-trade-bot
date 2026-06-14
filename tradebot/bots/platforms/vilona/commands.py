@@ -26,8 +26,36 @@ from tradebot.services.trade_tracker_service import USD_IDR
 
 LOG = logging.getLogger("tradebot.bots.vilona.commands")
 
+from typing import TYPE_CHECKING
 
-class CommandHandlersMixin(BaseBot):
+if TYPE_CHECKING:
+    class _BotProtocol(BaseBot):
+        async def _tg_send(self, text: str, chat_id: str | None = None, reply_markup: dict | None = None, reply_to: int | None = None) -> bool: ...
+        async def _tg_send_photo(self, photo_bytes: bytes, caption: str = "", chat_id: str | None = None, reply_markup: dict | None = None) -> bool: ...
+        async def _tg_answer_callback(self, cb_id: str, text: str, show_alert: bool = False) -> bool: ...
+        _default_pair: str
+        _pending_signals: dict
+        _user_last_analyze: dict
+        _engines: dict
+        _market_data: dict
+        _posted_signals: dict
+        _scan_interval_sec: int
+        
+        async def _detect_mechanical_signal(self, symbol: str) -> str | None: ...
+        async def _cmd_analyze(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_engines(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_portfolio(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_trade(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_whale(self, args: list[str], chat_id: str | None = None) -> str: ...
+        async def _cmd_autotrade(self, args: list[str], chat_id: str | None = None) -> str: ...
+        def _get_best_asset_ric(self) -> str: ...
+
+    _Base = _BotProtocol
+else:
+    _Base = BaseBot
+
+
+class CommandHandlersMixin(_Base):
     """Mixin providing all /command handlers for VilonaBot."""
 
     async def _cmd_start(self, args: list[str], chat_id: str | None = None) -> str:
@@ -190,6 +218,24 @@ class CommandHandlersMixin(BaseBot):
             "✅ /trade_yes — Kirim ke MT5 EA\n"
             "⏭ /trade_no — Skip"
         )
+
+        try:
+            from tradebot.analytics.charting import generate_signal_chart
+            chart_bytes = await generate_signal_chart(
+                symbol=display,
+                timeframe="15m",
+                trend=sig.get("action", "BULLISH"),
+                entry=entry_price,
+                sl=sig.get("sl", 0.0),
+                tp1=sig.get("tp", 0.0),
+                tp2=sig.get("tp2", 0.0)
+            )
+            if chart_bytes:
+                sent = await self._tg_send_photo(photo_bytes=chart_bytes, caption=msg, chat_id=target)
+                if sent:
+                    return ""
+        except Exception as e:
+            LOG.warning("Failed to generate and send chart for %s: %s", display, e)
         return msg
 
     async def _cmd_status(self, args: list[str], chat_id: str | None = None) -> str:
@@ -610,7 +656,7 @@ class CommandHandlersMixin(BaseBot):
             return "❌ Signal engine tidak tersedia."
 
         try:
-            result = run_engine_consensus(symbol=symbol)
+            result = await run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"❌ Engine consensus error: {e}"
 
@@ -671,7 +717,7 @@ class CommandHandlersMixin(BaseBot):
             return "❌ Engine consensus tidak tersedia."
 
         try:
-            result = run_engine_consensus(symbol=symbol)
+            result = await run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"❌ MTF error: {e}"
 
@@ -724,7 +770,7 @@ class CommandHandlersMixin(BaseBot):
         from tradebot.services.consensus_service import run_engine_consensus
 
         try:
-            result = run_engine_consensus(symbol=symbol)
+            result = await run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"❌ MTF error: {e}"
 
@@ -778,7 +824,7 @@ class CommandHandlersMixin(BaseBot):
             return "❌ Engine consensus tidak tersedia."
 
         try:
-            result = run_engine_consensus(symbol=symbol)
+            result = await run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"❌ Engine error: {e}"
 
@@ -1294,7 +1340,7 @@ class CommandHandlersMixin(BaseBot):
             return "📡 Market pulse: Engine consensus tidak tersedia."
         result = None
         try:
-            result = run_engine_consensus(symbol=symbol)
+            result = await run_engine_consensus(symbol=symbol)
         except Exception as e:
             return f"📡 Market pulse: {e}"
         if not result:
@@ -1649,6 +1695,52 @@ class CommandHandlersMixin(BaseBot):
             f"━━━━━━━━━━━━━━━━\n"
             f"🧠 /analyze {pair} — Analisa AI lengkap"
         )
+
+    async def _cmd_whale(self, args: list[str], chat_id: str | None = None) -> str:
+        """Whale/Bandar detection — volume & smart money flow analysis."""
+        pair = args[0] if args else "xauusd"
+        display = pair.upper()
+
+        try:
+            from tradebot.signals.market import MarketAggregator
+            from tradebot.engines.whale import analyze_whale_activity, format_whale_report
+
+            agg = MarketAggregator()
+            ohlcv = await agg.fetch(display, interval="1d", count=60)
+            await agg.close()
+
+            if not ohlcv or len(ohlcv) < 30:
+                return (
+                    f"🐋 <b>WHALE SCAN — {display}</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"⚠️ Insufficient data (< 30 candles).\n"
+                    f"Coba lagi nanti atau gunakan pair lain."
+                )
+
+            opens = [c.open for c in ohlcv]
+            highs = [c.high for c in ohlcv]
+            lows = [c.low for c in ohlcv]
+            closes = [c.close for c in ohlcv]
+            volumes = [float(c.volume) for c in ohlcv]
+
+            signals = analyze_whale_activity(display, opens, highs, lows, closes, volumes)
+            report = format_whale_report(display, signals)
+
+            if report:
+                return report
+
+            return (
+                f"🐋 <b>WHALE SCAN — {display}</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"No significant whale/bandar activity detected."
+            )
+        except Exception as e:
+            LOG.warning("Whale scan failed for %s: %s", display, e)
+            return (
+                f"🐋 <b>WHALE SCAN — {display}</b>\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"❌ Error: {e}"
+            )
 
     async def _cmd_donation_input(self, args: list[str], chat_id: str | None = None) -> str:
         target = str(chat_id or "")

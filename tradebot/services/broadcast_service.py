@@ -41,23 +41,23 @@ class BroadcastService:
         LOG.info(f"Broadcasting /levels to {len(real_users)} users")
         
         msg = (
-            "🚀 <b>FITUR BARU! /levels — SnR + FIBO + Engine Deep Dive</b>\\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\\n"
-            "Sekarang kamu bisa analisa level support/resistance\\n"
-            "langsung dari bot!\\n\\n"
-            "📐 <b>Layer 1: Simple SnR + FIBO</b>\\n"
-            "• Support & Resistance dengan multi-touch confirmation\\n"
-            "• FIBO 38.2% / 50% / 61.8%\\n"
-            "• Rekomendasi SL placement (aman dari wick)\\n\\n"
-            "🏦 <b>Layer 2: Engine Deep Dive</b>\\n"
-            "• SMC Order Blocks\\n"
-            "• Fair Value Gaps (FVG)\\n"
-            "• Liquidity Zones\\n"
-            "• Session Levels\\n\\n"
-            "👑 <b>Fitur Premium — Khusus Subscriber</b>\\n"
-            "Free member bisa lihat command, akses penuh\\n"
-            "setelah subscribe.\\n\\n"
-            "🔥 Cobain sekarang: /levels xauusd\\n"
+            "🚀 <b>FITUR BARU! /levels — SnR + FIBO + Engine Deep Dive</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Sekarang kamu bisa analisa level support/resistance\n"
+            "langsung dari bot!\n\n"
+            "📐 <b>Layer 1: Simple SnR + FIBO</b>\n"
+            "• Support & Resistance dengan multi-touch confirmation\n"
+            "• FIBO 38.2% / 50% / 61.8%\n"
+            "• Rekomendasi SL placement (aman dari wick)\n\n"
+            "🏦 <b>Layer 2: Engine Deep Dive</b>\n"
+            "• SMC Order Blocks\n"
+            "• Fair Value Gaps (FVG)\n"
+            "• Liquidity Zones\n"
+            "• Session Levels\n\n"
+            "👑 <b>Fitur Premium — Khusus Subscriber</b>\n"
+            "Free member bisa lihat command, akses penuh\n"
+            "setelah subscribe.\n\n"
+            "🔥 Cobain sekarang: /levels xauusd\n"
             "💚 Support AI: /subscribe"
         )
 
@@ -84,27 +84,27 @@ class BroadcastService:
         LOG.info(f"Broadcasting Technical Analysis to {len(real_users)} users")
 
         msg = (
-            "🆕 <b>FITUR BARU — TECHNICAL ANALYSIS TERMINAL</b>\\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\\n\\n"
-            "Sekarang lu bisa analisa teknikal SMC\\n"
-            "secara <b>deterministic (no AI hallucination)</b>:\\n\\n"
-            "🧲 <b>/zones</b> — Order Blocks + FVG + Supply/Demand\\n"
-            "🏗 <b>/structure</b> — BOS/CHoCH + Trend + MTF Alignment\\n"
-            "🕐 <b>/session</b> — Killzone + Session High/Low + Range\\n\\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\\n"
-            "🆓 <b>FREE:</b> Basic analysis (1 Timeframe)\\n"
-            "👑 <b>DONOR:</b> Multi-TF + Full Depth Analysis\\n\\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\\n"
-            "🔑 <b>Cara pake:</b> DM bot → ketik command\\n"
-            "   <code>/zones xauusd</code>\\n"
-            "   <code>/structure xauusd</code>\\n"
-            "   <code>/session xauusd</code>\\n\\n"
-            "📌 Support: XAUUSD · BTCUSD · ETHUSD · USOIL · Forex\\n\\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\\n"
-            "💡 <i>Tools analisa, bukan sinyal.</i>\\n"
-            "   Lu yang baca struktur, lu yang decide entry.\\n\\n"
-            "👑 Multi-TF + Full Depth → <b>/subscribe</b>\\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\\n"
+            "🆕 <b>FITUR BARU — TECHNICAL ANALYSIS TERMINAL</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Sekarang lu bisa analisa teknikal SMC\n"
+            "secara <b>deterministic (no AI hallucination)</b>:\n\n"
+            "🧲 <b>/zones</b> — Order Blocks + FVG + Supply/Demand\n"
+            "🏗 <b>/structure</b> — BOS/CHoCH + Trend + MTF Alignment\n"
+            "🕐 <b>/session</b> — Killzone + Session High/Low + Range\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🆓 <b>FREE:</b> Basic analysis (1 Timeframe)\n"
+            "👑 <b>DONOR:</b> Multi-TF + Full Depth Analysis\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔑 <b>Cara pake:</b> DM bot → ketik command\n"
+            "   <code>/zones xauusd</code>\n"
+            "   <code>/structure xauusd</code>\n"
+            "   <code>/session xauusd</code>\n\n"
+            "📌 Support: XAUUSD · BTCUSD · ETHUSD · USOIL · Forex\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 <i>Tools analisa, bukan sinyal.</i>\n"
+            "   Lu yang baca struktur, lu yang decide entry.\n\n"
+            "👑 Multi-TF + Full Depth → <b>/subscribe</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
             "⚡ Cobain sekarang — ketik /zones xauusd"
         )
 
@@ -196,7 +196,7 @@ class BroadcastService:
             "⚠️ <i>Past performance ≠ future results. NFA.</i>",
         ])
 
-        msg = "\\n".join(lines)
+        msg = "\n".join(lines)
 
         if dry_run:
             print("=== WEEKLY WINRATE ===")
@@ -212,15 +212,15 @@ class BroadcastService:
 
     async def broadcast_btc_chart(self, dry_run: bool) -> None:
         caption = (
-            "🟢 BUY BTCUSD ₿\\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\\n"
-            "📌 SETUP | Conf 49%\\n\\n"
-            "📍 Entry: $63750\\n"
-            "🔴 SL: $63100 | -650 pip\\n"
-            "🟢 TP1: $64500 | +750 pip\\n"
-            "🟢 TP2: $65200 | +1500 pip\\n"
-            "📊 RR 1:1.4\\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\\n"
+            "🟢 BUY BTCUSD ₿\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📌 SETUP | Conf 49%\n\n"
+            "📍 Entry: $63750\n"
+            "🔴 SL: $63100 | -650 pip\n"
+            "🟢 TP1: $64500 | +750 pip\n"
+            "🟢 TP2: $65200 | +1500 pip\n"
+            "📊 RR 1:1.4\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
             "⚠️ Risk 1% per trade — verify sendiri."
         )
 

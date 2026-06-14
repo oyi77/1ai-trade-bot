@@ -31,6 +31,9 @@ def _pip_size(symbol: str = "XAUUSD") -> float:
         return 0.01
     if s in ("USOIL", "OIL", "CL"):
         return 0.01
+    # Stocks: 1 pip = $0.01 (1 cent)
+    if s.endswith(".JK") or s.isalpha() and len(s) <= 5:
+        return 0.01
     return 0.0001
 
 

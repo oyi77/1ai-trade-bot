@@ -37,9 +37,7 @@ async def execute_backup() -> None:
         LOG.info("Backup created: %s (%.1f KB)", zip_name, size_kb)
     except Exception as e:
         LOG.error("Zip creation failed: %s", e)
-        return
-
-    admin_chat_id = settings.ADMIN_CHAT_ID
+    admin_chat_id = settings.ADMIN_USER_IDS.split(",")[0] if settings.ADMIN_USER_IDS else None
     bot_token = settings.TELEGRAM_BOT_TOKEN
     
     if admin_chat_id and bot_token:

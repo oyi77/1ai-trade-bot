@@ -1,30 +1,20 @@
-"""Consensus engine service — wraps scripts/engine_consensus for clean import.
-
-Temporary proxy until scripts/engine_consensus is absorbed into
-tradebot.engines.consensus. scripts is a PEP 420 implicit namespace
-package, so imports work at runtime.
+"""Consensus engine service wrapper.
 
 Provides TTL-based caching so multiple callers requesting the same
 symbol within the cache window share a single engine run.
 
 Also provides Quant Consensus UI formatters and Sequoia-X Turtle
-screening (absorbed from scripts/vilona_tradefx_handler.py).
+screening.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import Any
-
-from scripts.engine_consensus import (  # type: ignore[import-not-found]
-    TF_WEIGHTS as _TF_WEIGHTS,
-)
-from scripts.engine_consensus import (
-    TIMEFRAMES as _TIMEFRAMES,
-)
-from scripts.engine_consensus import (
-    run_engine_consensus as _run,
-)
+from tradebot.engines.consensus import TF_WEIGHTS as _TF_WEIGHTS
+from tradebot.engines.consensus import TIMEFRAMES as _TIMEFRAMES
+from tradebot.engines.consensus import MTFConsensus
+from tradebot.engines.registry import Registry
 from tradebot.storage.cache import TieredCache
 
 # ── Sequoia-X Turtle engine (optional, soft-fail) ──
@@ -53,7 +43,7 @@ _signal_cache = TieredCache(default_ttl=120)
 # ═══════════════════════════════════════════════════════════════════
 
 
-def run_engine_consensus(
+async def run_engine_consensus(
     ohlcv: list[dict] | None = None,
     price: float | None = None,
     symbol: str = "XAUUSD",
@@ -65,7 +55,11 @@ def run_engine_consensus(
         return cached
 
     LOG.debug("Signal cache MISS for %s — running engine consensus", cache_key)
-    result = _run(ohlcv=ohlcv, price=price, symbol=symbol)
+    
+    registry = Registry()
+    mtf = MTFConsensus(registry)
+    result = await mtf.analyze(symbol=symbol, price=price)
+    
     if result:
         _signal_cache.set(cache_key, result)
     return result

@@ -14,6 +14,7 @@ from tradebot.engines.session_levels import SessionLevelsEngine
 from tradebot.engines.smc import SMCEngine
 from tradebot.engines.sweep import SweepEngine
 from tradebot.engines.tv import TVEngine
+from tradebot.engines.whale import WhaleEngine, analyze_whale_activity, format_whale_report
 
 __all__ = [
     "ChaosEngine",
@@ -23,7 +24,7 @@ __all__ = [
     "FVGEngine",
     "HermesLiquidityEngine",
     "LayeringEngine",
-    "LiquidityEngine",
+    "WhaleEngine",
     "QuantEngine",
     "Registry",
     "SessionLevelsEngine",

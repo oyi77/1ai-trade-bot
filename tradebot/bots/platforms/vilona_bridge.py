@@ -353,7 +353,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                 if _scripts not in sys.path:
                     sys.path.insert(0, _scripts)
                 from tradebot.services.consensus_service import run_engine_consensus
-                result = run_engine_consensus(symbol="XAUUSD")
+                import asyncio
+                result = asyncio.run(run_engine_consensus(symbol="XAUUSD"))
                 dashboard_output: dict[str, Any] = {
                     "symbol": result.get("symbol", "XAUUSD"),
                     "price": result.get("price", 0),

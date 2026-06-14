@@ -24,6 +24,9 @@ from .forex import ForexSource
 from .mt5_source import MT5Source
 from .stockity import StockitySource
 from .yahoo import YahooSource
+from .finnhub import FinnhubSource
+from .alpha_vantage import AlphaVantageSource
+from .fred import FREDSource, is_bond_symbol
 
 LOG = logging.getLogger("tradebot.signals.market")
 
@@ -78,11 +81,16 @@ class MarketAggregator:
     * **Stockity** for platform assets (``CRYPTO_IDX``, …).
     * **Binance/CCXT** for crypto symbols (``BTC-USD``, ``ETH-USD``, …).
     * **ForexSource** for forex pairs (``EURUSD=X``, …).
-    * **Yahoo** for everything else (stocks, indices, commodities, …).
+    * **FRED** for bonds/rates (``UST10Y``, ``FF``, ``CPI``, …).
+    * **Finnhub** for stocks (``AAPL``, ``TSLA``, …).
+    * **Alpha Vantage** as secondary stock/forex fallback.
+    * **Yahoo** as universal fallback for everything.
     * **MT5** for symbols available in MetaTrader 5.
 
     Each source is tried in priority order with automatic fallback
-    to the next available source on failure.
+    to the next available source on failure. Sources requiring API
+    keys (Finnhub, Alpha Vantage, FRED) are skipped when their key
+    is not configured.
     """
 
     def __init__(self) -> None:
@@ -93,6 +101,9 @@ class MarketAggregator:
         self._ccxt = CCXTSource()
         self._deriv = DerivSource()
         self._mt5 = MT5Source()
+        self._finnhub = FinnhubSource()
+        self._alpha_vantage = AlphaVantageSource()
+        self._fred = FREDSource()
         self._http: httpx.AsyncClient | None = None
 
         # Cache for source resolution
@@ -130,8 +141,12 @@ class MarketAggregator:
         if sym in ("XAUUSD", "USOIL", "BTCUSD", "ETHUSD"):
             return [self._mt5, self._yahoo]
 
-        # Everything else → Yahoo
-        return [self._yahoo]
+        # Bonds/rates → FRED → Finnhub → Alpha Vantage → Yahoo
+        if is_bond_symbol(sym):
+            return [self._fred, self._finnhub, self._alpha_vantage, self._yahoo]
+
+        # Stocks & everything else → Finnhub → Alpha Vantage → Yahoo
+        return [self._finnhub, self._alpha_vantage, self._yahoo]
 
     @staticmethod
     def _resolve_alias(symbol: str) -> str:
@@ -232,6 +247,9 @@ class MarketAggregator:
         await self._yahoo.close()
         await self._forex.close()
         await self._stockity.close()
+        await self._finnhub.close()
+        await self._alpha_vantage.close()
+        await self._fred.close()
         if self._http and not self._http.is_closed:
             await self._http.aclose()
 

@@ -102,11 +102,11 @@ class MarketingService:
             ]
         )
 
-        return "\\n".join(lines)
+        return "\n".join(lines)
 
     def fmt_flash_sale(self, free_count: int, premium_count: int) -> str:
         slots_left = max(3, 15 - premium_count)
-        return "\\n".join(
+        return "\n".join(
             [
                 "⚡ <b>FLASH PRO SALE — 24 JAM ONLY!</b>",
                 "━━━━━━━━━━━━━━━━━━━━━━",
@@ -139,7 +139,7 @@ class MarketingService:
         else:
             wr, wins, losses, total_usd = 0, 0, 0, 0
 
-        return "\\n".join(
+        return "\n".join(
             [
                 "🎁 <b>1 SINYAL GRATIS BUAT LO — dari Vilona</b>",
                 "━━━━━━━━━━━━━━━━━━━━━━",
@@ -202,7 +202,7 @@ class MarketingService:
         elif blast_type == "flash":
             text = self.fmt_flash_sale(len(free_users), premium_n)
             if dry_run:
-                print("\\n=== FLASH SALE ===")
+                print("\n=== FLASH SALE ===")
                 print(text)
             else:
                 if self.bot:
@@ -222,9 +222,9 @@ class MarketingService:
                 LOG.info(f"✅ Flash sale DM'd to {sent}/{len(free_users)} free users")
 
         elif blast_type == "freetier":
-            text = self.fmt_free_teaser(stats, recent)
+            text = self.fmt_free_teaser(stats or {}, recent)
             if dry_run:
-                print("\\n=== FREE TEASER ===")
+                print("\n=== FREE TEASER ===")
                 print(text)
             else:
                 sent = 0
@@ -235,7 +235,6 @@ class MarketingService:
                     try:
                         if self.bot:
                             await self.bot._tg_send(text, cid)
-                        sent += 1
                         await asyncio.sleep(0.35)
                     except Exception as e:
                         LOG.warning(f"Teaser DM failed for {cid}: {e}")
@@ -243,25 +242,25 @@ class MarketingService:
 
         elif blast_type == "referral":
             text = (
-                "🤝 <b>GOTONG ROYONG — VILONA REFERRAL PROGRAM</b>\\n"
-                "━━━━━━━━━━━━━━━━━━━━━\\n\\n"
-                "Udah ngerasain tajamnya sinyal AI Vilona?\\n"
-                "Ajak temen-temen trader lu gabung!\\n\\n"
-                "💰 <b>REWARD REFERRAL:</b>\\n"
-                "  • 3 Teman Gabung → <b>PRO 7 Hari GRATIS!</b>\\n"
-                "  • 10 Teman Gabung → <b>ELITE 30 Hari GRATIS!</b>\\n\\n"
-                "📋 <b>Cara dapetin link:</b>\\n"
-                "  1. Ketik /referral di bot\\n"
-                "  2. Copy link referral kamu\\n"
-                "  3. Share ke grup WA, Telegram, sosmed\\n\\n"
-                "🎯 Semakin banyak trader pakai Vilona,\\n"
-                "   semakin besar data loop AI kita →\\n"
-                "   sinyal makin tajam buat semua member.\\n\\n"
-                "<b>WIN-WIN. GOTONG ROYONG.</b> 🇮🇩\\n\\n"
+                "🤝 <b>GOTONG ROYONG — VILONA REFERRAL PROGRAM</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "Udah ngerasain tajamnya sinyal AI Vilona?\n"
+                "Ajak temen-temen trader lu gabung!\n\n"
+                "💰 <b>REWARD REFERRAL:</b>\n"
+                "  • 3 Teman Gabung → <b>PRO 7 Hari GRATIS!</b>\n"
+                "  • 10 Teman Gabung → <b>ELITE 30 Hari GRATIS!</b>\n\n"
+                "📋 <b>Cara dapetin link:</b>\n"
+                "  1. Ketik /referral di bot\n"
+                "  2. Copy link referral kamu\n"
+                "  3. Share ke grup WA, Telegram, sosmed\n\n"
+                "🎯 Semakin banyak trader pakai Vilona,\n"
+                "   semakin besar data loop AI kita →\n"
+                "   sinyal makin tajam buat semua member.\n\n"
+                "<b>WIN-WIN. GOTONG ROYONG.</b> 🇮🇩\n\n"
                 f"🔗 {self.bot_username} → /referral"
             )
             if dry_run:
-                print("\\n=== REFERRAL ===")
+                print("\n=== REFERRAL ===")
                 print(text)
             else:
                 if self.bot and self.channel_id:
@@ -274,9 +273,9 @@ class MarketingService:
                     try:
                         if self.bot:
                             await self.bot._tg_send(
-                                "💡 <b>Gak perlu bayar buat upgrade!</b>\\n\\n"
-                                "Ajak 3 teman trader join Vilona →\\n"
-                                "lu dapet <b>PRO 7 hari GRATIS!</b>\\n\\n"
+                                "💡 <b>Gak perlu bayar buat upgrade!</b>\n\n"
+                                "Ajak 3 teman trader join Vilona →\n"
+                                "lu dapet <b>PRO 7 hari GRATIS!</b>\n\n"
                                 "🔗 Cek link lu: /referral",
                                 cid,
                             )

@@ -91,12 +91,38 @@ if __name__ == "__main__":
         print("No users to remind.")
         sys.exit(0)
 
-    sys.path.insert(0, str(PROJECT_DIR / "scripts"))
+    sys.path.insert(0, str(PROJECT_DIR / "scripts" / "_legacy"))
     try:
         from vilona_tradefx_handler import tg_send
     except ImportError:
-        logger.error("Cannot import tg_send")
-        sys.exit(1)
+        token = None
+        env_path = PROJECT_DIR / "strategies" / "vilona_tradefx" / ".env"
+        if env_path.exists():
+            for raw in env_path.read_text(errors="ignore").splitlines():
+                line = raw.strip()
+                if line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                if k.strip() == "VILONA_TRADEFX_TELEGRAM_BOT_TOKEN":
+                    token = v.strip()
+                    break
+        if not token:
+            logger.error("Missing VILONA_TRADEFX_TELEGRAM_BOT_TOKEN in strategies/vilona_tradefx/.env")
+            sys.exit(1)
+
+        def _tg_send(text, chat_id):
+            import urllib.request, json
+            payload = json.dumps({"chat_id": int(chat_id), "text": str(text), "parse_mode": "HTML"}).encode()
+            req = urllib.request.Request(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read())
+
+        tg_send = _tg_send
 
     reminded = load_reminded()
     for u in users:

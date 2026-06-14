@@ -82,10 +82,17 @@ _pip_sizes = {
     "GOLD": 0.10,
     "BTCUSD": 1.0,
     "ETHUSD": 0.01,
-    "EURUSD": 0.00010,
-    "GBPUSD": 0.00010,
-    "USDJPY": 0.01,
+    "USOIL": 0.01,
 }
+
+def _pip_size(symbol: str) -> float:
+    s = symbol.upper()
+    ps = _pip_sizes.get(s)
+    if ps is not None:
+        return ps
+    if s.endswith(".JK") or s.isalpha() and len(s) <= 5:
+        return 0.01
+    return 0.0001
 
 BRIDGE_URLS = ["https://phantomfx.aitradepulse.com", "http://localhost:8765"]
 MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "")
@@ -93,7 +100,6 @@ MASTER_API_KEY = os.environ.get("BRIDGE_MASTER_KEY", "")
 # Donor / Premium constants
 DONOR_DAYS = 9999
 MIN_DONATION = 10000
-MANUAL_THROTTLE_FREE = 120
 MANUAL_THROTTLE_DONOR = 60
 SAME_PAIR_COOLDOWN = 90
 DONOR_DAILY_QUOTA = 60
@@ -1052,16 +1058,6 @@ def fmt_signal(
         lines.append(f"💡 {q_reason}")
         lines.append("🔍 Gunakan sebagai konfirmasi SnR/FIBO manual.")
     lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-
-    try:
-        from scripts.smc_section import format_smc_analysis
-
-        smc_text = format_smc_analysis(display)
-    except Exception:
-        smc_text = ""
-
-    if smc_text and is_actionable:
-        lines.append(smc_text)
 
     lines.append(
         "⚠️ <i>NFA — Not Financial Advice. Sinyal hasil deteksi otomatis AI untuk edukasi. Keputusan & risiko trading sepenuhnya ada padamu. Selalu pakai manajemen risiko.</i>"

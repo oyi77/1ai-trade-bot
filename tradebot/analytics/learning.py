@@ -36,7 +36,7 @@ WINNING_PATTERNS_FILE = Path(settings.DATA_DIR) / "vilona_tradefx" / "winning_pa
 def _load_lessons() -> dict:
     try:
         if LESSONS_FILE.exists():
-            return json.loads(LESSONS_FILE.read_text())
+            return dict(json.loads(LESSONS_FILE.read_text()))
     except Exception:
         pass
     return {"lessons": [], "total_sl": 0, "total_tp": 0}
@@ -50,7 +50,7 @@ def _save_lessons(data: dict) -> None:
 def _load_patterns() -> dict:
     try:
         if WINNING_PATTERNS_FILE.exists():
-            return json.loads(WINNING_PATTERNS_FILE.read_text())
+            return dict(json.loads(WINNING_PATTERNS_FILE.read_text()))
     except Exception:
         pass
     return {"patterns": [], "total": 0, "last_pattern": "", "top_symbols": {}}
@@ -377,7 +377,7 @@ def format_learning_report(result: dict) -> str:
     tp_stats_str = ""
     for r, v in tp.items():
         if isinstance(v, dict) and "mean_tp_pips" in v:
-            tp_stats_str += f"[{r}] {v['count']}W, avg TP: {v['mean_tp_pips']}p\\n"
+            tp_stats_str += f"[{r}] {v['count']}W, avg TP: {v['mean_tp_pips']}p\n"
 
     lines.append(tp_stats_str)
-    return "\\n".join(lines)
+    return "\n".join(lines)
