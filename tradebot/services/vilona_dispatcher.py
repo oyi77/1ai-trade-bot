@@ -75,6 +75,11 @@ class DispatchResult:
     trial_sent: int = 0
     trial_failed: int = 0
 
+    # Tier 2.5 — Expired Paywall
+    expired_total: int = 0
+    expired_sent: int = 0
+    expired_failed: int = 0
+
     # Tier 3
     premium_total: int = 0
     premium_dm_sent: int = 0
@@ -241,7 +246,7 @@ class VilonaSignalDispatcher:
             result.showroom_sent = await self._send_showroom_teaser(signal)
 
         # ── Fetch all members ──────────────────────────────────────
-        trial_users, premium_users = await self._load_members()
+        trial_users, expired_users, premium_users = await self._load_members()
 
         # ── Tier 2: Free DM Trial ──────────────────────────────────
         result.trial_total = len(trial_users)
@@ -251,15 +256,26 @@ class VilonaSignalDispatcher:
             result.trial_sent = sum(1 for ok in dm_results if ok)
             result.trial_failed = result.trial_total - result.trial_sent
 
+        # ── Tier 2.5: Expired Paywall Teaser ───────────────────────
+        # Expired premium users get a masked teaser + renewal CTA.
+        # NO entry/SL/TP exposed. NO trade execution. Isolated failure.
+        result.expired_total = len(expired_users)
+        if expired_users:
+            paywall_msg = self._format_paywall_teaser(signal)
+            pw_results = await self._send_bulk_dm(expired_users, paywall_msg)
+            result.expired_sent = sum(1 for ok in pw_results if ok)
+            result.expired_failed = result.expired_total - result.expired_sent
+
         # ── Tier 3: Premium Auto-Copytrade ─────────────────────────
         result.premium_total = len(premium_users)
         if premium_users:
             result = await self._dispatch_premium(signal, premium_users, result)
 
         LOG.info(
-            "Dispatcher done: showroom=%s trial=%d/%d prem=%d/%d exec=%d/%d",
+            "Dispatcher done: showroom=%s trial=%d/%d expired=%d/%d prem=%d/%d exec=%d/%d",
             result.showroom_sent,
             result.trial_sent, result.trial_total,
+            result.expired_sent, result.expired_total,
             result.premium_dm_sent, result.premium_total,
             result.premium_executed, result.premium_total,
         )
@@ -412,12 +428,15 @@ class VilonaSignalDispatcher:
 
     # ── MEMBER LOADING ──────────────────────────────────────────────
 
-    async def _load_members(self) -> tuple[list[str], list[str]]:
-        """Load members from SQLite, split into trial and premium.
+    async def _load_members(self) -> tuple[list[str], list[str], list[str]]:
+        """Load members from SQLite, split into trial, expired, and premium.
 
-        Uses a thread to avoid blocking the event loop with synchronous
-        SQLite calls (members/__init__.py uses raw sqlite3 which is
-        synchronous).
+        - trial:   never paid (status != 'paid')
+        - expired: previously paid but subscription expired
+        - premium: actively paid with valid expiry
+
+        Expired users are strictly separated from genuine trial users
+        so the paywall teaser targets only those who have lapsed.
         """
         import sqlite3
         from pathlib import Path
@@ -426,6 +445,7 @@ class VilonaSignalDispatcher:
 
         def _query():
             trial: list[str] = []
+            expired: list[str] = []
             premium: list[str] = []
             try:
                 conn = sqlite3.connect(str(DB_PATH))
@@ -453,16 +473,16 @@ class VilonaSignalDispatcher:
                             if exp.tzinfo is None:
                                 exp = exp.replace(tzinfo=WIB)
                             if exp < now:
-                                trial.append(cid)  # expired → trial
+                                expired.append(cid)  # was paid, now lapsed
                                 continue
                         except (ValueError, TypeError):
                             pass
-                        premium.append(cid)
+                        premium.append(cid)  # paid + not expired
                     else:
-                        trial.append(cid)
+                        trial.append(cid)  # never paid
             except Exception as exc:
                 LOG.warning("load_members failed: %s", exc)
-            return trial, premium
+            return trial, expired, premium
 
         return await asyncio.get_event_loop().run_in_executor(None, _query)
 
@@ -563,3 +583,35 @@ class VilonaSignalDispatcher:
         ])
 
         return "\n".join(line for line in lines if line)
+
+    # ── TIER 2.5: EXPIRED PAYWALL TEASER ────────────────────────────
+
+    def _format_paywall_teaser(self, signal: Signal) -> str:
+        """Format a dynamic paywall message for expired premium users.
+
+        Masks entry/SL/TP — only reveals that a signal was detected
+        for premium members. Includes explicit renewal CTA.
+        No trade coordinates exposed.
+        """
+        symbol = signal.symbol
+        direction = signal.direction
+        grade = signal.grade.name if hasattr(signal.grade, "name") else str(signal.grade)
+        emoji = "🔒"
+
+        return (
+            f"{emoji} <b>VILONA AI ALERT</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Sinyal <b>{grade}</b> untuk <b>{symbol}</b> arah "
+            f"<b>{direction.upper()}</b> baru saja terdeteksi dan "
+            f"dieksekusi untuk Member Premium.\n"
+            "\n"
+            "⚠️ <b>Masa aktif langganan Anda telah habis.</b>\n"
+            "\n"
+            "⚡️ Perpanjang akses sekarang untuk mendapatkan koordinat "
+            "lengkap (Entry/SL/TP) dan mengaktifkan kembali "
+            "Auto-Copytrade EA Anda.\n"
+            "\n"
+            "👉 Ketik <b>/upgrade</b> untuk melihat paket.\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🤝 Powered by Vilona AI"
+        )
