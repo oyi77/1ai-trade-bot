@@ -78,6 +78,12 @@ BROKER_PROFILES = {
 _keys_cache = None
 _keys_cache_time = 0
 
+# ── MT5 Daemon Registry ──
+DAEMONS = {}  # daemon_id → {account_id, api_key, last_seen, hostname, mt5_version, active_ticket}
+DAEMON_SL_QUEUE = defaultdict(lambda: deque(maxlen=10))  # daemon_id → pending SL modifications
+TRADE_REPORTS = deque(maxlen=200)  # history of /trade-status reports
+RECONCILE_LOG = deque(maxlen=100)  # reconciliation reports
+
 def load_keys():
     global _keys_cache, _keys_cache_time
     now = time.time()
@@ -297,11 +303,17 @@ class SignalHandler(BaseHTTPRequestHandler):
             self.end_headers()
         elif path == "/status":
             with LOCK:
+                daemon_count = len([d for d in DAEMONS.values()
+                                   if time.time() - d["last_seen"] < 30])
                 self._json({
                     "pending": len(PENDING) > 0,
                     "pending_id": PENDING[0]["signal_id"] if PENDING else None,
                     "history_count": len(HISTORY),
                     "last_signal_id": HISTORY[-1]["signal_id"] if HISTORY else None,
+                    "daemons_online": daemon_count,
+                    "daemons_total": len(DAEMONS),
+                    "trade_reports": len(TRADE_REPORTS),
+                    "trailing_positions": len(TRAILED_POSITIONS),
                 })
         elif path == "/signal" or path == "/signal/pending":
             # Validate API key & rate limit
@@ -315,6 +327,21 @@ class SignalHandler(BaseHTTPRequestHandler):
 
             self._current_key = api_key
             account_id = params.get("account_id", [None])[0]
+            mode = params.get("mode", ["signal"])[0]
+            daemon_id = params.get("daemon_id", [None])[0]
+
+            # ── Daemon mode: serve trailing SL updates ──
+            if mode == "trailing" and daemon_id:
+                with LOCK:
+                    DAEMONS[daemon_id]["last_seen"] = time.time()
+                    if DAEMON_SL_QUEUE[daemon_id]:
+                        sig = DAEMON_SL_QUEUE[daemon_id].popleft()
+                        sig["daemon_id"] = daemon_id
+                        self._json(sig)
+                    else:
+                        self._json({"action": "HOLD", "status": "idle",
+                                   "pending": False, "daemon_id": daemon_id})
+                return
 
             if account_id:
                 # ── Instance Identity mode ──
@@ -1039,6 +1066,82 @@ class SignalHandler(BaseHTTPRequestHandler):
             _save_trail_config()
             self._json({"status": "ok", "config": dict(TRAIL_CONFIG[instance_id])})
 
+        elif path == "/trade-status":
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                body = json.loads(raw)
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+
+            daemon_id = body.get("daemon_id", "")
+            ticket = body.get("ticket", 0)
+            status = body.get("status", "unknown")
+            reason = body.get("reason", "")
+            actual_sl = body.get("actual_sl") or body.get("new_sl", 0)
+            instance_id = f"{body.get('api_key', '')}:{body.get('account_id', '')}"
+
+            with LOCK:
+                TRADE_REPORTS.append({
+                    "time": time.time(), "daemon_id": daemon_id,
+                    "instance_id": instance_id, "ticket": ticket,
+                    "status": status, "reason": reason, "sl": actual_sl,
+                })
+                if daemon_id:
+                    DAEMONS[daemon_id]["last_seen"] = time.time()
+                    if ticket:
+                        DAEMONS[daemon_id]["active_ticket"] = ticket
+
+                if instance_id and instance_id in TRAILED_POSITIONS:
+                    if status == "ok":
+                        TRAILED_POSITIONS[instance_id]["current_sl"] = actual_sl
+                        log.info(f"📊 Trade status: {instance_id} ticket={ticket} SL→{actual_sl}")
+                    elif status == "rejected":
+                        log.warning(f"⚠️ SL rejected: {instance_id} ticket={ticket} "
+                                   f"reason={reason} — SL NOT updated in bridge")
+                    elif status == "closed":
+                        del TRAILED_POSITIONS[instance_id]
+                        log.info(f"🏁 Position closed: {instance_id} ticket={ticket}")
+
+                if status == "reconciliation":
+                    RECONCILE_LOG.append({
+                        "time": time.time(), "daemon_id": daemon_id,
+                        "ticket": ticket, "sl": actual_sl,
+                        "tp": body.get("actual_tp", 0), "profit": body.get("profit", 0),
+                    })
+                    if instance_id and instance_id in TRAILED_POSITIONS:
+                        TRAILED_POSITIONS[instance_id]["current_sl"] = actual_sl
+
+            self._json({"status": "ok", "report_id": len(TRADE_REPORTS)})
+
+        elif path == "/daemon/register":
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                body = json.loads(raw)
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+
+            daemon_id = body.get("daemon_id", "")
+            if not daemon_id:
+                self._json({"error": "daemon_id required"}, 400)
+                return
+
+            with LOCK:
+                DAEMONS[daemon_id] = {
+                    "account_id": body.get("account_id", ""),
+                    "api_key": body.get("api_key", ""),
+                    "last_seen": time.time(),
+                    "hostname": body.get("hostname", ""),
+                    "mt5_version": body.get("mt5_version", ""),
+                    "active_ticket": 0,
+                }
+            log.info(f"🔌 Daemon registered: {daemon_id} | host={body.get('hostname', '?')} "
+                    f"| mt5={body.get('mt5_version', '?')} | account={body.get('account_id', '')}")
+            self._json({"status": "ok", "daemon_id": daemon_id, "daemon_count": len(DAEMONS)})
+
         elif path.startswith("/ack/"):
             signal_id = path.split("/ack/", 1)[1]
             with LOCK:
@@ -1308,11 +1411,11 @@ if __name__ == "__main__":
                                     f"SL {current_sl:.{cfg['digits']}f}→{target_sl:.{cfg['digits']}f} | "
                                     f"profit={profit_pips:.1f}pip")
 
-                            # Push trailing update signal to instance queue
+                            # Push trailing update to daemon queues AND instance queue
                             trail_sig = {
                                 "signal_id": pos["signal_id"],
                                 "symbol": "XAUUSD",
-                                "action": direction,  # BUY/SELL for SL update
+                                "action": direction,
                                 "entry": entry,
                                 "sl": target_sl,
                                 "tp": tp,
@@ -1327,6 +1430,12 @@ if __name__ == "__main__":
                                 "layers": [],
                                 "_for_instance": instance_id,
                             }
+                            # Route to daemon queues (active daemons get priority)
+                            for did, d in list(DAEMONS.items()):
+                                d_inst = f"{d.get('api_key', '')}:{d.get('account_id', '')}"
+                                if d_inst == instance_id or not d_inst.split(":")[0]:
+                                    DAEMON_SL_QUEUE[did].append(trail_sig)
+                            # Also keep in PENDING_BY_INSTANCE for EA fallback
                             PENDING_BY_INSTANCE[instance_id].append(trail_sig)
 
                 # Cleanup orphaned positions (instance gone > 1 hour)
