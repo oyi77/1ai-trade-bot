@@ -93,6 +93,7 @@ from tradebot.web.public_dashboard import (
     save_fuel_report as _save_fuel_report,
 )
 from tradebot.web.tracking_api import router as tracking_router
+from tradebot.api.trade_webhook import router as trade_webhook_router
 
 LOG = logging.getLogger("tradebot.web")
 
@@ -110,6 +111,7 @@ app.include_router(monitoring_router)
 # Wire bridge API router (MT5 EA signal polling)
 app.include_router(bridge_router)
 app.include_router(tracking_router)  # FB Ads tracking pixel
+app.include_router(trade_webhook_router)  # Vilona EA trade-close webhook
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
 # ═══════════════════════════════════════════════════════════
