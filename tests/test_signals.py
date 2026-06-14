@@ -18,6 +18,8 @@ from tradebot.signals.market import (
     FallbackChain,
     _is_forex,
 )
+from tradebot.signals.finnhub import FinnhubSource
+from tradebot.signals.alpha_vantage import AlphaVantageSource
 from tradebot.signals.mt5_source import MT5Source
 from tradebot.signals.stockity import StockitySource
 from tradebot.signals.yahoo import YahooSource
@@ -497,11 +499,13 @@ class TestMarketAggregator:
         assert len(sources) >= 1
         assert isinstance(sources[0], ForexSource)
 
-    def test_select_sources_stock_routes_to_yahoo(self):
+    def test_select_sources_stock_routes_to_finnhub(self):
         agg = MarketAggregator()
         sources = agg._select_sources("AAPL")
-        assert len(sources) == 1
-        assert isinstance(sources[0], YahooSource)
+        assert len(sources) == 3
+        assert isinstance(sources[0], FinnhubSource)
+        assert isinstance(sources[1], AlphaVantageSource)
+        assert isinstance(sources[2], YahooSource)
 
     def test_select_sources_platform_asset_routes_to_stockity(self):
         agg = MarketAggregator()
@@ -641,7 +645,6 @@ class TestFallbackChain:
             ):
                 price = await chain.fetch_price("XAUUSD")
         assert price == 1500.0
-
     @pytest.mark.asyncio
     async def test_fetch_price_returns_none_when_all_fail(self):
         chain = FallbackChain()

@@ -258,8 +258,8 @@ class TestPlatformLinkService:
     @pytest.mark.asyncio
     async def test_get_linked_platforms_returns_linked_platforms(self, svc):
         """get_linked_platforms() returns all active platforms for a user."""
-        row1 = {"user_id": "user1", "platform": "stockity", "status": "active"}
-        row2 = {"user_id": "user1", "platform": "deriv", "status": "active"}
+        row1 = ("1", "user1", "stockity", "", "", "", "", "", "", "active", "2024-01-01", "2024-01-01")
+        row2 = ("1", "user1", "deriv", "", "", "", "", "", "", "active", "2024-01-01", "2024-01-01")
         self.repo.fetchall.return_value = [row1, row2]
 
         result = await svc.get_linked_platforms("user1")
@@ -281,12 +281,7 @@ class TestPlatformLinkService:
     @pytest.mark.asyncio
     async def test_get_platform_credentials_returns_stored_credentials(self, svc):
         """get_platform_credentials() returns stored credentials for a platform."""
-        row = {
-            "user_id": "user1",
-            "platform": "stockity",
-            "email": "a@b.com",
-            "password": "secret",
-        }
+        row = ("1", "user1", "stockity", "", "a@b.com", "secret", "", "", "", "active", "2024-01-01", "2024-01-01")
         self.repo.fetchone.return_value = row
 
         result = await svc.get_platform_credentials("user1", "stockity")
@@ -310,13 +305,7 @@ class TestPlatformLinkService:
     @pytest.mark.asyncio
     async def test_refresh_stockity_cookie_re_logs_in_and_updates_cookie(self, svc):
         """refresh_stockity_cookie() re-logins and updates stored cookie."""
-        self.repo.fetchone.return_value = {
-            "user_id": "user1",
-            "platform": "stockity",
-            "email": "a@b.com",
-            "password": "secret",
-        }
-
+        self.repo.fetchone.return_value = ("1", "user1", "stockity", "", "a@b.com", "secret", "", "", "", "active", "2024-01-01", "2024-01-01")
         mock_client = AsyncMock()
         login_resp = MagicMock()
         login_resp.json.return_value = {

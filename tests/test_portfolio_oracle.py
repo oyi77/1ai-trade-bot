@@ -17,7 +17,7 @@ from tradebot.signals.portfolio_oracle import (
 
 # ── Constants ──────────────────────────────────────────────────────────────
 
-REQUIRED_KEYS = {"ric", "direction_picker_params", "duration", "action"}
+REQUIRED_KEYS = {"ric", "direction_picker_params", "duration", "action", "wr", "win", "thr", "payout"}
 DIRECTION_KEYS = {"lookback", "threshold", "payout"}
 
 ALL_RICS = {a["ric"] for a in ALL_ASSETS}
@@ -26,17 +26,15 @@ UNKNOWN_RIC = "ZZZ-XXX"
 
 # ── Data integrity ──────────────────────────────────────────────────────────
 
-
 class TestDataIntegrity:
-    """Verify the module-level constants are well-formed."""
 
     def test_all_assets_count(self) -> None:
-        assert len(ALL_ASSETS) == 23
+        assert len(ALL_ASSETS) == 24
 
     def test_asset_tiers_structure(self) -> None:
         assert set(ASSET_TIERS) == {"tier1", "tier2", "tier3"}
         assert len(ASSET_TIERS["tier1"]) == 2
-        assert len(ASSET_TIERS["tier2"]) == 6
+        assert len(ASSET_TIERS["tier2"]) == 7
         assert len(ASSET_TIERS["tier3"]) == 15
 
     def test_always_on_rics(self) -> None:

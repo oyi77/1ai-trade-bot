@@ -299,10 +299,10 @@ class TestRegistry:
     """Registry — discover, register, get."""
 
     def test_discover_finds_all_engines(self):
-        """Registry.discover() should find all 11 concrete engines."""
+        """Registry.discover() should find all 12 concrete engines."""
         reg = Registry()
         engines = reg.discover()
-        assert len(engines) == 11
+        assert len(engines) == 12
         expected_names = {
             "smc_scalper",
             "fvg_detector",
@@ -315,6 +315,7 @@ class TestRegistry:
             "hermes_liquidity_hunter",
             "layering",
             "session_levels",
+            "whale_detector",
         }
         assert set(engines.keys()) == expected_names
 

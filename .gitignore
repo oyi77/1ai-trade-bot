@@ -70,3 +70,7 @@ strategies/vilona_tradefx/.env
 logs/*.log
 *.db
 config/rapidapi_key.json
+
+# Backups (runtime artifacts — never commit)
+backups/
+scripts/logs/
