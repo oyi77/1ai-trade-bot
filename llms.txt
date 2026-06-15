@@ -144,3 +144,61 @@ class Signal:
 - **Type checker:** mypy (strict mode)
 - **Test runner:** pytest with `asyncio_mode = auto`
 - **Coverage:** pytest-cov, target ≥70%; excludes `__version__`, `cli`, `__main__`
+
+## Telethon Sessions for E2E Testing
+
+### Location
+All authenticated Telethon sessions are stored in: `~/.telethon_session/`
+
+### Primary Session (Use This One)
+- **File**: `paijo_fixed.session`
+- **Phone**: +6285732740006
+- **User**: @alwayscuanbos
+- **Version**: 11 (compatible with Telethon 1.44+)
+- **Status**: ✅ Working
+
+### Usage
+```python
+from telethon.sync import TelegramClient
+
+client = TelegramClient(
+    "/home/openclaw/.telethon_session/paijo_fixed",
+    api_id=23647272,
+    api_hash="1f69a4e0f03e5f51ddfa5b67ac7b5c49"
+)
+client.connect()
+
+if client.is_user_authorized():
+    bot = client.get_entity("berkahkaryaforexbotbot")
+    client.send_message(bot, "/start")
+```
+
+### Testing Checklist
+When testing Telegram bots, verify ALL of the following:
+- **Commands**: All variations (happy flow + sad flow)
+- **Functions**: Signal generation, price fetching, analysis engines
+- **Buttons**: Inline keyboards, callback data, navigation
+- **Security**: Admin commands, rate limiting, malformed input
+- **Signals**: Full pipeline from input to output
+- **Connection**: Connect/disconnect/reconnect cycles
+
+See `docs/AGENTS_QA.md` for complete testing guidelines.
+
+### Session Errors and Fixes
+
+#### `ValueError: too many values to unpack (expected 5, got 6)`
+**Fix**: Upgrade to Telethon 1.44.0+
+```bash
+uv pip install 'telethon>=1.44.0' --upgrade
+```
+
+#### `ValueError: not enough values to unpack (expected 6, got 4)`
+**Fix**: Session schema issue - use `paijo_fixed.session` instead
+
+#### `ApiIdInvalidError`
+**Fix**: API credentials revoked - create new at https://my.telegram.org/apps
+
+### Documentation
+- `~/.telethon_session/README.md` - Human documentation
+- `~/.telethon_session/AGENTS.md` - Agent instructions
+- `docs/AGENTS_QA.md` - Complete testing checklist and Q&A

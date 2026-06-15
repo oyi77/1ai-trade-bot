@@ -842,9 +842,6 @@ class SignalHandler(BaseHTTPRequestHandler):
             with LOCK:
                 stats["ea_count"] = len([i for i in INSTANCES.values() if time.time() - i["last_seen"] < 120])
             self._json(stats)
-        elif path == "/api/engine-readings":
-            # Handled by proxy block below → dashboard server
-            pass
         elif path == "/api/news":
             """Fetch latest XAUUSD/news from RSS."""
             try:

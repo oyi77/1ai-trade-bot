@@ -426,3 +426,66 @@ python -m pytest tests/ -x --tb=short
 - **Duplications:** Zero duplicate test functions within the same test class
 - **Legacy absorption:** All cross-package imports from `scripts/` eliminated from `tradebot/` package
 - **Working tree:** Clean (no dirty runtime data — if you see it, you broke gitignore)
+
+---
+
+## E2E Testing with Telethon Sessions
+
+### Pre-Authenticated Sessions
+
+All authenticated Telethon sessions are stored in `~/.telethon_session/`:
+
+| Session | Phone | User | Version | Status |
+|---------|-------|------|---------|--------|
+| `paijo_fixed.session` | +6285732740006 | @alwayscuanbos | 11 | ✅ **USE THIS** |
+| `vilona_session.session` | +6285732740006 | @alwayscuanbos | 8 | ⚠️ Needs fix |
+| `paijo.session` | +6285732740006 | @alwayscuanbos | 8 | ⚠️ Needs fix |
+
+**Always use `paijo_fixed.session` - it's the only one compatible with Telethon 1.44+.**
+
+### Testing Requirements
+
+When testing Telegram bots, you MUST verify:
+
+1. **Commands** - All command variations (valid + invalid input)
+2. **Functions** - Signal generation, price fetching, analysis
+3. **Buttons** - Inline keyboards, callback data, navigation
+4. **Happy/Sad Flow** - Valid input → expected output, invalid → helpful error
+5. **Security** - Admin commands, rate limiting, malformed input
+6. **Signals** - Complete pipeline from input to output
+7. **Connection** - Connect/disconnect/reconnect cycles
+
+### Quick Test Template
+
+```python
+from telethon.sync import TelegramClient
+
+SESSION = "/home/openclaw/.telethon_session/paijo_fixed"
+API_ID = 23647272
+API_HASH = "1f69a4e0f03e5f51ddfa5b67ac7b5c49"
+
+client = TelegramClient(SESSION, API_ID, API_HASH)
+client.connect()
+
+if client.is_user_authorized():
+    bot = client.get_entity("berkahkaryaforexbotbot")
+    
+    # Test commands
+    for cmd in ["/start", "/signal", "/price", "/analyze"]:
+        client.send_message(bot, cmd)
+        import time; time.sleep(2)
+        msg = client.get_messages(bot, limit=1)[0]
+        print(f"✅ {cmd}: {msg.message[:50]}...")
+```
+
+### Common Errors
+
+- `ValueError: too many values to unpack` → Upgrade to Telethon 1.44.0+
+- `ValueError: not enough values to unpack` → Use `paijo_fixed.session`
+- `ApiIdInvalidError` → API credentials revoked, create new at my.telegram.org
+
+### Full Documentation
+
+- `~/.telethon_session/README.md` - Session documentation
+- `~/.telethon_session/AGENTS.md` - Session usage guide
+- `docs/AGENTS_QA.md` - Complete testing Q&A and checklist

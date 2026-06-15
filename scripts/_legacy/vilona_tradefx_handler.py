@@ -24,7 +24,9 @@ _PID_FILE.write_text(str(os.getpid()))
 # ── Project path (MUST be before any local imports) ──
 # 3 levels up: _legacy → scripts → project root
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
+# ── Path setup ──
 sys.path.insert(0, str(PROJECT_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/_legacy for trade_tracker
 
 # ── Load .env BEFORE local imports (ScaleV keys needed) ──
 _env_path = PROJECT_DIR / "strategies" / "vilona_tradefx" / ".env"
