@@ -61,7 +61,7 @@ def _load_feed() -> dict[str, Any]:
                     signals.append({
                         "id": t.get("id", ""),
                         "symbol": t.get("symbol", "XAUUSD"),
-                        "direction": t.get("direction", "SELL"),
+                        "direction": direction,
                         "entry": round(float(entry), 2),
                         "sl": round(float(sl), 2),
                         "tp": round(float(tp), 2),
