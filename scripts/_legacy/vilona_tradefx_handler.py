@@ -9,6 +9,18 @@ import hashlib, json, logging, os, re, sqlite3, sys, threading, time, urllib.par
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+# ── PID LOCK: prevent duplicate bot instances ──
+_PID_FILE = Path(__file__).resolve().parent.parent.parent / "data" / ".bot_handler.pid"
+if _PID_FILE.exists():
+    try:
+        _old_pid = int(_PID_FILE.read_text().strip())
+        os.kill(_old_pid, 0)  # check if process exists
+        logging.warning(f"Bot handler already running (PID {_old_pid}). Exiting.")
+        sys.exit(0)
+    except (OSError, ValueError):
+        pass  # PID is stale — continue
+_PID_FILE.write_text(str(os.getpid()))
+
 # ── Project path (MUST be before any local imports) ──
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
