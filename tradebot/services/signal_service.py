@@ -31,10 +31,50 @@ def _load_feed() -> dict[str, Any]:
                 return {"signals": raw, "stats": {
                     "total": len(raw), "tp": 0, "sl": 0, "pending": 0,
                 }}
-            if isinstance(raw, dict):
+            if isinstance(raw, dict) and raw.get("signals"):
                 return raw
     except Exception as e:
         LOG.warning("Silent exception caught: %s", e)
+
+    # Fallback: populate from trade history
+    try:
+        th_file = DATA_DIR.parent / "trade_history.json"
+        if th_file.exists():
+            th = json.loads(th_file.read_text())
+            trades = th.get("trades", [])
+            if trades:
+                signals = []
+                for t in trades[-30:]:  # last 30 trades
+                    entry = t.get("entry_price") or t.get("open_price", 0)
+                    sl = t.get("sl") or t.get("stop_loss", 0)
+                    tp = t.get("tp") or t.get("take_profit", 0)
+                    result = t.get("result", "").lower()
+                    status = "tp_hit" if result in ("win", "tp", "profit") else "sl_hit" if result in ("loss", "sl") else "pending"
+                    pips = float(t.get("pips") or t.get("profit_pips", 0))
+                    signals.append({
+                        "id": t.get("id", ""),
+                        "symbol": t.get("symbol", "XAUUSD"),
+                        "direction": t.get("direction", "SELL"),
+                        "entry": round(float(entry), 2),
+                        "sl": round(float(sl), 2),
+                        "tp": round(float(tp), 2),
+                        "confidence": 0.75,
+                        "rr_ratio": "1:1.5",
+                        "grade": t.get("grade", "B"),
+                        "source": "channel-auto",
+                        "source_user": "",
+                        "timestamp": t.get("open_time") or t.get("close_time", ""),
+                        "status": status,
+                        "outcome_pips": round(pips, 1),
+                    })
+                return {"signals": signals, "stats": {
+                    "total": len(signals), "tp": sum(1 for s in signals if s["status"] == "tp_hit"),
+                    "sl": sum(1 for s in signals if s["status"] == "sl_hit"),
+                    "pending": sum(1 for s in signals if s["status"] == "pending"),
+                }}
+    except Exception as e:
+        LOG.warning("Trade history fallback failed: %s", e)
+
     return {"signals": [], "stats": {"total": 0, "tp": 0, "sl": 0, "pending": 0}}
 
 

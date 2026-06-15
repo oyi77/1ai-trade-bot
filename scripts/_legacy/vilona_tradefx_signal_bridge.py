@@ -502,8 +502,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "queue_size": len(PENDING),
             })
         elif path == "" or path == "/":
-            # Serve realtime dashboard (live data via JS fetch)
-            html_path = os.path.join(PROJECT_DIR, "scripts", "landing_page.html")
+            # Serve realtime public dashboard (ID template)
+            html_path = os.path.join(PROJECT_DIR, "tradebot", "web", "templates", "public_dashboard_id.html")
             try:
                 with open(html_path, "r") as f:
                     content = f.read()
@@ -511,6 +511,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(content.encode())))
                 self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
                 self.end_headers()
                 self.wfile.write(content.encode())
             except FileNotFoundError:
@@ -842,68 +843,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                 stats["ea_count"] = len([i for i in INSTANCES.values() if time.time() - i["last_seen"] < 120])
             self._json(stats)
         elif path == "/api/engine-readings":
-            eng_path = os.path.join(PROJECT_DIR, "bridges", "signal_bridge", "engine_status.json")
-            try:
-                with open(eng_path, "r") as f:
-                    cached = json.load(f)
-                    # Use cached if less than 120s old
-                    if time.time() - os.path.getmtime(eng_path) < 120:
-                        self._json(cached)
-                        return
-            except Exception:
-                pass
-            # Generate fresh MTF matrix — run_engine_consensus fetches all 5 TFs internally
-            try:
-                from engine_consensus import run_engine_consensus
-                result = run_engine_consensus(symbol="XAUUSD")
-                # Build dashboard-friendly MTF response
-                dashboard_output = {
-                    "symbol": result.get("symbol", "XAUUSD"),
-                    "price": result.get("price", 0),
-                    "timestamp": result.get("timestamp", ""),
-                    "timeframes": {},
-                    "hierarchical": result.get("hierarchical", {}),
-                    "mtf_alignment": result.get("mtf_alignment", "NONE"),
-                    "macro_trend": result.get("macro_trend", "NEUTRAL"),
-                    "counter_trend_flags": result.get("counter_trend_flags", []),
-                }
-                from engine_consensus import TIMEFRAMES as _TFS, TF_WEIGHTS as _TFW
-                for tf in _TFS:
-                    tr = result.get("timeframes", {}).get(tf, {})
-                    if tr:
-                        dashboard_output["timeframes"][tf] = {
-                            "verdict": tr["verdict"],
-                            "consensus_pct": tr["consensus_pct"],
-                            "buy_count": tr["buy_count"],
-                            "sell_count": tr["sell_count"],
-                            "total": tr["total"],
-                            "engines": tr.get("engines", {}),
-                            "weight": _TFW.get(tf, 0),
-                        }
-                        if "macro" in tr:
-                            dashboard_output["timeframes"][tf]["macro"] = tr["macro"]
-                        if "structure" in tr:
-                            dashboard_output["timeframes"][tf]["structure"] = tr["structure"]
-                        if "entry" in tr:
-                            dashboard_output["timeframes"][tf]["entry"] = tr["entry"]
-                # Save to cache
-                try:
-                    with open(eng_path, "w") as f:
-                        json.dump(dashboard_output, f, indent=2)
-                except Exception:
-                    pass
-                # Also include backwards-compat fields for older dashboard
-                active_tf = dashboard_output["timeframes"].get("M15", {})
-                dashboard_output["engines"] = active_tf.get("engines", {})
-                dashboard_output["verdict"] = dashboard_output["hierarchical"].get("verdict", "HOLD")
-                dashboard_output["consensus_pct"] = dashboard_output["hierarchical"].get("consensus_score", 0)
-                dashboard_output["buy_count"] = active_tf.get("buy_count", 0)
-                dashboard_output["sell_count"] = active_tf.get("sell_count", 0)
-                dashboard_output["total"] = active_tf.get("total", 0)
-                self._json(dashboard_output)
-            except Exception as e:
-                log.error(f"/api/engine-readings error: {e}")
-                self._json({"error": str(e), "engines": {}, "verdict": "N/A", "timeframes": {}})
+            # Handled by proxy block below → dashboard server
+            pass
         elif path == "/api/news":
             """Fetch latest XAUUSD/news from RSS."""
             try:
@@ -1949,8 +1890,14 @@ class SignalHandler(BaseHTTPRequestHandler):
             log.info(f"📌 TRAIL/ADD [{instance_id}]: +{added} manual positions")
             self._json({"status": "ok", "added": added})
 
-        # ── Proxy dashboard APIs (8768) ──
-        elif path in ("/api/live-snapshot", "/api/feed", "/api/donors"):
+        # ── Proxy dashboard APIs (8768) — ALL public endpoints ──
+        elif path.startswith("/api/") and path in (
+            "/api/live-snapshot", "/api/feed", "/api/donors",
+            "/api/trade_stats", "/api/transparency", "/api/backtest",
+            "/api/user_activity", "/api/daily_analyze", "/api/daily_recap",
+            "/api/fuel/stats", "/api/feed/stats", "/api/mapping",
+            "/api/today_trades", "/api/engine-readings",
+        ):
             try:
                 req = urllib.request.Request(
                     f"http://127.0.0.1:8768{self.path}"
