@@ -34,7 +34,7 @@ TIER_PRICES = {"pro": 50000, "elite": 150000, "lifetime": 500000, "donor": 99999
 TIER_DAYS = {"pro": 30, "elite": 30, "lifetime": 9999, "donor": 9999}
 TIER_LABEL = {"pro": "PRO", "elite": "ELITE", "lifetime": "LIFETIME"}
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = PROJECT_DIR / "data" / "vilona_tradefx"
 MEMBERS_DB = DATA_DIR / "members.db"
 WIB = timezone(timedelta(hours=7))
