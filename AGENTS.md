@@ -421,7 +421,7 @@ python -m pytest tests/ -x --tb=short
 | bots (base framework) | 100% |
 
 ### Quality Gates
-- **Tests:** 1441 passing, 0 failures
+- **Tests:** 1653 passing, 0 failures
 - **Anti-patterns:** Zero `except Exception: pass` (all log the exception)
 - **Duplications:** Zero duplicate test functions within the same test class
 - **Legacy absorption:** All cross-package imports from `scripts/` eliminated from `tradebot/` package
