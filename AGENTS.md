@@ -132,6 +132,7 @@ Telegram (VilonaBot — single unified bot with button menus)
 | Directory | Purpose |
 |-----------|---------|
 |`trading_bot/`|Provider abstraction layer — BaseProvider, Exness, CCXT, paper trader, registry|
+|`trading_bot/strategies/`|Strategy layer — BaseStrategy ABC, GridStrategy, TrendStrategy|
 | `tradebot/` | Main package — all production code (20 sub-packages) |
 | `tradebot/engines/` | 11 signal analysis engines + EngineConsensus + MTFConsensus + Registry |
 | `tradebot/brokers/` | Broker ABCs + Deriv (WS), MT5, CCXT, Stockity |
@@ -152,7 +153,7 @@ Telegram (VilonaBot — single unified bot with button menus)
 | `tradebot/constants/` | Shared constants |
 | `tradebot/exceptions/` | TradebotError exception hierarchy |
 | `tradebot/saas/` | SaaS subscription layer |
-| `tests/` | 1441 tests across 43 files |
+| `tests/` | 1460 tests across 46 files |
 | `scripts/` | Legacy standalone scripts (~70 files) — most absorbed into `tradebot` package. `scripts/_legacy/` is archive; do not import from scripts/ in tradebot/ package code. |
 | `.omo/` | AI agent scratch space (gitignored) — plans, todo lists, internal notes |
 | `docs/` | API reference, ops runbook, ownership protocol |
