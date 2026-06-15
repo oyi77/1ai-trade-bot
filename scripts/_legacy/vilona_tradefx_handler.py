@@ -6260,20 +6260,9 @@ def handle_command(cmd, text, chat_id, msg):
                     tg_send(f"⛔ <b>Signal ditahan — di luar Killzone</b>\n\n{disp} hanya trading di sesi London (14:00-17:00 WIB) & NY (19:00-22:00 WIB).\n\nGunakan /analyze untuk analisis only.", chat_id)
                     return
             # ── Post to channel FIRST, then bridge with message_id ──
+            # BLOCKED: only S-TIER signals (teaser) go to public channel now.
+            # Regular /signal posts show full entry/SL/TP — removed by user request.
             tg_msg_id = None
-            try:
-                pair_k = "gold" if disp.startswith("XAU") else disp.lower()
-                _entry = sig.get("entry", 0) or 0
-                _sl = sig.get("sl", 0) or 0
-                _tp = sig.get("tp", 0) or 0
-                if _can_post_to_channel(pair_k, sig["action"], _entry, _sl, _tp):
-                    result = send_to_channel(msg)
-                    if result:
-                        tg_msg_id = result.get("result",{}).get("message_id")
-                        sig["telegram_message_id"] = tg_msg_id
-                        logger.info(f"CHANNEL POST OK [/signal {disp}]: message_id={tg_msg_id}")
-            except Exception as ex:
-                logger.warning(f"Channel post [/signal] failed: {ex}")
             # ── Post to bridge for EA pickup ──
             try:
                 post_signal_to_bridge(sig, 0, disp)
@@ -7664,38 +7653,9 @@ def auto_analyze_loop():
                 _sl = sig.get("sl", 0) or 0
                 _tp = sig.get("tp", 0) or 0
                 # ── Post to channel FIRST, capture message_id for reply chain ──
+                # BLOCKED: only S-TIER signals go to public channel (teaser only).
+                # Regular AI-consensus signals contain full entry/SL/TP — removed by user request.
                 tg_msg_id = None
-                if _can_post_to_channel(pair, action, _entry, _sl, _tp):
-                    logger.info(f"CHANNEL POST [AI-consensus]: {pair} {action}")
-                    result = send_to_channel(text)
-                    if result:
-                        tg_msg_id = result.get('result',{}).get('message_id')
-                        logger.info(f"CHANNEL POST OK [AI-consensus]: message_id={tg_msg_id}")
-                    else:
-                        logger.warning(f"CHANNEL POST FAILED [AI-consensus]: tg_send returned None")
-                    _mark_channel_post(pair, action, _entry, _sl, _tp)
-                    # ── Save to unified feed ──
-                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
-                              confidence=conf, rr_ratio=sig.get("rr_ratio","?"),
-                              engines=sig.get("engines",{}), source="channel-auto",
-                              price=price, grade=sig.get("grade",""),
-                              models=sig.get("_models",""), voters=sig.get("voters","?"))
-                else:
-                    # Rate limited — respect global cooldown
-                    state_force2 = _cs()
-                    if time.time() - state_force2.get("global_last", 0) < _GLOBAL_CHANNEL_COOLDOWN:
-                        logger.info(f"⏱️ SKIP force post [AI-{disp}]: global cooldown active ({int(time.time()-state_force2['global_last'])}s ago)")
-                    else:
-                        logger.warning(f"🚨 FORCE POST [AI-{disp}]: rate limited but trade opened — posting anyway")
-                        result = send_to_channel(text)
-                        if result:
-                            tg_msg_id = result.get('result',{}).get('message_id')
-                        _mark_channel_post(pair, action, _entry, _sl, _tp)
-                    _feed_add(symbol=disp, direction=action, entry=_entry, sl=_sl, tp=_tp,
-                              confidence=conf, rr_ratio=sig.get("rr_ratio","?"),
-                              engines=sig.get("engines",{}), source="channel-auto",
-                              price=price, grade=sig.get("grade",""),
-                              models=sig.get("_models",""), voters=sig.get("voters","?"))
 
                 # ── Post to bridge NOW with telegram_message_id attached ──
                 if tg_msg_id:
