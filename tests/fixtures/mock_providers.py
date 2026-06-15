@@ -42,6 +42,7 @@ class MockProvider(BaseProvider):
         self._cancelled_order_ids: list[str] = []
         self._positions: list[Position] = []
         self._symbols: list[str] = ["EUR/USD", "BTC/USD", "XAU/USD"]
+        self._stored_candles: list[Candle] = []
 
     @property
     def name(self) -> str:
@@ -96,7 +97,7 @@ class MockProvider(BaseProvider):
     async def get_candles(
         self, symbol: str, timeframe: str, limit: int = 100
     ) -> list[Candle]:
-        return []
+        return self._stored_candles[:limit]
 
     async def get_symbols(self) -> list[str]:
         return list(self._symbols)
@@ -124,3 +125,9 @@ class MockProvider(BaseProvider):
         self._last_order = None
         self._cancelled_order_ids.clear()
         self._positions.clear()
+        self._symbols.clear()
+        self._stored_candles.clear()
+
+    def _inject_candles(self, candles: list[Candle]) -> None:
+        """Inject candles that will be returned by get_candles."""
+        self._stored_candles = candles
