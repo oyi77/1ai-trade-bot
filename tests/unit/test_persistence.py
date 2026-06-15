@@ -204,7 +204,7 @@ class TestConnectionBackends:
             await db.connect()
             try:
                 signal = StrategySignal(
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(timezone.utc),  # noqa: UP017
                     symbol="ETH/USD",
                     direction="long",
                     confidence=0.85,
