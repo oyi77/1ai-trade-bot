@@ -7923,60 +7923,56 @@ def _compute_daily_recap() -> str | None:
 
 
 def _compute_weekly_report() -> str | None:
-    """Generate weekly performance report (Friday only)."""
+    """Generate weekly performance report (Friday only) from trade_history.json."""
     now = wib_now()
     if now.weekday() != 4:  # Only Friday
         return None
-    
+
     lines = [f"📈 <b>WEEKLY PERFORMANCE REPORT</b>", f"━━━━━━━━━━━━━━━━"]
     lines.append(f"📅 {now.strftime('%d %b %Y')}")
     lines.append("")
-    
+
     today_iso = now.strftime("%Y-%m-%d")
     week_start = (now - __import__("datetime").timedelta(days=now.weekday())).strftime("%Y-%m-%d")
-    
-    # Load this week's trades
+
+    # Load this week's trades from trade_history.json — SINGLE SOURCE
     week_trades = []
     try:
         hist_file = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
         if hist_file.exists():
-            all_trades = json.loads(hist_file.read_text()).get("trades", [])
-            week_trades = [t for t in all_trades 
+            all_data = json.loads(hist_file.read_text())
+            all_trades = all_data.get("trades", [])
+            week_trades = [t for t in all_trades
                           if week_start <= str(t.get("open_time", t.get("close_time", "")))[:10] <= today_iso]
     except Exception:
         pass
-    
-    total_signals = 0; total_wins = 0; total_losses = 0; total_pips = 0.0
-    
+
+    if not week_trades:
+        return None
+
+    total_trades_count = 0; total_wins = 0; total_losses = 0; total_pips = 0.0
+
     for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD")]:
-        log = load_signal_log(pair_key)
-        sigs = log.get("signals_sent", 0)
-        if sigs == 0 and not any(t.get("symbol","").upper() == disp for t in week_trades):
+        pair_trades = [t for t in week_trades if t.get("symbol","").upper() == disp]
+        if not pair_trades:
             continue
-        total_signals += sigs
-        
-        wins = 0; losses = 0; pips = 0.0
-        for t in week_trades:
-            if t.get("symbol", "").upper() == disp:
-                outcome = t.get("outcome", "").upper()
-                if outcome == "TP_HIT":
-                    wins += 1
-                    pips += abs(float(t.get("pips", 0) or 0))
-                elif outcome == "SL_HIT":
-                    losses += 1
-                    pips -= abs(float(t.get("pips", 0) or 0))
-        
+
+        wins = sum(1 for t in pair_trades if t.get("outcome","").upper() == "TP_HIT")
+        losses = sum(1 for t in pair_trades if t.get("outcome","").upper() == "SL_HIT")
+        pips = sum(float(t.get("pips",0) or 0) for t in pair_trades if t.get("outcome","").upper() in ("TP_HIT","SL_HIT"))
+
         total_wins += wins
         total_losses += losses
         total_pips += pips
-        
+        total_trades_count += len(pair_trades)
+
         wr = f"{(wins/(wins+losses)*100):.0f}%" if (wins+losses) > 0 else "N/A"
-        lines.append(f"🏷 <b>{disp}</b>: {sigs} sinyal | {wins}W/{losses}L | WR {wr} | {pips:+.1f} pip")
-    
+        lines.append(f"🏷 <b>{disp}</b>: {len(pair_trades)} trades | {wins}W/{losses}L | WR {wr} | {pips:+.1f} pip")
+
     total_closed = total_wins + total_losses
     overall_wr = f"{(total_wins/total_closed*100):.0f}%" if total_closed > 0 else "N/A"
     lines.append("━━━━━━━━━━━━━━━━")
-    lines.append(f"📊 <b>Minggu Ini</b>: {total_trades} trades | {total_wins}W/{total_losses}L | WR {overall_wr} | {total_pips:+.1f} pip")
+    lines.append(f"📊 <b>Minggu Ini</b>: {total_trades_count} trades | {total_wins}W/{total_losses}L | WR {overall_wr} | {total_pips:+.1f} pip")
     lines.append("")
     if total_pips > 0:
         lines.append("🟢 <b>PROFITABLE WEEK!</b> 🚀")
