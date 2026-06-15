@@ -1057,7 +1057,7 @@ def handle_payment_callback(callback_query):
                     chat_id
                 )
         except Exception as e:
-            logger.error(f"ScaleV check failed: {e}")
+            logger.error(f"Midtrans check failed: {e}")
             tg_send(
                 "⚠️ <b>Cek status gagal</b>\n"
                 "Coba lagi nanti atau kirim bukti pembayaran ke admin: @codergaboets",
