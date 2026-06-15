@@ -12,7 +12,7 @@ import pytest
 
 from tests.fixtures.mock_providers import MockProvider
 from trading_bot.providers.base import Candle, OrderSide
-from trading_bot.strategies.base import StrategySignal
+from trading_bot.strategies.base import BaseStrategy, StrategySignal
 from trading_bot.strategies.grid import GridStrategy
 from trading_bot.strategies.trend import TrendStrategy
 
@@ -465,3 +465,59 @@ class TestTrendStrategyAnalyze:
         p._inject_candles(_candles([1.0, 2.0, 3.0]))
         candles = await p.get_candles("XAU/USD", "1h")
         assert len(candles) == 3
+# ===========================================================================
+#  Abstract BaseStrategy coverage
+# ===========================================================================
+
+
+class _MinimalStrategy(BaseStrategy):
+    """Concrete strategy implementing every abstract BaseStrategy member."""
+
+    @property
+    def name(self) -> str:
+        return "minimal"
+
+    async def analyze(
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+    ) -> StrategySignal | None:
+        return StrategySignal(
+            symbol=symbol,
+            direction=OrderSide.BUY,
+            confidence=1.0,
+            price=1.0,
+            strategy_name=self.name,
+        )
+
+
+class TestBaseStrategyAbstractMethods:
+    """Cover the abstract declarations in BaseStrategy."""
+
+    async def test_minimal_strategy_runs(self) -> None:
+        strategy = _MinimalStrategy(MockProvider())
+        signal = await strategy.analyze("XAU/USD")
+        assert signal is not None
+        assert signal.strategy_name == "minimal"
+        assert signal.direction == OrderSide.BUY
+
+    def test_missing_name_raises_type_error(self) -> None:
+        class MissingName(BaseStrategy):
+            async def analyze(
+                self,
+                symbol: str,
+                timeframe: str = "1h",
+            ) -> StrategySignal | None:
+                return None
+
+        with pytest.raises(TypeError, match="name"):
+            MissingName(MockProvider())
+
+    def test_missing_analyze_raises_type_error(self) -> None:
+        class MissingAnalyze(BaseStrategy):
+            @property
+            def name(self) -> str:
+                return "missing-analyze"
+
+        with pytest.raises(TypeError, match="analyze"):
+            MissingAnalyze(MockProvider())

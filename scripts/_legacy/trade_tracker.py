@@ -17,7 +17,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 WIB = timezone(timedelta(hours=7))
-DATA_FILE = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
+DATA_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "trade_history.json"
+# Fallback: also check the direct project-root path
+_DATA_FALLBACK = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
+if not DATA_FILE.exists() and _DATA_FALLBACK.exists():
+    DATA_FILE = _DATA_FALLBACK
 
 # USD → IDR rate (update periodically — last: Jun 2026)
 USD_IDR = 16350

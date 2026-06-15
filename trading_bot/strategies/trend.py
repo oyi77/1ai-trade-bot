@@ -115,8 +115,6 @@ class TrendStrategy(BaseStrategy):
         fast_ma = self._ma(closes, self._config.fast_period)
         slow_ma = self._ma(closes, self._config.slow_period)
 
-        if fast_ma is None or slow_ma is None:
-            return None
 
         # Crossover detection.
         prev_fast = self._prev_fast
