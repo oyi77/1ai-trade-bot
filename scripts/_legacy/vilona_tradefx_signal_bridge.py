@@ -1084,9 +1084,9 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "signal_id": sig_id,
                 "symbol": symbol,
                 "action": action,
-                "order_type": data.get("order_type", "MARKET"),  # MARKET, LIMIT, STOP
-                "zone_low": data.get("zone_low"),   # pending order zone
-                "zone_high": data.get("zone_high"),
+                "order_type": data.get("order_type", "MARKET"),
+                "zone_low": data.get("zone_low") or data.get("zone_lo") or data.get("entry"),
+                "zone_high": data.get("zone_high") or data.get("zone_hi") or data.get("entry"),
                 "entry": data.get("entry"),
                 "sl": data.get("sl"),
                 "tp": data.get("tp"),

@@ -680,6 +680,7 @@ def post_signal_to_bridge(sig: dict, price: float, display: str = "XAUUSD") -> N
         "zone_lo": sig.get("zone_lo", entry),
         "zone_hi": sig.get("zone_hi", entry),
         "entry_mode": sig.get("entry_mode", "zone"),
+        "order_type": "MARKET",
         "sl": sl,
         "tp": tp,
         "tp1": sig.get("tp1", sig.get("tp", 0)),
@@ -694,6 +695,22 @@ def post_signal_to_bridge(sig: dict, price: float, display: str = "XAUUSD") -> N
         "timestamp": wib_now().isoformat(),
         "rr_ratio": rr,
     }
+
+    # Auto-determine order type from entry vs zone
+    zlo = payload["zone_lo"]
+    zhi = payload["zone_hi"]
+    if action == "SELL" and entry > zhi:
+        payload["order_type"] = "SELL_LIMIT"
+        payload["entry"] = zhi  # place order at zone top, not market
+    elif action == "SELL" and entry < zlo:
+        payload["order_type"] = "SELL_STOP"
+        payload["entry"] = zlo
+    elif action == "BUY" and entry < zlo:
+        payload["order_type"] = "BUY_LIMIT"
+        payload["entry"] = zlo
+    elif action == "BUY" and entry > zhi:
+        payload["order_type"] = "BUY_STOP"
+        payload["entry"] = zhi
 
     try:
         ea_file = DATA_DIR / "ea_signal.json"
