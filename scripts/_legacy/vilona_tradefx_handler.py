@@ -2103,41 +2103,40 @@ def _call_deepseek(prompt):
 
 
 def _call_openai(prompt, model="gpt-4o-mini"):
-    """Call OpenAI. Model can be overridden: gpt-4o-mini, o3-mini, gpt-4.1, etc."""
-    if not OPENAI_KEY: return None
-    try:
-        # o3-mini doesn't support system messages or temperature
-        is_o3 = "o3" in model
-        messages = [{"role": "user", "content": f"{SYSTEM_PROMPT}\n\n{prompt}"}] if is_o3 else \
-                   [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
-        body = {"model": model, "max_tokens": 800, "messages": messages}
-        if not is_o3:
-            body["temperature"] = 0.3
-        
-        req = urllib.request.Request("https://api.openai.com/v1/chat/completions",
-            data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {OPENAI_KEY}"})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = json.loads(r.read())
-            content = data["choices"][0]["message"]["content"]
-            usage = data.get("usage", {})
-            _AI_TOKEN_USAGE["openai"] = {
-                "prompt": usage.get("prompt_tokens", 0),
-                "completion": usage.get("completion_tokens", 0),
-                "total": usage.get("total_tokens", 0),
-            }
-            logger.info(f"OpenAI/{model}: {len(content)} chars, {_AI_TOKEN_USAGE['openai']['total']} tokens")
-            return _extract_json(content)
-    except Exception as e:
-        logger.warning(f"OpenAI/{model} error: {e}")
-        # Admin alert on rate limit (429 = quota exhausted)
-        if hasattr(e, "code") and getattr(e, "code", 0) == 429:
-            try:
-                from members.admin_alert import send_admin_alert
-                send_admin_alert("OpenAI", f"Rate Limit 429 — model={model} — semua GPT-4o call blocked")
-            except Exception:
-                pass
-        return None
+    """Call via OmniRoute (auto-rotates keys, avoids rate limits)."""
+    if not OMNIROUTE_URL: return None
+    # Try models in order: requested → DeepSeek → best-free
+    candidates = [model]
+    if "deepseek" not in model.lower():
+        candidates.append("ds/deepseek-chat")
+    candidates.append("auto/best-free")
+    
+    for i, omni_model in enumerate(candidates):
+        try:
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}]
+            body = {"model": omni_model, "max_tokens": 800, "temperature": 0.3, "stream": False,
+                    "messages": messages}
+            
+            req = urllib.request.Request(OMNIROUTE_URL,
+                data=json.dumps(body).encode(),
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                data = json.loads(r.read())
+                content = data["choices"][0]["message"]["content"]
+                usage = data.get("usage", {})
+                _AI_TOKEN_USAGE["openai"] = {
+                    "prompt": usage.get("prompt_tokens", 0),
+                    "completion": usage.get("completion_tokens", 0),
+                    "total": usage.get("total_tokens", 0),
+                }
+                logger.info(f"AI/{omni_model}: {len(content)} chars, {_AI_TOKEN_USAGE['openai']['total']} tokens")
+                return _extract_json(content)
+        except Exception as e:
+            if i < len(candidates) - 1:
+                logger.debug(f"AI/{omni_model} failed, trying next: {e}")
+            else:
+                logger.warning(f"AI/all models failed: {e}")
+    return None
 
 
 def _call_gemini(prompt):
@@ -3716,6 +3715,16 @@ def _send_donate_menu(chat_id, username=""):
 
 # ── Command handler ──
 def handle_command(cmd, text, chat_id, msg):
+    # ── ACTIVITY TRACKING: update last_activity + cmd_count in root members.db ──
+    try:
+        _adb = sqlite3.connect(SUBS_PATH)
+        _adb.execute("UPDATE members SET last_activity=?, cmd_count=COALESCE(cmd_count,0)+1 WHERE chat_id=?",
+                     [datetime.now(timezone.utc).isoformat(), str(chat_id)])
+        _adb.commit()
+        _adb.close()
+    except Exception:
+        pass
+
     sub = text[len(cmd):].strip().lower() if len(text) > len(cmd) else ""
     sub_norm = _normalize_broker_symbol(sub)  # XAUUSDc → xauusd, EURUSD.pro → eurusd
 
