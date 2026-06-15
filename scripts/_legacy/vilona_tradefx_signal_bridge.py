@@ -86,7 +86,12 @@ TRAIL_CONFIG = defaultdict(lambda: {  # instance_id → trailing config
     "digits": 2,             # decimal places (XAUUSD=2, some brokers=3)
     "spread_buffer": 0.0,    # extra pips to add to breakeven for spread compensation
 })
-TRAILED_POSITIONS = {}  # instance_id → {signal_id, entry, current_sl, direction, tp, timestamp}
+TRAILED_POSITIONS = {}  # instance_id → [{signal_id, entry, current_sl, direction, tp, timestamp}, ...]
+
+def _add_trailed_position(instance_id, pos):
+    if instance_id not in TRAILED_POSITIONS:
+        TRAILED_POSITIONS[instance_id] = []
+    TRAILED_POSITIONS[instance_id].append(pos)
 TRAIL_CONFIG_FILE = os.path.join(PROJECT_DIR, "data", "vilona_tradefx", "trailing_config.json")
 
 # Pre-computed broker profiles for auto-detection
@@ -543,7 +548,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                     "daemons_online": daemon_count,
                     "daemons_total": len(DAEMONS),
                     "trade_reports": len(TRADE_REPORTS),
-                    "trailing_positions": len(TRAILED_POSITIONS),
+                    "trailing_positions": sum(len(v) if isinstance(v, list) else 1 for v in TRAILED_POSITIONS.values()),
                 })
         elif path == "/signal" or path == "/signal/pending":
             # Validate API key & rate limit
@@ -947,13 +952,17 @@ class SignalHandler(BaseHTTPRequestHandler):
 
             if self.command == "GET":
                 cfg = dict(TRAIL_CONFIG[instance_id])
-                pos = TRAILED_POSITIONS.get(instance_id)
-                cfg["active_position"] = pos is not None
-                if pos:
-                    cfg["position_preview"] = {
-                        "entry": pos["entry"], "sl": pos["current_sl"],
-                        "direction": pos["direction"], "age_sec": int(time.time() - pos["timestamp"])
-                    }
+                positions = TRAILED_POSITIONS.get(instance_id, [])
+                cfg["active_positions"] = len(positions)
+                if positions:
+                    cfg["positions"] = [
+                        {
+                            "entry": p["entry"], "sl": p["current_sl"],
+                            "direction": p["direction"], "ticket": p.get("ticket",""),
+                            "age_sec": int(time.time() - p["timestamp"])
+                        }
+                        for p in positions
+                    ]
                 self._json(cfg)
             elif self.command == "POST":
                 length = int(self.headers.get("Content-Length", 0))
@@ -1245,24 +1254,24 @@ class SignalHandler(BaseHTTPRequestHandler):
                                 TRAIL_CONFIG[instance_id]["breakeven_pips"] = int(breakeven)
                             if step is not None:
                                 TRAIL_CONFIG[instance_id]["step_pips"] = int(step)
-                            TRAILED_POSITIONS[instance_id] = {
+                            _add_trailed_position(instance_id, {
                                 "signal_id": sig_id, "entry": _entry,
                                 "current_sl": _sl, "direction": action,
                                 "tp": _tp, "timestamp": time.time(),
                                 "trail_pips": int(trail_pips),
                                 "breakeven_pips": int(breakeven) if breakeven else 0,
                                 "step_pips": int(step) if step else 0,
-                            }
+                            })
                             log.info(
                                 f"🎯 Trailing auto-enabled for {instance_id}: "
                                 f"trail={trail_pips}pips breakeven={breakeven}pips step={step}pips"
                             )
                         elif action in ("BUY", "SELL") and TRAIL_CONFIG[instance_id]["enabled"]:
-                            TRAILED_POSITIONS[instance_id] = {
+                            _add_trailed_position(instance_id, {
                                 "signal_id": sig_id, "entry": _entry,
                                 "current_sl": _sl, "direction": action,
                                 "tp": _tp, "timestamp": time.time()
-                            }
+                            })
                     log.info(f"📡 Instance broadcast ({broadcast_api_key}): {broadcast_count} instance(s)")
                     # Also queue to global fallback so newly-connecting instances get it
                     PENDING.append(signal)
@@ -2034,8 +2043,15 @@ if __name__ == "__main__":
                     continue
 
                 with LOCK:
-                    for pos_key, pos in list(TRAILED_POSITIONS.items()):
-                        instance_id = pos.get("instance_id", pos_key)  # key may be instance_id:ticket
+                    # Flatten all positions from all instances
+                    all_positions = []
+                    for inst_id, positions in list(TRAILED_POSITIONS.items()):
+                        pos_list = positions if isinstance(positions, list) else [positions]
+                        for pos in pos_list:
+                            pos.setdefault("instance_id", inst_id)
+                            all_positions.append(pos)
+                    for pos in all_positions:
+                        instance_id = pos.get("instance_id", "unknown")
                         cfg = TRAIL_CONFIG.get(instance_id, TRAIL_CONFIG.get("default", {}))
                         if not cfg or not cfg.get("enabled"):
                             continue
