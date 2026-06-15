@@ -61,7 +61,7 @@ SUBS_PATH = str(Path(__file__).resolve().parent.parent.parent / "members.db")
 
 # ── Payment gateway ──
 try:
-    from members.payment import get_pricing_info, get_pricing_table, PRICING, create_scalev_payment
+    from members.payment import get_pricing_info, get_pricing_table, PRICING, create_midtrans_payment
     PAYMENT_ENGINE = True
 except Exception as e:
     PAYMENT_ENGINE = False
@@ -93,7 +93,7 @@ _logging.getLogger('yfinance').setLevel(_logging.CRITICAL)
 try:
     from members import register_member, get_member, get_member_stats, mark_paid, get_due_members
     from members import is_premium, check_quota, use_quota, activate_premium, deactivate_premium
-    from members.payment import get_pricing_info, create_scalev_payment
+    from members.payment import get_pricing_info, create_midtrans_payment
     MEMBERS_ENABLED = True
 except Exception as e:
     MEMBERS_ENABLED = False
@@ -988,7 +988,7 @@ def handle_payment_callback(callback_query):
         tg_send(f"⏳ <b>Membuat invoice...</b>\n"
                 f"Paket: {pkg['label']} — Rp{pkg['price_idr']:,}", chat_id)
 
-        result = create_scalev_payment(chat_id, username, tier)
+        result = create_midtrans_payment(chat_id, username, tier)
         if result.get("error"):
             tg_send(f"❌ <b>Gagal membuat pembayaran</b>\n"
                     f"{result['error']}\n\n"
@@ -1031,7 +1031,7 @@ def handle_payment_callback(callback_query):
             tg_send("❌ Referensi tidak valid.", chat_id)
             return
 
-        tg_send("🔍 <b>Cek Status Pembayaran ke ScaleV...</b>", chat_id)
+        tg_send("🔍 <b>Cek Status Pembayaran...</b>", chat_id)
 
         # Check via local member DB
         try:
@@ -1069,8 +1069,8 @@ def handle_payment_callback(callback_query):
         sub_tier = data.split(":", 1)[1] if ":" in data else ""
         if sub_tier in ("pro", "elite", "lifetime"):
             try:
-                from members.payment import create_scalev_payment
-                result = create_scalev_payment(str(chat_id), username, tier=sub_tier)
+                from members.payment import create_midtrans_payment
+                result = create_midtrans_payment(str(chat_id), username, tier=sub_tier)
                 if result.get("success"):
                     payment_url = result.get("payment_url", "")
                     pay_code = result.get("pay_code", "")
@@ -1173,7 +1173,7 @@ def handle_payment_callback(callback_query):
         tier_label_text = {"pro": "⭐ PRO Rp50K", "elite": "👑 ELITE Rp150K"}
         tg_send(f"⏳ <b>Membuat link pembayaran...</b>\n{tier_label_text.get(tier_label, tier_label)} — Rp{amount:,}", chat_id)
 
-        result = create_scalev_payment(str(chat_id), username, tier=tier_label, amount=amount)
+        result = create_midtrans_payment(str(chat_id), username, tier=tier_label, amount=amount)
         if result.get("error"):
             tg_send(
                 f"❌ <b>Gagal membuat pembayaran otomatis</b>\n"
@@ -5138,8 +5138,8 @@ def handle_command(cmd, text, chat_id, msg):
         if sub_arg in ("pro", "elite", "lifetime"):
             # Direct tier purchase
             try:
-                from members.payment import create_scalev_payment
-                result = create_scalev_payment(str(chat_id), username, tier=sub_arg)
+                from members.payment import create_midtrans_payment
+                result = create_midtrans_payment(str(chat_id), username, tier=sub_arg)
                 if result.get("success"):
                     payment_url = result.get("payment_url", "")
                     pay_code = result.get("pay_code", "")
@@ -5210,7 +5210,7 @@ def handle_command(cmd, text, chat_id, msg):
 
         tg_send("🧪 <b>Test Upgrade Tier — Rp10,000</b>\nMembuat invoice...", chat_id)
 
-        result = create_scalev_payment(str(chat_id), username, tier="pro", amount=10000)
+        result = create_midtrans_payment(str(chat_id), username, tier="pro", amount=10000)
         if result.get("error"):
             tg_send(f"❌ Gagal: {result['error']}", chat_id)
             return
@@ -8281,7 +8281,7 @@ def main():
                                 elif PAYMENT_ENGINE:
                                     username = msg.get("chat", {}).get("username", "")
                                     tg_send(f"⏳ <b>Membuat invoice Rp{amount:,}...</b>", chat_id)
-                                    result = create_scalev_payment(str(chat_id), username, tier="donor", amount=amount)
+                                    result = create_midtrans_payment(str(chat_id), username, tier="donor", amount=amount)
                                     if result.get("error"):
                                         tg_send(f"❌ Gagal: {result['error']}\n📞 Hubungi @codergaboets", chat_id)
                                     else:

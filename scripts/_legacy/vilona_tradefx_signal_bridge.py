@@ -1767,6 +1767,38 @@ class SignalHandler(BaseHTTPRequestHandler):
 
             self._json({"status": "ok", "chat_id": chat_id, "tier": tier})
 
+        elif path == "/api/webhooks/midtrans":
+            """Midtrans payment callback — verify signature_key, activate user, fire CAPI."""
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                notification = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+            try:
+                # Import from the midtrans service
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                if project_root not in sys.path:
+                    sys.path.insert(0, project_root)
+                from tradebot.services.midtrans_service import process_notification
+                result = process_notification(notification)
+                if result.get("success"):
+                    send_telegram_alert(
+                        f"💰 <b>MIDTRANS PAYMENT — ✅ AUTO-ACTIVATED</b>\n\n"
+                        f"👤 Chat ID: <code>{result.get('chat_id')}</code>\n"
+                        f"📋 Order: <code>{result.get('order_id')}</code>\n"
+                        f"⭐ Tier: <b>{result.get('tier', '').upper()}</b>\n"
+                        f"💵 Amount: Rp {result.get('amount', 0):,}"
+                    )
+                    self._json({"status": "activated", "chat_id": result.get("chat_id"), "tier": result.get("tier")})
+                else:
+                    log.info(f"[MIDTRANS-WEBHOOK] Not processed: {result.get('error')}")
+                    self._json({"status": result.get("error", "skipped")})
+            except Exception as e:
+                log.error(f"[MIDTRANS-WEBHOOK] Error: {e}")
+                self._json({"error": "internal_error"}, 500)
+
         elif path == "/webhook/tripay" or path == "/api/webhook/tripay":
             """Tripay payment callback — verify X-Callback-Signature (HMAC-SHA256), process payment, return {"success":true}."""
             import hmac as _hmac

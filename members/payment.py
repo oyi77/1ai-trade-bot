@@ -575,3 +575,54 @@ def create_scalev_payment(chat_id: str, username: str, tier: str = "pro",
             f"💡 Setelah bayar, subscription akan otomatis aktif."
         ),
     }
+
+
+def create_midtrans_payment(chat_id: str, username: str, tier: str = "pro",
+                            method: str = "", amount: int = None,
+                            merchant_ref: str = None) -> dict:
+    """Create Midtrans Snap payment — redirect URL + auto-activate via webhook."""
+    tier_info = PRICING.get(tier, {})
+    tier_label = tier_info.get("label", tier)
+    price = amount or tier_info.get("price_idr", 0)
+
+    try:
+        # Add project root to path for tradebot import
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+        from tradebot.services.midtrans_service import create_snap_transaction
+
+        customer = {}
+        if username:
+            customer["first_name"] = username
+        customer["phone"] = str(chat_id)
+
+        result = create_snap_transaction(str(chat_id), tier, price, customer)
+        if not result.get("success"):
+            logger.error(f"Midtrans Snap failed: {result.get('error')}")
+            return {"success": False, "error": result.get("error", "Unknown error")}
+
+        redirect_url = result.get("redirect_url", "")
+        order_id = result.get("order_id", "")
+
+        logger.info(f"Midtrans checkout: chat_id={chat_id} tier={tier} amount={price} order={order_id}")
+
+        return {
+            "success": True,
+            "reference": order_id,
+            "merchant_ref": order_id,
+            "payment_url": redirect_url,
+            "amount": price,
+            "tier": tier,
+            "tier_label": tier_label,
+            "provider": "midtrans",
+            "message": (
+                f"💳 <b>Pembayaran {tier_label}</b> — Rp {price:,.0f}\n\n"
+                f"Klik link berikut untuk bayar via Midtrans:\n"
+                f"{redirect_url}\n\n"
+                f"💡 Setelah bayar, subscription <b>otomatis aktif!</b>"
+            ),
+        }
+    except Exception as e:
+        logger.error(f"Midtrans payment creation failed: {e}")
+        return {"success": False, "error": str(e)}
