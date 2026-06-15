@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+from trading_bot.engine import (
+    EngineState,
+    Event,
+    EventBus,
+    PortfolioTracker,
+    RiskConfig,
+    RiskManager,
+    TradingOrchestrator,
+)
 from trading_bot.providers.base import (
     BaseProvider,
     Candle,
@@ -24,6 +33,9 @@ __all__ = [
     "Candle",
     "CCXTProvider",
     "DEFAULT_BALANCE",
+    "EngineState",
+    "Event",
+    "EventBus",
     "ExnessProvider",
     "MarketType",
     "Order",
@@ -32,7 +44,11 @@ __all__ = [
     "OrderStatus",
     "OrderType",
     "PaperTradingProvider",
+    "PortfolioTracker",
     "Position",
     "ProviderRegistry",
+    "RiskConfig",
+    "RiskManager",
     "TimeInForce",
+    "TradingOrchestrator",
 ]
