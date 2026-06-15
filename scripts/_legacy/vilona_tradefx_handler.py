@@ -7879,7 +7879,8 @@ def _compute_daily_recap() -> str | None:
             all_trades = all_data.get("trades", [])
             today_iso = today.strftime("%Y-%m-%d")
             today_trades = [t for t in all_trades
-                          if str(t.get("open_time", t.get("close_time", "")))[:10] == today_iso]
+                          if str(t.get("open_time", ""))[:10] == today_iso
+                          or str(t.get("close_time", ""))[:10] == today_iso]
     except Exception:
         pass
 
