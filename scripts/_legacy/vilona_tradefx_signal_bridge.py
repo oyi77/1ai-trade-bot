@@ -1379,7 +1379,8 @@ class SignalHandler(BaseHTTPRequestHandler):
                         DAEMONS[daemon_id]["active_ticket"] = ticket
 
                 if instance_id and instance_id in TRAILED_POSITIONS:
-                    pos = TRAILED_POSITIONS[instance_id]
+                    positions = TRAILED_POSITIONS.get(instance_id, [])
+                    pos = positions[0] if isinstance(positions, list) and positions else positions
                     if status == "ok":
                         pos["current_sl"] = actual_sl
                         log.info(f"📊 Trade status: {instance_id} ticket={ticket} SL→{actual_sl}")
@@ -1399,7 +1400,10 @@ class SignalHandler(BaseHTTPRequestHandler):
                             f"<i>SL in bridge memory is NOT updated. State remains in sync.</i>"
                         )
                     elif status == "closed":
-                        del TRAILED_POSITIONS[instance_id]
+                        if isinstance(TRAILED_POSITIONS.get(instance_id), list):
+                            TRAILED_POSITIONS[instance_id] = []
+                        else:
+                            del TRAILED_POSITIONS[instance_id]
                         log.info(f"🏁 Position closed: {instance_id} ticket={ticket}")
                         send_telegram_alert(
                             f"🏁 <b>POSITION CLOSED</b>\n"
@@ -1415,10 +1419,16 @@ class SignalHandler(BaseHTTPRequestHandler):
                         "tp": body.get("actual_tp", 0), "profit": body.get("profit", 0),
                     })
                     if instance_id and instance_id in TRAILED_POSITIONS:
-                        bridge_sl = TRAILED_POSITIONS[instance_id]["current_sl"]
+                        tps = TRAILED_POSITIONS.get(instance_id, {})
+                        pos_list = tps if isinstance(tps, list) else [tps]
+                        bridge_sl = pos_list[0].get("current_sl", 0) if pos_list else 0
                         if abs(actual_sl - bridge_sl) > 0.001:
                             log.warning(f"🔍 DRIFT: {instance_id} bridge={bridge_sl} broker={actual_sl} — forcing sync")
-                            TRAILED_POSITIONS[instance_id]["current_sl"] = actual_sl
+                            tps4 = TRAILED_POSITIONS.get(instance_id, {})
+                            if isinstance(tps4, list) and tps4:
+                                tps4[0]["current_sl"] = actual_sl
+                            elif isinstance(tps4, dict):
+                                tps4["current_sl"] = actual_sl
                             send_telegram_alert(
                                 f"🔍 <b>SILENT DRIFT DETECTED</b>\n"
                                 f"<b>Instance:</b> <code>{instance_id}</code>\n"
@@ -1430,7 +1440,11 @@ class SignalHandler(BaseHTTPRequestHandler):
                             )
                         else:
                             log.debug(f"🔍 Reconcile OK: {instance_id} SL={actual_sl} (no drift)")
-                            TRAILED_POSITIONS[instance_id]["current_sl"] = actual_sl
+                            tps4 = TRAILED_POSITIONS.get(instance_id, {})
+                            if isinstance(tps4, list) and tps4:
+                                tps4[0]["current_sl"] = actual_sl
+                            elif isinstance(tps4, dict):
+                                tps4["current_sl"] = actual_sl
 
             self._json({"status": "ok", "report_id": len(TRADE_REPORTS)})
 
@@ -1848,9 +1862,16 @@ class SignalHandler(BaseHTTPRequestHandler):
                     symbol = p.get("symbol", "XAUUSD")
 
                     if pos_key in TRAILED_POSITIONS:
-                        TRAILED_POSITIONS[pos_key]["current_sl"] = sl
-                        TRAILED_POSITIONS[pos_key]["tp"] = tp
-                        TRAILED_POSITIONS[pos_key]["timestamp"] = time.time()
+                        tps6 = TRAILED_POSITIONS.get(pos_key, {})
+                        if isinstance(tps6, list):
+                            for tp6 in tps6:
+                                tp6["current_sl"] = sl
+                                tp6["tp"] = tp
+                                tp6["timestamp"] = time.time()
+                        elif isinstance(tps6, dict):
+                            tps6["current_sl"] = sl
+                            tps6["tp"] = tp
+                            tps6["timestamp"] = time.time()
                         updated += 1
                     else:
                         TRAILED_POSITIONS[pos_key] = {
