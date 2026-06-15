@@ -2,10 +2,26 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
-from trading_bot.cli import build_parser, main
+import pytest
+
+from trading_bot.cli import _build_strategy, _signal_handler, build_parser, main
+
+
+class TestBuildStrategy:
+    """Strategy factory edge cases."""
+
+    def test_build_strategy_unknown(self) -> None:
+        with pytest.raises(ValueError, match="Unknown strategy 'unknown'"):
+            _build_strategy("unknown", provider=None, params={})
+
+    def test_signal_handler_sets_event(self) -> None:
+        shutdown = asyncio.Event()
+        _signal_handler(shutdown)
+        assert shutdown.is_set()
 
 
 class TestBuildParser:
@@ -92,3 +108,57 @@ class TestMainRun:
         code = await main(["--config", str(config_path), "run", "--db", str(db_path)])
         assert code == 0
         assert db_path.exists()
+
+    async def test_run_grid_strategy_places_order(self, tmp_path: Path) -> None:
+        config_path = tmp_path / "cfg.json"
+        config_path.write_text(json.dumps({
+            "symbols": ["XAU/USD"],
+            "risk": {"max_risk_per_trade_pct": 1.0},
+            "strategies": [{"name": "grid", "levels": [118.5]}],
+            "provider": "paper",
+            "cycle_interval_seconds": 0,
+            "paper_candles": [
+                {
+                    "symbol": "XAU/USD",
+                    "timeframe": "1h",
+                    "open": 100.0 + i,
+                    "high": 101.0 + i,
+                    "low": 99.0 + i,
+                    "close": 100.0 + i,
+                    "volume": 1000.0,
+                }
+                for i in range(20)
+            ],
+        }))
+        db_path = tmp_path / "run.db"
+        code = await main(["--config", str(config_path), "run", "--db", str(db_path)])
+        assert code == 0
+        assert db_path.exists()
+
+    async def test_run_invalid_strategy_name(self, tmp_path: Path) -> None:
+        config_path = tmp_path / "cfg.json"
+        config_path.write_text(json.dumps({
+            "symbols": ["XAU/USD"],
+            "risk": {"max_risk_per_trade_pct": 1.0},
+            "strategies": [{"fast_period": 5, "slow_period": 10}],
+            "provider": "paper",
+            "cycle_interval_seconds": 0,
+        }))
+        db_path = tmp_path / "run.db"
+        with pytest.raises(ValueError, match="strategy entry must include a 'name' string"):
+            await main(["--config", str(config_path), "run", "--db", str(db_path)])
+
+
+class TestMainEntrypoint:
+    """Top-level argument dispatch."""
+
+    async def test_main_no_subcommand(self, capsys) -> None:
+        code = await main([])
+        assert code == 1
+        captured = capsys.readouterr()
+        assert "usage:" in captured.out
+
+    async def test_main_help(self) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            await main(["--help"])
+        assert exc_info.value.code == 0

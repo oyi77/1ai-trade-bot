@@ -6,6 +6,7 @@ All tests use MockProvider; no real API keys or network calls.
 from __future__ import annotations
 
 import datetime
+import logging
 
 import pytest
 
@@ -205,6 +206,39 @@ class TestGridStrategyAnalyze:
         assert n == 1
         assert grid._levels[0].order_id is None
 
+    async def test_grid_cooldown_blocks_signal(self, grid: GridStrategy) -> None:
+        """A level in cooldown should return None even when price is still close."""
+        await grid.on_start()
+        grid._provider._inject_candles(_candles([100.05]))
+        result1 = await grid.analyze("XAU/USD")
+        assert result1 is not None
+
+        # Simulate a completed fill: reset so the level is eligible again.
+        level = grid._levels[0]
+        level.filled = False
+        level.order_id = None
+
+        result2 = await grid.analyze("XAU/USD")
+        assert result2 is None
+        assert grid._cooldown_counters[level.price] > 0
+
+    async def test_grid_order_rejected(
+        self, grid: GridStrategy, caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """When the provider rejects an order, analyze should warn and return None."""
+        await grid.on_start()
+        # MockProvider rejects non-positive quantities.
+        original_size = grid._config.order_size
+        grid._config.order_size = 0.0
+        try:
+            grid._provider._inject_candles(_candles([100.05]))
+            with caplog.at_level(logging.WARNING, logger="trading_bot.strategies.grid"):
+                result = await grid.analyze("XAU/USD")
+            assert result is None
+            assert "rejected" in caplog.text.lower()
+        finally:
+            grid._config.order_size = original_size
+
 
 class TestGridStrategyFindCrossing:
     """_find_crossing edge cases."""
@@ -276,6 +310,31 @@ class TestTrendStrategyAnalyze:
     async def test_insufficient_candles(self, trend: TrendStrategy) -> None:
         result = await trend.analyze("XAU/USD")
         assert result is None
+
+    async def test_trend_insufficient_data_returns_none(
+        self, trend: TrendStrategy,
+    ) -> None:
+        """Inject fewer candles than slow_period; analyze must return None."""
+        trend._provider._inject_candles(_candles([100.0] * 5))
+        result = await trend.analyze("XAU/USD")
+        assert result is None
+
+    def test_trend_ma_insufficient_values(self) -> None:
+        """_ma returns None when the value list is shorter than the period."""
+        p = MockProvider()
+        ts = TrendStrategy(p, {"fast_period": 3, "slow_period": 7})
+        assert ts._ma([1.0, 2.0], period=5) is None
+
+    def test_trend_ema_insufficient(self) -> None:
+        """_ma returns None in EMA mode when values are shorter than period."""
+        p = MockProvider()
+        ts = TrendStrategy(p, {
+            "fast_period": 3,
+            "slow_period": 7,
+            "use_ema": True,
+        })
+        assert ts._ma([1.0], period=3) is None
+
 
     async def test_no_crossover_no_signal(self, trend: TrendStrategy) -> None:
         """Flat prices produce no signal even after priming."""

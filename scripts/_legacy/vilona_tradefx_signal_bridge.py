@@ -56,6 +56,12 @@ PENDING = deque(maxlen=100)        # global pending queue (all users)
 PENDING_BY_KEY = defaultdict(lambda: deque(maxlen=50))  # per-user pending
 PENDING_BY_INSTANCE = defaultdict(lambda: deque(maxlen=50))  # per-instance queue
 LOCK = threading.Lock()
+
+# Retry queue for market-closed failures
+RETRY_QUEUE = []
+RETRY_MAX = 3
+RETRY_DELAY = 60
+RETRY_LOCK = threading.Lock()
 ID_COUNTER = 0
 ACKED = set()
 ACKED_BY_KEY = defaultdict(set)  # per-account ACK tracking
@@ -2204,6 +2210,40 @@ if __name__ == "__main__":
     trail_thread.start()
     log.info(f"  Instances:   {len(INSTANCES)} active | Master keys: {len(MASTER_INSTANCES)}")
 
+    def retry_engine():
+        while True:
+            time.sleep(RETRY_DELAY)
+            try:
+                with RETRY_LOCK:
+                    now = time.time()
+                    to_retry = [(i, s, r, e) for i, (s, r, e) in enumerate(RETRY_QUEUE) if e > now]
+                    expired = [i for i, (s, r, e) in enumerate(RETRY_QUEUE) if e <= now]
+                    for i in sorted(expired, reverse=True):
+                        RETRY_QUEUE.pop(i)
+                for idx, sig, retry_count, expired_at in to_retry:
+                    if retry_count >= RETRY_MAX:
+                        with RETRY_LOCK:
+                            RETRY_QUEUE.pop(idx)
+                        continue
+                    symbol = sig.get("symbol", "XAUUSD")
+                    action = sig.get("action", "BUY")
+                    sent = 0
+                    for inst_id, inst in list(INSTANCES.items()):
+                        url_b = f"http://{inst['ip']}:{inst.get('port', 8765)}/signal?api_key={inst['api_key']}&account_id={inst.get('account_id','')}"
+                        try:
+                            payload = json.dumps({"signal_id": f"retry_{int(time.time())}_{idx}", "action": sig.get("action"), "symbol": sig.get("symbol"), "entry": sig.get("entry"), "sl": sig.get("sl"), "tp": sig.get("tp"), "tp1": sig.get("tp1"), "tp2": sig.get("tp2"), "confidence": sig.get("confidence")}).encode()
+                            req = urllib.request.Request(url_b, data=payload, headers={"Content-Type": "application/json"})
+                            urllib.request.urlopen(req, timeout=10)
+                            sent += 1
+                        except: pass
+                    with RETRY_LOCK:
+                        if sent > 0:
+                            RETRY_QUEUE.pop(idx)
+                            log.info(f"🔄 Retry SUCCESS ({retry_count+1}x): {symbol} {action}")
+                        else:
+                            RETRY_QUEUE[idx] = (sig, retry_count + 1, time.time() + RETRY_DELAY)
+            except: pass
+
     def cleanup_stale_instances():
         """Remove instances not seen in 30 minutes."""
         while True:
@@ -2244,6 +2284,9 @@ if __name__ == "__main__":
 
     reconcile_thread = threading.Thread(target=reconciliation_loop, daemon=True, name="reconcile-loop")
     reconcile_thread.start()
+
+    retry_thread = threading.Thread(target=retry_engine, daemon=True, name="retry-engine")
+    retry_thread.start()
 
     server = ThreadingHTTPServer((args.host, args.port), SignalHandler)
     try:

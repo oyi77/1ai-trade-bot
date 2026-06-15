@@ -16,6 +16,7 @@ from typing import Any
 
 from trading_bot.config import BotConfig, load_config
 from trading_bot.engine import (
+    ORDER_PLACED,
     EventBus,
     PortfolioTracker,
     RiskManager,
@@ -67,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to configuration file (default: config.yaml)",
     )
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=False)
 
     run = sub.add_parser("run", help="Run the live trading loop")
     run.add_argument(
@@ -95,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 #  Command handlers
 # ---------------------------------------------------------------------------
+
+
+def _signal_handler(shutdown: asyncio.Event) -> None:
+    """Request a graceful shutdown when a signal is received."""
+    shutdown.set()
 
 
 async def _cmd_run(config: BotConfig, db_path: Path) -> int:
@@ -144,18 +150,15 @@ async def _cmd_run(config: BotConfig, db_path: Path) -> int:
         # Orders are persisted by the executor; this hook could be extended.
         pass
 
-    event_bus.subscribe("ORDER_PLACED", _on_order)
+    event_bus.subscribe(ORDER_PLACED, _on_order)
 
     await executor.start()
     await orchestrator.start()
 
     shutdown = asyncio.Event()
 
-    def _handle_sig() -> None:
-        shutdown.set()
-
     for sig in (signal.SIGINT, signal.SIGTERM):
-        asyncio.get_running_loop().add_signal_handler(sig, _handle_sig)
+        asyncio.get_running_loop().add_signal_handler(sig, _signal_handler, shutdown)
 
     try:
         while not shutdown.is_set():

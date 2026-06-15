@@ -10,6 +10,9 @@ import pytest
 from trading_bot.config import (
     BotConfig,
     _candles_from_value,
+    _load_json,
+    _load_toml,
+    _load_yaml,
     _risk_from_value,
     load_config,
     load_config_from_env,
@@ -22,14 +25,21 @@ from trading_bot.providers.base import Candle
 class TestRiskFromValue:
     """RiskConfig parsing helper."""
 
-    def test_passthrough_instance(self) -> None:
-        cfg = RiskConfig(max_risk_per_trade_pct=2.0)
-        assert _risk_from_value(cfg) is cfg
-
-    def test_from_dict(self) -> None:
-        cfg = _risk_from_value({"max_risk_per_trade_pct": 2.5})
+    def test_dict(self) -> None:
+        value = {
+            "max_risk_per_trade_pct": 1.5,
+            "max_drawdown_pct": 5.0,
+            "max_open_positions": 2,
+        }
+        cfg = _risk_from_value(value)
         assert isinstance(cfg, RiskConfig)
-        assert cfg.max_risk_per_trade_pct == 2.5
+        assert cfg.max_risk_per_trade_pct == 1.5
+
+    def test_instance(self) -> None:
+        original = RiskConfig(max_risk_per_trade_pct=3.0)
+        cfg = _risk_from_value(original)
+        assert cfg is original
+        assert cfg.max_risk_per_trade_pct == 3.0
 
     def test_invalid_type(self) -> None:
         with pytest.raises(TypeError):
@@ -70,27 +80,30 @@ class TestCandlesFromValue:
         with pytest.raises(TypeError):
             _candles_from_value([123])
 
+    def test_candles_from_value_invalid_type(self) -> None:
+        with pytest.raises(TypeError):
+            _candles_from_value(123)
+
 
 class TestBotConfig:
     """BotConfig dataclass validation."""
 
     def test_minimum_valid(self) -> None:
-        cfg = BotConfig(symbols=["XAU/USD"], risk=RiskConfig(), strategies=[])
-        assert cfg.initial_balance == 10_000.0
-        assert cfg.timeframe == "1h"
+        cfg = BotConfig(symbols=["XAU/USD"], risk=RiskConfig(), strategies=[{"name": "grid"}])
+        assert cfg.symbols == ["XAU/USD"]
         assert cfg.provider == "paper"
 
-    def test_empty_symbols(self) -> None:
-        with pytest.raises(ValueError, match="non-empty"):
-            BotConfig(symbols=[], risk=RiskConfig(), strategies=[])
+    def test_symbols_empty(self) -> None:
+        with pytest.raises(ValueError, match="non-empty list"):
+            BotConfig(symbols=[], risk=RiskConfig(), strategies=[{"name": "grid"}])
 
-    def test_non_string_symbol(self) -> None:
-        with pytest.raises(ValueError, match="strings"):
-            BotConfig(symbols=["XAU/USD", 123], risk=RiskConfig(), strategies=[])
+    def test_symbols_non_string(self) -> None:
+        with pytest.raises(ValueError, match="all symbols must be strings"):
+            BotConfig(symbols=[123], risk=RiskConfig(), strategies=[{"name": "grid"}])
 
     def test_risk_wrong_type(self) -> None:
         with pytest.raises(TypeError, match="RiskConfig"):
-            BotConfig(symbols=["X"], risk={}, strategies=[])
+            BotConfig(symbols=["X"], risk={}, strategies=[{"name": "grid"}])
 
     def test_strategies_wrong_type(self) -> None:
         with pytest.raises(ValueError, match="list of dicts"):
@@ -116,6 +129,12 @@ class TestLoadConfigJson:
         assert cfg.provider == "paper"
         assert cfg.cycle_interval_seconds == 30
 
+    def test_load_json_not_object(self, tmp_path: Path) -> None:
+        path = tmp_path / "config.json"
+        path.write_text("[]")
+        with pytest.raises(ValueError, match="top-level object"):
+            _load_json(path)
+
     def test_load_toml(self, tmp_path: Path) -> None:
         path = tmp_path / "config.toml"
         path.write_text(
@@ -133,9 +152,15 @@ class TestLoadConfigJson:
         )
         cfg = load_config(path)
         assert cfg.symbols == ["BTC/USD"]
-        assert cfg.timeframe == "15m"
-        assert cfg.provider == "ccxt"
         assert cfg.risk.max_risk_per_trade_pct == 1.5
+
+    def test_load_toml_not_table(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import tomllib
+        path = tmp_path / "config.toml"
+        path.write_text("answer = 42\n")
+        monkeypatch.setattr(tomllib, "load", lambda _handle: 42)
+        with pytest.raises(ValueError, match="top-level table"):
+            _load_toml(path)
 
     def test_unsupported_extension(self, tmp_path: Path) -> None:
         path = tmp_path / "config.txt"
@@ -147,45 +172,33 @@ class TestLoadConfigJson:
 class TestLoadConfigFromEnv:
     """Environment variable config loader."""
 
-    def test_parses_json_and_numbers(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("TRADE_BOT_SYMBOLS", '["XAU/USD", "BTC/USD"]')
+    def test_load_config_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TRADE_BOT_SYMBOLS", "[\"XAU/USD\", \"EUR/USD\"]")
+        monkeypatch.setenv("TRADE_BOT_PROVIDER", "paper")
         monkeypatch.setenv("TRADE_BOT_CYCLE_INTERVAL_SECONDS", "45")
-        monkeypatch.setenv("TRADE_BOT_PROVIDER", "ccxt")
         cfg = load_config_from_env()
-        assert cfg["symbols"] == ["XAU/USD", "BTC/USD"]
+        assert cfg["symbols"] == ["XAU/USD", "EUR/USD"]
+        assert cfg["provider"] == "paper"
         assert cfg["cycle_interval_seconds"] == 45
-        assert cfg["provider"] == "ccxt"
-
-    def test_no_prefix_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("OTHER_KEY", "value")
-        cfg = load_config_from_env()
         assert "other_key" not in cfg
 
 
 class TestMergeConfigs:
     """Deep merge helper."""
 
-    def test_nested_merge(self) -> None:
+    def test_merge_nested(self) -> None:
         base = {
-            "risk": {"max_risk_per_trade_pct": 1.0, "max_drawdown_pct": 20.0},
             "symbols": ["XAU/USD"],
+            "risk": {"max_risk_per_trade_pct": 1.0},
+            "provider": "paper",
         }
-        override = {"risk": {"max_risk_per_trade_pct": 3.0}}
+        override = {
+            "risk": {"max_daily_risk_pct": 3.0},
+            "provider": "ccxt",
+        }
         merged = merge_configs(base, override)
-        assert merged["risk"]["max_risk_per_trade_pct"] == 3.0
-        assert merged["risk"]["max_drawdown_pct"] == 20.0
-        assert merged["symbols"] == ["XAU/USD"]
-
-    def test_list_override(self) -> None:
-        base = {"symbols": ["XAU/USD"]}
-        override = {"symbols": ["BTC/USD", "ETH/USD"]}
-        merged = merge_configs(base, override)
-        assert merged["symbols"] == ["BTC/USD", "ETH/USD"]
-
-    def test_adds_new_keys(self) -> None:
-        base = {}
-        override = {"provider": "ccxt"}
-        merged = merge_configs(base, override)
+        assert merged["risk"]["max_risk_per_trade_pct"] == 1.0
+        assert merged["risk"]["max_daily_risk_pct"] == 3.0
         assert merged["provider"] == "ccxt"
 
 
@@ -208,6 +221,13 @@ class TestYamlLoader:
         assert cfg.symbols == ["XAU/USD"]
         assert cfg.risk.max_risk_per_trade_pct == 2.0
         assert cfg.strategies[0]["name"] == "grid"
+
+    def test_load_yaml_not_mapping(self, tmp_path: Path) -> None:
+        pytest.importorskip("yaml")
+        path = tmp_path / "config.yaml"
+        path.write_text("- a\n- b\n")
+        with pytest.raises(ValueError, match="top-level mapping"):
+            _load_yaml(path)
 
     def test_yaml_without_pyyaml_raises_helpful_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

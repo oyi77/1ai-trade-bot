@@ -171,3 +171,54 @@ class TestPositionPersistence:
         rows = await store.get_positions(status="open")
         assert len(rows) == 1
         assert rows[0]["symbol"] == "BTC/USD"
+
+class TestConnectionBackends:
+    """Backend-specific coverage for aiosqlite and threaded fallback."""
+
+    async def test_aiosqlite_execute_without_connect(self) -> None:
+        """Calling execute on an unopened _AiosqliteConnection raises RuntimeError."""
+        from trading_bot.persistence import _AiosqliteConnection
+
+        conn = _AiosqliteConnection()
+        with pytest.raises(RuntimeError, match="not open"):
+            await conn.execute("SELECT 1")
+
+    async def test_threaded_execute_without_connect(self) -> None:
+        """Calling execute on an unopened _ThreadedConnection raises RuntimeError."""
+        from trading_bot.persistence import _ThreadedConnection
+
+        conn = _ThreadedConnection()
+        with pytest.raises(RuntimeError, match="not open"):
+            await conn.execute("SELECT 1")
+
+    async def test_threaded_fallback(self, tmp_path: Path) -> None:
+        """PersistenceStore falls back to the threaded sqlite3 backend."""
+        from trading_bot.persistence import _AIOSQLITE_AVAILABLE
+
+        original = _AIOSQLITE_AVAILABLE
+        import trading_bot.persistence as persistence_module
+
+        persistence_module._AIOSQLITE_AVAILABLE = False
+        try:
+            db = PersistenceStore(tmp_path / "fallback.db")
+            await db.connect()
+            try:
+                signal = StrategySignal(
+                    timestamp=datetime.now(timezone.utc),
+                    symbol="ETH/USD",
+                    direction="long",
+                    confidence=0.85,
+                    price=1800.0,
+                    strategy_name="test-fallback",
+                )
+                row_id = await db.save_signal(signal)
+                assert row_id > 0
+
+                rows = await db.get_signals(symbol="ETH/USD")
+                assert len(rows) == 1
+                assert rows[0]["symbol"] == "ETH/USD"
+                assert rows[0]["direction"] == "long"
+            finally:
+                await db.close()
+        finally:
+            persistence_module._AIOSQLITE_AVAILABLE = original
