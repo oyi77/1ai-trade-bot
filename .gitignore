@@ -74,3 +74,4 @@ config/rapidapi_key.json
 # Backups (runtime artifacts — never commit)
 backups/
 scripts/logs/
+:memory:.session
