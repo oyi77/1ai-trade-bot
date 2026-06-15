@@ -1660,11 +1660,15 @@ class SignalHandler(BaseHTTPRequestHandler):
             variant_map = {530141: "pro", 530142: "elite", 530143: "lifetime"}
             tier = variant_map.get(int(variant_id) if variant_id else 0, "pro")
 
-            # Find chat_id from notes (tg://xxx) or by phone, or from pending orders
+            # Find chat_id from notes (raw chat_id or tg://chat_id format)
             chat_id = None
-            if "tg://" in str(notes):
+            if notes:
                 try:
-                    chat_id = str(notes).split("tg://")[1].split()[0]
+                    notes_str = str(notes).strip()
+                    if notes_str.isdigit():
+                        chat_id = notes_str
+                    elif "tg://" in notes_str:
+                        chat_id = notes_str.split("tg://")[1].split()[0].strip()
                 except Exception:
                     pass
             # Try pending orders map (ref→chat_id)
