@@ -159,9 +159,14 @@ class VilonaMetaOrchestrator:
         flat_signal: Signal | None = None,
         mtf_verdict: dict[str, Any] | None = None,
         harmonic_verdict: ConsensusVerdict | None = None,
+        sbr_killer_signal: Signal | None = None,
     ) -> Signal | None:
         """
         Resolve three signal paths into a single executable Signal.
+
+        A 4th path (sbr_killer_signal) may be passed and, if above
+        minimum confidence, pre-empts all other paths during active
+        killzone windows.
 
         Parameters
         ----------
@@ -177,6 +182,9 @@ class VilonaMetaOrchestrator:
         harmonic_verdict:
             ``ConsensusVerdict`` from ``MTFConsensusGate``, or *None*
             if no harmonic pattern is active.
+        sbr_killer_signal:
+            Signal from SBRKillerEngine, or *None*.
+            Pre-empts all other paths when confidence >= 0.50.
 
         Returns
         -------
@@ -186,6 +194,24 @@ class VilonaMetaOrchestrator:
             Returns *None* (HOLD) when all paths conflict or no valid
             signal exists.
         """
+        # ── Path 0: SBR/BRS Killer Zone (pre-emptive, if confident) ──
+        if sbr_killer_signal is not None and sbr_killer_signal.confidence >= 0.50:
+            LOG.info(
+                "Orchestrator: %s — SBR/BRS Killer Zone signal @ %.2f — "
+                "pre-empting all other paths",
+                symbol, sbr_killer_signal.confidence,
+            )
+            sbr_killer_signal.grade = SignalGrade.STRONG
+            sbr_killer_signal.metadata["orchestrator_verdict"] = {
+                "resolution_path": (
+                    "🎯 Apex SBR/BRS Killer Zone pre-empt — "
+                    "institutional SMC setup during active killzone"
+                ),
+                "stake_multiplier": 2.0,
+                "pre_empted": True,
+            }
+            return sbr_killer_signal
+
         # ── Normalise inputs ─────────────────────────────────────────
         hstate = self._classify_harmonic(harmonic_verdict, symbol)
         mtrend = self._extract_macro_trend(mtf_verdict)

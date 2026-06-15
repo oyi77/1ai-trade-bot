@@ -5570,20 +5570,45 @@ def handle_command(cmd, text, chat_id, msg):
             return
         try:
             from tradebot.services.apex_hunt_radar import scan_harmonic_patterns, format_ahz_alert
+            from tradebot.engines.sbr_killer import SBRKillerEngine
+
             bars = _fetch_ohlcv_for_ai("xauusd", keep=80)
-            result = scan_harmonic_patterns(bars)
-            if result:
-                tg_send(format_ahz_alert(result), chat_id)
-            else:
-                tg_send(
-                    f"📡 <b>APEX HUNT RADAR — XAUUSD</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🔍 Tidak ada Pattern Harmonic yang mendekati AHZ saat ini.\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"⏰ {datetime.now(WIB).strftime('%H:%M WIB')}\n"
-                    f"🎯 Powered by Harmonic AHZ Engine",
-                    chat_id
+
+            # ── AHZ Scan ──
+            ahz_result = scan_harmonic_patterns(bars)
+
+            # ── SBR/BRS Killer Zone Scan (if killzone active) ──
+            sbr_kz = SBRKillerEngine._detect_killzone()
+            sbr_text = ""
+            if sbr_kz:
+                from tradebot.engines.sbr_killer import SBRKillerSetup, SBRKillerEngine
+                kz_label = {"LONDON": "🇬🇧 London", "NEW_YORK": "🗽 New York", "LONDON_NY_OVERLAP": "🇬🇧/🗽 London-NY Overlap"}
+                sbr_text = (
+                    f"\n🔥 <b>SBR/BRS KILLER ZONE</b>\n"
+                    f"💀 Killzone: {kz_label.get(sbr_kz, sbr_kz)} — ACTIVE!\n"
                 )
+                try:
+                    engine = SBRKillerEngine(bars_h1=bars, bars_m15=bars, symbol="XAUUSD")
+                    setup = engine.find_setup()
+                    if setup:
+                        sbr_text += engine.format_setup_text(setup)
+                    else:
+                        sbr_text += "🔍 No killer zone setup detected at this level.\n"
+                except Exception as sbr_e:
+                    sbr_text += f"⚠️ SBR scan error: {sbr_e}\n"
+
+            # ── Compose response ──
+            lines = [f"📡 <b>APEX HUNT RADAR — XAUUSD</b>\n━━━━━━━━━━━━━━━━━━━━━━"]
+            if ahz_result:
+                lines.append(format_ahz_alert(ahz_result))
+            else:
+                lines.append("🔍 Tidak ada Pattern Harmonic yang mendekati AHZ saat ini.")
+            if sbr_text:
+                lines.append(sbr_text)
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append(f"⏰ {datetime.now(WIB).strftime('%H:%M WIB')}")
+            lines.append("🎯 Powered by Harmonic AHZ + SBR/BRS Engine")
+            tg_send("\n".join(lines), chat_id)
         except Exception as e:
             tg_send(f"❌ AHZ Radar error: {e}", chat_id)
             logger.warning(f"/ahz_radar error: {e}")

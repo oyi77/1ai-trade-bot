@@ -10,6 +10,7 @@ from tradebot.engines.layering import LayeringEngine
 from tradebot.engines.liquidity import LiquidityEngine
 from tradebot.engines.quant import QuantEngine
 from tradebot.engines.registry import Registry
+from tradebot.engines.sbr_killer import SBRKillerEngine
 from tradebot.engines.session_levels import SessionLevelsEngine
 from tradebot.engines.smc import SMCEngine
 from tradebot.engines.sweep import SweepEngine
