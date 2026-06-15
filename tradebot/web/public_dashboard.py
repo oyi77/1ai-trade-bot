@@ -122,12 +122,15 @@ def get_donor_list() -> list:
         c.execute(
             """
             SELECT m.chat_id, m.nama, m.username, m.tier, m.joined_at,
-                   COALESCE(p.amount, 0) as donation_amount,
-                   p.paid_at, p.merchant_ref
-            FROM payment_orders p
-            INNER JOIN members m ON m.chat_id = p.chat_id
-            WHERE p.status = 'paid' AND p.amount > 0
-            ORDER BY p.paid_at DESC
+                   COALESCE(SUM(p.amount), 0) as donation_amount,
+                   MAX(p.paid_at) as paid_at
+            FROM members m
+            LEFT JOIN payment_orders p ON m.chat_id = p.chat_id
+                AND p.status = 'paid' AND p.amount > 0
+            WHERE m.status = 'paid'
+              AND m.tier NOT IN ('free', 'trial', 'expired')
+            GROUP BY m.chat_id
+            ORDER BY donation_amount DESC
             """
         )
         rows = c.fetchall()
