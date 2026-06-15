@@ -332,3 +332,50 @@ async def create_tripay_payment(
         method=method,
         tier=tier,
     )
+
+
+# ── Legacy compatibility sync wrapper ──────────────────────────────────────
+def create_transaction(
+    user_id: str,
+    username: str,
+    amount: int,
+    method: str = "",
+    customer_email: str = "",
+    customer_phone: str = "",
+    order_items: list | None = None,
+    merchant_ref: str | None = None,
+    brand_id: str = "vilona",
+) -> dict:
+    """Legacy sync interface absorbed from scripts/payment_tripay.py.
+
+    Accepts the same signature as the original synchronous module-level
+    function so non-async callers (e.g. unified_bot fallback) keep working
+    without changing architecture. Delegates to PaymentService under the hood.
+    """
+    tier = "1ai-subscribe" if brand_id == "1ai" else "pro"
+    svc = PaymentService()
+
+    async def _run() -> dict:
+        return await svc.create_tripay_transaction(
+            user_id=user_id,
+            username=username,
+            amount=amount,
+            method=method or settings.TRIPAY_DEFAULT_METHOD,
+            customer_email=customer_email,
+            customer_phone=customer_phone,
+            order_items=order_items,
+        )
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Already in an async context — run in a worker thread.
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, _run()).result()
+        return loop.run_until_complete(_run())
+    except RuntimeError:
+        return asyncio.run(_run())
+
+

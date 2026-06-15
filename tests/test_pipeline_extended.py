@@ -505,6 +505,12 @@ class TestPipelineMetrics:
             "max_latency_ms",
             "min_latency_ms",
             "last_latency_ms",
+            "orchestrator_calls",
+            "orchestrator_executes",
+            "orchestrator_holds",
+            "orchestrator_hunts",
+            "mtf_timeouts",
+            "harmonic_timeouts",
         }
         assert expected_keys == set(snap.keys())
 

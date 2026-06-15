@@ -307,9 +307,6 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "trades": [], "uptime": "", "ea_count": 0,
             }
             try:
-                _scripts = str(Path(settings.DATA_DIR).parent / "scripts")
-                if _scripts not in sys.path:
-                    sys.path.insert(0, _scripts)
                 from tradebot.services.trade_tracker_service import (
                     get_recent_trades,
                     get_stats,
@@ -349,12 +346,6 @@ class SignalHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 LOG.warning("Silent exception caught: %s", e)
             try:
-                _scripts = str(Path(settings.DATA_DIR).parent / "scripts")
-                if _scripts not in sys.path:
-                    sys.path.insert(0, _scripts)
-                from tradebot.services.consensus_service import run_engine_consensus
-                import asyncio
-                result = asyncio.run(run_engine_consensus(symbol="XAUUSD"))
                 dashboard_output: dict[str, Any] = {
                     "symbol": result.get("symbol", "XAUUSD"),
                     "price": result.get("price", 0),
@@ -426,9 +417,6 @@ class SignalHandler(BaseHTTPRequestHandler):
             self._json({"api_key": "VT-MASTER-734AD731F5FB"})
         elif path == "/api/donations":
             try:
-                _root = str(Path(settings.DATA_DIR).parent)
-                if _root not in sys.path:
-                    sys.path.insert(0, _root)
                 from tradebot.services.members_service import get_total_donations
                 self._json({"total_raised": get_total_donations(), "currency": "IDR"})
             except Exception as e:

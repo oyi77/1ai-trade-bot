@@ -45,8 +45,8 @@ def _signal_prz(**overrides) -> Signal:
         confidence=0.85, source=SignalSource.CONSENSUS,
         grade=SignalGrade.MODERATE, entry_price=1922.5,
         metadata={
-            "PRZ_Active": True, "pattern": "gartley",
-            "prz_upper": 1925.0, "prz_lower": 1920.0,
+            "AHZ_Active": True, "pattern": "gartley",
+            "ahz_upper": 1925.0, "ahz_lower": 1920.0,
             "sl": 1918.0, "tp1": 1940.0, "tp2": 1955.0,
             "orchestrator_verdict": {"resolution_path": "Harmonic EXECUTE"},
         },
@@ -135,7 +135,7 @@ class TestFullSignalFormatting:
         text = dispatcher._format_full_signal(sig)
         assert "Golden Synergy" in text
 
-    def test_format_prz_signal_shows_pattern(self):
+    def test_format_ahz_signal_shows_pattern(self):
         dispatcher = VilonaSignalDispatcher(bot_token="x", public_chat_id="x")
         sig = _signal_prz()
         text = dispatcher._format_full_signal(sig)
@@ -289,7 +289,7 @@ class TestShowroomTeaserFormatting:
         assert "2645.30" not in grade  # entry not in grade string
         assert "STRONG" in grade or "MODERATE" in grade
 
-    def test_prz_teaser_mentions_prz(self):
+    def test_ahz_teaser_mentions_ahz(self):
         dispatcher = VilonaSignalDispatcher(bot_token="x", public_chat_id="x")
         sig = _signal_prz()
-        assert sig.metadata.get("PRZ_Active") is True
+        assert sig.metadata.get("AHZ_Active") is True

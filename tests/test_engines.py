@@ -302,7 +302,7 @@ class TestRegistry:
         """Registry.discover() should find all 12 concrete engines."""
         reg = Registry()
         engines = reg.discover()
-        assert len(engines) == 12
+        assert len(engines) == 13
         expected_names = {
             "smc_scalper",
             "fvg_detector",
@@ -316,6 +316,7 @@ class TestRegistry:
             "layering",
             "session_levels",
             "whale_detector",
+            "harmonic",
         }
         assert set(engines.keys()) == expected_names
 

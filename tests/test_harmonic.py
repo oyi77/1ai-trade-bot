@@ -1,7 +1,7 @@
 """
 Tests for tradebot.engines.harmonic — XABCD Harmonic Pattern Detection Engine.
 
-Covers: pivot detection, Fibonacci validation, PRZ generation, risk management,
+Covers: pivot detection, Fibonacci validation, AHZ generation, risk management,
 mock data demo, and Engine ABC compliance.
 """
 from __future__ import annotations
@@ -197,13 +197,13 @@ class TestPatternValidation:
         )
         assert validate_pattern(points, PatternType.GARTLEY) is None
 
-    def test_prz_zone_is_narrow(self):
+    def test_ahz_zone_is_narrow(self):
         points = self._make_bullish_gartley()
         match = validate_pattern(points, PatternType.GARTLEY)
         assert match is not None
-        # PRZ should be a tight zone around D
-        assert match.prz_upper > match.prz_lower
-        assert (match.prz_upper - match.prz_lower) < abs(points.a.price - points.x.price) * 0.02
+        # AHZ should be a tight zone around D
+        assert match.ahz_upper > match.ahz_lower
+        assert (match.ahz_upper - match.ahz_lower) < abs(points.a.price - points.x.price) * 0.02
 
     def test_pattern_match_to_dict(self):
         points = self._make_bullish_gartley()
@@ -225,14 +225,14 @@ class TestPatternValidation:
 
 class TestRiskManagement:
     def test_bullish_sl_below_prz(self):
-        prz_upper, prz_lower = 1911.0, 1910.0
-        sl = _calculate_sl(prz_upper, prz_lower, Bias.BULLISH, 50.0)
-        assert sl < prz_lower
+        ahz_upper, ahz_lower = 1911.0, 1910.0
+        sl = _calculate_sl(ahz_upper, ahz_lower, Bias.BULLISH, 50.0)
+        assert sl < ahz_lower
 
     def test_bearish_sl_above_prz(self):
-        prz_upper, prz_lower = 1989.0, 1988.0
-        sl = _calculate_sl(prz_upper, prz_lower, Bias.BEARISH, 100.0)
-        assert sl > prz_upper
+        ahz_upper, ahz_lower = 1989.0, 1988.0
+        sl = _calculate_sl(ahz_upper, ahz_lower, Bias.BEARISH, 100.0)
+        assert sl > ahz_upper
 
     def test_bullish_tp_direction(self):
         tp1, tp2 = _calculate_tp(1900.0, 1921.4, Bias.BULLISH, 78.6)

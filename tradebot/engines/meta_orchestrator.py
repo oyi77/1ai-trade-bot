@@ -250,8 +250,8 @@ class VilonaMetaOrchestrator:
             "state": session.state.name,
             "direction": session.meso.direction,
             "pattern": session.meso.pattern,
-            "prz_upper": session.meso.prz_upper,
-            "prz_lower": session.meso.prz_lower,
+            "ahz_upper": session.meso.ahz_upper,
+            "ahz_lower": session.meso.ahz_lower,
             "created_at": session.created_at,
             "expires_at": session.expires_at,
             "trigger_count": len(session.triggers),
@@ -372,16 +372,16 @@ class VilonaMetaOrchestrator:
                 signal=None,
                 stake_multiplier=0.0,
                 resolution_path=(
-                    f"HUNT_MODE: {hunt_dir} PRZ active — "
+                    f"HUNT_MODE: {hunt_dir} AHZ active — "
                     f"waiting for micro trigger, no flat signal to block"
                 ),
                 metadata={
                     "hunt_mode": True,
-                    "prz_upper": (
-                        verdict.metadata.get("prz_upper") if verdict else None
+                    "ahz_upper": (
+                        verdict.metadata.get("ahz_upper") if verdict else None
                     ),
-                    "prz_lower": (
-                        verdict.metadata.get("prz_lower") if verdict else None
+                    "ahz_lower": (
+                        verdict.metadata.get("ahz_lower") if verdict else None
                     ),
                 },
             )
@@ -396,7 +396,7 @@ class VilonaMetaOrchestrator:
                 signal=None,
                 stake_multiplier=0.0,
                 resolution_path=(
-                    f"HUNT_MODE: {hunt_dir} PRZ active — flat signal "
+                    f"HUNT_MODE: {hunt_dir} AHZ active — flat signal "
                     f"{fdir} is supportive, holding for micro trigger confirmation"
                 ),
                 metadata={

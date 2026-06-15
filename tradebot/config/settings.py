@@ -211,20 +211,39 @@ class Settings(BaseSettings):
     STOCKITY_FULL_COOKIE: str = ""
     STOCKITY_USER_ID: str = ""
     STOCKITY_CURRENCY: str = "IDR"
-
     FCS_API_KEY: str = ""
+
+    # ═════════════════════════════════════════════════════════════════
+    #  BROKERS — Indonesian & US Platforms
+    # ═════════════════════════════════════════════════════════════════
+
+    # Ajaib
+    AJAIB_EMAIL: str = ""
+    AJAIB_PASSWORD: str = ""
+    AJAIB_DEVICE_ID: str = ""
+
+    # Pluang
+    PLUANG_API_KEY: str = ""
+    PLUANG_API_SECRET: str = ""
+
+    # Stockbit
+    STOCKBIT_EMAIL: str = ""
+    STOCKBIT_PASSWORD: str = ""
+
+    # Robinhood (US)
+    ROBINHOOD_USERNAME: str = ""
+    ROBINHOOD_PASSWORD: str = ""
+    ROBINHOOD_DEVICE_TOKEN: str = ""
 
     #  STOCK DATA — Free API Sources (add keys in .env to enable)
     FINNHUB_API_KEY: str = ""
     ALPHA_VANTAGE_API_KEY: str = ""
     FRED_API_KEY: str = ""
 
-
     YAHOO_MIN_INTERVAL: float = 20.0
 
     BINANCE_BASE_URL: str = "https://api.binance.com"
     BINANCE_TIMEOUT: int = 15
-    # ═══════════════════════════════════════════════════════════════
     #  PAYMENT — Tripay & Duitku Gateway Configuration
     # ═══════════════════════════════════════════════════════════════
 

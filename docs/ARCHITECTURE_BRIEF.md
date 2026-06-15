@@ -73,15 +73,15 @@ class Signal:
 }
 ```
 
-**Harmonic Engine (PRZ_Active signal):**
+**Harmonic Engine (AHZ_Active signal):**
 ```json
 {
-  "PRZ_Active": true,
+  "AHZ_Active": true,
   "pattern": "gartley",
   "bias": "bullish",
-  "prz_upper": 1925.0,
-  "prz_lower": 1920.0,
-  "prz_mid": 1922.5,
+  "ahz_upper": 1925.0,
+  "ahz_lower": 1920.0,
+  "ahz_mid": 1922.5,
   "sl": 1918.0,
   "tp1": 1940.0,
   "tp2": 1955.0,
@@ -89,7 +89,7 @@ class Signal:
   "points": { "X": 1900.0, "A": 2000.0, "B": 1938.2, "C": 1993.0, "D": 1921.4 },
   "ratios": { "ab_retrace": 0.618, "bc_retrace": 0.887, "cd_ext": 1.307, "xd_ext": 0.786 },
   "requires_confirmation": true,
-  "confirmation_hint": "Wait for SMC order block / FVG on M5/M15 within the PRZ zone"
+  "confirmation_hint": "Wait for SMC order block / FVG on M5/M15 within the AHZ zone"
 }
 ```
 
@@ -102,7 +102,7 @@ class Signal:
   "tp2": 1955.0,
   "macro_alignment": true,
   "micro_trigger": "smc_choch",
-  "gate_reason": "CONFIRMED: gartley BULLISH PRZ → smc_choch at 1922.5"
+  "gate_reason": "CONFIRMED: gartley BULLISH AHZ → smc_choch at 1922.5"
 }
 ```
 
@@ -169,8 +169,8 @@ class Signal:
 | 10 | `layering` | `LayeringEngine` | Order flow layering detection | Equal (1.0) |
 | 11 | `session_levels` | `SessionLevelsEngine` | Session-based S/R levels (Asia/London/NY) | Equal (1.0) |
 | 12 | `whale_detector` | `WhaleEngine` | Large order / whale activity detection | Equal (1.0) |
-| 13 | `harmonic` | `HarmonicEngine` | XABCD harmonic patterns (Bat, Butterfly, Gartley) | **Special** (PRZ_Active flag) |
-| 14 | `mtf_consensus` | `MTFConsensusGate` | 3-tier gate: Macro(H1/H4) → Meso(M15/PRZ) → Micro(M1/M5 trigger) | **Gate** (not a signal source) |
+| 13 | `harmonic` | `HarmonicEngine` | XABCD harmonic patterns (Bat, Butterfly, Gartley) | **Special** (AHZ_Active flag) |
+| 14 | `mtf_consensus` | `MTFConsensusGate` | 3-tier gate: Macro(H1/H4) → Meso(M15/AHZ) → Micro(M1/M5 trigger) | **Gate** (not a signal source) |
 
 ### 2.2 Weighting & Hierarchy Architecture
 
@@ -200,7 +200,7 @@ class Signal:
 **Key fact: Engines have NO inherent priority.**
 - All 13 engines are peers — no leader/follower architecture
 - The 14th component (`MTFConsensusGate`) is a **post-processing gate**, not a signal source
-- The harmonic engine emits a special `PRZ_Active` flag → consumed by the gate for Hunt Mode
+- The harmonic engine emits a special `AHZ_Active` flag → consumed by the gate for Hunt Mode
 
 ---
 
@@ -240,7 +240,7 @@ class Signal:
 │    └─ Stage 4: Event emission (signal_generated, pipeline_complete) │
 ├─────────────────────────────────────────────────────────────────────┤
 │ 4. HARMONIC + MTF GATE PATH (Independent Pipeline)                  │
-│    ┌─ HarmonicEngine.analyze() → PRZ_Active Signal                  │
+│    ┌─ HarmonicEngine.analyze() → AHZ_Active Signal                  │
 │    ├─ meso_from_signal() → MesoState                                │
 │    ├─ MTFConsensusGate.activate_hunt() → HUNT_MODE                  │
 │    ├─ process_micro_trigger() → EXECUTE or REJECT                   │
@@ -298,7 +298,7 @@ The incoming Meta-Orchestrator must bridge:
 
 Key challenge: These three paths produce different output formats and operate independently. The orchestrator must:
 - Accept both `Signal` objects and gate `ConsensusVerdict` objects
-- Resolve conflicts (e.g., MTF says BUY at 0.78, Harmonic says Bearish PRZ active)
+- Resolve conflicts (e.g., MTF says BUY at 0.78, Harmonic says Bearish AHZ active)
 - Prioritize between signal sources
 - Feed a unified final signal to `TradeExecutor`
 

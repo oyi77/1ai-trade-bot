@@ -106,9 +106,11 @@ class CallbackHandlersMixin(_BaseCB):
         # Trade confirmation / skip callbacks
         if data.startswith("trade:") or data.startswith("skip:"):
             return await self._handle_trade_callback(chat_id, data)
-        # Payment callbacks
+        # Payment / subscription / address callbacks
         if (
             data.startswith("pay:")
+            or data.startswith("sub:")
+            or data.startswith("addr:")
             or data.startswith("check:")
             or data.startswith("donate:")
             or data.startswith("pricing:")

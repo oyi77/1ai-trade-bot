@@ -25,7 +25,7 @@ _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-import scripts.payment_tripay as _payment_mod
+import tradebot.services.payment as _payment_mod
 import unified_bot.telegram.whitelabel_runner as _wr
 
 from unified_bot.telegram.whitelabel_runner import (
@@ -173,7 +173,7 @@ class TestBrandConfig:
         assert brand_custom.owner_cut == 0.70
         assert brand_custom.reseller_cut == 0.20
         assert brand_custom.referrer_cut == 0.10
-        assert brand_custom.payment_methods == ["tripay", "qris"]
+        assert brand_custom.payment_methods == ["scalev", "bank_transfer"]
         assert brand_custom.is_active is True
 
     def test_bot_link(self, brand_custom: BrandConfig):

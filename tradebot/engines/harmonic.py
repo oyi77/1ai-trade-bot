@@ -45,7 +45,7 @@ class FibRule:
 
 
 # Pattern definitions: {pattern: {leg: [valid FibRule, ...]}}
-# Strict rules: AB retrace + BC retrace + XD completion (PRZ).
+# Strict rules: AB retrace + BC retrace + XD completion (AHZ).
 # CD extension is a quality bonus (scoring only), not a hard gate —
 # because in real markets CD and XD constraints can conflict.
 PATTERN_RULES: dict[PatternType, dict[str, list[FibRule]]] = {
@@ -261,16 +261,16 @@ class PatternMatch:
     points: XABCDPoints
     ratios: dict[str, float]
     confidence: float  # 0.0–1.0
-    prz_upper: float
-    prz_lower: float
+    ahz_upper: float
+    ahz_lower: float
     sl: float
     tp1: float
     tp2: float
     timeframe: str = ""
 
     @property
-    def prz_mid(self) -> float:
-        return (self.prz_upper + self.prz_lower) / 2
+    def ahz_mid(self) -> float:
+        return (self.ahz_upper + self.ahz_lower) / 2
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -285,7 +285,7 @@ class PatternMatch:
             },
             "ratios": {k: round(v, 4) for k, v in self.ratios.items()},
             "confidence": round(self.confidence, 3),
-            "prz": {"upper": self.prz_upper, "lower": self.prz_lower, "mid": self.prz_mid},
+            "prz": {"upper": self.ahz_upper, "lower": self.ahz_lower, "mid": self.ahz_mid},
             "sl": self.sl,
             "tp1": self.tp1,
             "tp2": self.tp2,
@@ -300,7 +300,7 @@ def validate_pattern(
     """
     Validate an XABCD formation against a specific harmonic pattern's Fibonacci rules.
 
-    Returns a PatternMatch with PRZ, SL, TP1, TP2 if valid.
+    Returns a PatternMatch with AHZ, SL, TP1, TP2 if valid.
     Returns None if the ratios don't match within tolerance.
     """
     rules = PATTERN_RULES[pattern_type]
@@ -339,14 +339,14 @@ def validate_pattern(
     else:
         return None
 
-    # PRZ: the zone where D completes — range between CD extension and XD extension
-    prz_upper, prz_lower = _calculate_prz(points, bias, xa_range)
+    # AHZ: the zone where D completes — range between CD extension and XD extension
+    ahz_upper, ahz_lower = _calculate_prz(points, bias, xa_range)
 
     # Confidence: average of how close each ratio is to its best target
     confidence = _calculate_confidence(ratios, rules)
 
     # Risk management
-    sl = _calculate_sl(prz_upper, prz_lower, bias, xa_range)
+    sl = _calculate_sl(ahz_upper, ahz_lower, bias, xa_range)
     ad_range = abs(d.price - a.price)
     tp1, tp2 = _calculate_tp(a.price, d.price, bias, ad_range)
 
@@ -356,8 +356,8 @@ def validate_pattern(
         points=points,
         ratios=ratios,
         confidence=confidence,
-        prz_upper=prz_upper,
-        prz_lower=prz_lower,
+        ahz_upper=ahz_upper,
+        ahz_lower=ahz_lower,
         sl=sl,
         tp1=tp1,
         tp2=tp2,
@@ -370,14 +370,14 @@ def _calculate_prz(
     xa_range: float,
 ) -> tuple[float, float]:
     """
-    Calculate the Potential Reversal Zone (PRZ) for Point D.
+    Calculate the Apex Hunt Zone (AHZ) for Point D.
 
-    The PRZ is the confluence zone between:
+    The AHZ is the confluence zone between:
       1. The XD extension level (primary reversal zone)
       2. The CD extension level projected from C
 
-    For bullish patterns, PRZ is below the XA midpoint (buy zone).
-    For bearish patterns, PRZ is above the XA midpoint (sell zone).
+    For bullish patterns, AHZ is below the XA midpoint (buy zone).
+    For bearish patterns, AHZ is above the XA midpoint (sell zone).
     """
     x, a, b, c, d = points.x, points.a, points.b, points.c, points.d
 
@@ -389,17 +389,17 @@ def _calculate_prz(
     # Zone based on the D point itself (the actual detected D)
     d_price = d.price
 
-    # The PRZ is a zone around D: ±0.5% of XA range from D
+    # The AHZ is a zone around D: ±0.5% of XA range from D
     zone_half = xa_range * 0.005  # 0.5% of XA range
 
     if bias == Bias.BULLISH:
-        prz_upper = d_price + zone_half
-        prz_lower = d_price - zone_half
+        ahz_upper = d_price + zone_half
+        ahz_lower = d_price - zone_half
     else:
-        prz_upper = d_price + zone_half
-        prz_lower = d_price - zone_half
+        ahz_upper = d_price + zone_half
+        ahz_lower = d_price - zone_half
 
-    return prz_upper, prz_lower
+    return ahz_upper, ahz_lower
 
 
 def _calculate_confidence(ratios: dict[str, float], rules: dict[str, list[FibRule]]) -> float:
@@ -425,22 +425,22 @@ def _calculate_confidence(ratios: dict[str, float], rules: dict[str, list[FibRul
 
 
 def _calculate_sl(
-    prz_upper: float,
-    prz_lower: float,
+    ahz_upper: float,
+    ahz_lower: float,
     bias: Bias,
     xa_range: float,
 ) -> float:
     """
-    Stop Loss = slightly beyond the PRZ extreme.
-    Bullish: SL below PRZ lower (invalidation of bullish pattern).
-    Bearish: SL above PRZ upper (invalidation of bearish pattern).
-    Buffer: 10% of XA range beyond the PRZ edge.
+    Stop Loss = slightly beyond the AHZ extreme.
+    Bullish: SL below AHZ lower (invalidation of bullish pattern).
+    Bearish: SL above AHZ upper (invalidation of bearish pattern).
+    Buffer: 10% of XA range beyond the AHZ edge.
     """
     buffer = xa_range * 0.10
     if bias == Bias.BULLISH:
-        return prz_lower - buffer
+        return ahz_lower - buffer
     else:
-        return prz_upper + buffer
+        return ahz_upper + buffer
 
 
 def _calculate_tp(
@@ -474,7 +474,7 @@ class HarmonicEngine(Engine):
     XABCD Harmonic Pattern Detection Engine.
 
     Scans OHLCV data for Bullish/Bearish Bat, Butterfly, and Gartley patterns.
-    Returns a PRZ_Active signal — the downstream quality gate + MTF consensus
+    Returns a AHZ_Active signal — the downstream quality gate + MTF consensus
     will decide final execution. No raw buy/sell from this engine.
     """
 
@@ -528,18 +528,18 @@ class HarmonicEngine(Engine):
 
         LOG.info(
             "Harmonic %s %s detected — confidence %.1f%%, "
-            "PRZ [%.5f–%.5f], SL=%.5f, TP1=%.5f, TP2=%.5f",
+            "AHZ [%.5f–%.5f], SL=%.5f, TP1=%.5f, TP2=%.5f",
             best_match.bias.value.upper(),
             best_match.pattern.value.upper(),
             best_match.confidence * 100,
-            best_match.prz_lower,
-            best_match.prz_upper,
+            best_match.ahz_lower,
+            best_match.ahz_upper,
             best_match.sl,
             best_match.tp1,
             best_match.tp2,
         )
 
-        # Build Signal — PRZ_Active flag, no raw buy/sell
+        # Build Signal — AHZ_Active flag, no raw buy/sell
         symbol = ticks[-1].symbol if ticks else "UNKNOWN"
         last_price = ticks[-1].price if ticks else 0.0
 
@@ -560,10 +560,10 @@ class HarmonicEngine(Engine):
             metadata={
                 "pattern": best_match.pattern.value,
                 "bias": best_match.bias.value,
-                "PRZ_Active": True,
-                "prz_upper": best_match.prz_upper,
-                "prz_lower": best_match.prz_lower,
-                "prz_mid": best_match.prz_mid,
+                "AHZ_Active": True,
+                "ahz_upper": best_match.ahz_upper,
+                "ahz_lower": best_match.ahz_lower,
+                "ahz_mid": best_match.ahz_mid,
                 "sl": best_match.sl,
                 "tp1": best_match.tp1,
                 "tp2": best_match.tp2,
@@ -578,8 +578,8 @@ class HarmonicEngine(Engine):
                 "ratios": best_match.ratios,
                 "requires_confirmation": True,
                 "confirmation_hint": (
-                    "Wait for SMC order block / FVG on M5/M15 within the PRZ zone "
-                    "before executing. This is a PRZ activation, not a raw signal."
+                    "Wait for SMC order block / FVG on M5/M15 within the AHZ zone "
+                    "before executing. This is a AHZ activation, not a raw signal."
                 ),
             },
         )
@@ -700,7 +700,7 @@ def run_mock_demo() -> None:
         if match:
             print(f"\n  ✅ {match.bias.value.upper()} {ptype.value.upper()} DETECTED!")
             print(f"     Confidence: {match.confidence:.1%}")
-            print(f"     PRZ: [{match.prz_lower:.5f} — {match.prz_upper:.5f}]")
+            print(f"     AHZ: [{match.ahz_lower:.5f} — {match.ahz_upper:.5f}]")
             print(f"     SL: {match.sl:.5f}  |  TP1: {match.tp1:.5f}  |  TP2: {match.tp2:.5f}")
             print(f"     Ratios: ab={match.ratios['ab_retrace']:.4f}  "
                   f"bc={match.ratios['bc_retrace']:.4f}  "
@@ -725,7 +725,7 @@ def run_mock_demo() -> None:
             if match:
                 matched_any = True
                 print(f"  ✅ {match.bias.value.upper()} {ptype.value.upper()} — confidence {match.confidence:.1%}")
-                print(f"     PRZ: [{match.prz_lower:.5f} — {match.prz_upper:.5f}]")
+                print(f"     AHZ: [{match.ahz_lower:.5f} — {match.ahz_upper:.5f}]")
         if not matched_any:
             print("  ℹ️  No exact pattern match (bar-level noise shifts ratios)")
             print("     → This is expected: real data needs tolerance tuning")

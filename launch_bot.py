@@ -17,7 +17,6 @@ import dotenv
 dotenv.load_dotenv(Path(__file__).resolve().parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
 
 os.environ.setdefault("DATA_DIR", str(Path(__file__).resolve().parent / "data"))
 

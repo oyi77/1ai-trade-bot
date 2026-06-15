@@ -101,7 +101,8 @@ class BaseBot(abc.ABC):
         if not chat:
             LOG.warning("No chat_id configured for %s", self.name)
             return False
-        return await self._telegram.send_message(text)
+        ok, _ = await self._telegram.send_message(text)
+        return ok
 
     async def send_signal(
         self,

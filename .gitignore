@@ -29,8 +29,8 @@ data/
 bridges/signal_bridge/engine_status.json
 bridges/signal_bridge/dashboard.html.bak
 
-# Legacy restored files (deleted in d99df1f unification)
-scripts/dashboard_server.py
+# Legacy scripts archive — active runtime logic is now in tradebot/
+scripts/_legacy/
 
 # AI agent scratch space
 .omo/

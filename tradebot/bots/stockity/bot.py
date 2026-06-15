@@ -287,7 +287,7 @@ class StockityBot(BaseBot):
                         )
                         msg = self._format_signal(sig)
                         if self._home_chat_id:
-                            await self._telegram.send_message(msg)
+                            await self._telegram.send_message(msg)  # fire-and-forget, msg_id ignored
                         LOG.info("🚀 %s %s %d%% (mode=%s src=%s)",
                                  sym, getattr(sig, "action", ""), conf,
                                  mode, getattr(sig, "source", ""))

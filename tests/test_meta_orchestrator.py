@@ -45,8 +45,8 @@ def _harmonic_execute(**overrides) -> ConsensusVerdict:
         decision=GateState.EXECUTE, symbol="XAUUSD", direction="BULLISH",
         entry_price=1922.5, sl=1918.0, tp1=1940.0, tp2=1955.0,
         confidence=0.80, macro_alignment=True,
-        reason="CONFIRMED: gartley BULLISH PRZ → smc_choch at 1922.5",
-        metadata={"pattern": "gartley", "prz_upper": 1925.0, "prz_lower": 1920.0},
+        reason="CONFIRMED: gartley BULLISH AHZ → smc_choch at 1922.5",
+        metadata={"pattern": "gartley", "ahz_upper": 1925.0, "ahz_lower": 1920.0},
     )
     d.update(overrides)
     return ConsensusVerdict(**d)
@@ -56,7 +56,7 @@ def _harmonic_hunt(**overrides) -> ConsensusVerdict:
     d = dict(
         decision=GateState.HUNT_MODE, symbol="XAUUSD", direction="BULLISH",
         reason="Hunt Mode active — awaiting micro confirmation",
-        metadata={"pattern": "gartley", "prz_upper": 1925.0, "prz_lower": 1920.0},
+        metadata={"pattern": "gartley", "ahz_upper": 1925.0, "ahz_lower": 1920.0},
     )
     d.update(overrides)
     return ConsensusVerdict(**d)
@@ -230,7 +230,7 @@ class TestHuntModeShield:
         """Hunt shield works via live gate session, not just verdict."""
         gate = MTFConsensusGate()
         meso = MesoState(
-            prz_active=True, prz_upper=1925.0, prz_lower=1920.0,
+            ahz_active=True, ahz_upper=1925.0, ahz_lower=1920.0,
             direction="BULLISH", pattern="gartley",
             sl=1918.0, tp1=1940.0, tp2=1955.0,
             confidence=0.85, symbol="XAUUSD",

@@ -3,11 +3,9 @@ import os
 import sys
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
-
 from datetime import datetime
 
-from deriv.client import DerivContractResult, DerivOHLCV, DerivTick
+from tradebot.brokers.deriv.client import DerivContractResult, DerivOHLCV, DerivTick
 
 
 class TestDerivTick(unittest.TestCase):

@@ -427,19 +427,30 @@ class TestTelegramService:
         assert svc.bot_token == "tok123"
         assert svc.chat_id == "999"
         assert svc._enabled is True
-
-    def test_init_disabled_when_empty(self):
-        svc = TelegramService(bot_token="", chat_id="")
+    def test_init_disabled_when_no_token(self):
+        svc = TelegramService(bot_token="", chat_id="12345")
         assert svc._enabled is False
 
-    def test_init_disabled_partial(self):
+    def test_init_disabled_when_no_chat_id(self):
         svc = TelegramService(bot_token="tok", chat_id="")
         assert svc._enabled is False
 
+    def test_init_enabled_with_both_empty_when_settings_absent(self):
+        from unittest.mock import patch
+        with patch.object(__import__("tradebot.config.settings", fromlist=["settings"]).settings, "TELEGRAM_BOT_TOKEN", ""):
+            with patch.object(__import__("tradebot.config.settings", fromlist=["settings"]).settings, "TELEGRAM_CHAT_ID", ""):
+                svc = TelegramService()
+                assert svc._enabled is False
+
     @pytest.mark.asyncio
     async def test_send_message_disabled(self):
-        svc = TelegramService()
-        assert await svc.send_message("hello") is False
+        # Mock settings to simulate absent credentials
+        from unittest.mock import patch
+        with patch.object(__import__("tradebot.config.settings", fromlist=["settings"]).settings, "TELEGRAM_BOT_TOKEN", ""):
+            with patch.object(__import__("tradebot.config.settings", fromlist=["settings"]).settings, "TELEGRAM_CHAT_ID", ""):
+                svc = TelegramService()
+                result = await svc.send_message("hello")
+                assert result[0] is False
 
     @pytest.mark.asyncio
     async def test_send_message_success(self):
@@ -457,7 +468,7 @@ class TestTelegramService:
             m.AsyncClient.return_value = mock_client
             with patch.dict("sys.modules", {"httpx": m}):
                 result = await svc.send_message("test message")
-                assert result is True
+                assert result[0] is True
                 mock_client.post.assert_called_once()
                 call_args = mock_client.post.call_args
                 assert "test_token" in call_args[0][0]
@@ -480,7 +491,8 @@ class TestTelegramService:
         with patch("tradebot.services.telegram.httpx", create=True) as m:
             m.AsyncClient.return_value = mock_client
             with patch.dict("sys.modules", {"httpx": m}):
-                assert await svc.send_message("fail") is False
+                result = await svc.send_message("fail")
+                assert result[0] is False
 
     @pytest.mark.asyncio
     async def test_send_message_exception(self):
@@ -494,12 +506,13 @@ class TestTelegramService:
         with patch("tradebot.services.telegram.httpx", create=True) as m:
             m.AsyncClient.return_value = mock_client
             with patch.dict("sys.modules", {"httpx": m}):
-                assert await svc.send_message("boom") is False
+                result = await svc.send_message("boom")
+                assert result[0] is False
 
     @pytest.mark.asyncio
     async def test_send_signal_alert_formatting(self):
         svc = TelegramService(bot_token="tok", chat_id="123")
-        svc.send_message = AsyncMock(return_value=True)
+        svc.send_message = AsyncMock(return_value=(True, 123))
 
         await svc.send_signal_alert("R_75", "CALL", 85.5, 33000.12345)
         svc.send_message.assert_called_once()
@@ -512,7 +525,7 @@ class TestTelegramService:
     @pytest.mark.asyncio
     async def test_send_signal_alert_put(self):
         svc = TelegramService(bot_token="tok", chat_id="123")
-        svc.send_message = AsyncMock(return_value=True)
+        svc.send_message = AsyncMock(return_value=(True, 123))
 
         await svc.send_signal_alert("EURUSD", "PUT", 60.0, 1.0850)
         text = svc.send_message.call_args[0][0]
@@ -521,7 +534,7 @@ class TestTelegramService:
     @pytest.mark.asyncio
     async def test_send_trade_result_win(self):
         svc = TelegramService(bot_token="tok", chat_id="123")
-        svc.send_message = AsyncMock(return_value=True)
+        svc.send_message = AsyncMock(return_value=(True, 123))
 
         await svc.send_trade_result(2.52, True, "R_75", "digit match")
         text = svc.send_message.call_args[0][0]
@@ -531,7 +544,7 @@ class TestTelegramService:
     @pytest.mark.asyncio
     async def test_send_trade_result_loss(self):
         svc = TelegramService(bot_token="tok", chat_id="123")
-        svc.send_message = AsyncMock(return_value=True)
+        svc.send_message = AsyncMock(return_value=(True, 123))
 
         await svc.send_trade_result(-0.35, False, "R_75")
         text = svc.send_message.call_args[0][0]

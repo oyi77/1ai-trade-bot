@@ -16,17 +16,32 @@ class TelegramService:
     Uses the python-telegram-bot library or simple HTTP calls.
     Configure via TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID env vars.
     """
+    _SENTINEL = object()
 
-    def __init__(self, bot_token: str = "", chat_id: str = ""):
-        self.bot_token = bot_token or settings.TELEGRAM_BOT_TOKEN
-        self.chat_id = chat_id or settings.TELEGRAM_CHAT_ID
-        self._enabled = bool(self.bot_token and self.chat_id)
+    def __init__(
+        self,
+        bot_token: str | object = _SENTINEL,
+        chat_id: str | object = _SENTINEL,
+    ):
+        # Explicit empty string means disabled; None/sentinel means use settings
+        if bot_token is not self._SENTINEL and chat_id is not self._SENTINEL:
+            # Both explicitly provided (could be empty strings)
+            self.bot_token = bot_token if bot_token else ""
+            self.chat_id = chat_id if chat_id else ""
+            self._enabled = bool(self.bot_token and self.chat_id)
+        else:
+            # Fall back to settings
+            self.bot_token = settings.TELEGRAM_BOT_TOKEN if settings.TELEGRAM_BOT_TOKEN else ""
+            self.chat_id = settings.TELEGRAM_CHAT_ID if settings.TELEGRAM_CHAT_ID else ""
+            self._enabled = bool(self.bot_token and self.chat_id)
 
-    async def send_message(self, text: str) -> bool:
-        """Send a text message to the configured Telegram chat."""
+    async def send_message(self, text: str) -> tuple[bool, int | None]:
+        """Send a text message to the configured Telegram chat.
+
+        Returns (success, message_id) where message_id is None on failure."""
         if not self._enabled:
             LOG.debug("Telegram not configured — skipping message: %s", text[:50])
-            return False
+            return False, None
 
         try:
             import httpx
@@ -39,11 +54,13 @@ class TelegramService:
                 })
                 if resp.status_code != 200:
                     LOG.warning("Telegram send failed: %s", resp.text[:200])
-                    return False
-                return True
+                    return False, None
+                data = resp.json()
+                message_id = data.get("result", {}).get("message_id") if data.get("ok") else None
+                return True, message_id
         except Exception as e:
             LOG.warning("Telegram send error: %s", e)
-            return False
+            return False, None
 
     async def send_signal_alert(self, symbol: str, direction: str,
                                  confidence: float, price: float):
@@ -56,7 +73,8 @@ class TelegramService:
             f"Confidence: {confidence:.1f}%\n"
             f"Price: {price:.5f}"
         )
-        return await self.send_message(text)
+        ok, _ = await self.send_message(text)
+        return ok
 
     async def send_trade_result(self, profit: float, win: bool,
                                  symbol: str, details: str = ""):
@@ -68,7 +86,8 @@ class TelegramService:
             f"P&L: ${profit:+.2f}\n"
             f"{details}"
         )
-        return await self.send_message(text)
+        ok, _ = await self.send_message(text)
+        return ok
 
 
 # ── HTML Escaping ─────────────────────────────────────────────────

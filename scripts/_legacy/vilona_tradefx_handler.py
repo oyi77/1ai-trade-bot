@@ -22,7 +22,8 @@ if _PID_FILE.exists():
 _PID_FILE.write_text(str(os.getpid()))
 
 # ── Project path (MUST be before any local imports) ──
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+# 3 levels up: _legacy → scripts → project root
+PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
 # ── Load .env BEFORE local imports (Tripay keys needed) ──
@@ -1912,7 +1913,7 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     
     reason = f"🤖 S-TIER ZONE [{grade}]: {grade_label}\n" + "\n".join(f"  • {r}" for r in best["reasons"])
     
-    zone_half = entry * 0.0005 if entry > 0 else 0
+    zone_half = 0.20 if display in ("XAUUSD", "GOLD") else (entry * 0.0005 if entry > 0 else 0)
     sig = {
         "action": direction, "entry": entry,
         "zone_lo": entry - zone_half if zone_half else entry,
@@ -2720,9 +2721,10 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
     header_label = f"SINYAL {order_type}" if is_actionable else "MARKET PULSE"
 
     # --- MIN SL GUARD: override if AI sets SL too tight (3-digit Exness adjusted) ---
+    # MUST match _clamp_sltp MIN_SL (20 pip) to prevent rejection loop
     if action in ("BUY","SELL") and entry and sl and price:
         sl_dist = abs(sl - entry)
-        min_sl_map = {"XAUUSD": 3.0, "GOLD": 3.0, "USOIL": 0.15, "BTCUSD": 600, "ETHUSD": 50}
+        min_sl_map = {"XAUUSD": 2.0, "GOLD": 2.0, "USOIL": 0.15, "BTCUSD": 600, "ETHUSD": 50}
         min_sl = min_sl_map.get(display, 0)
         if min_sl > 0 and 0 < sl_dist < min_sl:
             # Inline pip calc for logging (3-digit Exness)
@@ -2767,31 +2769,36 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
                         logger.info(f"    [ZONE SL GUARD] SELL skipped: would push SL beyond 35 pip from entry")
 
     # Fallback SL/TP — wider for realistic fills, tighter for consistency
-    if (sl == 0 or tp == 0) and price and price > 0:
+    # ── For pending/zone orders, use ENTRY as reference, NOT live price ──
+    # Live price can be $2-3 away from zone entry → SL would land inside the zone!
+    if (sl == 0 or tp == 0) and ((entry > 0 and abs(entry - price) > 0.5) or price > 0):
+        ref = entry if (entry > 0 and abs(entry - price) > 0.5) else price
+        if ref <= 0:
+            ref = price
         if display in ("XAUUSD", "GOLD"):
-            sl = round(price - 3.0, 2) if action == "BUY" else round(price + 3.0, 2)   # 30 pip 3-digit
-            tp = round(price + 5.0, 2) if action == "BUY" else round(price - 5.0, 2)   # 50 pip 3-digit
+            sl = round(ref - 3.0, 2) if action == "BUY" else round(ref + 3.0, 2)   # 30 pip 3-digit
+            tp = round(ref + 5.0, 2) if action == "BUY" else round(ref - 5.0, 2)   # 50 pip 3-digit
         elif display == "USOIL":
-            sl = round(price - 0.25, 2) if action == "BUY" else round(price + 0.25, 2) # 25 pip 3-digit
-            tp = round(price + 0.50, 2) if action == "BUY" else round(price - 0.50, 2) # 50 pip 3-digit
+            sl = round(ref - 0.25, 2) if action == "BUY" else round(ref + 0.25, 2) # 25 pip 3-digit
+            tp = round(ref + 0.50, 2) if action == "BUY" else round(ref - 0.50, 2) # 50 pip 3-digit
         elif display in ("EURUSD","GBPUSD","USDJPY"):
-            sl = round(price - 0.0015, 5) if action == "BUY" else round(price + 0.0015, 5)
-            tp = round(price + 0.0030, 5) if action == "BUY" else round(price - 0.0030, 5)
+            sl = round(ref - 0.0015, 5) if action == "BUY" else round(ref + 0.0015, 5)
+            tp = round(ref + 0.0030, 5) if action == "BUY" else round(ref - 0.0030, 5)
         elif display == "BTCUSD":
-            sl = round(price - 600, 2) if action == "BUY" else round(price + 600, 2)
-            tp = round(price + 1200, 2) if action == "BUY" else round(price - 1200, 2)
+            sl = round(ref - 600, 2) if action == "BUY" else round(ref + 600, 2)
+            tp = round(ref + 1200, 2) if action == "BUY" else round(ref - 1200, 2)
         elif display == "ETHUSD":
-            sl = round(price - 50, 2) if action == "BUY" else round(price + 50, 2)
-            tp = round(price + 75, 2) if action == "BUY" else round(price - 75, 2)
+            sl = round(ref - 50, 2) if action == "BUY" else round(ref + 50, 2)
+            tp = round(ref + 75, 2) if action == "BUY" else round(ref - 75, 2)
         elif display in ("BBCA","BBRI","TLKM","ASII","UNVR","BMRI","ADRO","IHSG"):
             # IDX stocks — percentage-based (backtest-optimized)
             sl_pct = 0.01   # 1% SL
             tp_pct = 0.02 if display == "BBCA" else 0.015  # BBCA: 2% TP, others: 1.5%
-            sl = round(price * (1 - sl_pct), 0) if action == "BUY" else round(price * (1 + sl_pct), 0)
-            tp = round(price * (1 + tp_pct), 0) if action == "BUY" else round(price * (1 - tp_pct), 0)
+            sl = round(ref * (1 - sl_pct), 0) if action == "BUY" else round(ref * (1 + sl_pct), 0)
+            tp = round(ref * (1 + tp_pct), 0) if action == "BUY" else round(ref * (1 - tp_pct), 0)
         else:
-            sl = round(price - 0.50, 2) if action == "BUY" else round(price + 0.50, 2)
-            tp = round(price + 0.75, 2) if action == "BUY" else round(price - 0.75, 2)
+            sl = round(ref - 0.50, 2) if action == "BUY" else round(ref + 0.50, 2)
+            tp = round(ref + 0.75, 2) if action == "BUY" else round(ref - 0.75, 2)
 
     # --- XAUUSD spot offset: shift entry/SL/TP from futures -> spot ---
     if action in ("BUY","SELL") and display in ("XAUUSD","GOLD") and entry > 0:
@@ -7438,7 +7445,7 @@ def auto_analyze_loop():
                             stier_sig["zone_hi"] = snr_zone_hi
                             stier_sig["entry_mode"] = "zone"
                             # Tighter SL: below SnR zone (not below entry)
-                            zone_margin = 3.0 * pip_sz
+                            zone_margin = 20.0 * pip_sz   # 20 pip minimum (was 3 pip — way too tight!)
                             if action == "BUY":
                                 stier_sig["sl"] = round(snr_zone_lo - zone_margin, 2)
                             else:

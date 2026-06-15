@@ -107,16 +107,12 @@ class PipelineMetrics:
                 else 0.0
             ),
             "last_latency_ms": round(self.last_latency_ms, 2),
-            "orchestrator": {
-                "calls": self.orchestrator_calls,
-                "executes": self.orchestrator_executes,
-                "holds": self.orchestrator_holds,
-                "hunts": self.orchestrator_hunts,
-            },
-            "timeouts": {
-                "mtf": self.mtf_timeouts,
-                "harmonic": self.harmonic_timeouts,
-            },
+            "orchestrator_calls": self.orchestrator_calls,
+            "orchestrator_executes": self.orchestrator_executes,
+            "orchestrator_holds": self.orchestrator_holds,
+            "orchestrator_hunts": self.orchestrator_hunts,
+            "mtf_timeouts": self.mtf_timeouts,
+            "harmonic_timeouts": self.harmonic_timeouts,
         }
 
 
@@ -233,11 +229,15 @@ class SignalPipeline:
         """
         start = time.monotonic()
 
-        # ── Stage 0: edge guard ────────────────────────────────────────
-        if not ticks:
+        # Stage 0: edge guard
+        if ticks is None:
             LOG.debug("Pipeline: empty ticks, skipping")
             return None
-
+        if isinstance(ticks, Signal):
+            ticks = [ticks]
+        if not ticks:
+            LOG.debug("Pipeline: empty ticks after normalize, skipping")
+            return None
         self.metrics.signals_received += 1
         symbol = ticks[-1].symbol if ticks else "UNKNOWN"
 
@@ -452,7 +452,7 @@ class SignalPipeline:
         if harmonic_verdict and harmonic_verdict.decision == GateState.HUNT_MODE:
             self.metrics.orchestrator_hunts += 1
             LOG.info(
-                "Pipeline: orchestrator HUNT — %s PRZ active, "
+                "Pipeline: orchestrator HUNT — %s AHZ active, "
                 "waiting for micro trigger",
                 symbol,
             )
@@ -478,7 +478,7 @@ class SignalPipeline:
     ) -> ConsensusVerdict | None:
         """Collect harmonic + gate data (Path C).
 
-        Runs the Harmonic Engine and, if PRZ_Active, checks the gate
+        Runs the Harmonic Engine and, if AHZ_Active, checks the gate
         for any active hunt session.  Returns the current gate verdict
         or a synthetic HUNT_MODE verdict for active sessions.
         """
@@ -496,8 +496,8 @@ class SignalPipeline:
                     reason="Hunt Mode active — awaiting micro confirmation",
                     metadata={
                         "pattern": session.meso.pattern,
-                        "prz_upper": session.meso.prz_upper,
-                        "prz_lower": session.meso.prz_lower,
+                        "ahz_upper": session.meso.ahz_upper,
+                        "ahz_lower": session.meso.ahz_lower,
                         "sl": session.meso.sl,
                         "tp1": session.meso.tp1,
                         "tp2": session.meso.tp2,

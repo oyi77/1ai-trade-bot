@@ -15,11 +15,14 @@ from typing import Any
 
 class BrokerPlatform(StrEnum):
     """Supported trading platforms."""
-    STOCKITY = "stockity"
     DERIV = "deriv"
     MT5 = "mt5"
     CEX = "ccxt"
-
+    STOCKITY = "stockity"
+    AJAIB = "ajaib"
+    PLUANG = "pluang"
+    STOCKBIT = "stockbit"
+    ROBINHOOD = "robinhood"
 
 class TradeDirection(StrEnum):
     """Trade direction."""
@@ -107,12 +110,11 @@ class BaseBroker(ABC):
     async def __aexit__(self, *args: object) -> None:
         await self.close()
 
-
 def get_broker(platform: str | BrokerPlatform) -> BaseBroker:
     """Get a broker instance for the specified platform.
 
     Args:
-        platform: Platform name ("stockity", "deriv", "mt5").
+        platform: Platform name.
 
     Returns:
         Broker instance for that platform.
@@ -133,10 +135,21 @@ def get_broker(platform: str | BrokerPlatform) -> BaseBroker:
         return MT5Broker()
     elif platform_enum == BrokerPlatform.CEX:
         from tradebot.brokers.ccxt.broker import CCXTBroker
-        return CCXTBroker(exchange="bitget")  # Default to Bitget
+        return CCXTBroker(exchange="bitget")
+    elif platform_enum == BrokerPlatform.AJAIB:
+        from tradebot.brokers.ajaib.broker import AjaibBroker
+        return AjaibBroker()
+    elif platform_enum == BrokerPlatform.PLUANG:
+        from tradebot.brokers.pluang.broker import PluangBroker
+        return PluangBroker()
+    elif platform_enum == BrokerPlatform.STOCKBIT:
+        from tradebot.brokers.stockbit.broker import StockbitBroker
+        return StockbitBroker()
+    elif platform_enum == BrokerPlatform.ROBINHOOD:
+        from tradebot.brokers.robinhood.broker import RobinhoodBroker
+        return RobinhoodBroker()
     else:
         raise ValueError(f"Unsupported platform: {platform}")
-
 
 # Adapter for Deriv (wraps DerivWSClient to match BaseBroker interface)
 class DerivBrokerAdapter(BaseBroker):

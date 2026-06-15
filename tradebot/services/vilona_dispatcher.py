@@ -5,7 +5,7 @@ Deprecates Paths A-E. Single entry point after VilonaMetaOrchestrator for
 tiered Gotong Royong routing:
 
   Tier 1 — Public Showroom (TELEGRAM_CHAT_ID)
-    Masked teaser for STRONG/MODERATE or PRZ_Active signals.
+    Masked teaser for STRONG/MODERATE or AHZ_Active signals.
     No entry/SL/TP exposed — FOMO only.
 
   Tier 2 — Free DM Trial (trial members)
@@ -240,7 +240,7 @@ class VilonaSignalDispatcher:
         # ── Tier 1: Public Showroom ────────────────────────────────
         showroom_eligible = (
             grade.upper() in _SHOWROOM_GRADES
-            or meta.get("PRZ_Active") is True
+            or meta.get("AHZ_Active") is True
         )
         if showroom_eligible:
             result.showroom_sent = await self._send_showroom_teaser(signal)
@@ -251,8 +251,8 @@ class VilonaSignalDispatcher:
         # ── Tier 2: Free DM Trial ──────────────────────────────────
         result.trial_total = len(trial_users)
         if trial_users:
-            full_msg = self._format_full_signal(signal)
-            dm_results = await self._send_bulk_dm(trial_users, full_msg)
+            trial_msg = self._format_trial_signal(signal)
+            dm_results = await self._send_bulk_dm(trial_users, trial_msg)
             result.trial_sent = sum(1 for ok in dm_results if ok)
             result.trial_failed = result.trial_total - result.trial_sent
 
@@ -290,42 +290,93 @@ class VilonaSignalDispatcher:
         direction = signal.direction
         grade = signal.grade.name if hasattr(signal.grade, "name") else str(signal.grade)
         meta = signal.metadata
-        prZ_active = meta.get("PRZ_Active", False)
+        ahz_active = meta.get("AHZ_Active", False)
         pattern = meta.get("pattern", meta.get("gate_reason", ""))
-
+        confidence = signal.confidence
+        macro = meta.get("macro_trend", "")
         emoji = "🟢" if direction.upper() in ("BULLISH", "BUY", "CALL") else "🔴"
 
-        if prZ_active:
-            headline = f"🚨 VILONA AI IS HUNTING {symbol}"
+        if ahz_active:
             lines = [
-                f"{emoji} <b>{headline}</b>",
+                f"{emoji} <b>🚨 VILONA AI IS HUNTING {symbol}</b>",
                 "━━━━━━━━━━━━━━━━━━━━━━",
-                f"🎯 Pattern: <b>{pattern or 'PRZ Validated'}</b>",
+                f"🎯 Pattern: <b>{pattern or 'AHZ (Apex Hunt Zone) Validated'}</b>",
                 f"📊 Direction: <b>{direction.upper()}</b>",
+                f"⚡ Confidence: <b>{confidence:.0%}</b>",
                 "",
-                "⚡ <b>PRZ ZONE ACTIVE — AI agents deployed.</b>",
-                "Pro members receive full entry + auto-execution.",
+                "🔥 <b>AHZ ZONE ACTIVE — AI SNIPER DEPLOYED</b>",
                 "━━━━━━━━━━━━━━━━━━━━━━",
-                "💳 <b>Subscribe →</b> /subscribe",
+                "",
+                "💎 Member Premium auto-execute + full coordinates.",
+                "🔒 Entry/SL/TP hanya untuk subscriber.",
+                "",
+                "👇 <b>CARA AKSES:</b>",
+                "📲 DM @berkahkaryaforexbotbot",
+                "⚡ Ketik <b>/subscribe</b> untuk lihat paket",
             ]
         else:
-            headline = f"VILONA AI SIGNAL — {symbol}"
             lines = [
-                f"{emoji} <b>{headline}</b>",
+                f"{emoji} <b>⚡ VILONA AI SIGNAL — {symbol}</b>",
                 "━━━━━━━━━━━━━━━━━━━━━━",
                 f"📊 Direction: <b>{direction.upper()}</b>",
                 f"🏆 Grade: <b>{grade}</b>",
-                "",
-                "⚡ <b>AI consensus signal detected.</b>",
-                "Full entry/SL/TP → upgrade to Premium.",
-                "━━━━━━━━━━━━━━━━━━━━━━",
-                "💳 <b>Subscribe →</b> /subscribe",
+                f"⚡ Confidence: <b>{confidence:.0%}</b>",
             ]
+            if macro:
+                lines.append(f"🏛 Macro Trend: <b>{macro.upper()}</b>")
+            lines.extend([
+                "",
+                "🔥 <b>AI CONSENSUS SIGNAL DETECTED</b>",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                "",
+                "💎 Member Premium auto-execute + full coordinates.",
+                "🔒 Entry/SL/TP hanya untuk subscriber.",
+                "",
+                "👇 <b>CARA AKSES:</b>",
+                "📲 DM @berkahkaryaforexbotbot",
+                "⚡ Ketik <b>/subscribe</b> untuk lihat paket",
+            ])
 
         text = "\n".join(lines)
         return await self._tg_send(self._public_chat, text)
 
     # ── TIER 2: FREE DM TRIAL ─────────────────────────────────────────
+
+    def _format_trial_signal(self, signal: Signal) -> str:
+        """Format a masked signal for trial users — Entry only, NO SL/TP/RR."""
+        symbol = signal.symbol
+        direction = signal.direction
+        emoji = "🟢" if direction.upper() in ("BULLISH", "BUY", "CALL") else "🔴"
+        meta = signal.metadata
+        entry = signal.entry_price or meta.get("entry_price", 0)
+        grade = signal.grade.name if hasattr(signal.grade, "name") else str(signal.grade)
+        confidence = signal.confidence
+        macro = meta.get("macro_trend", "")
+        orch = meta.get("orchestrator_verdict", {})
+        resolution = orch.get("resolution_path", "") if isinstance(orch, dict) else ""
+
+        lines = [
+            f"{emoji} <b>VILONA SIGNAL — {direction.upper()} {symbol}</b>",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"💰 Entry: <b>${entry:.2f}</b>" if entry else "",
+            f"🏆 Grade: <b>{grade}</b> | ⚡ {confidence:.0%}",
+        ]
+        if macro:
+            lines.append(f"🏛 Macro: <b>{macro.upper()}</b>")
+        if resolution:
+            lines.append(f"🧠 {resolution}")
+        lines.extend([
+            "",
+            "🔒 <b>SL/TP/ RR — Khusus PREMIUM</b>",
+            "",
+            "👇 <b>UNLOCK FULL SIGNAL:</b>",
+            "⚡ /subscribe — mulai Rp 50k/bulan",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+            f"⏰ {datetime.now(WIB).strftime('%H:%M WIB')}",
+            "⚡ Powered by Vilona AI",
+            "━━━━━━━━━━━━━━━━━━━━━━",
+        ])
+        return "\n".join(line for line in lines if line)
 
     async def _send_bulk_dm(
         self, chat_ids: list[str], text: str
@@ -550,7 +601,7 @@ class VilonaSignalDispatcher:
         orch = meta.get("orchestrator_verdict", {})
         resolution = orch.get("resolution_path", "") if isinstance(orch, dict) else ""
         macro_trend = meta.get("macro_trend", "")
-        prZ = meta.get("PRZ_Active", False)
+        prZ = meta.get("AHZ_Active", False)
         pattern = meta.get("pattern", "")
 
         lines = [

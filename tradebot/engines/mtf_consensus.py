@@ -1,17 +1,17 @@
 """
 mtf_consensus.py — Multi-Timeframe Consensus Gate
 
-Three-tier validation gate that evaluates PRZ_Active signals from the
+Three-tier validation gate that evaluates AHZ_Active signals from the
 Harmonic Engine against macro trend (H1/H4), meso setup (M15), and
 micro trigger (M1/M5) timeframes before authorizing execution.
 
 Architecture:
   Macro (Trend)  → H1/H4 bias alignment (SMC market structure)
-  Meso (Setup)   → M15 harmonic PRZ activation (the trap)
-  Micro (Trigger) → M1/M5 confirmation within PRZ bounds (the entry)
+  Meso (Setup)   → M15 harmonic AHZ activation (the trap)
+  Micro (Trigger) → M1/M5 confirmation within AHZ bounds (the entry)
 
 State Machine:
-  IDLE → HUNT_MODE (PRZ detected) → EXECUTE (confirmed) or REJECT (invalidated)
+  IDLE → HUNT_MODE (AHZ detected) → EXECUTE (confirmed) or REJECT (invalidated)
 
 Conforms to: tradebot pipeline stage (not an Engine — it's a gate, not a signal source).
 """
@@ -52,9 +52,9 @@ class Timeframe(Enum):
 class TriggerType(Enum):
     """Micro-confirmation trigger types from existing engines."""
     SMC_CHOCH = "smc_choch"          # Change of Character on M1/M5
-    SMC_OB_TAP = "smc_ob_tap"        # Order Block tap within PRZ
-    FVG_FILL = "fvg_fill"            # FVG fill inside PRZ zone
-    LIQUIDITY_SWEEP = "liq_sweep"    # Liquidity sweep of PRZ extreme
+    SMC_OB_TAP = "smc_ob_tap"        # Order Block tap within AHZ
+    FVG_FILL = "fvg_fill"            # FVG fill inside AHZ zone
+    LIQUIDITY_SWEEP = "liq_sweep"    # Liquidity sweep of AHZ extreme
     SMC_BOS = "smc_bos"              # Break of Structure on M5
 
 
@@ -86,11 +86,11 @@ class MacroState:
 class MesoState:
     """
     Meso timeframe analysis result (M15).
-    The Harmonic Engine's PRZ activation lives here.
+    The Harmonic Engine's AHZ activation lives here.
     """
-    prz_active: bool
-    prz_upper: float
-    prz_lower: float
+    ahz_active: bool
+    ahz_upper: float
+    ahz_lower: float
     direction: str  # "BULLISH" or "BEARISH"
     pattern: str  # "gartley", "bat", "butterfly"
     sl: float  # Harmonic SL (invalidation level)
@@ -102,12 +102,12 @@ class MesoState:
     metadata: dict = field(default_factory=dict)
 
     @property
-    def prz_mid(self) -> float:
-        return (self.prz_upper + self.prz_lower) / 2
+    def ahz_mid(self) -> float:
+        return (self.ahz_upper + self.ahz_lower) / 2
 
     @property
-    def prz_height(self) -> float:
-        return self.prz_upper - self.prz_lower
+    def ahz_height(self) -> float:
+        return self.ahz_upper - self.ahz_lower
 
 
 @dataclass
@@ -122,7 +122,7 @@ class MicroTrigger:
     direction: str  # Must match meso direction
     confidence: float
     source_engine: str
-    within_prz: bool = False  # Computed: is this trigger inside the PRZ?
+    within_ahz: bool = False  # Computed: is this trigger inside the AHZ?
     timeframe: str = "M5"
     metadata: dict = field(default_factory=dict)
 
@@ -189,7 +189,7 @@ class ConsensusVerdict:
 class HuntSession:
     """
     Active hunt session for one symbol.
-    Created when PRZ_Active fires, tracks state until EXECUTE or REJECT.
+    Created when AHZ_Active fires, tracks state until EXECUTE or REJECT.
     """
     symbol: str
     meso: MesoState
@@ -206,8 +206,8 @@ class HuntSession:
 
     @property
     def best_trigger(self) -> MicroTrigger | None:
-        """Best confirmed trigger within PRZ bounds."""
-        valid = [t for t in self.triggers if t.within_prz]
+        """Best confirmed trigger within AHZ bounds."""
+        valid = [t for t in self.triggers if t.within_ahz]
         if not valid:
             return None
         return max(valid, key=lambda t: t.confidence)
@@ -220,10 +220,10 @@ class MTFConsensusGate:
     """
     Multi-Timeframe Consensus Gate.
 
-    Evaluates PRZ_Active signals through three tiers:
+    Evaluates AHZ_Active signals through three tiers:
       1. Macro (H1/H4) — trend alignment check
-      2. Meso (M15) — harmonic PRZ activation
-      3. Micro (M1/M5) — trigger confirmation within PRZ
+      2. Meso (M15) — harmonic AHZ activation
+      3. Micro (M1/M5) — trigger confirmation within AHZ
 
     Manages Hunt Mode state per symbol with configurable TTL.
     """
@@ -257,7 +257,7 @@ class MTFConsensusGate:
         now: float | None = None,
     ) -> ConsensusVerdict:
         """
-        Enter Hunt Mode when Harmonic Engine fires PRZ_Active.
+        Enter Hunt Mode when Harmonic Engine fires AHZ_Active.
 
         Returns immediate REJECT if macro alignment fails (if required).
         Returns HUNT_MODE status if macro passes (hunt begins).
@@ -265,12 +265,12 @@ class MTFConsensusGate:
         import time
         t = now if now is not None else time.time()
 
-        if not meso.prz_active:
+        if not meso.ahz_active:
             return ConsensusVerdict(
                 decision=GateState.REJECT,
                 symbol=meso.symbol,
                 direction=meso.direction,
-                reason="PRZ not active — no harmonic pattern detected",
+                reason="AHZ not active — no harmonic pattern detected",
             )
 
         # Tier 1: Macro alignment check
@@ -304,10 +304,10 @@ class MTFConsensusGate:
         self._sessions[meso.symbol] = session
 
         LOG.info(
-            "Gate HUNT_MODE: %s %s PRZ [%.5f–%.5f] — "
+            "Gate HUNT_MODE: %s %s AHZ [%.5f–%.5f] — "
             "macro=%s, waiting for micro trigger",
             meso.direction, meso.symbol,
-            meso.prz_lower, meso.prz_upper,
+            meso.ahz_lower, meso.ahz_upper,
             "aligned" if macro_aligned else "skipped",
         )
 
@@ -315,15 +315,15 @@ class MTFConsensusGate:
             decision=GateState.HUNT_MODE,
             symbol=meso.symbol,
             direction=meso.direction,
-            entry_price=meso.prz_mid,
+            entry_price=meso.ahz_mid,
             sl=meso.sl,
             tp1=meso.tp1,
             tp2=meso.tp2,
             macro_alignment=macro_aligned,
             reason="Hunt Mode active — awaiting micro confirmation",
             metadata={
-                "prz_upper": meso.prz_upper,
-                "prz_lower": meso.prz_lower,
+                "ahz_upper": meso.ahz_upper,
+                "ahz_lower": meso.ahz_lower,
                 "pattern": meso.pattern,
                 "confidence": meso.confidence,
             },
@@ -341,8 +341,8 @@ class MTFConsensusGate:
         Process a micro timeframe trigger event (SMC ChoCh, FVG fill, etc.).
 
         If no active hunt for this trigger's symbol → ignored (returns None).
-        If price is outside PRZ → trigger ignored.
-        If trigger confirms within PRZ → EXECUTE with full coordinates.
+        If price is outside AHZ → trigger ignored.
+        If trigger confirms within AHZ → EXECUTE with full coordinates.
 
         Returns None if no active session exists for this symbol.
         """
@@ -366,16 +366,16 @@ class MTFConsensusGate:
             self._verdict_history.append(verdict)
             return verdict
 
-        # Check if trigger is inside PRZ bounds
+        # Check if trigger is inside AHZ bounds
         price = current_price or trigger.price
-        in_prz = self._is_within_prz(price, session.meso)
-        trigger.within_prz = in_prz
+        in_ahz = self._is_within_ahz(price, session.meso)
+        trigger.within_ahz = in_ahz
 
-        if not in_prz:
+        if not in_ahz:
             LOG.debug(
-                "Trigger %s at %.5f outside PRZ [%.5f–%.5f] for %s",
+                "Trigger %s at %.5f outside AHZ [%.5f–%.5f] for %s",
                 trigger.trigger_type.value, price,
-                session.meso.prz_lower, session.meso.prz_upper,
+                session.meso.ahz_lower, session.meso.ahz_upper,
                 trigger.symbol,
             )
             session.triggers.append(trigger)
@@ -425,11 +425,11 @@ class MTFConsensusGate:
             micro_trigger=trigger,
             reason=(
                 f"CONFIRMED: {session.meso.pattern} {session.meso.direction} "
-                f"PRZ → {trigger.trigger_type.value} at {price:.5f}"
+                f"AHZ → {trigger.trigger_type.value} at {price:.5f}"
             ),
             metadata={
-                "prz_upper": session.meso.prz_upper,
-                "prz_lower": session.meso.prz_lower,
+                "ahz_upper": session.meso.ahz_upper,
+                "ahz_lower": session.meso.ahz_lower,
                 "pattern": session.meso.pattern,
                 "harmonic_confidence": session.meso.confidence,
                 "macro_bias": session.macro.bias.value if session.macro else "unknown",
@@ -457,7 +457,7 @@ class MTFConsensusGate:
         symbol: str,
     ) -> ConsensusVerdict | None:
         """
-        Check if current price has invalidated the PRZ (hit SL level).
+        Check if current price has invalidated the AHZ (hit SL level).
         Called on every tick for active hunts.
 
         Returns REJECT if price breached the harmonic SL, None otherwise.
@@ -468,8 +468,8 @@ class MTFConsensusGate:
 
         meso = session.meso
 
-        # Bullish: SL is below PRZ — price dropping below SL = invalidation
-        # Bearish: SL is above PRZ — price rising above SL = invalidation
+        # Bullish: SL is below AHZ — price dropping below SL = invalidation
+        # Bearish: SL is above AHZ — price rising above SL = invalidation
         invalidated = False
         if meso.direction == "BULLISH" and current_price <= meso.sl:
             invalidated = True
@@ -479,7 +479,7 @@ class MTFConsensusGate:
         if invalidated:
             session.state = GateState.REJECT
             reason = (
-                f"PRZ invalidated: {meso.direction} SL {meso.sl:.5f} "
+                f"AHZ invalidated: {meso.direction} SL {meso.sl:.5f} "
                 f"breached by price {current_price:.5f}"
             )
             LOG.info("Gate REJECT (invalidation): %s — %s", symbol, reason)
@@ -581,10 +581,10 @@ class MTFConsensusGate:
             )
         return aligned
 
-    def _is_within_prz(self, price: float, meso: MesoState) -> bool:
-        """Check if a price falls within the PRZ zone (with 5% buffer)."""
-        buffer = meso.prz_height * 0.05
-        return (meso.prz_lower - buffer) <= price <= (meso.prz_upper + buffer)
+    def _is_within_ahz(self, price: float, meso: MesoState) -> bool:
+        """Check if a price falls within the AHZ zone (with 5% buffer)."""
+        buffer = meso.ahz_height * 0.05
+        return (meso.ahz_lower - buffer) <= price <= (meso.ahz_upper + buffer)
 
     def _compute_composite_confidence(
         self, session: HuntSession, trigger: MicroTrigger
@@ -623,16 +623,16 @@ class MTFConsensusGate:
 def meso_from_signal(signal: Signal) -> MesoState | None:
     """
     Extract MesoState from a Harmonic Engine signal.
-    Returns None if the signal doesn't carry PRZ_Active metadata.
+    Returns None if the signal doesn't carry AHZ_Active metadata.
     """
     meta = signal.metadata
-    if not meta.get("PRZ_Active"):
+    if not meta.get("AHZ_Active"):
         return None
 
     return MesoState(
-        prz_active=True,
-        prz_upper=meta.get("prz_upper", 0.0),
-        prz_lower=meta.get("prz_lower", 0.0),
+        ahz_active=True,
+        ahz_upper=meta.get("ahz_upper", 0.0),
+        ahz_lower=meta.get("ahz_lower", 0.0),
         direction=signal.direction,
         pattern=meta.get("pattern", "unknown"),
         sl=meta.get("sl", 0.0),

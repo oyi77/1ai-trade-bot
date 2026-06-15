@@ -22,55 +22,66 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "vilo
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_SYMBOL_MAP: dict[str, str] = {
-    "gold": "XAUUSD=X",
-    "xauusd": "XAUUSD=X",
+    # ── Metals (MT5 primary, Yahoo fallback) ──
+    "gold": "GC=F",
+    "xauusd": "GC=F",
+    "xagusd": "SI=F",
+    "silver": "SI=F",
+    # ── Energy (MT5 primary) ──
+    "oil": "CL=F",
+    "usoil": "CL=F",
+    "brent": "BZ=F",
+    # ── Crypto (Binance/CCXT primary, Yahoo fallback) ──
     "btc": "BTC-USD",
     "btcusd": "BTC-USD",
     "eth": "ETH-USD",
     "ethusd": "ETH-USD",
+    # ── Major Forex (MT5 primary) ──
     "eurusd": "EURUSD=X",
     "gbpusd": "GBPUSD=X",
     "usdjpy": "JPY=X",
     "jpyusd": "JPY=X",
+    "usdcad": "CAD=X",
+    "audusd": "AUDUSD=X",
+    "nzdusd": "NZDUSD=X",
+    "usdchf": "CHF=X",
+    # ── US Stocks (kept for Yahoo Finance charting only) ──
     "aapl": "AAPL",
     "tsla": "TSLA",
     "msft": "MSFT",
     "nvda": "NVDA",
-    "bbca": "BBCA.JK",
-    "bbri": "BBRI.JK",
-    "tlkm": "TLKM.JK",
-    "asii": "ASII.JK",
-    "unvr": "UNVR.JK",
-    "bmri": "BMRI.JK",
-    "adro": "ADRO.JK",
-    "ihsg": "^JKSE",
 }
 
 SUPPORTED_PAIRS: list[str] = [
-    "gold",
-    "btc",
-    "eth",
+    # ── Metals ──
+    "gold", "xagusd",
+    # ── Energy ──
     "oil",
-    "eurusd",
-    "gbpusd",
-    "usdjpy",
-    "aapl",
-    "tsla",
-    "msft",
-    "nvda",
-    "bbca",
-    "bbri",
-    "tlkm",
-    "asii",
-    "unvr",
-    "bmri",
-    "adro",
-    "ihsg",
+    # ── Crypto ──
+    "btc", "eth",
+    # ── Major Forex ──
+    "eurusd", "gbpusd", "usdjpy",
+    "usdcad", "audusd", "nzdusd", "usdchf",
+    # ── US Stocks (charting only) ──
+    "aapl", "tsla", "msft", "nvda",
 ]
+
+# ── IDX Stock symbols (intercepted → redirect to @vilonidxbot) ──
+_IDX_SYMBOLS: frozenset[str] = frozenset({
+    "bbca", "bbri", "tlkm", "asii", "unvr",
+    "bmri", "adro", "ihsg", "goto", "antm",
+    "mdka", "pgas", "inkp", "icbp", "klbf",
+})
+
+# ── Stockity indices (intercepted → redirect to @agent_1ai2_bot) ──
+_STOCKITY_SYMBOLS: frozenset[str] = frozenset({
+    "crypto_idx", "btc_idx", "eth_idx", "gold_idx",
+    "stockity", "crash_idx", "boom_idx",
+})
 
 AUTO_SCAN_ASSETS: list[tuple[str, str, str, bool]] = [
     ("gold", "XAUUSD", "GC=F", True),
-    ("btc", "BTCUSD", "BTC-USD", False),
+    ("btc", "BTCUSD", "BTC-USD", True),
 ]
 
 DONATION_INPUT_STATE: dict[str, bool] = {}

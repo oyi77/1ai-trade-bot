@@ -96,8 +96,10 @@ class SignalPublisher:
             LOG.debug("Bridge post failed: %s", exc)
             return False
 
-    async def post_to_telegram(self, text: str) -> bool:
-        """Post formatted signal text to Telegram channel."""
+    async def post_to_telegram(self, text: str) -> tuple[bool, int | None]:
+        """Post formatted signal text to Telegram channel.
+
+        Returns (success, message_id) for reply-chain tracking."""
         return await self.telegram.send_message(text)
 
     async def publish_signal(
@@ -129,7 +131,9 @@ class SignalPublisher:
 
         # Format for Telegram
         text = self._format_signal(signal)
-        tg_ok = await self.post_to_telegram(text)
+        tg_ok, msg_id = await self.post_to_telegram(text)
+        if msg_id:
+            signal["telegram_message_id"] = msg_id
         bridge_ok = await self.post_to_bridge(signal)
 
         if tg_ok or bridge_ok:

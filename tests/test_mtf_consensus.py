@@ -2,7 +2,7 @@
 Tests for tradebot.engines.mtf_consensus — MTF Consensus Gate.
 
 Covers: state machine, macro alignment, micro trigger validation,
-PRZ invalidation, expiry, composite confidence, and Signal conversion.
+AHZ invalidation, expiry, composite confidence, and Signal conversion.
 """
 from __future__ import annotations
 
@@ -29,9 +29,9 @@ from tradebot.models import Signal, SignalGrade, SignalSource
 
 def _bullish_meso(**overrides) -> MesoState:
     defaults = dict(
-        prz_active=True,
-        prz_upper=1925.0,
-        prz_lower=1920.0,
+        ahz_active=True,
+        ahz_upper=1925.0,
+        ahz_lower=1920.0,
         direction="BULLISH",
         pattern="gartley",
         sl=1918.0,
@@ -46,9 +46,9 @@ def _bullish_meso(**overrides) -> MesoState:
 
 def _bearish_meso(**overrides) -> MesoState:
     defaults = dict(
-        prz_active=True,
-        prz_upper=2010.0,
-        prz_lower=2005.0,
+        ahz_active=True,
+        ahz_upper=2010.0,
+        ahz_lower=2005.0,
         direction="BEARISH",
         pattern="bat",
         sl=2012.0,
@@ -110,7 +110,7 @@ def _fvg_trigger(**overrides) -> MicroTrigger:
 
 
 def _inactive_meso() -> MesoState:
-    return _bullish_meso(prz_active=False)
+    return _bullish_meso(ahz_active=False)
 
 
 # ── Test: Gate State Machine ───────────────────────────────────────────
@@ -132,7 +132,7 @@ class TestGateStateMachine:
         assert gate.hunt_count == 1
         assert "XAUUSD" in gate.active_sessions
 
-    def test_inactive_prz_returns_reject(self):
+    def test_inactive_ahz_returns_reject(self):
         gate = MTFConsensusGate()
         result = gate.activate_hunt(meso=_inactive_meso())
         assert result.decision == GateState.REJECT
@@ -226,16 +226,16 @@ class TestMacroAlignment:
 
 
 class TestMicroTrigger:
-    def test_trigger_outside_prz_ignored(self):
+    def test_trigger_outside_ahz_ignored(self):
         gate = MTFConsensusGate()
         gate.activate_hunt(meso=_bullish_meso())
 
-        trigger = _smc_choch_trigger(price=1950.0)  # Way above PRZ
+        trigger = _smc_choch_trigger(price=1950.0)  # Way above AHZ
         result = gate.process_micro_trigger(trigger, current_price=1950.0)
         assert result is None
-        assert not trigger.within_prz
+        assert not trigger.within_ahz
 
-    def test_trigger_within_prz_executes(self):
+    def test_trigger_within_ahz_executes(self):
         gate = MTFConsensusGate()
         gate.activate_hunt(meso=_bullish_meso())
 
@@ -260,9 +260,9 @@ class TestMicroTrigger:
         result = gate.process_micro_trigger(trigger, current_price=1922.0)
         assert result is None
 
-    def test_prz_buffer_allows_boundary(self):
+    def test_ahz_buffer_allows_boundary(self):
         gate = MTFConsensusGate()
-        gate.activate_hunt(meso=_bullish_meso())  # PRZ [1920, 1925]
+        gate.activate_hunt(meso=_bullish_meso())  # AHZ [1920, 1925]
 
         # 5% buffer: 1920 - 0.25 = 1919.75
         trigger = _smc_choch_trigger(price=1919.80)
@@ -280,10 +280,10 @@ class TestMicroTrigger:
         assert result.micro_trigger.trigger_type == TriggerType.FVG_FILL
 
 
-# ── Test: PRZ Invalidation ─────────────────────────────────────────────
+# ── Test: AHZ Invalidation ─────────────────────────────────────────────
 
 
-class TestPRZInvalidation:
+class TestAHZInvalidation:
     def test_bullish_invalidated_below_sl(self):
         gate = MTFConsensusGate()
         gate.activate_hunt(meso=_bullish_meso())  # SL=1918.0
@@ -450,9 +450,9 @@ class TestHelpers:
             confidence=0.85,
             source=SignalSource.MOMEN,
             metadata={
-                "PRZ_Active": True,
-                "prz_upper": 1925.0,
-                "prz_lower": 1920.0,
+                "AHZ_Active": True,
+                "ahz_upper": 1925.0,
+                "ahz_lower": 1920.0,
                 "sl": 1918.0,
                 "tp1": 1940.0,
                 "tp2": 1955.0,
@@ -462,8 +462,8 @@ class TestHelpers:
         )
         meso = meso_from_signal(signal)
         assert meso is not None
-        assert meso.prz_active is True
-        assert meso.prz_upper == 1925.0
+        assert meso.ahz_active is True
+        assert meso.ahz_upper == 1925.0
         assert meso.direction == "BULLISH"
         assert meso.pattern == "gartley"
 
@@ -556,9 +556,9 @@ class TestHuntSession:
             state=GateState.HUNT_MODE,
         )
         low = _smc_choch_trigger(price=1922.0, confidence=0.5)
-        low.within_prz = True
+        low.within_ahz = True
         high = _fvg_trigger(price=1921.0, confidence=0.8)
-        high.within_prz = True
+        high.within_ahz = True
         session.triggers = [low, high]
 
         assert session.best_trigger is not None
@@ -571,9 +571,9 @@ class TestHuntSession:
             state=GateState.HUNT_MODE,
         )
         outside = _smc_choch_trigger(price=1950.0, confidence=0.9)
-        outside.within_prz = False
+        outside.within_ahz = False
         inside = _fvg_trigger(price=1921.0, confidence=0.6)
-        inside.within_prz = True
+        inside.within_ahz = True
         session.triggers = [outside, inside]
 
         assert session.best_trigger is not None

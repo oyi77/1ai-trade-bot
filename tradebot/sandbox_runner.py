@@ -92,7 +92,7 @@ class Position:
 @dataclass
 class SandboxMetrics:
     total_signals: int = 0
-    prZ_active: int = 0
+    ahz_active: int = 0
     hunts_started: int = 0
     hunts_confirmed: int = 0
     hunts_rejected: int = 0
@@ -168,8 +168,8 @@ class SandboxRunner:
 
     Runs in a loop:
       1. Fetch latest M15 data via MarketAggregator
-      2. Run Harmonic Engine → PRZ detection
-      3. Feed PRZ to MTF Consensus Gate
+      2. Run Harmonic Engine → AHZ detection
+      3. Feed AHZ to MTF Consensus Gate
       4. Check micro triggers (simulated from price action)
       5. Manage open positions (TP/SL hits)
       6. Log everything
@@ -298,21 +298,21 @@ class SandboxRunner:
 
         In production this would query SMC/FVG engines on M1/M5.
         For sandbox, we detect simple price-action triggers:
-          - Strong directional move inside PRZ → ChoCh simulation
-          - Price touches PRZ boundary → OB tap simulation
+          - Strong directional move inside AHZ → ChoCh simulation
+          - Price touches AHZ boundary → OB tap simulation
         """
-        if not meso.prz_active:
+        if not meso.ahz_active:
             return None
 
-        # Check if price is inside PRZ
-        in_prz = meso.prz_lower <= price <= meso.prz_upper
-        if not in_prz:
+        # Check if price is inside AHZ
+        in_ahz = meso.ahz_lower <= price <= meso.ahz_upper
+        if not in_ahz:
             return None
 
         price_change = price - prev_price
         pip_change = _price_to_pips(price_change, self.cfg.symbol)
 
-        # Trigger 1: Strong move inside PRZ (ChoCh simulation)
+        # Trigger 1: Strong move inside AHZ (ChoCh simulation)
         if meso.direction == "BULLISH" and pip_change > 2.0:
             return MicroTrigger(
                 trigger_type=TriggerType.SMC_CHOCH,
@@ -321,7 +321,7 @@ class SandboxRunner:
                 direction="BULLISH",
                 confidence=min(0.9, 0.5 + pip_change * 0.02),
                 source_engine="sandbox_simulator",
-                within_prz=True,
+                within_ahz=True,
                 timeframe="M5",
             )
         elif meso.direction == "BEARISH" and pip_change < -2.0:
@@ -332,14 +332,14 @@ class SandboxRunner:
                 direction="BEARISH",
                 confidence=min(0.9, 0.5 + abs(pip_change) * 0.02),
                 source_engine="sandbox_simulator",
-                within_prz=True,
+                within_ahz=True,
                 timeframe="M5",
             )
 
-        # Trigger 2: Price touches PRZ boundary (OB tap)
-        prZ_height = meso.prz_upper - meso.prz_lower
-        near_lower = abs(price - meso.prz_lower) < prZ_height * 0.1
-        near_upper = abs(price - meso.prz_upper) < prZ_height * 0.1
+        # Trigger 2: Price touches AHZ boundary (OB tap)
+        prZ_height = meso.ahz_upper - meso.ahz_lower
+        near_lower = abs(price - meso.ahz_lower) < prZ_height * 0.1
+        near_upper = abs(price - meso.ahz_upper) < prZ_height * 0.1
 
         if near_lower and meso.direction == "BULLISH":
             return MicroTrigger(
@@ -349,7 +349,7 @@ class SandboxRunner:
                 direction="BULLISH",
                 confidence=0.6,
                 source_engine="sandbox_simulator",
-                within_prz=True,
+                within_ahz=True,
                 timeframe="M5",
             )
         elif near_upper and meso.direction == "BEARISH":
@@ -360,7 +360,7 @@ class SandboxRunner:
                 direction="BEARISH",
                 confidence=0.6,
                 source_engine="sandbox_simulator",
-                within_prz=True,
+                within_ahz=True,
                 timeframe="M5",
             )
 
@@ -549,7 +549,7 @@ class SandboxRunner:
             "",
             "## Pipeline Metrics",
             f"- Signals Scanned: {m.total_signals}",
-            f"- PRZ Active: {m.prZ_active}",
+            f"- AHZ Active: {m.ahz_active}",
             f"- Hunts Started: {m.hunts_started}",
             f"- Hunts Confirmed: {m.hunts_confirmed}",
             f"- Hunts Rejected: {m.hunts_rejected}",
@@ -639,19 +639,19 @@ class SandboxRunner:
                 # 3. Run Harmonic Engine on M15 ticks
                 harmonic_signal = await self.harmonic.analyze(ticks)
 
-                if harmonic_signal and harmonic_signal.metadata.get("PRZ_Active"):
-                    self.metrics.prZ_active += 1
+                if harmonic_signal and harmonic_signal.metadata.get("AHZ_Active"):
+                    self.metrics.ahz_active += 1
                     meso = meso_from_signal(harmonic_signal)
 
                     if meso is not None:
                         # 4. Feed to MTF Consensus Gate
                         verdict = self.gate.activate_hunt(meso=meso)
 
-                        self._log_event("prz_detected", {
+                        self._log_event("ahz_detected", {
                             "pattern": meso.pattern,
                             "direction": meso.direction,
-                            "prz_upper": meso.prz_upper,
-                            "prz_lower": meso.prz_lower,
+                            "ahz_upper": meso.ahz_upper,
+                            "ahz_lower": meso.ahz_lower,
                             "sl": meso.sl,
                             "tp1": meso.tp1,
                             "tp2": meso.tp2,
@@ -702,7 +702,7 @@ class SandboxRunner:
                     inv = self.gate.check_invalidation(current_price, symbol)
                     if inv:
                         self.metrics.hunts_rejected += 1
-                        self._log_event("prz_invalidated", {
+                        self._log_event("ahz_invalidated", {
                             "symbol": symbol,
                             "sl_level": inv.sl,
                             "invalidation_price": current_price,
