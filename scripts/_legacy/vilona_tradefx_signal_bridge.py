@@ -1226,6 +1226,33 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "mode": "broadcast" if broadcast_count > 0 else "queued",
             })
 
+            # ── AUTO-EXECUTION ENGINE v1.0 ──
+            # After queuing, auto-forward to EA instances immediately
+            if action in ("BUY", "SELL") and broadcast_count > 0:
+                try:
+                    ea_file = os.path.join(PROJECT_DIR, "data", "vilona_tradefx", "ea_signal.json")
+                    ea_data = {
+                        "signal_id": sig_id,
+                        "symbol": symbol,
+                        "action": action,
+                        "entry": signal.get("entry"),
+                        "sl": signal.get("sl"),
+                        "tp": signal.get("tp"),
+                        "tp1": signal.get("tp1"),
+                        "tp2": signal.get("tp2"),
+                        "confidence": signal.get("confidence"),
+                        "rr_ratio": signal.get("rr_ratio"),
+                        "comment": signal.get("comment"),
+                        "trailing": signal.get("trailing"),
+                        "timestamp": time.time(),
+                        "auto_executed": True,
+                    }
+                    with open(ea_file, "w") as f:
+                        json.dump(ea_data, f, indent=2, default=str)
+                    log.info(f"⚡ AUTO-EXEC: {sig_id} written to ea_signal.json for EA pickup")
+                except Exception as e:
+                    log.error(f"⚡ AUTO-EXEC write failed: {e}")
+
         elif path == "/trailing":
             # POST trailing config (bridge-side handler)
             instance_id = f"{api_key}:{account_id}" if (api_key and account_id) else None

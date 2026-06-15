@@ -6365,10 +6365,20 @@ def handle_command(cmd, text, chat_id, msg):
                     logger.info(f"   [/signal {disp}] BLOCKED: outside killzone (London/NY only)")
                     tg_send(f"⛔ <b>Signal ditahan — di luar Killzone</b>\n\n{disp} hanya trading di sesi London (14:00-17:00 WIB) & NY (19:00-22:00 WIB).\n\nGunakan /analyze untuk analisis only.", chat_id)
                     return
-            # ── Post teaser to channel FIRST → get message_id → bridge ──
+            # ── Post teaser (HIDDEN entry/SL/TP) to channel → message_id → bridge ──
             tg_msg_id = None
             try:
-                tease = f"🤖 <b>AI Signal Generated</b> — {disp} {sig['action']}\nConfidence: {sig.get('confidence',0):.0%} | Grade: {sig.get('grade','?')}\n⏳ Menunggu eksekusi EA..."
+                grade_label = sig.get("grade", "?")
+                conf = sig.get("confidence", 0)
+                tease = (
+                    f"🤖 <b>AI SIGNAL — {disp} {sig['action']}</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Grade: {grade_label} | Confidence: {conf:.0%}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔒 <b>Entry / SL / TP — 🔒</b>\n"
+                    f"Upgrade ke premium buat akses full signal!\n\n"
+                    f"👉 /subscribe"
+                )
                 result = tg_send(tease, SIGNAL_CHANNEL_ID)
                 if result and isinstance(result, dict):
                     tg_msg_id = result.get("result", {}).get("message_id")
