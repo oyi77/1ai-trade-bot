@@ -189,19 +189,24 @@ def _learn_from_tp(trade: dict) -> dict:
         pattern_key += f"_{trade['grade']}"
         
     entry = trade.get("entry_price", trade.get("entry", 0))
+    pips = trade.get("pips", 0)
+    symbol = trade.get("symbol", "?")
+    action = trade.get("action", "?")
+    grade = trade.get("grade", "?")
+    confidence = trade.get("confidence", 0)
 
     winning_pattern = {
         "type": "TP_HIT",
         "timestamp": now,
         "pattern_key": pattern_key,
-        "symbol": trade.get("symbol", "?"),
-        "action": trade.get("action", "?"),
+        "symbol": symbol,
+        "action": action,
         "entry": entry,
         "sl": trade.get("sl", 0),
         "tp": trade.get("tp", 0),
-        "pips": trade.get("pips", 0),
-        "grade": trade.get("grade", "?"),
-        "confidence": trade.get("confidence", 0),
+        "pips": pips,
+        "grade": grade,
+        "confidence": confidence,
         "source": trade.get("source", "?"),
         "hour_wib": datetime.now(WIB).hour,
         "entry_time": trade.get("open_time", ""),
@@ -212,17 +217,36 @@ def _learn_from_tp(trade: dict) -> dict:
     data["total"] = data.get("total", 0) + 1
     data["last_pattern"] = now
 
-    sym = trade.get("symbol", "?")
+    sym = symbol
     if sym not in data["top_symbols"]:
         data["top_symbols"][sym] = {"wins": 0, "total_pips": 0}
     data["top_symbols"][sym]["wins"] += 1
-    data["top_symbols"][sym]["total_pips"] += abs(trade.get("pips", 0))
+    data["top_symbols"][sym]["total_pips"] += abs(pips)
 
     _save_patterns(data)
+
+    # ── ALSO record to lessons.json for unified tracking ──
+    tp_lesson = {
+        "type": "TP_HIT",
+        "timestamp": now,
+        "symbol": symbol,
+        "action": action,
+        "entry": entry,
+        "sl": trade.get("sl", 0),
+        "tp": trade.get("tp", 0),
+        "pips": pips,
+        "grade": grade,
+        "confidence": confidence,
+    }
+    lessons_data = _load_lessons()
+    lessons_data["lessons"].append(tp_lesson)
+    lessons_data["total_tp"] = lessons_data.get("total_tp", 0) + 1
+    lessons_data["last_tp"] = now
+    _save_lessons(lessons_data)
     
     logger.info(
-        f"🧠 TP PATTERN SAVED [{winning_pattern['symbol']} {winning_pattern['action']}]: "
-        f"+{trade.get('pips', 0):.0f} pip | Grade {trade.get('grade', '?')}"
+        f"🧠 TP LEARNED [{symbol} {action}]: "
+        f"+{pips:.0f} pip | Grade {grade} | total_tp={lessons_data['total_tp']}"
     )
     return winning_pattern
 
