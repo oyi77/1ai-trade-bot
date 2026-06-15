@@ -5,7 +5,7 @@ Grab forex data + generate signals even without MT5/EA.
 
 Commands: /start /help /price /analyze /data /killzone /status /subscribe /autosync /genkey /listkeys /mykey /myid
 """
-import hashlib, json, logging, os, re, sys, threading, time, urllib.parse, urllib.request
+import hashlib, json, logging, os, re, sqlite3, sys, threading, time, urllib.parse, urllib.request
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -44,7 +44,7 @@ check_due_reminders = lambda: []
 check_expired = lambda: []
 mark_expired = lambda cid: None
 set_reminder = lambda cid, label: None
-SUBS_PATH = ""
+SUBS_PATH = str(PROJECT_DIR / "members.db")
 
 # ── Payment gateway ──
 try:
@@ -7488,8 +7488,8 @@ def auto_analyze_loop():
                 # 1. DM to all premium members (PRO, ELITE, LIFETIME) — use SUBS_PATH NOT members module
                 premium_count = 0
                 try:
-                    db = _sql.connect(str(_P(SUBS_PATH)))
-                    db.row_factory = _sql.Row
+                    db = sqlite3.connect(SUBS_PATH)
+                    db.row_factory = sqlite3.Row
                     rows = db.execute(
                         "SELECT chat_id FROM members WHERE status='paid' AND chat_id NOT LIKE 'test%' AND chat_id NOT LIKE 'vfy%'"
                     ).fetchall()
