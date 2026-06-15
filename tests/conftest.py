@@ -11,6 +11,8 @@ import pytest
 from cryptography.fernet import Fernet
 
 from tradebot.models import Tick
+from trading_bot.providers.base import Candle
+from trading_bot.providers.paper.paper_trader import PaperTradingProvider
 
 # ---------------------------------------------------------------------------
 #  Global encryption key for tests
@@ -134,3 +136,37 @@ def temp_db(tmp_path) -> str:
     """Return a path to a temporary SQLite database file."""
     db_path = tmp_path / "test_tradebot.db"
     return str(db_path)
+
+
+# ---------------------------------------------------------------------------
+#  Paper provider fixtures (trading_bot.providers)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def paper_provider() -> PaperTradingProvider:
+    """Return a fresh PaperTradingProvider with default 10,000 balance."""
+    return PaperTradingProvider()
+
+
+@pytest.fixture
+def sample_candles() -> list[Candle]:
+    """Return 10 OHLCV candles for EUR/USD at 1h."""
+    base = 1.10500
+    candles: list[Candle] = []
+    for i in range(10):
+        o = base + i * 0.0005
+        h = o + 0.0003
+        low_val = o - 0.0002
+        c = o + 0.0001
+        candles.append(Candle(
+            symbol="EUR/USD",
+            timeframe="1h",
+            open=o,
+            high=h,
+            low=low_val,
+            close=c,
+            volume=1000.0 + i * 100,
+            timestamp=datetime(2026, 1, 1, i + 8, 0, 0, tzinfo=UTC),
+        ))
+    return candles
