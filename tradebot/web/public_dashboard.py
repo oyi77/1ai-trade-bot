@@ -105,9 +105,9 @@ def get_backtest_data() -> dict:
 
 
 def get_donor_list() -> list:
-    """Get list of donors with their usernames and payment info.
+    """Get list of all paying members (donors/supporters).
 
-    Returns a list of dicts. On schema error, returns [{"error": "..."}].
+    Returns list with display_name, amount, paid_at.
     """
     db_path = _resolve_members_db()
     conn = None
@@ -120,9 +120,9 @@ def get_donor_list() -> list:
             SELECT m.chat_id, m.nama, m.username, m.tier, m.joined_at,
                    COALESCE(p.amount, 0) as donation_amount,
                    p.paid_at, p.merchant_ref
-            FROM members m
-            LEFT JOIN payment_orders p ON m.chat_id = p.chat_id AND p.status = 'paid'
-            WHERE m.tier = 'donor' AND m.status = 'paid'
+            FROM payment_orders p
+            INNER JOIN members m ON m.chat_id = p.chat_id
+            WHERE p.status = 'paid' AND p.amount > 0
             ORDER BY p.paid_at DESC
             """
         )
@@ -130,8 +130,8 @@ def get_donor_list() -> list:
         donors = []
         for r in rows:
             d = dict(r)
-            display_name = d.get("nama", "") or f"User-{d['chat_id'][:8]}"
-            if d.get("username"):
+            display_name = d.get("nama", "") or d.get("username", "") or f"User-{d['chat_id'][:8]}"
+            if d.get("username") and not d.get("nama"):
                 display_name = f"@{d['username']}"
             donors.append(
                 {
@@ -139,7 +139,7 @@ def get_donor_list() -> list:
                     "display_name": display_name,
                     "amount": float(d.get("donation_amount", 0) or 0),
                     "paid_at": str(d.get("paid_at", "") or ""),
-                    "joined_at": str(d.get("joined_at", "") or ""),
+                    "tier": d.get("tier", "donor"),
                 }
             )
         return donors

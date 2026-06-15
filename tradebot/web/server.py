@@ -357,31 +357,35 @@ async def dashboard_redirect(request: Request):
     return RedirectResponse(url=target, status_code=302)
 
 
+# ── Backward compat: old /id and /en routes (bridge proxies these) ──
+
+
+@app.get("/en", response_class=RedirectResponse)
+async def compat_dashboard_en():
+    return RedirectResponse(url="/dashboard/en", status_code=302)
+
+
+@app.get("/id", response_class=RedirectResponse)
+async def compat_dashboard_id():
+    return RedirectResponse(url="/dashboard/id", status_code=302)
+
+
 @app.get("/dashboard/en", response_class=HTMLResponse)
-async def dashboard_en(request: Request):
-    """Public signal dashboard (English)."""
-    return templates.TemplateResponse(
-        "public_dashboard_en.html",
-        {"request": request, "title": "Vilona TradeFX — AI Signal Dashboard"},
-    )
+async def dashboard_en():
+    """Public signal dashboard (English) — pure static HTML."""
+    return HTMLResponse(TEMPLATE_DIR.joinpath("public_dashboard_en.html").read_text(encoding="utf-8"))
 
 
 @app.get("/dashboard/id", response_class=HTMLResponse)
-async def dashboard_id(request: Request):
-    """Public signal dashboard (Indonesian)."""
-    return templates.TemplateResponse(
-        "public_dashboard_id.html",
-        {"request": request, "title": "Vilona TradeFX — Dasbor Sinyal AI"},
-    )
+async def dashboard_id():
+    """Public signal dashboard (Indonesian) — pure static HTML."""
+    return HTMLResponse(TEMPLATE_DIR.joinpath("public_dashboard_id.html").read_text(encoding="utf-8"))
 
 
 @app.get("/dashboard/bilingual", response_class=HTMLResponse)
-async def dashboard_bilingual(request: Request):
-    """Public signal dashboard (bilingual)."""
-    return templates.TemplateResponse(
-        "public_dashboard_bilingual.html",
-        {"request": request, "title": "Vilona TradeFX — AI Signal Dashboard"},
-    )
+async def dashboard_bilingual():
+    """Public signal dashboard (bilingual) — pure static HTML."""
+    return HTMLResponse(TEMPLATE_DIR.joinpath("public_dashboard_bilingual.html").read_text(encoding="utf-8"))
 
 
 # ═══════════════════════════════════════════════════════════
