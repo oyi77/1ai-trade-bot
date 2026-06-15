@@ -1320,6 +1320,14 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
         "rr_ratio": rr,
     }
 
+    # ── Auto-configure trailing for bridge EA execution ──
+    # XAUUSD: 15 pip trail, 10 pip breakeven, 5 pip step
+    # Other: 30 pip trail, 15 pip breakeven, 5 pip step
+    is_gold = symbol.upper() in ("XAUUSD", "GOLD")
+    payload["trailing_stop_pips"] = 15 if is_gold else 30
+    payload["breakeven_trigger"] = 10 if is_gold else 15
+    payload["trailing_step"] = 5
+
     # ── Write to EA signal file (for ea_executor.py to pick up) ──
     try:
         # ── Apply learned weights to total_score if component scores available ──
