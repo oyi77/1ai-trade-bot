@@ -4272,6 +4272,99 @@ def handle_command(cmd, text, chat_id, msg):
                 chat_id
             )
 
+    elif cmd == "/trailmanual":
+        # ── Register MANUAL position for trailing (DONOR ONLY) ──
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "📎 <b>Trail Manual Position</b> [🔒 LOCKED]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Daftarin posisi manual kamu ke bridge\n"
+                "biar auto-trailing SL. Khusus Subscriber.\n\n"
+                "👑 /subscribe — Rp 50K/bln (PRO)",
+                chat_id
+            )
+            return
+
+        parts = text.strip().split()
+        if len(parts) < 5:
+            tg_send(
+                "📎 <b>Trail Manual Position</b>\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Format:\n"
+                "<code>/trailmanual BUY XAUUSD entry=4350 sl=4345 tp=4360</code>\n\n"
+                "Contoh SELL:\n"
+                "<code>/trailmanual SELL XAUUSD entry=4370 sl=4375 tp=4365</code>",
+                chat_id
+            )
+            return
+
+        direction = parts[1].upper()
+        symbol = parts[2].upper()
+        if direction not in ("BUY", "SELL"):
+            tg_send("❌ Direction harus BUY atau SELL.", chat_id)
+            return
+
+        params2 = {}
+        for i in range(3, len(parts)):
+            if "=" in parts[i]:
+                k, v = parts[i].split("=", 1)
+                try:
+                    params2[k] = float(v)
+                except ValueError:
+                    params2[k] = v
+
+        entry = params2.get("entry", 0)
+        sl = params2.get("sl", 0)
+        tp = params2.get("tp", 0)
+
+        if not entry or not sl:
+            tg_send("❌ entry= dan sl= wajib diisi.", chat_id)
+            return
+
+        import json as _j, urllib.request as _ur
+        ticket = f"manual-{int(time.time())}"
+        account_id2 = f"MT5-{chat_id}"
+        payload = _j.dumps({
+            "positions": [{
+                "ticket": ticket,
+                "symbol": symbol,
+                "direction": direction,
+                "entry": entry,
+                "sl": sl,
+                "tp": tp,
+                "source": "manual_trailmanual",
+            }]
+        }).encode()
+
+        try:
+            req = _ur.Request(
+                f"http://localhost:8765/report_positions?api_key=VT-PRO-LAUNCH&account_id={account_id2}",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with _ur.urlopen(req, timeout=5) as resp:
+                result = _j.loads(resp.read())
+            pip_sz = 0.10
+            sl_pips = abs(sl - entry) / pip_sz
+            sl_sign = "+" if (direction == "SELL" and sl > entry) or (direction == "BUY" and sl < entry) else "-"
+            tg_send(
+                f"✅ <b>Posisi Manual Terdaftar!</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"{'🟢' if direction=='BUY' else '🔴'} {direction} {symbol}\n"
+                f"📍 Entry: ${entry:.2f}\n"
+                f"🛑 SL: ${sl:.2f} ({sl_sign}{sl_pips:.0f} pip)\n"
+                f"🎯 TP: ${tp:.2f}\n"
+                f"🆔 Ticket: {ticket}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>Bridge akan auto-trail SL setelah breakeven.</i>\n\n"
+                f"Cek /trailing status",
+                chat_id
+            )
+        except Exception as e:
+            logger.error(f"/trailmanual bridge POST failed: {e}")
+            tg_send(f"❌ Gagal daftarin posisi: {e}", chat_id)
+
     elif cmd == "/download":
         if not _is_donor(chat_id):
             _uname = msg.get("chat", {}).get("username", "") or msg.get("from", {}).get("username", "")
@@ -8101,6 +8194,7 @@ def main():
             {"command": "zones", "description": "🧲 Order Blocks + FVG Scanner"},
             {"command": "structure", "description": "🏗 BOS/CHoCH + MTF Alignment"},
             {"command": "stier", "description": "💀 S-TIER Zone — Triple Confluence GOD TIER"},
+            {"command": "trailmanual", "description": "📎 Daftarin posisi manual untuk auto-trailing"},
             {"command": "subscribe","description": "⭐ Upgrade ke PRO/ELITE/LIFETIME"},
             {"command": "status",   "description": "🛡 Cek Kuota & Status"},
             {"command": "mykey",    "description": "🔑 Cek License EA Kamu"},
