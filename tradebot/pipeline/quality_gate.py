@@ -554,9 +554,10 @@ class QualityGate:
 
         Steps:
           1. Validate — reject if quality gate fails
-          2. Compute levels — ATR-based TP/SL
-          3. Grade — assign A/B/C grade
-          4. Build reason — human-readable explanation
+          2. Multi-AI consensus — reject if AI models disagree (NEW)
+          3. Compute levels — ATR-based TP/SL
+          4. Grade — assign A/B/C grade
+          5. Build reason — human-readable explanation
 
         Returns the enriched signal, or None if rejected.
         """
@@ -564,14 +565,29 @@ class QualityGate:
         if not self.validate(signal):
             return None
 
-        # Step 2: compute levels
+        # Step 2: multi-AI consensus (if configured)
+        if self._ai_consensus_fn is not None:
+            try:
+                action = "BUY" if signal.direction in ("CALL", "BUY") else "SELL"
+                symbol = getattr(signal, "symbol", "XAUUSD")
+                ok = await self._ai_consensus_fn(symbol, action, signal)
+                if not ok:
+                    LOG.info(
+                        "Quality gate: signal %s %s rejected by multi-AI consensus",
+                        symbol, action,
+                    )
+                    return None
+            except Exception as e:
+                LOG.warning("Multi-AI consensus check failed (%s), allowing signal through", e)
+
+        # Step 3: compute levels
         if not self.compute_levels(signal):
             return None
 
-        # Step 3: grade
+        # Step 4: grade
         self.grade(signal)
 
-        # Step 4: reason
+        # Step 5: reason
         self.build_reason(signal)
 
         return signal
