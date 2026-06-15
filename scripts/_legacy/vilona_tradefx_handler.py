@@ -7653,30 +7653,34 @@ def auto_analyze_loop():
                 _sl = sig.get("sl", 0) or 0
                 _tp = sig.get("tp", 0) or 0
                 # ── Post to channel FIRST, capture message_id for reply chain ──
-                # Channel gets PROMO TEASER only — full signal is DM'd to user via bot
+                # GRADE-GATED: A=Premium-only (silent), B/C=Promo teaser to channel
                 tg_msg_id = None
-                try:
-                    grade_label = sig.get("grade", action)
-                    pair_label = f"{'🟢' if action=='BUY' else '🔴'} {action} {disp}"
-                    channel_text = (
-                        f"🔥 <b>AI Signal Terdeteksi — {disp}</b>\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"📊 {pair_label}\n"
-                        f"📐 Grade: {grade_label} | Confidence: {int(conf*100)}%\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"🔒 <b>Entry, SL & TP hanya untuk subscriber Premium</b>\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"💎 DM @berkahkaryaforexbotbot — ketik /subscribe\n"
-                        f"   untuk akses sinyal lengkap + EA otomatis!\n\n"
-                        f"⚡ <b>Upgrade sekarang, trading dimulai dalam hitungan detik!</b>"
-                    )
-                    result = send_to_channel(channel_text)
-                    if result:
-                        tg_msg_id = result.get("result",{}).get("message_id")
-                        logger.info(f"CHANNEL PROMO OK [AI-{disp}]: message_id={tg_msg_id}")
-                        _mark_channel_post(pair, action, 0, 0, 0)
-                except Exception as ex:
-                    logger.warning(f"Channel post [AI-{disp}] failed: {ex}")
+                grade_label = sig.get("grade", action)
+                if grade_label != "A":
+                    # B/C — promo teaser only (no entry/SL/TP)
+                    try:
+                        pair_label = f"{'🟢' if action=='BUY' else '🔴'} {action} {disp}"
+                        channel_text = (
+                            f"🔥 <b>AI Signal Terdeteksi — {disp}</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📊 {pair_label}\n"
+                            f"📐 Grade: {grade_label} | Confidence: {int(conf*100)}%\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🔒 <b>Entry, SL & TP hanya untuk subscriber Premium</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"💎 DM @berkahkaryaforexbotbot — ketik /subscribe\n"
+                            f"   untuk akses sinyal lengkap + EA otomatis!\n\n"
+                            f"⚡ <b>Upgrade sekarang, trading dimulai dalam hitungan detik!</b>"
+                        )
+                        result = send_to_channel(channel_text)
+                        if result:
+                            tg_msg_id = result.get("result",{}).get("message_id")
+                            logger.info(f"CHANNEL PROMO OK [AI-{disp} Grade {grade_label}]: message_id={tg_msg_id}")
+                            _mark_channel_post(pair, action, 0, 0, 0)
+                    except Exception as ex:
+                        logger.warning(f"Channel post [AI-{disp}] failed: {ex}")
+                else:
+                    logger.info(f"🔒 Grade A [{disp}] — premium-only, skipped channel post")
 
                 # ── Post to bridge NOW with telegram_message_id attached ──
                 if tg_msg_id:
