@@ -132,12 +132,20 @@ def _activate_user(chat_id, tier, ref):
         db = sqlite3.connect(str(MEMBERS_DB))
         days = TIER_DAYS.get(tier, 30)
         expiry = (datetime.now(WIB) + timedelta(days=days)).isoformat()
+        # UPDATE if exists
         db.execute(
             "UPDATE members SET tier=?, status=?, payment_ref=?, expiry=? WHERE chat_id=?",
             (tier, "paid", ref, expiry, chat_id),
         )
-        ok = db.total_changes > 0
+        # INSERT if not exists yet (user hasn't chatted bot)
+        if db.total_changes == 0:
+            now_iso = datetime.now(WIB).isoformat()
+            db.execute(
+                "INSERT INTO members (chat_id, nama, username, tier, status, joined_at, expiry, payment_ref) VALUES (?,?,?,?,?,?,?,?)",
+                (chat_id, f"User-{chat_id}", "", tier, "paid", now_iso, expiry, ref),
+            )
         db.commit()
+        ok = db.total_changes > 0
         db.close()
         return ok
     except Exception as e:
