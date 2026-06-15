@@ -122,31 +122,40 @@ def get_donor_list() -> list:
         c.execute(
             """
             SELECT m.chat_id, m.nama, m.username, m.tier, m.joined_at,
-                   COALESCE(SUM(p.amount), 0) as donation_amount,
-                   MAX(p.paid_at) as paid_at
+                   COALESCE(SUM(p.amount), 0) as tripay_amount,
+                   MAX(p.paid_at) as tripay_paid_at,
+                   m.payment_ref
             FROM members m
             LEFT JOIN payment_orders p ON m.chat_id = p.chat_id
                 AND p.status = 'paid' AND p.amount > 0
             WHERE m.status = 'paid'
               AND m.tier NOT IN ('free', 'trial', 'expired')
             GROUP BY m.chat_id
-            ORDER BY donation_amount DESC
+            ORDER BY m.tier = 'elite' DESC, m.tier = 'pro' DESC, tripay_amount DESC
             """
         )
         rows = c.fetchall()
+        # Midtrans tier pricing (matches midtrans_service.py TIER_PRICES)
+        TIER_AMOUNT = {"pro": 50000, "elite": 150000, "lifetime": 500000, "premium": 50000, "donor": 15000, "vip": 500000}
         donors = []
         for r in rows:
             d = dict(r)
             display_name = d.get("nama", "") or d.get("username", "") or f"User-{d['chat_id'][:8]}"
             if d.get("username") and not d.get("nama"):
                 display_name = f"@{d['username']}"
+            tier = d.get("tier", "pro")
+            # Prefer actual Tripay amount, fall back to Midtrans tier pricing
+            tripay_amt = float(d.get("tripay_amount", 0) or 0)
+            midtrans_amt = TIER_AMOUNT.get(tier, 0) if d.get("payment_ref") else 0
+            amount = max(tripay_amt, midtrans_amt)  # use whichever has data
+            paid_at = str(d.get("tripay_paid_at", "") or "")
             donors.append(
                 {
                     "chat_id": d["chat_id"],
                     "display_name": display_name,
-                    "amount": float(d.get("donation_amount", 0) or 0),
-                    "paid_at": str(d.get("paid_at", "") or ""),
-                    "tier": d.get("tier", "donor"),
+                    "amount": amount,
+                    "paid_at": paid_at,
+                    "tier": tier,
                 }
             )
         return donors
