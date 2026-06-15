@@ -124,14 +124,21 @@ def get_donor_list() -> list:
             SELECT m.chat_id, m.nama, m.username, m.tier, m.joined_at,
                    COALESCE(SUM(p.amount), 0) as tripay_amount,
                    MAX(p.paid_at) as tripay_paid_at,
-                   m.payment_ref
+                   m.payment_ref, m.tags
             FROM members m
             LEFT JOIN payment_orders p ON m.chat_id = p.chat_id
                 AND p.status = 'paid' AND p.amount > 0
             WHERE m.status = 'paid'
               AND m.tier NOT IN ('free', 'trial', 'expired')
+              AND (m.tags IS NULL OR m.tags NOT LIKE '%test%')
+              AND m.chat_id != 'testnew'
             GROUP BY m.chat_id
-            ORDER BY m.tier = 'elite' DESC, m.tier = 'pro' DESC, tripay_amount DESC
+            ORDER BY CASE m.tier
+                WHEN 'elite' THEN 1
+                WHEN 'pro' THEN 2
+                WHEN 'donor' THEN 3
+                ELSE 4
+            END, tripay_amount DESC
             """
         )
         rows = c.fetchall()

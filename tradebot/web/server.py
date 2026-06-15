@@ -40,6 +40,7 @@ Run: python -m tradebot.web.server --port 9090
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from pathlib import Path
@@ -99,6 +100,8 @@ LOG = logging.getLogger("tradebot.web")
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 TEMPLATE_DIR.mkdir(parents=True, exist_ok=True)
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_DIR / "data" / "vilona_tradefx"
 app = FastAPI(title="1ai-trade-bot Admin", version="1.0")
 app.add_middleware(
     SessionMiddleware,
@@ -502,10 +505,105 @@ async def webhook_tripay(request: Request):
 
 @app.get("/api/live-snapshot")
 async def api_live_snapshot():
-    """Serve latest dashboard_snapshot to frontend with fallback."""
+    """Serve latest dashboard_snapshot to frontend with live-data fallback.
+
+    Priority: cached worker push → live computation from real data.
+    """
     with _live_snapshot_lock:
-        snap = dict(_live_snapshot) if _live_snapshot else dict(SNAPSHOT_FALLBACK)
-    return snap
+        if _live_snapshot:
+            return dict(_live_snapshot)
+
+    # No worker snapshot — compute live from real data sources
+    from datetime import datetime, timezone, timedelta
+
+    from tradebot.services.signal_service import get_stats as _signal_stats
+
+    WIB = timezone(timedelta(hours=7))
+    today_str = datetime.now(WIB).strftime("%Y-%m-%d")
+
+    # Trade performance
+    trade_stats = _get_trade_stats()
+    total_trades = trade_stats.get("total", 0)
+    wins = trade_stats.get("wins", 0)
+    losses = trade_stats.get("losses", 0)
+    win_rate = round(trade_stats.get("win_rate", 0), 1)
+    total_pips = round(trade_stats.get("total_pips", 0), 1)
+    total_pnl = round(trade_stats.get("total_profit_usd", 0), 1)
+
+    # Active users today (quota_cache files with today's date)
+    quota_dir = DATA_DIR / "quota_cache"
+    active_today = 0
+    bot_users = 0
+    try:
+        if quota_dir.exists():
+            for f in quota_dir.glob("*.json"):
+                try:
+                    data = json.loads(f.read_text())
+                    if data.get("date") == today_str:
+                        active_today += 1
+                except Exception:
+                    pass
+            bot_users = len(list(quota_dir.glob("*.json")))
+    except Exception:
+        pass
+
+    # Member counts from transparency
+    transparency = _get_transparency_data()
+    tier_bd = transparency.get("tier_breakdown", {})
+
+    # Last XAUUSD price from trade history
+    xauusd_price = None
+    try:
+        th_file = PROJECT_DIR / "data" / "trade_history.json"
+        if th_file.exists():
+            th = json.loads(th_file.read_text())
+            trades_list = th.get("trades", [])
+            if trades_list:
+                last_trade = trades_list[-1]
+                xauusd_price = last_trade.get("close_price") or last_trade.get("entry_price")
+    except Exception:
+        pass
+
+    # Signal stats
+    sig_stats = _signal_stats()
+
+    return {
+        "type": "dashboard_snapshot",
+        "status": {
+            "state": "live",
+            "pair": "XAUUSD",
+            "detail": f"{total_trades} trades · {active_today} active today",
+        },
+        "performance": {
+            "win_rate": win_rate,
+            "total_pnl": total_pnl,
+            "total_trades": total_trades,
+            "wins": wins,
+            "losses": losses,
+            "total_pips": total_pips,
+        },
+        "users": {
+            "active": active_today,
+            "bot_users": bot_users,
+            "total_paid": tier_bd.get("elite_paid", 0)
+            + tier_bd.get("pro_paid", 0)
+            + tier_bd.get("donor_paid", 0),
+            "total_members": transparency.get("total_members", 0),
+            "tiers": {
+                "elite": tier_bd.get("elite_paid", 0),
+                "pro": tier_bd.get("pro_paid", 0),
+                "donor": tier_bd.get("donor_paid", 0),
+            },
+        },
+        "prices": {"XAUUSD": xauusd_price},
+        "uptime_seconds": 0,
+        "total_cycles": total_trades,
+        "signal_stats": {
+            "total": sig_stats.get("total", 0),
+            "tp": sig_stats.get("tp", 0),
+            "sl": sig_stats.get("sl", 0),
+        },
+    }
 
 
 # ── Public APIs (no auth) ──────────────────────────────────────────────
