@@ -154,7 +154,7 @@ Telegram (VilonaBot — single unified bot with button menus)
 | `tradebot/constants/` | Shared constants |
 | `tradebot/exceptions/` | TradebotError exception hierarchy |
 | `tradebot/saas/` | SaaS subscription layer |
-| `tests/` | 1545 tests across 49 files |
+| `tests/` | 1584 tests across 52 files |
 | `.omo/` | AI agent scratch space (gitignored) — plans, todo lists, internal notes |
 | `docs/` | API reference, ops runbook, ownership protocol |
 | `deploy/systemd/` | Systemd service files |
