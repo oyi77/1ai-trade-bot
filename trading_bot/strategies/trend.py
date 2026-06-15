@@ -114,6 +114,8 @@ class TrendStrategy(BaseStrategy):
 
         fast_ma = self._ma(closes, self._config.fast_period)
         slow_ma = self._ma(closes, self._config.slow_period)
+        assert fast_ma is not None
+        assert slow_ma is not None
 
 
         # Crossover detection.
@@ -125,8 +127,12 @@ class TrendStrategy(BaseStrategy):
         if prev_fast is None or prev_slow is None:
             return None
 
-        fast_crossed_above = prev_fast <= prev_slow and fast_ma > slow_ma
-        fast_crossed_below = prev_fast >= prev_slow and fast_ma < slow_ma
+        # Narrow types for mypy
+        pf: float = prev_fast
+        ps: float = prev_slow
+
+        fast_crossed_above = pf <= ps and fast_ma > slow_ma
+        fast_crossed_below = pf >= ps and fast_ma < slow_ma
 
         if not fast_crossed_above and not fast_crossed_below:
             return None
@@ -139,7 +145,6 @@ class TrendStrategy(BaseStrategy):
         if confidence < self._config.min_confidence:
             LOG.debug("Trend signal confidence %.3f below threshold", confidence)
             return None
-
         # Volume filter.
         if self._config.volume_filter and volumes:
             recent_volume = volumes[-1]

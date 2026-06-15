@@ -8,6 +8,7 @@ No real API keys, network calls, or terminal connections required.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from types import ModuleType, SimpleNamespace
@@ -27,6 +28,7 @@ from trading_bot.providers.base import (
     OrderStatus,
     OrderType,
     Position,
+    TimeInForce,
 )
 from trading_bot.providers.crypto.ccxt_adapter import CCXTProvider
 from trading_bot.providers.forex.exness import (
@@ -37,6 +39,7 @@ from trading_bot.providers.forex.exness import (
     _parse_timeframe,
 )
 from trading_bot.providers.paper.paper_trader import PaperTradingProvider
+
 
 @contextmanager
 def monkeypatch_sys_module(name: str, value: Any) -> Any:
@@ -715,6 +718,7 @@ class FakeExchange:
         self.symbols: list[str] = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
         self.load_markets_called = False
         self.close_called = False
+        self._last_params: dict[str, Any] = {}
 
     def _set_raise(self, method: str, exc: Exception | None) -> None:
         self._raise_on[method] = exc
@@ -737,7 +741,7 @@ class FakeExchange:
         self._maybe_raise("fetch_balance")
         return {
             "free": {"USDT": 1234.5},
-            "total": {"BTC": 0.5, "ETH": 2.0},
+            "total": {"USDT": 1234.5, "BTC": 0.5, "ETH": 2.0},
         }
 
     async def fetch_positions(self) -> list[dict[str, Any]]:
@@ -755,6 +759,7 @@ class FakeExchange:
     ) -> dict[str, Any]:
         self._maybe_raise("create_order")
         params = params or {}
+        self._last_params = params
         status = params.get("test_status", "closed")
         return {
             "id": f"{symbol}-{side}-{type}",
@@ -784,12 +789,14 @@ class FakeExchange:
 
     async def fetch_ticker(self, symbol: str) -> dict[str, Any]:
         self._maybe_raise("fetch_ticker")
+        if symbol == "USDT/USDT":
+            return {"last": 1.0}
         return {"last": 100000.0}
 
     async def set_leverage(self, leverage: int, symbol: str) -> dict[str, Any]:
         self._maybe_raise("set_leverage")
+        self.config["leverage_sent"] = leverage
         return {}
-
 
 class FakeCCXTModule:
     """Stand-in for ``ccxt.async_support`` injected into sys.modules."""
@@ -802,7 +809,11 @@ class FakeCCXTModule:
 
 @pytest.fixture
 def fake_ccxt() -> Iterator[None]:
-    with patch.dict("sys.modules", {"ccxt.async_support": FakeCCXTModule()}):
+    """Patch both ccxt and ccxt.async_support in sys.modules."""
+    fake_module = FakeCCXTModule()
+    # Create a fake ccxt module with async_support attribute
+    fake_ccxt_module = type("module", (), {"async_support": fake_module})()
+    with patch.dict("sys.modules", {"ccxt": fake_ccxt_module, "ccxt.async_support": fake_module}):
         yield
 
 
@@ -927,7 +938,7 @@ class TestCCXTProviderMocked:
             order_type=OrderType.MARKET, quantity=0.01, reduce_only=True,
         )
         await p.place_order(order)
-        assert p._exchange.config.get("reduceOnly_sent") is True
+        assert p._exchange._last_params.get("reduceOnly") is True
 
     async def test_place_order_with_leverage(self, fake_ccxt: None) -> None:
         p = CCXTProvider(exchange_id="binance")
@@ -946,19 +957,18 @@ class TestCCXTProviderMocked:
             symbol="BTC", side=OrderSide.BUY,
             order_type=OrderType.LIMIT, quantity=0.01, price=50000.0,
         )
-        p._exchange._maybe_raise = lambda method: None  # type: ignore[method-assign]
-        with patch.object(
-            FakeExchange,
-            "create_order",
-            new=lambda self, **kwargs: {
+        # Patch the instance's create_order method
+        async def fake_create_order(**kwargs: Any) -> dict[str, Any]:
+            return {
                 "id": "open-1",
                 "status": "open",
                 "filled": 0.0,
                 "price": 0.0,
                 "average": 0.0,
-            },
-        ):
-            result = await p.place_order(order)
+                "symbol": kwargs.get("symbol", "BTC/USDT"),
+            }
+        p._exchange.create_order = fake_create_order  # type: ignore[method-assign]
+        result = await p.place_order(order)
         assert result.status == OrderStatus.OPEN
 
     async def test_place_order_rejected(self, fake_ccxt: None) -> None:
@@ -1204,7 +1214,7 @@ class _MinimalProvider(BaseProvider):
     async def get_positions(self) -> list[Position]:
         return []
 
-    async def place_order(self, order: Order) -> "OrderResult":
+    async def place_order(self, order: Order) -> OrderResult:
         from trading_bot.providers.base import OrderResult
 
         return OrderResult(status=OrderStatus.PENDING, order_id="1")
@@ -1250,7 +1260,7 @@ class TestBaseProviderAbstractMethods:
             async def get_positions(self) -> list[Position]:
                 return []
 
-            async def place_order(self, order: Order) -> "OrderResult":
+            async def place_order(self, order: Order) -> OrderResult:
                 from trading_bot.providers.base import OrderResult
 
                 return OrderResult(status=OrderStatus.PENDING, order_id="1")
@@ -1291,7 +1301,7 @@ class TestBaseProviderAbstractMethods:
             async def get_positions(self) -> list[Position]:
                 return []
 
-            async def place_order(self, order: Order) -> "OrderResult":
+            async def place_order(self, order: Order) -> OrderResult:
                 from trading_bot.providers.base import OrderResult
 
                 return OrderResult(status=OrderStatus.PENDING, order_id="1")
