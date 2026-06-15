@@ -2688,6 +2688,13 @@ def fmt_signal(sig, price, dxy, h, display="XAUUSD", currency="$", quality=None,
         order_type = action
     sl = sig.get("sl") or 0
     tp = sig.get("tp") or 0
+    # ── SL DIRECTION GUARD: mirror SL to correct side for display ──
+    if sl and entry and action in ("BUY","SELL") and zone_lo and zone_hi:
+        pip_sl2 = 0.10 if display in ("XAUUSD","GOLD") else 0.01
+        if action == "BUY" and sl > zone_lo:
+            sl = round(zone_lo - abs(sl - zone_lo), 2)
+        elif action == "SELL" and sl < zone_hi:
+            sl = round(zone_hi + abs(sl - zone_hi), 2)
     tp1 = sig.get("tp1", 0)
     tp2 = sig.get("tp2", 0)
     tp3 = sig.get("tp3", 0)
