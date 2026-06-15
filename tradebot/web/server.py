@@ -593,8 +593,9 @@ async def api_live_snapshot():
             "total_pips": total_pips,
         },
         "users": {
-            "active": active_today,
+            "active": bot_users,  # total unique bot users all-time
             "bot_users": bot_users,
+            "active_today": active_today,  # today only
             "total_paid": tier_bd.get("elite_paid", 0)
             + tier_bd.get("pro_paid", 0)
             + tier_bd.get("donor_paid", 0),
