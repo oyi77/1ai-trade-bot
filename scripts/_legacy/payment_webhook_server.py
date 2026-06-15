@@ -26,7 +26,7 @@ GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID", "")
 BOT_TOKEN = os.environ.get("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN", "")
 BOT_TOKEN_1AI = os.environ.get("TELEGRAM_BOT_TOKEN_1AI", "8343388239:AAFgeAkc9bvjywyCsHqRIa_RiJ6q-rp6uv0")
 
-# ── Donation model: ANY amount → donor (LIFETIME) ─────────
+# ── Donation model: ANY amount → subscriber (LIFETIME) ─────────
 # No more fixed tiers. "Dukung Server AI" = pay-what-you-want.
 DONOR_DAYS = 9999  # Lifetime access — bukan subscription
 
@@ -57,16 +57,32 @@ def tg_send(text: str, chat_id: str, bot_token: str = None, reply_markup=None):
 def verify_tripay_signature(body: bytes, callback_sig: str) -> bool:
     """Verify Tripay HMAC-SHA256 signature."""
     if not TRIPAY_PRIVATE_KEY:
-        log.warning("TRIPAY_PRIVATE_KEY not set — skipping signature check")
-        return True  # Allow in dev mode
+        log.error("TRIPAY_PRIVATE_KEY not set — REJECTING callback")
+        return False  # Reject in production — never accept unverified callbacks
     expected = hmac.new(
         TRIPAY_PRIVATE_KEY.encode(), body, hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected, callback_sig)
 
 
+def _already_processed(merchant_ref: str) -> bool:
+    """Check if this payment was already processed (idempotency guard)."""
+    if not merchant_ref:
+        return False
+    try:
+        from members import _conn
+        with _conn() as db:
+            row = db.execute(
+                "SELECT status FROM payment_orders WHERE merchant_ref=? AND status='paid'",
+                (merchant_ref,)
+            ).fetchone()
+            return row is not None
+    except Exception:
+        return False
+
+
 def upgrade_member(chat_id: str, tier: str, days: int, merchant_ref: str = "") -> bool:
-    """Upgrade member ke DONATUR via members.db (SQLite). Returns True on full success."""
+    """Upgrade member ke SUBSCRIBER via members.db (SQLite). Returns True on full success."""
     try:
         from members import upgrade_tier as mem_upgrade, mark_payment_paid
         mem_upgrade(chat_id, tier, days, merchant_ref)
@@ -127,7 +143,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
         callback_sig = self.headers.get("X-Callback-Signature", "")
         if not callback_sig or not verify_tripay_signature(body, callback_sig):
             log.warning(f"Invalid Tripay signature for: {data.get('merchant_ref', '?')}")
-            self._json({"error": "invalid signature"}, 403)
+            self._json({"error": "invalid signature"}, 200)  # 200 tell Tripay to stop retrying
             return
 
         merchant_ref = data.get("merchant_ref", "")
@@ -143,14 +159,24 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self._json({"status": "ignored", "reason": f"status={status}"})
             return
 
+        # ── IDEMPOTENCY GUARD: skip if already processed ──
+        if _already_processed(merchant_ref):
+            log.info(f"Duplicate callback ignored (already paid): {merchant_ref}")
+            self._json({"status": "already_processed", "ref": merchant_ref})
+            return
+
         chat_id = ""
         brand = "vilona"
+        tier = "pro"  # default
         try:
             parts = merchant_ref.split("-")
             if len(parts) >= 2:
                 prefix = parts[0].upper()
                 if prefix == "VTFX":
-                    brand, chat_id = "vilona", parts[1]
+                    brand = "vilona"
+                    if len(parts) >= 3:
+                        chat_id = parts[2]  # VTFX-{tier}-{chat_id}-{ts}
+                        tier = parts[1].lower()
                 elif prefix == "1AI":
                     brand, chat_id = "1ai", parts[1]
         except Exception as e:
@@ -163,11 +189,25 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
         token = BOT_TOKEN_1AI if brand == "1ai" else BOT_TOKEN
 
-        # Upgrade member to DONOR
-        if not upgrade_member(chat_id, "donor", DONOR_DAYS, merchant_ref):
-            log.error(f"Member upgrade failed for {chat_id} — returning 500 for retry")
+        # Upgrade member to correct tier (extracted from merchant_ref)
+        tier_days = {"pro": 30, "elite": 30, "lifetime": 9999, "donor": 9999}
+        days = tier_days.get(tier, 30)
+        if not upgrade_member(chat_id, tier, days, merchant_ref):
+            log.error(f"Member upgrade failed for {chat_id} -- returning 500 for retry")
             self._json({"status": "error", "message": "upgrade_failed"}, 500)
             return
+
+        # Meta CAPI Purchase event
+        try:
+            from members.payment import fire_capi_purchase
+            fire_capi_purchase(
+                chat_id=chat_id,
+                amount=float(total_amount),
+                tier=tier,
+                transaction_id=merchant_ref,
+            )
+        except Exception as e:
+            log.warning(f"Meta CAPI Purchase failed (non-critical): {e}")
 
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -177,13 +217,53 @@ class WebhookHandler(BaseHTTPRequestHandler):
         except Exception as e:
             log.warning(f"Commission tracking skipped: {e}")
 
+        # ── Bemob conversion postback (server-side) ──
+        bemob_cid = data.get("bemob_cid", "") or data.get("cid", "") or os.environ.get("BEMOB_CID_FALLBACK", "")
+        try:
+            postback_params = {
+                "cid": bemob_cid,
+                "payout": int(total_amount),
+                "txid": merchant_ref,
+                "status": status.lower(),
+            }
+            pb_qs = "&".join(f"{k}={v}" for k, v in postback_params.items() if v)
+            # 1) Postback URL (server-side callback) — Bemob domain is dead (NXDOMAIN), fail gracefully
+            pb_url = f"https://rr9u3.bemobrcks.com/postback?{pb_qs}"
+            log.info(f"📊 Firing Bemob postback: {pb_url[:120]}...")
+            try:
+                urllib.request.urlopen(pb_url, timeout=5)
+            except Exception:
+                log.debug("Bemob postback skipped (domain unreachable) — non-critical")
+            # 2) Conversion pixel (mirror as server-side GET)
+            px_url = f"https://rr9u3.bemobrcks.com/conversion.gif?{pb_qs}"
+            try:
+                urllib.request.urlopen(px_url, timeout=5)
+            except Exception:
+                pass
+        except Exception as e:
+            log.warning(f"Bemob postback failed (non-critical): {e}")
+
+        # ── Auto-add to premium group/channel ──
+        try:
+            from tradebot.tracking.group_sync import add_to_premium_groups
+            add_to_premium_groups(chat_id, tier)
+        except Exception as e:
+            log.warning(f"Group sync failed (non-critical): {e}")
+
+        # ── Log activity ──
+        try:
+            from tradebot.tracking.activity import log_activity
+            log_activity(chat_id, chat_id, '', 'payment_success', tier, {'amount': total_amount, 'ref': merchant_ref})
+        except Exception as e:
+            log.warning(f"Activity log failed (non-critical): {e}")
+
         if brand == "1ai":
             msg = (
                 f"🔥 <b>BOOM! Bahan bakar server sudah masuk.</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"💰 <b>Rp{int(total_amount):,}</b> — Makasih Bro!\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                f"👑 Status kamu sekarang: <b>SUBSCRIBER VIP</b>\n"
                 f"\n"
                 f"Akses VIP kamu <b>AKTIF PERMANEN</b>.\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -205,7 +285,7 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"💰 <b>Rp{int(total_amount):,}</b> — Makasih Bro!\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
-                f"👑 Status kamu sekarang: <b>DONATUR VIP</b>\n"
+                f"👑 Status kamu sekarang: <b>SUBSCRIBER VIP</b>\n"
                 f"\n"
                 f"Akses VIP kamu <b>AKTIF PERMANEN</b>.\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -227,6 +307,27 @@ class WebhookHandler(BaseHTTPRequestHandler):
         if result is None:
             log.warning(f"tg_send DM to {chat_id} returned None (message may not have been delivered)")
 
+        # ── Extra DM: SL/TP unlocked CTA ──────────────────────────
+        time.sleep(3)
+        extra_msg = (
+            '🔥 <b>SELAMAT BRO!</b>\n'
+            '━━━━━━━━━━━━━━━━━━━━━\n'
+            'SL/TP udah <b>TERBUKA</b> buat kamu!\n'
+            '\n'
+            'Sekarang lu bisa:\n'
+            '✅ /analyze — Signal FULL + SL/TP\n'
+            '✅ Grok News — Real-time market news\n'
+            '✅ EA Auto-Trade — Bridge AKTIF\n'
+            '\n'
+            '🔥 Coba sekarang: /analyze\n'
+            '━━━━━━━━━━━━━━━━━━━━━\n'
+            'Makasih udah support server! 💚'
+        )
+        extra_result = tg_send(extra_msg, chat_id, bot_token=token)
+        if extra_result is None:
+            log.warning(f"tg_send SL/TP DM to {chat_id} returned None")
+        # ── End extra DM ───────────────────────────────────────────
+
         # Notify group — Social Proof (semangat gotong royong)
         if GROUP_CHAT_ID:
             group_msg = (
@@ -238,14 +339,14 @@ class WebhookHandler(BaseHTTPRequestHandler):
                 f"Terima kasih orang baik! Mesin AI kita\n"
                 f"makin buas hari ini berkat dukunganmu. 🥂\n"
                 f"━━━━━━━━━━━━━━━━\n"
-                f"💚 Mau ikut bensin server? /donate\n"
+                f"💚 Mau ikut bensin server? /subscribe\n"
                 f"📢 Signal real-time: @vilonaaichanel"
             )
             group_result = tg_send(group_msg, GROUP_CHAT_ID)
             if group_result is None:
                 log.warning("tg_send to GROUP_CHAT_ID returned None (group notification may not have been delivered)")
 
-        log.info(f"✅ Donation complete: {chat_id} → DONATUR (ref={merchant_ref[:16]} amount={total_amount})")
+        log.info(f"✅ Donation complete: {chat_id} → SUBSCRIBER (ref={merchant_ref[:16]} amount={total_amount})")
         self._json({"status": "ok", "chat_id": chat_id, "donor": True})
 
     def log_message(self, format, *args):
@@ -279,6 +380,14 @@ def main():
     except KeyboardInterrupt:
         log.info("Shutting down...")
         server.shutdown()
+    except Exception as e:
+        log.critical("Payment webhook CRASH: %s", e)
+        try:
+            from members.admin_alert import send_admin_alert
+            send_admin_alert("Tripay Webhook", f"Server crash — {str(e)[:200]}")
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":

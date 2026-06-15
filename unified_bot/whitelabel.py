@@ -1,25 +1,15 @@
-# Whitelabel Management System
-# Brand configuration and feature management for unified bot
-
-"""
-Whitelabel Management System for Unified Trading Bot
-
-This module provides comprehensive whitelabel support for the unified trading bot,
-enabling multiple brands to operate under a single codebase while maintaining
-complete brand differentiation and customization.
-"""
+"""Whitelabel management: brand configs, feature toggles, pricing, branding."""
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 LOG = logging.getLogger(__name__)
 class BrandStatus(Enum):
@@ -44,7 +34,7 @@ class PlanType(str, Enum):
     ENTERPRISE = "enterprise"
     CUSTOM = "custom"
 class PaymentMethod(str, Enum):
-    TRIPAY = "tripay"
+    SCALEV = "scalev"
     STRIPE = "stripe"
     PAYPAL = "paypal"
     BANK_TRANSFER = "bank_transfer"
@@ -57,8 +47,7 @@ class Currency(str, Enum):
     GBP = "GBP"
     BTC = "BTC"
     ETH = "ETH"
-@dataclass
-class BrandFeatures:
+class BrandFeatures(BaseModel):
     """Feature configuration for a brand."""
     
     # Core Trading Features
@@ -70,11 +59,11 @@ class BrandFeatures:
     # Signal Features
     enable_signal_generation: bool = True
     min_confidence_threshold: float = 0.7
-    signal_providers: List[str] = field(default_factory=list)
-    custom_indicators: List[str] = field(default_factory=list)
+    signal_providers: List[str] = Field(default_factory=list)
+    custom_indicators: List[str] = Field(default_factory=list)
     
     # Payment Features
-    payment_methods: List[PaymentMethod] = field(default_factory=list)
+    payment_methods: List[PaymentMethod] = Field(default_factory=list)
     auto_subscription: bool = True
     trial_enabled: bool = True
     trial_days: int = 7
@@ -101,44 +90,44 @@ class BrandFeatures:
     push_notifications: bool = True
     
     # Webhooks
-    webhook_endpoints: List[str] = field(default_factory=list)
-    webhook_events: List[str] = field(default_factory=list)
+    webhook_endpoints: List[str] = Field(default_factory=list)
+    webhook_events: List[str] = Field(default_factory=list)
     
     # Mobile
     mobile_app_enabled: bool = True
     mobile_app_name: str = "Trading Bot"
     
     # Custom Settings
-    custom_settings: Dict[str, Any] = field(default_factory=dict)
-class BrandPricing:
+    custom_settings: Dict[str, Any] = Field(default_factory=dict)
+class BrandPricing(BaseModel):
     """Pricing configuration for a brand."""
     
     # Subscription Plans
-    plans: Dict[PlanType, Dict[str, Any]] = field(default_factory=dict)
+    plans: Dict[PlanType, Dict[str, Any]] = Field(default_factory=dict)
     
     # One-time Payments
-    one_time_payments: Dict[str, float] = field(default_factory=dict)
+    one_time_payments: Dict[str, float] = Field(default_factory=dict)
     
     # Features Included
-    features_included: Dict[str, List[str]] = field(default_factory=dict)
+    features_included: Dict[str, List[str]] = Field(default_factory=dict)
     
     # Currency
     default_currency: Currency = Currency.USD
     
     # Payment Gateways
-    payment_gateways: Dict[PaymentMethod, Dict[str, Any]] = field(default_factory=dict)
+    payment_gateways: Dict[PaymentMethod, Dict[str, Any]] = Field(default_factory=dict)
     
     # Discounts
     welcome_discount_enabled: bool = True
     welcome_discount_percentage: float = 0.0
     referral_discount_enabled: bool = True
     referral_discount_percentage: float = 0.1
-class BrandBranding:
+class BrandBranding(BaseModel):
     """Branding configuration for a brand."""
     
     # Basic Branding
-    brand_name: str
-    domain: str
+    brand_name: str = ""
+    domain: str = ""
     logo_url: Optional[str] = None
     logo_dark_url: Optional[str] = None
     favicon_url: Optional[str] = None
@@ -157,8 +146,8 @@ class BrandBranding:
     
     # Images
     hero_image_url: Optional[str] = None
-    feature_images: List[str] = field(default_factory=list)
-    testimonial_images: List[str] = field(default_factory=list)
+    feature_images: List[str] = Field(default_factory=list)
+    testimonial_images: List[str] = Field(default_factory=list)
     
     # Custom CSS/JS
     custom_css: Optional[str] = None
@@ -172,12 +161,7 @@ class BrandBranding:
     og_image_url: Optional[str] = None
     twitter_image_url: Optional[str] = None
 class BrandConfiguration(BaseModel):
-    """
-    Complete brand configuration for the unified trading bot.
-    
-    This configuration determines how a brand operates within the unified bot,
-    including features, pricing, branding, and technical settings.
-    """
+    """Brand identity, features, pricing, branding, and rate limits."""
     
     # Basic Information
     brand_id: str = Field(..., description="Unique brand identifier")
@@ -228,19 +212,22 @@ class BrandConfiguration(BaseModel):
     # Custom Configuration
     custom_config: Dict[str, Any] = Field(default_factory=dict)
     
-    @validator("brand_id", "domain")
-    def validate_required_fields(cls, v, field):
+    @field_validator("brand_id", "domain")
+    @classmethod
+    def validate_required_fields(cls, v):
         if not v or not str(v).strip():
-            raise ValueError(f"{field.name} cannot be empty")
+            raise ValueError("brand_id and domain cannot be empty")
         return v.strip()
-    
-    @validator("brand_id")
+
+    @field_validator("brand_id")
+    @classmethod
     def validate_brand_id_format(cls, v):
         if not v.replace("_", "").replace("-", "").isalnum():
             raise ValueError("brand_id must be alphanumeric with underscores or hyphens")
         return v.lower()
-    
-    @validator("domain")
+
+    @field_validator("domain")
+    @classmethod
     def validate_domain_format(cls, v):
         if not v.startswith("http://") and not v.startswith("https://"):
             v = "https://" + v
@@ -306,12 +293,7 @@ class BrandConfiguration(BaseModel):
         
         return cls(**data)
 class BrandManager:
-    """
-    Manages brand configurations and operations for the unified trading bot.
-    
-    This class handles brand registration, configuration updates, feature
-    management, and brand-specific operations.
-    """
+    """CRUD for brand configurations, backed by a JSON file."""
     
     def __init__(self, config_file: Optional[str] = None):
         self.brands: Dict[str, BrandConfiguration] = {}

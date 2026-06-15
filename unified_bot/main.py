@@ -1,12 +1,4 @@
-# Unified Bot Main Application
-# Entry point for the unified multi-brand trading bot
-
-"""
-Unified Bot Main Application
-
-This module is the entry point for the unified multi-brand trading bot,
-combining the core engine, API layer, and whitelabel management system.
-"""
+"""Entry point: initializes engine, API, PoC adapters, and runs the bot loop."""
 
 from __future__ import annotations
 
@@ -21,6 +13,18 @@ from unified_bot.core.engine import UnifiedSignalEngine
 from unified_bot.core.metrics import MetricsCollector
 from unified_bot.api.unified_api import UnifiedAPIService, APIConfig
 
+# ── PoC Adapters ──
+from unified_bot.adapters import (
+    SatpamAdapter,
+    ScalevAdapter,
+    SubscriptionAdapter,
+    SignalBridgeAdapter,
+    EngineConsensusAdapter,
+    LicenseManagerAdapter,
+    ExpiryReminderAdapter,
+    DailyReportAdapter,
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -29,12 +33,7 @@ logging.basicConfig(
 
 LOG = logging.getLogger(__name__)
 class UnifiedBot:
-    """
-    Unified trading bot for multi-brand operations.
-    
-    This class combines the core signal engine, API layer, and whitelabel management
-    system into a single unified trading bot application.
-    """
+    """Orchestrates engine, API, adapters and background tasks."""
     
     def __init__(self, config_file: str = "config.json"):
         self.config_file = Path(config_file)
@@ -42,6 +41,16 @@ class UnifiedBot:
         self.metrics_collector = MetricsCollector()
         self.signal_engine: UnifiedSignalEngine
         self.api_service: UnifiedAPIService
+        
+        # ── PoC Adapters (real instances) ──
+        self.satpam: SatpamAdapter = SatpamAdapter()
+        self.scalev: ScalevAdapter = ScalevAdapter()
+        self.subscription: SubscriptionAdapter = SubscriptionAdapter()
+        self.signal_bridge: SignalBridgeAdapter = SignalBridgeAdapter()
+        self.engine_consensus: EngineConsensusAdapter = EngineConsensusAdapter()
+        self.license_manager: LicenseManagerAdapter = LicenseManagerAdapter()
+        self.expiry_reminder: ExpiryReminderAdapter = ExpiryReminderAdapter()
+        self.daily_report: DailyReportAdapter = DailyReportAdapter()
         
         # Application state
         self.running = False
@@ -65,6 +74,9 @@ class UnifiedBot:
             
             # Initialize API service
             await self._initialize_api_service()
+            
+            # Initialize PoC adapters
+            await self._initialize_adapters()
             
             # Start background services
             await self._start_background_services()
@@ -130,6 +142,43 @@ class UnifiedBot:
         # Start API service
         await self.api_service.start()
     
+    async def _initialize_adapters(self) -> None:
+        """Initialize all PoC adapters with default configs."""
+        LOG.info("Initializing PoC adapters...")
+        
+        self.satpam = SatpamAdapter()
+        self.scalev = ScalevAdapter()
+        self.subscription = SubscriptionAdapter()
+        self.signal_bridge = SignalBridgeAdapter()
+        self.engine_consensus = EngineConsensusAdapter()
+        self.license_manager = LicenseManagerAdapter()
+        self.expiry_reminder = ExpiryReminderAdapter()
+        self.daily_report = DailyReportAdapter()
+        
+        # Init adapters that need async setup (non-blocking concurrent)
+        results = await asyncio.gather(
+            self.signal_bridge.initialize(),
+            self.subscription.initialize(),
+            self.scalev.initialize(),
+            self.engine_consensus.initialize(),
+            self.license_manager.initialize(),
+            self.expiry_reminder.initialize(),
+            self.daily_report.initialize(),
+            return_exceptions=True,
+        )
+        
+        adapter_names = [
+            "signal_bridge", "subscription", "scalev",
+            "engine_consensus", "license_manager", "expiry_reminder", "daily_report",
+        ]
+        for name, result in zip(adapter_names, results):
+            if isinstance(result, Exception):
+                LOG.warning("Adapter %s init returned error: %s", name, result)
+            else:
+                LOG.info("Adapter %s initialized: %s", name, result)
+        
+        LOG.info("PoC adapters initialization complete")
+    
     async def _start_background_services(self) -> None:
         """Start background services."""
         # Start signal scheduler
@@ -181,6 +230,18 @@ class UnifiedBot:
             # Wait for tasks to complete
             if self.tasks:
                 await asyncio.gather(*self.tasks, return_exceptions=True)
+            
+            # Shutdown adapters
+            adapter_shutdowns = []
+            for attr in (
+                "satpam", "scalev", "subscription", "signal_bridge",
+                "engine_consensus", "license_manager", "expiry_reminder", "daily_report",
+            ):
+                adapter = getattr(self, attr, None)
+                if adapter:
+                    adapter_shutdowns.append(adapter.shutdown())
+            if adapter_shutdowns:
+                await asyncio.gather(*adapter_shutdowns, return_exceptions=True)
             
             # Shutdown API service
             if self.api_service:

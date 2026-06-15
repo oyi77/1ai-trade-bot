@@ -18,9 +18,9 @@ TRIPAY_CALLBACK_URL  = os.environ.get("TRIPAY_CALLBACK_URL", "")
 DEFAULT_METHOD       = os.environ.get("TRIPAY_DEFAULT_METHOD", "QRIS2")
 
 # Donation model — "Dukung Server AI" (pay-what-you-want)
-# Any amount above minimum → DONATUR status
+# Any amount above minimum → SUBSCRIBER status
 PRODUCT_TIERS = {
-    "vtfx-donasi": {"tier": "donor", "price": 0, "label_prefix": "Donatur"},
+    "vtfx-subscribe": {"tier": "donor", "price": 0, "label_prefix": "Subscriber"},
 }
 
 MIN_DONATION = 10000  # Minimum Rp10.000
@@ -46,7 +46,8 @@ def verify_callback_signature(callback_data: str, callback_signature: str) -> bo
 
 def create_transaction(user_id: str, username: str, amount: int,
                        method: str = None, customer_email: str = "",
-                       customer_phone: str = "", order_items: list = None) -> dict:
+                       customer_phone: str = "", order_items: list = None,
+                       merchant_ref: str = None, brand_id: str = "vilona") -> dict:
     """Create Tripay Closed Payment transaction.
 
     Args:
@@ -57,6 +58,8 @@ def create_transaction(user_id: str, username: str, amount: int,
         customer_email: Customer email
         customer_phone: Customer phone
         order_items: List of {"name": str, "price": int, "quantity": int}
+        merchant_ref: Optional custom merchant_ref (default: auto-generated)
+        brand_id: Brand identifier ('vilona' or '1ai') for prefix
 
     Returns:
         dict with payment URL + reference
@@ -64,11 +67,13 @@ def create_transaction(user_id: str, username: str, amount: int,
     if method is None:
         method = DEFAULT_METHOD
 
-    # Open-amount donation model — any amount valid
-    product_key = "vtfx-donasi"
-    label = "Dukung Server AI - VilonaTradeFX"
+    prefix = "1AI" if brand_id == "1ai" else "VTFX"
+    product_key = f"{brand_id}-subscribe"
+    brand_label = "1AI Agent" if brand_id == "1ai" else "VilonaTradeFX"
+    label = f"Dukung Server AI - {brand_label}"
 
-    merchant_ref = f"VTFX-{user_id}-{int(time.time())}"
+    if merchant_ref is None:
+        merchant_ref = f"{prefix}-{user_id}-{int(time.time())}"
     payload = {
         "method": method,
         "merchant_ref": merchant_ref,

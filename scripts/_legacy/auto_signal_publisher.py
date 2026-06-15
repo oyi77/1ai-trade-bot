@@ -14,7 +14,9 @@ import sys, os, json, logging, time, argparse
 from datetime import datetime, timezone, timedelta
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(PROJECT_DIR)  # project root
 sys.path.insert(0, PROJECT_DIR)
+sys.path.insert(0, ROOT_DIR)              # for tradebot.* imports
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,12 +40,16 @@ def killzone_active_wib(now=None):
 
 def trading_allowed(symbol):
     """Check if trading is allowed for this symbol based on killzone routing."""
+    now_wib = datetime.now(WIB)
+    weekday = now_wib.weekday()  # 0=Mon … 5=Sat, 6=Sun
     if symbol in CRYPTO_PAIRS:
-        return True  # Crypto 24/7
+        return True  # Crypto 24/7 — no weekday gate
     if symbol in FOREX_METAL_PAIRS:
-        lkz, nykz = killzone_active_wib()
-        return lkz or nykz  # Only London or NY
-    return True  # Stocks, others — always allowed during weekdays
+        if weekday >= 5:
+            return False  # Forex/metals closed Sat–Sun
+        lkz, nykz = killzone_active_wib(now_wib)
+        return lkz or nykz  # Only London or NY on weekdays
+    return weekday < 5  # Stocks/others: Mon–Fri only
 
 def load_trade_log():
     path = os.path.join(PROJECT_DIR, "..", "data", "trade_log.json")
@@ -64,7 +70,7 @@ def is_duplicate(log, signal):
             # Cek time gap — minimal 180 menit (3 jam) untuk sinyal yang sama
             try:
                 t1 = datetime.fromisoformat(s.get("timestamp", "")).timestamp()
-                if now - t1 < 10800:  # 180 menit
+                if now - t1 < 5400:  # 90 menit (M15 siklus)
                     return True
             except:
                 pass  # kalau gak bisa parse, lanjut cek
@@ -104,7 +110,9 @@ def main():
 
     try:
         from engine_consensus import run_engine_consensus
-        from signal_calculator import compute_signal, format_signal_telegram, log_signal
+        from tradebot.services.signal_calculator_service import (
+            compute_signal, format_signal_telegram, log_signal,
+        )
     except ImportError as e:
         log.error(f"Import error: {e}")
         return 1
@@ -113,7 +121,6 @@ def main():
     assets = [
         {"symbol": "XAUUSD", "class": "forex_metal"},
         {"symbol": "BTCUSD", "class": "crypto"},
-        {"symbol": "USOIL", "class": "forex_metal"},
     ]
     results = {}
     
@@ -188,7 +195,6 @@ def main():
         text = format_signal_telegram(sig)
         
         try:
-            sys.path.insert(0, os.path.join(PROJECT_DIR, "scripts"))
             from vilona_tradefx_handler import send_to_channel
             result = send_to_channel(text)
             if result:

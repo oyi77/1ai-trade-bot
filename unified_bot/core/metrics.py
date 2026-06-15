@@ -1,13 +1,4 @@
-# Metrics Collection System
-# Performance metrics for unified signal engine
-
-"""
-Metrics Collection System for Unified Signal Engine
-
-This module implements comprehensive metrics collection and monitoring
-for the unified trading bot signal engine, including performance tracking,
-quality metrics, and brand-specific analytics.
-"""
+"""Processing and brand-specific metrics collection."""
 
 from __future__ import annotations
 
@@ -134,12 +125,7 @@ class BrandMetrics:
             return 0.0
         return self.signals_accepted / self.signals_processed
 class MetricsCollector:
-    """
-    Metrics collector for unified signal engine.
-    
-    This class collects and manages performance metrics for the unified trading bot,
-    including processing metrics, brand metrics, and historical data.
-    """
+    """Collects processing and brand metrics with retention-based cleanup."""
     
     def __init__(self, retention_hours: int = 24):
         self.retention_hours = retention_hours

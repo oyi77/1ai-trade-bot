@@ -56,7 +56,7 @@ check_due_reminders = lambda: []
 check_expired = lambda: []
 mark_expired = lambda cid: None
 set_reminder = lambda cid, label: None
-SUBS_PATH = str(PROJECT_DIR / "members.db")
+SUBS_PATH = str(Path(__file__).resolve().parent.parent.parent / "members.db")
 
 # ── Payment gateway ──
 try:

@@ -1,21 +1,13 @@
-# Unified API Layer
-# REST API for unified multi-brand trading bot
-
-"""
-Unified API Layer for Multi-Brand Trading Bot
-
-This module implements the REST API interface for the unified trading bot,
-providing endpoints for signal generation, brand management, and monitoring
-with whitelabel support.
-"""
+"""FastAPI REST endpoints: signals, brands, metrics, health."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -73,13 +65,7 @@ class MetricsResponse(BaseModel):
     processing_metrics: Dict[str, Dict[str, Any]] = Field(..., description="Processing metrics")
     brand_metrics: Dict[str, Dict[str, Any]] = Field(..., description="Brand metrics")
 class UnifiedAPIService:
-    """
-    Unified API service for multi-brand trading bot.
-    
-    This class implements the REST API interface for the unified trading bot,
-    providing endpoints for signal generation, brand management, and monitoring
-    with whitelabel support.
-    """
+    """FastAPI service exposing signal generation, brand CRUD, and metrics."""
     
     def __init__(self, config: APIConfig, brand_manager: BrandManager, 
                  signal_engine: UnifiedSignalEngine, metrics_collector: MetricsCollector):
@@ -319,12 +305,64 @@ class UnifiedAPIService:
                     message="Brands retrieved successfully",
                     data=[brand.to_dict() for brand in brands]
                 )
-                
+
             except Exception as e:
                 LOG.error("Error getting brands: %s", e)
                 return SignalResponse(
                     success=False,
                     message=str(e)
+                )
+
+        # ── Scalev Webhook ──────────────────────────────────────────
+
+        @self.app.post("/api/payments/notify")
+        async def scalev_webhook(request: Request):
+            """Scalev payment callback webhook.
+
+            Verifies HMAC-SHA256 signature, extracts order_id + status,
+            and marks the order as PAID in the local store."""
+            try:
+                body = await request.body()
+                signature = request.headers.get("X-Scalev-Signature", "")
+
+                from unified_bot.adapters.payment_adapter import ScalevAdapter
+                adapter = ScalevAdapter()
+                await adapter.initialize()
+
+                if not adapter.verify_webhook_signature(body, signature):
+                    return JSONResponse(
+                        {"success": False, "error": "Invalid signature"},
+                        status_code=403,
+                    )
+
+                data = json.loads(body) if body else {}
+                order_id = data.get("order_id") or data.get("data", {}).get("order_id", "")
+                status = data.get("status") or data.get("data", {}).get("status", "")
+                variant_id = data.get("variant_id") or data.get("data", {}).get("variant_id", 0)
+
+                if not order_id:
+                    return JSONResponse(
+                        {"success": False, "error": "Missing order_id"},
+                        status_code=400,
+                    )
+
+                if status.upper() == "PAID":
+                    plan_key = adapter.variant_id_to_plan(int(variant_id))
+                    ok, row = adapter.mark_order_paid(order_id, plan_key)
+                    LOG.info(
+                        "Scalev webhook: order=%s status=%s plan=%s",
+                        order_id, status, plan_key,
+                    )
+                    return {"success": True, "paid": True, "order_id": order_id, "plan_key": plan_key}
+
+                LOG.info("Scalev webhook: order=%s status=%s (not PAID, skipped)", order_id, status)
+                return {"success": True, "paid": False, "order_id": order_id}
+
+            except Exception as exc:
+                LOG.warning("Scalev webhook error: %s", exc)
+                return JSONResponse(
+                    {"success": False, "error": str(exc)[:200]},
+                    status_code=400,
                 )
     
     async def start(self) -> None:

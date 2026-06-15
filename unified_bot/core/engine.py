@@ -1,12 +1,4 @@
-# Unified Signal Engine
-# Core signal processing engine based on tradebot architecture
-
-"""
-Unified Signal Engine for Multi-Brand Trading Bot
-
-This module implements the core signal processing engine based on the tradebot
-architecture, with whitelabel support and brand-specific configurations.
-"""
+"""Core signal processing engine wrapping tradebot pipeline with whitelabel support."""
 
 from __future__ import annotations
 
@@ -26,16 +18,11 @@ from tradebot.models import Signal, Tick
 if TYPE_CHECKING:
     from .quality_gate import QualityGate
 
-from unified_bot.core.metrics import PipelineMetrics
+from unified_bot.core.metrics import ProcessingMetrics
 
 LOG = logging.getLogger(__name__)
 class UnifiedSignalEngine:
-    """
-    Unified signal engine for multi-brand trading bot.
-    
-    This engine combines the signal processing capabilities of tradebot with
-    whitelabel support, brand-specific configurations, and unified API integration.
-    """
+    """Signal pipeline wrapper with per-brand config, rate limiting, and quality gating."""
     
     def __init__(self, brand_manager: BrandManager):
         self.brand_manager = brand_manager
@@ -47,7 +34,7 @@ class UnifiedSignalEngine:
         self.quality_gate: Optional[QualityGate] = None
         
         # Unified metrics
-        self.metrics = PipelineMetrics()
+        self.metrics = ProcessingMetrics()
         
         # Brand-specific configuration
         self.brand_config: Optional[BrandConfiguration] = None

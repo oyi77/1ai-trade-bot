@@ -1,12 +1,4 @@
-# Quality Gate System
-# Signal quality filtering and validation for unified engine
-
-"""
-Quality Gate System for Unified Signal Engine
-
-This module implements signal quality filtering, validation, and quality assurance
-for the unified trading bot signal engine, with brand-specific quality settings.
-"""
+"""Signal quality filtering: strategies, validation, and per-brand adjustments."""
 
 from __future__ import annotations
 
@@ -88,12 +80,7 @@ class QualityGateConfig:
         if self.fallback_strategies is None:
             self.fallback_strategies = ["conservative", "moderate", "aggressive"]
 class QualityGate:
-    """
-    Signal quality gate for filtering and validation.
-    
-    This class implements signal quality filtering, validation, and quality
-    assurance for the unified signal engine, with brand-specific quality settings.
-    """
+    """Filters signals by confidence thresholds and quality strategies."""
     
     def __init__(self, config: QualityGateConfig):
         self.config = config

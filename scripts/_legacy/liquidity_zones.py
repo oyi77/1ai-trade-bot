@@ -240,7 +240,7 @@ def find_tp_targets(liquidity_map: LiquidityMap, sweep_direction: str) -> Tuple[
     elif liquidity_map.nearest_target:
         tp2 = liquidity_map.nearest_target.midpoint
     elif tp1:
-        if sweep_direction == "SELL":
+        if sweep_direction in ("SELL", "BEARISH"):
             tp2 = tp1 - abs(liquidity_map.current_price - tp1) * 0.5
         else:
             tp2 = tp1 + abs(tp1 - liquidity_map.current_price) * 0.5

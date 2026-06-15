@@ -52,7 +52,7 @@ class BrandConfig:
     owner_cut: float = 0.70       # Platform owner gets 70%
     reseller_cut: float = 0.20    # Reseller/whitelabel partner gets 20%
     referrer_cut: float = 0.10    # Referrer gets 10%
-    payment_methods: list = field(default_factory=lambda: ["tripay", "qris"])
+    payment_methods: list = field(default_factory=lambda: ["scalev", "bank_transfer"])
     is_active: bool = True
 
     @property
@@ -303,8 +303,7 @@ async def _handle_callback(update: Update, brand: BrandConfig):
 
         payment_url = None
         try:
-            sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-            from scripts.payment_tripay import create_transaction
+            from tradebot.services.payment import create_transaction
             user = update.effective_user
             cid = str(user.id)
             uname = user.username or user.first_name or "Trader"
@@ -314,7 +313,7 @@ async def _handle_callback(update: Update, brand: BrandConfig):
             if result.get("success") and result.get("data", {}).get("checkout_url"):
                 payment_url = result["data"]["checkout_url"]
         except Exception as e:
-            LOG.warning("Tripay transaction failed (brand=%s): %s", brand.brand_id, e)
+            LOG.warning("Scalev transaction failed (brand=%s): %s", brand.brand_id, e)
 
         if payment_url:
             price_str = f"Rp{amount:,}"

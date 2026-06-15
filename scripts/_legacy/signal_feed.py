@@ -30,7 +30,12 @@ MAX_FEED_ENTRIES = 500  # Keep last 500 signals in memory (older → archive)
 def _load_feed() -> dict:
     try:
         if FEED_FILE.exists():
-            return json.loads(FEED_FILE.read_text())
+            raw = json.loads(FEED_FILE.read_text())
+            if isinstance(raw, list):
+                # legacy format: upgrade bare list → dict with "signals" key
+                return {"signals": raw, "stats": {"total": len(raw), "tp": 0, "sl": 0, "pending": 0}}
+            if isinstance(raw, dict):
+                return raw
     except Exception:
         pass
     return {"signals": [], "stats": {"total": 0, "tp": 0, "sl": 0, "pending": 0}}
@@ -109,9 +114,21 @@ def update_outcome(symbol: str, entry_price: float, result: str, pips: float):
     """Mark a signal as TP or SL."""
     feed = _load_feed()
     updated = False
+    # Asset-aware threshold: XAU=5.0, crypto=200, forex=0.005, USOIL=0.3
+    sym = symbol.upper()
+    if sym in ("XAUUSD", "GOLD"):
+        threshold = 5.0
+    elif sym in ("BTCUSD", "ETHUSD"):
+        threshold = 200.0
+    elif sym in ("USOIL", "OIL"):
+        threshold = 0.3
+    elif sym.endswith("JPY"):
+        threshold = 0.5
+    else:
+        threshold = 0.005  # forex 5-digit
     for sig in feed["signals"]:
         if (sig["symbol"] == symbol.upper() and 
-            abs(sig["entry"] - entry_price) < 5.0 and
+            abs(sig["entry"] - entry_price) < threshold and
             sig["status"] == "pending"):
             sig["status"] = result.lower()
             sig["outcome_pips"] = round(float(pips), 1)
@@ -281,9 +298,9 @@ def fmt_signal_unified(
     
     # ═══ SECTION 6: DONATION CTA ═══
     lines.append("")
-    lines.append(f"\U0001f49a <b>Kalau sinyal ini cuan, isi bensin AI!</b>")
+    lines.append(f"\U0001f49a <b>Kalau sinyal ini cuan, subscription!</b>")
     lines.append(f"Server analisa 24/7 butuh biaya API & GPU.")
-    lines.append(f"\U0001f449 /donate — dukung seikhlasnya, AKTIF PERMANEN")
+    lines.append(f"\U0001f449 /subscribe — dukung seikhlasnya, AKTIF PERMANEN")
     
     # ═══ SECTION 7: SOURCE TAG ═══
     lines.append("")

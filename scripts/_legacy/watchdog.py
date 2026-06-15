@@ -83,14 +83,9 @@ def check_bot_responsive():
     return True
 
 def restart_bot():
-    """Restart the bot service. Returns True if successful."""
-    try:
-        subprocess.run(["sudo", "systemctl", "restart", "vilona-tradefx-bot"], timeout=15, check=True)
-        logger.info("Bot restarted successfully")
-        return True
-    except Exception as e:
-        logger.error(f"Restart failed: {e}")
-        return False
+    """Restart the bot service is DISABLED during system recovery."""
+    logger.warning("Watchdog restart is BLOCKED: vilona-tradefx-bot.service is disabled")
+    return False
 
 def main():
     state = {"consecutive_fails": 0, "total_restarts": 0, "last_restart": None}

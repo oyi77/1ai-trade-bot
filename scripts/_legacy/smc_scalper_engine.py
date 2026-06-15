@@ -167,7 +167,7 @@ class SMCConfirmation:
 
     @property
     def grade(self) -> Grade:
-        return Grade.from_score(self.score, 18)
+        return Grade.from_score(self.score, 20)
 
     def _reasons_id(self, symbol: str) -> list[str]:
         """Alasan dalam bahasa Indonesia — World Class SMC v2."""
@@ -262,7 +262,7 @@ def detect_choch(ohlcv: list[dict], lookback: int = 50) -> dict | None:
             mid_lows = [l for l in swing_lows 
                        if swing_highs[i][0] < l[0] < swing_highs[i+1][0]]
             if mid_lows:
-                last_low = min(mid_lows, key=lambda x: x[0])
+                last_low = min(mid_lows, key=lambda x: x[1])  # lowest PRICE
                 if last_close < last_low[1]:
                     return {"direction": "SELL", "price": last_low[1], "index": len(bars) - 1}
     
@@ -862,6 +862,7 @@ def analyze_smc_scalper(
     result["_idm"] = idm
     result["_false_break"] = false_break
     result["_sd_zones"] = sd_zones
+    result["_ob"] = ob
 
     return result
 

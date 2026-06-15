@@ -122,7 +122,7 @@ def _bars_to_dicts(bars: list) -> list[dict]:
 
 # ════════════════════════════════════════════════════════════════
 # MTF DATA — FROM EA BRIDGE (MT5 Exness — priority) + yfinance fallback
-# ════════════════════════════════════════════════════════════════
+# MTF DATA — FROM EA BRIDGE (MT5 Exness — priority) + RapidAPI/yfinance fallback
 
 def push_mt5_ohlcv(symbol: str, tf: str, bars: list[dict]):
     """Called by bridge when EA pushes MT5 OHLCV data."""
@@ -805,7 +805,21 @@ def _compute_hierarchical_verdict(tf_results: dict[str, dict]) -> dict:
 
     # Final verdict
     threshold = 0.35  # Need at least 35% weighted consensus
-    if weighted_buy_norm > threshold and weighted_buy_norm > weighted_sell_norm:
+
+    # ── MTF alignment check FIRST (for CONFLICT label) ──
+    alignment_ratio = alignment_count / max(total_tfs, 1)
+    if alignment_ratio >= 0.6:
+        mtf_alignment = "ALIGNED"
+    elif alignment_ratio >= 0.3:
+        mtf_alignment = "MIXED"
+    else:
+        mtf_alignment = "CONFLICT"
+
+    # ── CONFLICT override: force HOLD regardless of weighted score ──
+    if mtf_alignment == "CONFLICT":
+        verdict = "HOLD"
+        consensus_score = 0.0
+    elif weighted_buy_norm > threshold and weighted_buy_norm > weighted_sell_norm:
         verdict = "BUY"
         consensus_score = weighted_buy_norm
     elif weighted_sell_norm > threshold and weighted_sell_norm > weighted_buy_norm:
@@ -814,15 +828,6 @@ def _compute_hierarchical_verdict(tf_results: dict[str, dict]) -> dict:
     else:
         verdict = "HOLD"
         consensus_score = max(weighted_buy_norm, weighted_sell_norm)
-
-    # MTF alignment
-    alignment_ratio = alignment_count / max(total_tfs, 1)
-    if alignment_ratio >= 0.6:
-        mtf_alignment = "ALIGNED"
-    elif alignment_ratio >= 0.3:
-        mtf_alignment = "MIXED"
-    else:
-        mtf_alignment = "CONFLICT"
 
     return {
         "verdict": verdict,
