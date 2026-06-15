@@ -578,6 +578,33 @@ async def api_live_snapshot():
     # Signal stats
     sig_stats = _signal_stats()
 
+    # Backtest results
+    backtest_data = {}
+    try:
+        bt = _get_backtest_data()
+        if bt:
+            bt_xau = bt.get("xauusd", {})
+            backtest_data = {
+                "winrate": bt_xau.get("winrate", 0),
+                "total_trades": bt_xau.get("trades", 0),
+                "total_pips": bt_xau.get("total_pips", 0),
+                "period": bt_xau.get("period", ""),
+            }
+    except Exception:
+        pass
+
+    # Quality gate monitoring — blocked signals count
+    qg_blocked = 0
+    qg_reasons = {}
+    try:
+        c = conn.cursor()  # reuse members db conn
+        c.execute("SELECT reason, COUNT(*) as cnt FROM quality_gate_log WHERE created_at >= ? GROUP BY reason ORDER BY cnt DESC LIMIT 5", (today_str,))
+        for row in c.fetchall():
+            qg_reasons[row[0]] = row[1]
+            qg_blocked += row[1]
+    except Exception:
+        pass
+
     return {
         "type": "dashboard_snapshot",
         "status": {
@@ -614,6 +641,11 @@ async def api_live_snapshot():
             "total": sig_stats.get("total", 0),
             "tp": sig_stats.get("tp", 0),
             "sl": sig_stats.get("sl", 0),
+        },
+        "backtest": backtest_data,
+        "quality_gate": {
+            "blocked_today": qg_blocked,
+            "reasons": qg_reasons,
         },
     }
 
