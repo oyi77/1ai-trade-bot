@@ -3919,27 +3919,28 @@ def handle_command(cmd, text, chat_id, msg):
             if is_donor:
                 # ── 2a. DYNAMIC CONTENT: PAID (PRO / ELITE / LIFETIME) ──
                 welcome += (
-                    f"📊 Status: <b>SUBSCRIBER 👑</b>\n"
-                    f"⚡️ Kuota AI: <b>UNLIMITED ♾️</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📊 <b>AKSES VIP KAMU:</b>\n"
-                    f"📥 Download EA MT5: phantomfx.aitradepulse.com/ea/download/\n"
-                    f"🔑 Cek Licensi EA: /mykey\n"
-                    f"🌐 Bridge Dashboard: phantomfx.aitradepulse.com\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🧠 /signal — Signal dari 9 engines\n"
-                    f"🏛 /levels — SnR + FIBO + Engine Deep Dive 👑\n"
-                    f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
-                    f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
-                    f"💀 /stier — S-TIER Zone GOD TIER 👑\n"
-                    f"📡 /ahz_radar — Apex Hunt Radar — zona AHZ Harmonic\n"
-                    f"🕐 /session — Killzone + Session Level 🆕\n"
-                    f"📰 /news — Market Intel: macro catalyst analysis 👑\n"
-                    f"📊 /dashboard — Live dashboard web\n"
-                    f"📱 /help — Semua command\n"
-                    f"⚡️ Perpanjang/Upgrade Tier → /subscribe\n"
+                    f"📊 <b>STATUS: SUBSCRIBER 👑</b>\n"
+                    f"⚡ Kuota AI: <b>UNLIMITED ♾️</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📥 EA Download: phantomfx.aitradepulse.com/ea/\n"
+                    f"🔑 Licensi: /mykey | 🌐 Dashboard: /dashboard\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🧠 <b>AI SIGNALS</b>\n"
+                    f"  /signal — 9 Engines MTF | /stier — S-TIER\n"
+                    f"  /ahz_radar — AHZ + Killer Zone\n"
                     f"\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📊 <b>ANALYSIS</b>\n"
+                    f"  /levels — SnR+FIBO | /zones — OB+FVG\n"
+                    f"  /structure — BOS/CHoCH | /session — Killzone\n"
+                    f"  /news — Market Intel | /dashboard — Web\n"
+                    f"\n"
+                    f"⏰ <b>REALTIME</b>\n"
+                    f"  /autosync — Auto EA | /trailing — Trailing\n"
+                    f"  /price — Harga | /killzone — Session Radar\n"
+                    f"\n"
+                    f"📱 /help — Semua command lengkap\n"
+                    f"\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"🤝 <b>GOTONG ROYONG:</b>\n"
                     f"Ajak teman trader lu — setiap 3 orang yang\n"
                     f"gabung lewat link referral lu, dapet <b>PRO 7 hari GRATIS!</b>\n"
@@ -3949,15 +3950,18 @@ def handle_command(cmd, text, chat_id, msg):
                 # ── 2b. DYNAMIC CONTENT: FREE ──
                 quota_line = f"{quota['remaining']}/{FREE_QUOTA_PER_DAY} Analisa/Hari"
                 welcome += (
-                    f"📊 Status: <b>FREE TIER</b>\n"
-                    f"⚡️ Kuota AI: {quota_line}\n"
-                    f"🔒 SL/TP: <b>Dikunci (Subscriber Only)</b>\n"
-                    f"❌ Akses EA: <b>Restricted</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"Akses kamu sangat dibatasi. Upgrade sekarang\n"
-                    f"untuk membuka full SL/TP, kuota unlimited, dan\n"
-                    f"akses rahasia ke EA Auto-Trade!\n"
-                    f"Ketik /subscribe atau klik tombol di bawah.\n\n💡 <b>Gak mau bayar? Ajak teman!</b>\n3 referral = <b>PRO 7 hari GRATIS</b> → /referral"
+                    f"📊 <b>STATUS: FREE TIER</b>\n"
+                    f"⚡ Kuota AI: {quota_line}\n"
+                    f"🔒 SL/TP: Subscriber Only\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"Ketik /subscribe untuk buka:\n"
+                    f"  ✅ SL/TP + AUTO-EA\n"
+                    f"  ✅ Kuota Unlimited AI\n"
+                    f"  ✅ Akses Signal Full Engines\n"
+                    f"\n"
+                    f"💡 <b>Gak mau bayar?</b>\n"
+                    f"Ajak 3 teman = <b>PRO 7 hari GRATIS!</b>\n"
+                    f"🔗 /referral\n"
                 )
 
             # ── 3. Interactive onboarding buttons (tetap 3 tombol) ──
@@ -4086,46 +4090,53 @@ def handle_command(cmd, text, chat_id, msg):
     elif cmd == "/help":
         help_lines = [
             "⚙️ <b>VILONA AI — COMMAND CENTER</b>",
-            "━━━━━━━━━━━━━━━━",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
             "Ketik command di bawah untuk memberi instruksi pada AI.",
             "",
-            "🟢 <b>GENERAL & SETUP</b>",
-            "/start — Reboot Markas Komando",
-            "/status — Cek Kuota & Akses Tier",
-            "/subscribe — Upgrade Tier ⚡️",
-            "/referral — Link Referral (Bawa 3 Teman = PRO Gratis!)",
-            "/price — Cek harga market real-time",
-            "/help — Buka menu panduan ini",
+            "🟢 <b>GENERAL</b>",
+            "  /start — Reboot Markas Komando",
+            "  /help — Buka menu panduan ini",
+            "  /status — Cek kuota & akses tier",
+            "  /price — Harga market real-time",
+            "  /session — Sesi market + level WIB",
+            "  /killzone — Radar sesi London/NY",
+            "  /myid — Lihat Telegram ID kamu",
+            "  /subscribe — Upgrade tier ⚡",
+            "  /referral — Program referral + reward",
             "",
-            "🤝 <b>GOTONG ROYONG (REFERRAL)</b>",
-            "/referral — Lihat Link & Statistik Referral",
-            "💰 3 Teman Gabung = PRO 7 Hari GRATIS!",
-            "💰 10 Teman Gabung = ELITE 30 Hari GRATIS!",
-            "📢 Share link lu ke grup trader, sosmed, dll",
+            "🧠 <b>AI SIGNALS</b>",
+            "  /analyze — AI scan market (FREE 3x/hari)",
+            "  /signal — Signal MTF + 9 engines 👑",
+            "  /mtf — Matrix 5TF × 9 engines 👑",
+            "  /stier — S-TIER Zone GOD TIER 👑",
+            "  /ahz_radar — Apex Hunt Radar + Killer Zone 👑",
+            "  /engines — Detail semua engines active",
             "",
-            "🧠 <b>AI SIGNAL GENERATOR</b>",
-            "/analyze — Perintahkan AI Scan Market (FREE: 3x/hari)",
-            "/signal — Generate sinyal dari MTF + 9 engines 👑",
-            "/mtf — Matrix 5TF × 9 engines (top-down) 👑",
+            "📊 <b>MARKET ANALYSIS</b>",
+            "  /zones — OB + FVG + Supply/Demand 👑",
+            "  /levels — SnR + FIBO + Deep Dive 👑",
+            "  /structure — BOS/CHoCH + Trend Alignment 👑",
+            "  /data — Data OHLCV mentah 👑",
+            "  /news — Market intel dari X/Twitter 👑",
+            "  /mapping — Multi-symbol mapping view 👑",
             "",
-            "🔍 <b>TECHNICAL ANALYSIS (SMC & PA)</b>",
-            "/zones — Order Blocks + FVG + Supply/Demand 👑",
-            "/structure — BOS/CHoCH + Trend Alignment 👑",
-            "/stier — S-TIER Zone GOD TIER 👑",
-            "/ahz_radar — Apex Hunt Radar — zona AHZ Harmonic 👑",
-            "📊 <b>TRADING TOOLS & DATA</b>",
-            "/levels — SnR + FIBO + Engine Deep Dive 👑",
-            "/news — Market Intel — X/Twitter intel 👑",
-            "/killzone — Radar sesi market aktif",
-            "/recap — Rekap & riwayat performa trade",
+            "⚙️ <b>TRADING SYSTEMS</b>",
+            "  /autosync — Auto-trade ke EA 👑",
+            "  /bridge_status — Status koneksi EA 👑",
+            "  /mykey — Cek license EA kamu 👑",
+            "  /dashboard — Live dashboard web 👑",
+            "  /trailing — Set trailing stop EA 👑",
+            "  /recap — Rekap performa trading harian",
+            "  /winrate — Statistik win rate",
+            "  /history — Riwayat sinyal terakhir",
             "",
-            "🔧 <b>POWER TOOLS & EA (SUBSCRIBER ONLY)</b>",
-            "/autosync — Auto-trade ke EA 👑",
-            "/bridge_status — Cek koneksi EA 👑",
-            "/mykey — Cek License EA kamu 👑",
-            "/dashboard — Buka live dashboard web 👑",
+            "👑 <b>PREMIUM TOOLS</b>",
+            "  /donate — Donasi support developer",
+            "  /learn_report — Laporan pembelajaran AI",
+            "  /referral — Ajak teman = PRO/ELITE gratis",
             "",
-            "━━━━━━━━━━━━━━━━",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "💡 <b>Tier:</b> 👑 = Premium (PRO/ELITE/LIFETIME)",
             "📞 Bantuan / Investor: @codergaboets",
         ]
         tg_send("\n".join(help_lines), chat_id)
