@@ -527,6 +527,8 @@ async def api_live_snapshot():
     wins = trade_stats.get("wins", 0)
     losses = trade_stats.get("losses", 0)
     win_rate = round(trade_stats.get("win_rate", 0), 1)
+    if win_rate == 0 and wins + losses > 0:
+        win_rate = round(wins / (wins + losses) * 100, 1)
     total_pips = round(trade_stats.get("total_pips", 0), 1)
     total_pnl = round(trade_stats.get("total_profit_usd", 0), 1)
 
