@@ -6,7 +6,7 @@ import logging
 from enum import Enum, auto
 from typing import Any
 
-from trading_bot.engine.events import ERROR, EventBus
+from trading_bot.engine.events import ERROR, SIGNAL, EventBus, signal_event
 from trading_bot.engine.portfolio import PortfolioTracker
 from trading_bot.engine.risk import RiskManager
 from trading_bot.strategies.base import BaseStrategy, StrategySignal
@@ -178,6 +178,11 @@ class TradingOrchestrator:
                     LOG.debug("Signal %s rejected: %s", name, pos_reason)
                     continue
 
+                # Emit signal event on the bus so the executor can act.
+                await self._event_bus.publish(
+                    SIGNAL,
+                    **signal_event(signal).data,
+                )
                 signals.append(signal)
 
             except Exception as exc:
