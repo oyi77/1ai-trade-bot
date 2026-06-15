@@ -992,27 +992,14 @@ class SignalHandler(BaseHTTPRequestHandler):
                 log.error(f"/api/donations error: {e}")
                 self._json({"total_raised": 0, "error": str(e)})
         elif path == "/api/create-payment":
-            """Create Tripay payment for LP visitor. Params: amount (int), method (str, default QRIS2).
-            POST body (optional): {"merchant_ref": "click_id_from_bemob"}"""
+            """Create Midtrans payment for LP visitor. Params: amount (int)."""
             try:
                 amount = int(params.get("amount", ["50000"])[0])
-                method = params.get("method", ["QRIS2"])[0]
             except ValueError:
                 self._json({"error": "Invalid amount"}, 400)
                 return
 
-            # Read merchant_ref (BeMob click_id) from POST body if provided
-            custom_merchant_ref = None
-            try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                if content_length > 0:
-                    body_raw = self.rfile.read(content_length)
-                    body = json.loads(body_raw.decode())
-                    custom_merchant_ref = body.get("merchant_ref", "").strip() or None
-            except (json.JSONDecodeError, ValueError, KeyError):
-                pass  # No body or invalid JSON → use auto-generated ref
-
-            # Map amount to tier
+            # Map amount to tier (matches midtrans_service.py TIER_BY_AMOUNT)
             if amount >= 500000:
                 tier = "lifetime"
             elif amount >= 150000:
@@ -1020,22 +1007,18 @@ class SignalHandler(BaseHTTPRequestHandler):
             else:
                 tier = "pro"
 
-            # Generate web session ID for LP visitors
             import secrets
             session_id = f"web_{int(time.time())}_{secrets.token_hex(4)}"
 
             try:
-                # Add project root to path so members module can be imported
                 if PROJECT_DIR not in sys.path:
                     sys.path.insert(0, PROJECT_DIR)
-                from members.payment import create_tripay_payment
-                result = create_tripay_payment(
+                from members.payment import create_midtrans_payment
+                result = create_midtrans_payment(
                     chat_id=session_id,
                     username="LP_Visitor",
                     tier=tier,
-                    method=method,
                     amount=amount,
-                    merchant_ref=custom_merchant_ref,
                 )
                 if "error" in result:
                     self._json({"error": result["error"]}, 500)

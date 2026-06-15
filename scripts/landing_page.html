@@ -1135,19 +1135,19 @@ async function fetchNews(){
   }
 }
 
-// ─── DIRECT PAYMENT ───
+// ─── DIRECT PAYMENT (Midtrans) ───
 function directPay(amount){
   var ps=$('pay-status');
-  ps.innerHTML='⏳ Membuat invoice...';
-  fetch(BRIDGE+'/api/create-payment?amount='+amount+'&method=QRIS2',{signal:AbortSignal.timeout(10000)})
+  ps.innerHTML='⏳ Membuka pembayaran Midtrans...';
+  fetch(BRIDGE+'/api/create-payment?amount='+amount,{signal:AbortSignal.timeout(15000)})
     .then(function(r){return r.json()})
     .then(function(d){
       if(d.error){ps.innerHTML='❌ '+d.error;return}
-      if(d.payment_url){
-        ps.innerHTML='✅ Invoice siap! <a href="'+d.payment_url+'" target="_blank" style="color:var(--cyan);font-weight:600">Klik bayar via QRIS/VA</a>';
-        window.open(d.payment_url,'_blank');
-      }else if(d.qr_url){
-        ps.innerHTML='✅ Scan QRIS: <br><img src="'+d.qr_url+'" style="width:140px;border-radius:8px;margin-top:6px">';
+      if(d.redirect_url){
+        ps.innerHTML='✅ Mengarahkan ke Midtrans...';
+        window.open(d.redirect_url,'_blank');
+      }else if(d.payment_url){
+        ps.innerHTML='✅ <a href="'+d.payment_url+'" target="_blank" style="color:var(--cyan);font-weight:600">Klik bayar</a>';
       }
     })
     .catch(function(e){ps.innerHTML='❌ Gagal: '+e.message});
