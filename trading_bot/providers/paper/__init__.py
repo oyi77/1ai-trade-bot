@@ -1,0 +1,1 @@
+"""Paper (simulated) trading provider."""
