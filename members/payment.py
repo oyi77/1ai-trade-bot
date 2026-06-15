@@ -527,7 +527,27 @@ def create_scalev_payment(chat_id: str, username: str, tier: str = "pro",
     except Exception:
         pass
 
-    payment_url = f"{SCALEV_CHECKOUT_URL}?variant_ids={variant_id}&qty=1"
+    payment_url = f"{SCALEV_CHECKOUT_URL}?variant_ids={variant_id}&qty=1&notes={chat_id}"
+
+    # Save mapping: ref → chat_id for webhook lookup
+    try:
+        import json as _json
+        map_file = Path(__file__).resolve().parent.parent / "data" / "vilona_tradefx" / "scalev_pending.json"
+        map_file.parent.mkdir(parents=True, exist_ok=True)
+        data = {}
+        if map_file.exists():
+            data = _json.loads(map_file.read_text())
+        data[ref] = {
+            "chat_id": str(chat_id),
+            "username": username,
+            "tier": tier,
+            "amount": price,
+            "variant_id": variant_id,
+            "timestamp": time.time(),
+        }
+        map_file.write_text(_json.dumps(data, indent=2))
+    except Exception as e:
+        logger.warning(f"Failed to save ScaleV pending map: {e}")
 
     try:
         from members import save_pending_order

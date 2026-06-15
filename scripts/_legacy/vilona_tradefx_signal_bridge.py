@@ -1660,13 +1660,32 @@ class SignalHandler(BaseHTTPRequestHandler):
             variant_map = {530141: "pro", 530142: "elite", 530143: "lifetime"}
             tier = variant_map.get(int(variant_id) if variant_id else 0, "pro")
 
-            # Find chat_id from notes (tg://xxx) or by phone
+            # Find chat_id from notes (tg://xxx) or by phone, or from pending orders
             chat_id = None
             if "tg://" in str(notes):
                 try:
                     chat_id = str(notes).split("tg://")[1].split()[0]
                 except Exception:
                     pass
+            # Try pending orders map (ref→chat_id)
+            if not chat_id:
+                try:
+                    pending_path = os.path.join(PROJECT_DIR, "data", "vilona_tradefx", "scalev_pending.json")
+                    if os.path.exists(pending_path):
+                        with open(pending_path) as f:
+                            pending = json.load(f)
+                        # Match by phone in customer data
+                        for ref, info in pending.items():
+                            if phone and info.get("phone") == phone:
+                                chat_id = info.get("chat_id")
+                                break
+                        # Fallback: match most recent pending order (user likely paid right after getting link)
+                        if not chat_id and pending:
+                            latest = max(pending.values(), key=lambda x: x.get("timestamp", 0))
+                            chat_id = latest.get("chat_id")
+                except Exception as e:
+                    log.warning(f"[SCALEV-WEBHOOK] pending lookup failed: {e}")
+            # Phone lookup in members DB
             if not chat_id and phone:
                 try:
                     members_path = os.path.join(PROJECT_DIR, "data", "vilona_tradefx", "members.db")
