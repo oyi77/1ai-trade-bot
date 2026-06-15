@@ -679,7 +679,7 @@ def post_signal_to_bridge(sig: dict, price: float, display: str = "XAUUSD") -> N
         "entry": entry,
         "zone_lo": sig.get("zone_lo", entry),
         "zone_hi": sig.get("zone_hi", entry),
-        "entry_mode": sig.get("entry_mode", "market"),
+        "entry_mode": sig.get("entry_mode", "zone"),
         "sl": sl,
         "tp": tp,
         "tp1": sig.get("tp1", sig.get("tp", 0)),

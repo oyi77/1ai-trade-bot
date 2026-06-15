@@ -403,39 +403,43 @@ def main():
                             logger.info(f"⏭️ SLIPPAGE SKIP (zone mode): entry=${sig_entry:.2f} live=${live_check} — drift expected, EA will wait for zone")
 
                         # ── ZONE MODE: wait for price to enter zone instead of immediate entry ──
-                        entry_mode = sig.get("entry_mode", "market")
+                        entry_mode = sig.get("entry_mode", "zone")
                         if entry_mode == "zone":
                             zone_lo = sig.get("zone_lo", 0)
                             zone_hi = sig.get("zone_hi", 0)
-                            live_check = live_check or fetch_price(sig_symbol)
-                            if live_check and zone_lo < zone_hi and (zone_lo <= live_check <= zone_hi):
-                                # Price already in zone — execute immediately (fall through)
-                                logger.info(f"🎯 ZONE MODE: price=${live_check:.2f} already inside zone=[${zone_lo:.2f}-${zone_hi:.2f}] — executing now")
+                            # ── No meaningful zone spread → execute as market ──
+                            if zone_lo == zone_hi:
+                                logger.info(f"🎯 ZONE MODE: zone_lo==zone_hi (${zone_lo:.2f}) — treating as market execution")
                             else:
-                                # Price outside zone — queue for zone-wait
-                                pending_entry = {
-                                    "created_ts": time.time(),
-                                    "symbol": sig_symbol,
-                                    "entry": sig_entry,
-                                    "zone_lo": zone_lo,
-                                    "zone_hi": zone_hi,
-                                    "sl": sig.get("sl", 0),
-                                    "tp": sig.get("tp", 0),
-                                    "signal": dict(sig),
-                                    "action": sig.get("action", "HOLD"),
-                                    "entry_timeout": sig.get("entry_timeout", 1800),
-                                }
-                                state.setdefault("pending_zone_signals", []).append(pending_entry)
-                                state["signals_processed"] += 1
-                                state["last_signal_id"] = sig_fp
-                                save_state(state)
-                                live_str = f"${live_check:.2f}" if live_check else "N/A"
-                                logger.info(
-                                    f"⏳ ZONE PENDING: {sig['action']} {sig_symbol} | "
-                                    f"zone=[${zone_lo:.2f}-${zone_hi:.2f}] | live={live_str} | "
-                                    f"waiting for price to reach zone (timeout=30m)"
-                                )
-                                continue  # skip position creation — zone monitor will handle it
+                                live_check = live_check or fetch_price(sig_symbol)
+                                if live_check and zone_lo < zone_hi and (zone_lo <= live_check <= zone_hi):
+                                    # Price already in zone — execute immediately (fall through)
+                                    logger.info(f"🎯 ZONE MODE: price=${live_check:.2f} already inside zone=[${zone_lo:.2f}-${zone_hi:.2f}] — executing now")
+                                else:
+                                    # Price outside zone — queue for zone-wait
+                                    pending_entry = {
+                                        "created_ts": time.time(),
+                                        "symbol": sig_symbol,
+                                        "entry": sig_entry,
+                                        "zone_lo": zone_lo,
+                                        "zone_hi": zone_hi,
+                                        "sl": sig.get("sl", 0),
+                                        "tp": sig.get("tp", 0),
+                                        "signal": dict(sig),
+                                        "action": sig.get("action", "HOLD"),
+                                        "entry_timeout": sig.get("entry_timeout", 1800),
+                                    }
+                                    state.setdefault("pending_zone_signals", []).append(pending_entry)
+                                    state["signals_processed"] += 1
+                                    state["last_signal_id"] = sig_fp
+                                    save_state(state)
+                                    live_str = f"${live_check:.2f}" if live_check else "N/A"
+                                    logger.info(
+                                        f"⏳ ZONE PENDING: {sig['action']} {sig_symbol} | "
+                                        f"zone=[${zone_lo:.2f}-${zone_hi:.2f}] | live={live_str} | "
+                                        f"waiting for price to reach zone (timeout=30m)"
+                                    )
+                                    continue  # skip position creation — zone monitor will handle it
 
                         pos = {
                             "id": f"ea_{int(time.time()*1000)}",
