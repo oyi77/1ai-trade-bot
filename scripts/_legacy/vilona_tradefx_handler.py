@@ -7861,63 +7861,57 @@ RECAP_SENT_FILE = DATA_DIR / ".last_recap_date"
 WEEKLY_SENT_FILE = DATA_DIR / ".last_weekly_date"
 
 def _compute_daily_recap() -> str | None:
-    """Generate end-of-day recap: signals, pips, winrate per asset."""
+    """Generate end-of-day recap: trades, pips, winrate from trade_history.json."""
     today = wib_now()
     today_str = today.strftime("%Y%m%d")
     lines = [f"📊 <b>DAILY RECAP — {today.strftime('%d %b %Y')}</b>", "━━━━━━━━━━━━━━━━"]
-    total_signals = 0
+    total_trades_count = 0
     total_wins = 0
     total_losses = 0
     total_pips = 0.0
-    
-    # Load today's trades from trade_history.json
+
+    # Load today's trades from trade_history.json — SINGLE SOURCE OF TRUTH
     today_trades = []
     try:
         hist_file = Path(__file__).resolve().parent.parent / "data" / "trade_history.json"
         if hist_file.exists():
-            all_trades = json.loads(hist_file.read_text()).get("trades", [])
-            today_trades = [t for t in all_trades 
-                          if str(t.get("open_time", t.get("close_time", "")))[:10] == today.strftime("%Y-%m-%d")]
+            all_data = json.loads(hist_file.read_text())
+            all_trades = all_data.get("trades", [])
+            today_iso = today.strftime("%Y-%m-%d")
+            today_trades = [t for t in all_trades
+                          if str(t.get("open_time", t.get("close_time", "")))[:10] == today_iso]
     except Exception:
         pass
-    
+
+    if not today_trades:
+        return None
+
     for pair_key, disp in [("gold","XAUUSD"), ("btc","BTCUSD")]:
-        log = load_signal_log(pair_key)
-        sigs = log.get("signals_sent", 0)
-        if sigs == 0 and not any(t.get("symbol","").upper() == disp for t in today_trades):
+        pair_trades = [t for t in today_trades if t.get("symbol","").upper() == disp]
+        if not pair_trades:
             continue
-        total_signals += sigs
-        
-        wins = 0; losses = 0; pips = 0.0
-        for t in today_trades:
-            if t.get("symbol", "").upper() == disp:
-                outcome = t.get("outcome", "").upper()
-                if outcome == "TP_HIT":
-                    wins += 1
-                    pips += abs(float(t.get("pips", 0) or 0))
-                elif outcome == "SL_HIT":
-                    losses += 1
-                    pips -= abs(float(t.get("pips", 0) or 0))
-        
+
+        wins = sum(1 for t in pair_trades if t.get("outcome","").upper() == "TP_HIT")
+        losses = sum(1 for t in pair_trades if t.get("outcome","").upper() == "SL_HIT")
+        pips = sum(float(t.get("pips",0) or 0) for t in pair_trades if t.get("outcome","").upper() in ("TP_HIT","SL_HIT"))
+
         total_wins += wins
         total_losses += losses
         total_pips += pips
-        
+        total_trades_count += len(pair_trades)
+
         wr = f"{(wins/(wins+losses)*100):.0f}%" if (wins+losses) > 0 else "N/A"
-        lines.append(f"🏷 <b>{disp}</b>: {sigs} sinyal | {wins}W/{losses}L | WR {wr} | {pips:+.1f} pip")
-    
-    if total_signals == 0 and not today_trades:
-        return None
-    
-    total_trades = total_wins + total_losses
-    overall_wr = f"{(total_wins/total_trades*100):.0f}%" if total_trades > 0 else "N/A"
+        lines.append(f"🏷 <b>{disp}</b>: {len(pair_trades)} trades | {wins}W/{losses}L | WR {wr} | {pips:+.1f} pip")
+
+    total_closed = total_wins + total_losses
+    overall_wr = f"{(total_wins/total_closed*100):.0f}%" if total_closed > 0 else "N/A"
     lines.append("━━━━━━━━━━━━━━━━")
-    lines.append(f"📈 <b>Total</b>: {total_signals} sinyal | {total_wins}W/{total_losses}L | WR {overall_wr} | {total_pips:+.1f} pip")
+    lines.append(f"📈 <b>Total</b>: {total_trades_count} trades | {total_wins}W/{total_losses}L | WR {overall_wr} | {total_pips:+.1f} pip")
     lines.append("")
     if total_pips > 0:
         lines.append("🟢 <b>PROFIT HARI INI!</b> Mesin AI bekerja dengan baik.")
     elif total_pips < 0:
-        lines.append("🔴 <b>LOSS HARI INI.</b> Evaluasi ulang strategi, mungkin market sideways.")
+        lines.append("🔴 <b>LOSS HARI INI.</b> Catat lesson-nya dan perbaiki.")
     else:
         lines.append("⚪ <b>BREAKEVEN.</b> Tidak ada sinyal yang tersentuh TP/SL.")
     lines.append("")
@@ -7976,10 +7970,10 @@ def _compute_weekly_report() -> str | None:
         wr = f"{(wins/(wins+losses)*100):.0f}%" if (wins+losses) > 0 else "N/A"
         lines.append(f"🏷 <b>{disp}</b>: {sigs} sinyal | {wins}W/{losses}L | WR {wr} | {pips:+.1f} pip")
     
-    total_trades = total_wins + total_losses
-    overall_wr = f"{(total_wins/total_trades*100):.0f}%" if total_trades > 0 else "N/A"
+    total_closed = total_wins + total_losses
+    overall_wr = f"{(total_wins/total_closed*100):.0f}%" if total_closed > 0 else "N/A"
     lines.append("━━━━━━━━━━━━━━━━")
-    lines.append(f"📊 <b>Minggu Ini</b>: {total_signals} sinyal | {total_wins}W/{total_losses}L | WR {overall_wr} | {total_pips:+.1f} pip")
+    lines.append(f"📊 <b>Minggu Ini</b>: {total_trades} trades | {total_wins}W/{total_losses}L | WR {overall_wr} | {total_pips:+.1f} pip")
     lines.append("")
     if total_pips > 0:
         lines.append("🟢 <b>PROFITABLE WEEK!</b> 🚀")
