@@ -550,7 +550,8 @@ async def api_live_snapshot():
             c.execute("SELECT COUNT(DISTINCT chat_id) FROM subscriber_activity WHERE created_at >= ?", (today_str,))
             row = c.fetchone()
             active_today = row[0] if row else 0
-            c.execute("SELECT COUNT(DISTINCT chat_id) FROM subscriber_activity")
+            # bot_users = ALL members (free + paid) = total user base
+            c.execute("SELECT COUNT(*) FROM members")
             row = c.fetchone()
             bot_users = row[0] if row else 0
             conn.close()
