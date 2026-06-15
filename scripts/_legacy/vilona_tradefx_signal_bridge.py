@@ -465,6 +465,9 @@ class SignalHandler(BaseHTTPRequestHandler):
             "signal_id": sig.get("signal_id", ""),
             "symbol": sig.get("symbol", ""),
             "action": sig.get("action", "HOLD"),
+            "order_type": sig.get("order_type", "MARKET"),
+            "zone_low": sig.get("zone_low"),
+            "zone_high": sig.get("zone_high"),
             "entry": sig.get("entry", 0),
             "sl": sig.get("sl", 0),
             "tp": sig.get("tp", 0),
@@ -473,6 +476,8 @@ class SignalHandler(BaseHTTPRequestHandler):
             "tp3": sig.get("tp3", 0),
             "tp4": sig.get("tp4", 0),
             "risk_percent": sig.get("risk_percent", 1.0),
+            "trailing": sig.get("trailing"),
+            "telegram_message_id": sig.get("telegram_message_id"),  # reply chain
             "comment": sig.get("comment", "VTFX/AI"),
             "confidence": sig.get("confidence", 0),
             "layers": layers,
@@ -1079,6 +1084,9 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "signal_id": sig_id,
                 "symbol": symbol,
                 "action": action,
+                "order_type": data.get("order_type", "MARKET"),  # MARKET, LIMIT, STOP
+                "zone_low": data.get("zone_low"),   # pending order zone
+                "zone_high": data.get("zone_high"),
                 "entry": data.get("entry"),
                 "sl": data.get("sl"),
                 "tp": data.get("tp"),
@@ -1094,6 +1102,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                 "status": "pending",
                 "layers": data.get("layers", []),
                 "target_user": data.get("target_user"),
+                "telegram_message_id": data.get("telegram_message_id"),  # reply chain
                 # ── Trailing parameters (preserved for EA consumption) ──
                 "trailing": {
                     "enabled": bool(

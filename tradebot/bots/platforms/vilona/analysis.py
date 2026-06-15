@@ -64,6 +64,76 @@ class AnalysisHandlersMixin(_BaseAN):
                         LOG.info("Auto-analysis skipped: %s", reason)
                     elif sig and sig.get("action") != "HOLD":
                         display = pair.upper()
+
+                        # ── MULTI-AI QUALITY GATE v2.0 ──
+                        # Mechanical signal must pass multi-AI consensus
+                        try:
+                            price = sig.get("entry", 0)
+                            dxy = self._market_data.get_latest_dxy() if self._market_data else None
+                            sess = "london" if lkz else "ny" if nykz else "asia"
+                            kz_str = f"⏰ London {lkz}" if lkz else f"⏰ New York {nykz}" if nykz else "⏰ Asia"
+                            loss_count = getattr(self, "_daily_loss_count", 0)
+                            tier = getattr(self, "_tier", "starter")
+                            has_premium = getattr(self, "_premium", False)
+                            ohlcv = None
+                            try:
+                                symbol = resolve_yahoo_symbol(pair)
+                                ohlcv = self._market_data.get_bars_dicts(symbol, "15m", 20) if self._market_data else None
+                            except Exception:
+                                pass
+
+                            ai_result = await self.ask_ai_ensemble(
+                                price, dxy, sess, kz_str, loss_count,
+                                premium=has_premium, ohlcv_data=ohlcv,
+                                display=display, tier=tier
+                            )
+                        except Exception as e:
+                            LOG.warning("Multi-AI gate failed: %s — falling back to mechanical-only", e)
+                            ai_result = None
+
+                        # ── AI Consensus Check ──
+                        ai_direction = None
+                        ai_models_used = 0
+                        ai_models_agree = 0
+                        if ai_result and isinstance(ai_result, dict):
+                            ai_direction = ai_result.get("action")
+                            # Count how many AI models contributed
+                            sig_details = ai_result.get("signals", [])
+                            ai_models_used = len(sig_details)
+                            ai_models_agree = sum(
+                                1 for s in sig_details
+                                if s.get("action") == sig.get("action")
+                            )
+
+                        mech_direction = sig.get("action")
+                        consensus_ok = True
+
+                        if ai_direction and ai_models_used >= 2 and ai_models_agree < 2:
+                            # 2+ AI models disagree → block signal
+                            consensus_ok = False
+                            LOG.info(
+                                "🔇 QA BLOCKED: %s %s — AI consensus %s (agreed: %d/%d models)",
+                                display, mech_direction, ai_direction,
+                                ai_models_agree, ai_models_used
+                            )
+                        elif ai_direction and ai_models_used >= 2 and ai_models_agree >= 2:
+                            LOG.info(
+                                "✅ QA PASS: %s %s — AI consensus %s (agreed: %d/%d models)",
+                                display, mech_direction, ai_direction,
+                                ai_models_agree, ai_models_used
+                            )
+                        elif ai_direction and ai_models_used == 1:
+                            # Single AI mode (starter tier) — solo model decides
+                            if ai_direction != mech_direction:
+                                consensus_ok = False
+                                LOG.info(
+                                    "🔇 QA (SOLO) BLOCKED: %s %s — AI says %s",
+                                    display, mech_direction, ai_direction
+                                )
+
+                        if not consensus_ok:
+                            continue
+
                         last_posted = self._posted_signals.get(pair, 0)
                         if time.time() - last_posted < 5400:
                             LOG.info(
@@ -94,7 +164,9 @@ class AnalysisHandlersMixin(_BaseAN):
                         self._posted_signals[pair] = time.time()
                         price = sig.get("entry", 0)
                         msg = format_signal_basic(sig, price, display)
-                        await self._tg_send(msg)
+                        msg_id = await self._tg_send(msg)
+                        if msg_id:
+                            sig["telegram_message_id"] = msg_id
                         from tradebot.bots.platforms.vilona.helpers import post_signal_to_bridge
 
                         post_signal_to_bridge(sig, price)

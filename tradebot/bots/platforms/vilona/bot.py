@@ -479,10 +479,10 @@ class VilonaBot(
         text: str,
         chat_id: str | None = None,
         reply_markup: dict[str, Any] | None = None,
-    ) -> bool:
+    ) -> int:
         target = chat_id or self.chat_id
         if not target or not self.bot_token:
-            return False
+            return 0
 
         MAX_LEN = 4000
         if len(text) > MAX_LEN:
@@ -509,7 +509,8 @@ class VilonaBot(
                 headers={"Content-Type": "application/json"},
             )
             with urllib.request.urlopen(req, timeout=15) as r:
-                return bool(json.loads(r.read()))
+                resp = json.loads(r.read())
+                return resp.get("result", {}).get("message_id", 0)
         except Exception as e:
             if "Bad Request" in str(e) or "can't parse" in str(e):
                 try:
@@ -523,12 +524,13 @@ class VilonaBot(
                         headers={"Content-Type": "application/json"},
                     )
                     with urllib.request.urlopen(req, timeout=15) as r:
-                        return bool(json.loads(r.read()))
+                        resp = json.loads(r.read())
+                        return resp.get("result", {}).get("message_id", 0)
                 except Exception as e2:
                     LOG.error("tg_send fallback failed: %s", e2)
             else:
                 LOG.error("tg_send failed to %s: %s", target, e)
-            return False
+            return 0
 
     async def _tg_send_photo(
         self,
