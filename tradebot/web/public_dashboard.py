@@ -54,8 +54,12 @@ def _resolve_members_db() -> Path:
     return MEMBERS_DB  # default to current location; caller will handle error
 
 
-def _ensure_data_dir() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+def _resolve_payment_db() -> Path:
+    """Return members.db with actual payment data (legacy takes priority)."""
+    legacy = DATA_DIR / "members.db"
+    if legacy.exists():
+        return legacy
+    return MEMBERS_DB
 
 
 def get_backtest_data() -> dict:
@@ -109,7 +113,7 @@ def get_donor_list() -> list:
 
     Returns list with display_name, amount, paid_at.
     """
-    db_path = _resolve_members_db()
+    db_path = _resolve_payment_db()
     conn = None
     try:
         conn = sqlite3.connect(str(db_path))
@@ -242,7 +246,7 @@ def get_transparency_data() -> dict:
     Returns dict with member counts, revenue, donation totals, trade stats,
     server cost breakdown, and weekly revenue trend.
     """
-    db_path = _resolve_members_db()
+    db_path = _resolve_payment_db()
     conn = None
     total_members = 0
     total_donors = 0
