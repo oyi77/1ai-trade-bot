@@ -7532,6 +7532,32 @@ def auto_analyze_loop():
                     logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ''} DM'd to {premium_count} premium members")
                 except Exception as me:
                     logger.warning(f"S-TIER premium DM error: {me}")
+                # 1.5. POST to signal bridge → EA auto-execution
+                try:
+                    bridge_data = {
+                        "symbol": disp,
+                        "action": action,
+                        "entry": stier_sig.get("entry"),
+                        "sl": stier_sig.get("sl"),
+                        "tp": stier_sig.get("tp"),
+                        "tp1": stier_sig.get("tp1", stier_sig.get("tp")),
+                        "tp2": stier_sig.get("tp2"),
+                        "confidence": stier_sig.get("confidence"),
+                        "rr_ratio": stier_sig.get("rr_ratio", 0),
+                        "comment": f"S-TIER {'SnR+' if is_snr_boosted else 'ZC'} {action} {disp}",
+                        "source": "stier_zone_detector",
+                    }
+                    req = urllib.request.Request(
+                        f"http://localhost:8765/signal?api_key=VT-PRO-LAUNCH",
+                        data=json.dumps(bridge_data).encode(),
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        br_resp = json.loads(resp.read())
+                        logger.info(f"🔗 S-TIER → Bridge POST: {br_resp.get('status','?')} ({br_resp.get('pending_signals',0)} pending)")
+                except Exception as be:
+                    logger.warning(f"S-TIER bridge POST failed: {be}")
                 # 2. Teaser to public channel (no entry/SL/TP details)
                 tg_msg_id = None
                 try:
