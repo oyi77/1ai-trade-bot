@@ -7515,9 +7515,9 @@ def auto_analyze_loop():
                         f"   Breaker + OB/FVG + Double Sweep\n"
                         + (f"🔬 SnR CONFIRMED — {snr_type} @ ${snr_level:.2f}\n" if is_snr_boosted else f"🎯 Near-100% Accuracy Setup\n") +
                         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"👑 <b>PREMIUM ONLY</b> — Signal dikirim ke {premium_count} subscriber.\n"
-                        f"⭐ Upgrade ke PRO/ELITE untuk akses S-TIER:\n"
-                        f"   /upgrade atau DM @berkahkaryaforexbotbot"
+                        f"👑 <b>Signal dikirim ke SEMUA subscriber Premium</b>\n"
+                        f"   Lengkap dengan SL/TP & alasan analisa.\n"
+                        f"⭐ Upgrade ke PRO/ELITE untuk akses penuh:\n"
                     )
                     result = send_to_channel(tease)
                     if result:
