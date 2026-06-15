@@ -3932,6 +3932,7 @@ def handle_command(cmd, text, chat_id, msg):
                     f"🔍 /zones — OB + FVG + Supply/Demand 🆕\n"
                     f"🏗 /structure — BOS/CHoCH + MTF Alignment 🆕\n"
                     f"💀 /stier — S-TIER Zone GOD TIER 👑\n"
+                    f"📡 /ahz_radar — Apex Hunt Radar — zona AHZ Harmonic\n"
                     f"🕐 /session — Killzone + Session Level 🆕\n"
                     f"📰 /news — Market Intel: macro catalyst analysis 👑\n"
                     f"📊 /dashboard — Live dashboard web\n"
@@ -4110,9 +4111,8 @@ def handle_command(cmd, text, chat_id, msg):
             "🔍 <b>TECHNICAL ANALYSIS (SMC & PA)</b>",
             "/zones — Order Blocks + FVG + Supply/Demand 👑",
             "/structure — BOS/CHoCH + Trend Alignment 👑",
-            "/session — Killzone + Session High/Low 👑",
             "/stier — S-TIER Zone GOD TIER 👑",
-            "",
+            "/ahz_radar — Apex Hunt Radar — zona AHZ Harmonic 👑",
             "📊 <b>TRADING TOOLS & DATA</b>",
             "/levels — SnR + FIBO + Engine Deep Dive 👑",
             "/news — Market Intel — X/Twitter intel 👑",
@@ -5554,6 +5554,39 @@ def handle_command(cmd, text, chat_id, msg):
         except Exception as e:
             logger.error(f"/stier error: {e}")
             tg_send(f"❌ Gagal scan S-TIER zone: {e}", chat_id)
+
+    elif cmd == "/ahz_radar":
+        """📡 Apex Hunt Radar — Harmonic pattern scan. PRO/ELITE/LIFETIME only."""
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "📡 <b>APEX HUNT RADAR</b> [🔒 PREMIUM]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Lihat zona AHZ aktif untuk pattern harmonic:\n"
+                "🦋 Gartley | 🦇 Bat | 🦋 Butterfly | 🦀 Crab | 🕊 Cypher\n\n"
+                "🔒 Fitur ini khusus Member Premium\n\n"
+                "⚡ /subscribe — mulai dari Rp 50k/bln",
+                chat_id
+            )
+            return
+        try:
+            from tradebot.services.apex_hunt_radar import scan_harmonic_patterns, format_ahz_alert
+            bars = _fetch_ohlcv_for_ai("xauusd", keep=80)
+            result = scan_harmonic_patterns(bars)
+            if result:
+                tg_send(format_ahz_alert(result), chat_id)
+            else:
+                tg_send(
+                    f"📡 <b>APEX HUNT RADAR — XAUUSD</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"🔍 Tidak ada Pattern Harmonic yang mendekati AHZ saat ini.\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"⏰ {datetime.now(WIB).strftime('%H:%M WIB')}\n"
+                    f"🎯 Powered by Harmonic AHZ Engine",
+                    chat_id
+                )
+        except Exception as e:
+            tg_send(f"❌ AHZ Radar error: {e}", chat_id)
+            logger.warning(f"/ahz_radar error: {e}")
 
     elif cmd == "/zones":
         """Liquidity zones: OB + FVG + Supply/Demand. Free: 1 TF. Donor: multi-TF."""
@@ -8203,6 +8236,7 @@ def main():
             {"command": "zones", "description": "🧲 Order Blocks + FVG Scanner"},
             {"command": "structure", "description": "🏗 BOS/CHoCH + MTF Alignment"},
             {"command": "stier", "description": "💀 S-TIER Zone — Triple Confluence GOD TIER"},
+            {"command": "ahz_radar", "description": "📡 Apex Hunt Radar — zona AHZ Harmonic"},
             {"command": "trailmanual", "description": "📎 Daftarin posisi manual untuk auto-trailing"},
             {"command": "subscribe","description": "⭐ Upgrade ke PRO/ELITE/LIFETIME"},
             {"command": "status",   "description": "🛡 Cek Kuota & Status"},
@@ -8262,7 +8296,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/download","/referral","/learn_report"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/ahz_radar","/download","/referral","/learn_report"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
