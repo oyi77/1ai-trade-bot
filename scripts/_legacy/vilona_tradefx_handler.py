@@ -1050,7 +1050,7 @@ def handle_payment_callback(callback_query):
                 tg_send(
                     "⏳ <b>Pembayaran Belum Terkonfirmasi</b>\n"
                     "━━━━━━━━━━━━━━━━\n"
-                    "ScaleV belum menerima pembayaran untuk pesanan ini.\n"
+                    "Midtrans belum mengirim notifikasi pembayaran.\n"
                     "Pastikan kamu sudah menyelesaikan pembayaran.\n\n"
                     "💡 Setelah bayar, subscription otomatis aktif 1-5 menit.\n"
                     "📞 Kalau lebih dari 10 menit, hubungi admin: @codergaboets",
