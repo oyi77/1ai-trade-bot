@@ -1876,6 +1876,46 @@ class SignalHandler(BaseHTTPRequestHandler):
             log.info(f"📊 POSITIONS REPORT [{instance_id}]: +{added} ~{updated} -{removed}")
             self._json({"status": "ok", "added": added, "updated": updated, "removed": removed})
 
+        elif path == "/trail/add":
+            """Manually register positions for trailing. POST: {positions: [{symbol,direction,entry,sl,tp,ticket}]}"""
+            instance_id = f"{api_key}:{account_id}" if (api_key and account_id) else None
+            if not instance_id:
+                self._json({"error": "api_key and account_id required"}, 400)
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                body = json.loads(raw)
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+            positions = body.get("positions", [])
+            added = 0
+            with LOCK:
+                if not TRAIL_CONFIG.get(instance_id, {}).get("enabled"):
+                    TRAIL_CONFIG.setdefault(instance_id, {}).update({
+                        "enabled": True, "mode": "basic",
+                        "trail_pips": 15, "breakeven_pips": 10, "step_pips": 5,
+                    })
+                for p in positions:
+                    ticket = str(p.get("ticket", int(time.time()*1000)))
+                    pos_key = f"{instance_id}:{ticket}"
+                    if pos_key not in TRAILED_POSITIONS:
+                        _add_trailed_position(instance_id, {
+                            "ticket": ticket,
+                            "symbol": p.get("symbol", "XAUUSD"),
+                            "direction": p.get("direction", "BUY"),
+                            "entry": p.get("entry", 0),
+                            "current_sl": p.get("sl", p.get("entry", 0)),
+                            "tp": p.get("tp", 0),
+                            "signal_id": f"manual-{ticket}",
+                            "timestamp": time.time(),
+                            "_source": "manual_add",
+                        })
+                        added += 1
+            log.info(f"📌 TRAIL/ADD [{instance_id}]: +{added} manual positions")
+            self._json({"status": "ok", "added": added})
+
         else:
             self._json({"error": "not found"}, 404)
 
