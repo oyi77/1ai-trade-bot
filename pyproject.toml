@@ -47,8 +47,7 @@ mt5 = [
 tradebot = "tradebot.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["tradebot*"]
-
+include = ["tradebot*", "trading_bot*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -68,7 +67,7 @@ select = ["E", "F", "I", "W", "N", "UP", "SIM"]
 quote-style = "double"
 
 [tool.coverage.run]
-source = ["tradebot"]
+source = ["tradebot", "trading_bot"]
 omit = [
     "tradebot/__version__.py",
     "tradebot/cli.py",

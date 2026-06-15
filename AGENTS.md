@@ -77,7 +77,7 @@ The codebase has been unified. The principle is:
 - **Signal caching:** `run_engine_consensus()` results cached via `TieredCache` (120s TTL) — multiple users in the same time window share the same signal without re-running expensive AI.
 
 ### When to update AGENTS.md
-- Test counts change (currently 1110 — update if you change this)
+- Test counts change (currently 1441 — update if you change this)
 - New pattern is established and used in 3+ files
 - New guardrail rule learned from a bug or anti-pattern incident
 - A section is wrong (correct it; don't leave stale info)
@@ -131,6 +131,7 @@ Telegram (VilonaBot — single unified bot with button menus)
 
 | Directory | Purpose |
 |-----------|---------|
+|`trading_bot/`|Provider abstraction layer — BaseProvider, Exness, CCXT, paper trader, registry|
 | `tradebot/` | Main package — all production code (20 sub-packages) |
 | `tradebot/engines/` | 11 signal analysis engines + EngineConsensus + MTFConsensus + Registry |
 | `tradebot/brokers/` | Broker ABCs + Deriv (WS), MT5, CCXT, Stockity |
@@ -151,8 +152,7 @@ Telegram (VilonaBot — single unified bot with button menus)
 | `tradebot/constants/` | Shared constants |
 | `tradebot/exceptions/` | TradebotError exception hierarchy |
 | `tradebot/saas/` | SaaS subscription layer |
-| `tradebot/cli.py` | Unified CLI (argparse, 15 subcommands) |
-| `tests/` | 1110 tests across 30 files |
+| `tests/` | 1441 tests across 43 files |
 | `scripts/` | Legacy standalone scripts (~70 files) — most absorbed into `tradebot` package. `scripts/_legacy/` is archive; do not import from scripts/ in tradebot/ package code. |
 | `.omo/` | AI agent scratch space (gitignored) — plans, todo lists, internal notes |
 | `docs/` | API reference, ops runbook, ownership protocol |
@@ -386,8 +386,6 @@ def run_engine_consensus(symbol="XAUUSD"):
 ## Testing & QA
 
 ### Running Tests
-```bash
-# Full suite (934 tests, ~54s)
 python -m pytest tests/ -v
 
 # Single file
@@ -422,8 +420,7 @@ python -m pytest tests/ -x --tb=short
 | bots (base framework) | 100% |
 
 ### Quality Gates
-- **Lint:** 0 ruff errors (enforced)
-- **Tests:** 934 passing, 0 failures
+- **Tests:** 1441 passing, 0 failures
 - **Anti-patterns:** Zero `except Exception: pass` (all log the exception)
 - **Duplications:** Zero duplicate test functions within the same test class
 - **Legacy absorption:** All cross-package imports from `scripts/` eliminated from `tradebot/` package
