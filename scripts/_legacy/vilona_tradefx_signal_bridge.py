@@ -1893,7 +1893,7 @@ class SignalHandler(BaseHTTPRequestHandler):
             "/api/trade_stats", "/api/transparency", "/api/backtest",
             "/api/user_activity", "/api/daily_analyze", "/api/daily_recap",
             "/api/fuel/stats", "/api/feed/stats", "/api/mapping",
-            "/api/today_trades", "/api/engine-readings",
+            "/api/today_trades", "/api/engine-readings", "/api/recent-activity",
         ):
             try:
                 req = urllib.request.Request(

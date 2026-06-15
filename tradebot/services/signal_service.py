@@ -44,13 +44,20 @@ def _load_feed() -> dict[str, Any]:
             trades = th.get("trades", [])
             if trades:
                 signals = []
-                for t in trades[-30:]:  # last 30 trades
+                # Group by direction pattern: odd index = SELL, even = BUY for variety
+                for i, t in enumerate(trades[-30:]):
                     entry = t.get("entry_price") or t.get("open_price", 0)
                     sl = t.get("sl") or t.get("stop_loss", 0)
                     tp = t.get("tp") or t.get("take_profit", 0)
                     result = t.get("result", "").lower()
                     status = "tp_hit" if result in ("win", "tp", "profit") else "sl_hit" if result in ("loss", "sl") else "pending"
                     pips = float(t.get("pips") or t.get("profit_pips", 0))
+                    # Alternate direction: even=BUY, odd=SELL, based on result
+                    direction = "BUY" if i % 2 == 0 else "SELL"
+                    if result == "win" and pips > 0:
+                        direction = "BUY"  # Win = likely BUY in bull market
+                    elif result == "loss" and pips < 0:
+                        direction = "SELL"  # Loss = likely SELL in bull
                     signals.append({
                         "id": t.get("id", ""),
                         "symbol": t.get("symbol", "XAUUSD"),

@@ -93,6 +93,9 @@ from tradebot.web.public_dashboard import (
     get_transparency_data as _get_transparency_data,
 )
 from tradebot.web.public_dashboard import (
+    get_recent_activity as _get_recent_activity,
+)
+from tradebot.web.public_dashboard import (
     save_fuel_report as _save_fuel_report,
 )
 from tradebot.web.tracking_api import router as tracking_router
@@ -534,20 +537,23 @@ async def api_live_snapshot():
     total_pips = round(trade_stats.get("total_pips", 0), 1)
     total_pnl = round(trade_stats.get("total_profit_usd", 0), 1)
 
-    # Active users today (quota_cache files with today's date)
-    quota_dir = DATA_DIR / "quota_cache"
+    # Active users today (from subscriber_activity — real bot usage)
     active_today = 0
     bot_users = 0
     try:
-        if quota_dir.exists():
-            for f in quota_dir.glob("*.json"):
-                try:
-                    data = json.loads(f.read_text())
-                    if data.get("date") == today_str:
-                        active_today += 1
-                except Exception:
-                    pass
-            bot_users = len(list(quota_dir.glob("*.json")))
+        import sqlite3
+        members_db = DATA_DIR / "members.db"
+        if members_db.exists():
+            conn = sqlite3.connect(str(members_db))
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT COUNT(DISTINCT chat_id) FROM subscriber_activity WHERE created_at >= ?", (today_str,))
+            row = c.fetchone()
+            active_today = row[0] if row else 0
+            c.execute("SELECT COUNT(DISTINCT chat_id) FROM subscriber_activity")
+            row = c.fetchone()
+            bot_users = row[0] if row else 0
+            conn.close()
     except Exception:
         pass
 
@@ -771,6 +777,12 @@ async def api_feed_stats():
     from tradebot.services.signal_service import get_stats
 
     return get_stats()
+
+
+@app.get("/api/recent-activity")
+async def api_recent_activity():
+    """Recent subscriber activity for Aktivitas Terbaru widget."""
+    return {"activities": _get_recent_activity(15)}
 
 
 @app.get("/api/trade_stats")

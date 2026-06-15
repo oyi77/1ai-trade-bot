@@ -359,21 +359,43 @@ def get_transparency_data() -> dict:
     # Trade stats
     trade_stats = get_trade_stats()
 
-    # Today's active users (from quota cache)
+    # Today's active users (from subscriber_activity — real bot usage)
     today_str = datetime.now(WIB).strftime("%Y-%m-%d")
     active_users = 0
     try:
-        quota_dir = DATA_DIR / "quota_cache"
-        if quota_dir.exists():
-            for f in quota_dir.glob("*.json"):
-                try:
-                    data = json.loads(f.read_text())
-                    if data.get("date") == today_str:
-                        active_users += 1
-                except Exception as exc:
-                    LOG.debug("Skipping quota file %s: %s", f, exc)
+        conn2 = sqlite3.connect(str(db_path))
+        conn2.row_factory = sqlite3.Row
+        c2 = conn2.cursor()
+        c2.execute(
+            "SELECT COUNT(DISTINCT chat_id) FROM subscriber_activity WHERE created_at >= ?",
+            (today_str,),
+        )
+        row = c2.fetchone()
+        active_users = row[0] if row else 0
+        conn2.close()
     except Exception as exc:
-        LOG.debug("quota scan failed: %s", exc)
+        LOG.debug("subscriber_activity unavailable: %s", exc)
+
+    # Total revenue: combine Tripay payment_orders + Midtrans tier pricing
+    midtrans_tiers = {"pro": 50000, "elite": 150000, "lifetime": 500000, "donor": 15000, "premium": 50000, "vip": 500000}
+    try:
+        conn3 = sqlite3.connect(str(db_path))
+        conn3.row_factory = sqlite3.Row
+        c3 = conn3.cursor()
+        # Tripay total
+        c3.execute("SELECT COALESCE(SUM(amount), 0) FROM payment_orders WHERE status='paid'")
+        tripay_total = float(c3.fetchone()[0] or 0)
+        # Midtrans total (from members with payment_ref and status=paid)
+        c3.execute("SELECT tier, COUNT(*) FROM members WHERE status='paid' AND payment_ref != '' AND tags NOT LIKE '%test%' AND chat_id != 'testnew' GROUP BY tier")
+        midtrans_total = 0
+        for r in c3.fetchall():
+            tier = r[0]
+            count = r[1]
+            midtrans_total += midtrans_tiers.get(tier, 50000) * count
+        total_revenue = tripay_total + midtrans_total
+        conn3.close()
+    except Exception as exc:
+        LOG.debug("Midtrans revenue calc failed: %s", exc)
 
     return {
         "total_members": total_members,
@@ -491,3 +513,54 @@ def save_fuel_report(chat_id: str) -> tuple[dict, int]:
         "success": True,
         "message": "Laporan diterima. Admin akan aktivasi dalam 1x24 jam.",
     }, 200
+
+
+def get_recent_activity(limit: int = 15) -> list:
+    """Get recent subscriber activity for Aktivitas Terbaru widget."""
+    db_path = _resolve_payment_db()
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT sa.chat_id, m.nama, m.username, m.tier,
+                   sa.event, sa.meta, sa.created_at
+            FROM subscriber_activity sa
+            LEFT JOIN members m ON sa.chat_id = m.chat_id
+            ORDER BY sa.created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = c.fetchall()
+        activities = []
+        for r in rows:
+            d = dict(r)
+            display_name = d.get("nama", "") or d.get("username", "") or f"User-{d['chat_id'][:8]}"
+            if d.get("username") and not d.get("nama"):
+                display_name = f"@{d['username']}"
+            event = d.get("event", "analyze")
+            event_label = {
+                "analyze": "🔍 Analisa Pasar",
+                "start_tracked": "📊 Mulai Track",
+                "generate_signal": "📡 Generate Sinyal",
+                "subscribe": "💳 Berlangganan",
+            }.get(event, f"📌 {event}")
+            activities.append({
+                "chat_id": d["chat_id"],
+                "display_name": display_name,
+                "tier": d.get("tier", "trial"),
+                "event": event,
+                "event_label": event_label,
+                "meta": d.get("meta", ""),
+                "created_at": d.get("created_at", ""),
+            })
+        return activities
+    except Exception as exc:
+        LOG.warning("get_recent_activity failed: %s", exc)
+        return []
+    finally:
+        if conn is not None:
+            conn.close()
