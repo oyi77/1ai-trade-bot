@@ -3632,7 +3632,7 @@ def _get_user_tier(chat_id):
                     pass
             # ── is_paid: status="paid" AND expiry not past, OR grandfathered lifetime ──
             # Also exclude test-tagged accounts
-            is_test = "test" in (member.get("tags") or "")
+            is_test = (member.get("chat_id", "") or "").startswith("test") or (member.get("chat_id", "") or "").startswith("vfy")
             is_paid = (status == "paid" and not expiry_past and not is_test) or tier in ("donor", "lifetime")
             if tier == "pro":
                 limit = TIER_LIMITS.get("pro", FREE_DAILY_LIMIT)
@@ -6892,6 +6892,7 @@ _channel_state = None             # lazy-loaded from disk
 LAST_POST_DIR = DATA_DIR / "last_channel_post"
 LAST_POST_DIR.mkdir(parents=True, exist_ok=True)
 _LAST_POST_COOLDOWN = 1800  # 30 min — don't post same pair within this window
+_STIER_BROADCAST_CD = {}    # {pair:direction: timestamp} — S-TIER cooldown (5 min)
 
 def _get_last_post(pair_key: str) -> dict:
     """Read last channel post for a pair. Returns empty dict if none/stale."""
@@ -7062,7 +7063,7 @@ def broadcast_tp_hit_and_upsell(pair: str, profit_pips: float):
                 chat_id = row["chat_id"]
                 tier = row["tier"] or "free"
                 status = row["status"] or ""
-                is_test = "test" in (row["tags"] or "")
+                is_test = chat_id.startswith("test") or chat_id.startswith("vfy")
                 is_paid = (status == "paid" and not is_test) or tier in ("pro", "elite", "lifetime", "donor")
                 
                 if is_paid:
@@ -7365,6 +7366,23 @@ def auto_analyze_loop():
                     logger.debug(f"S-TIER check [{disp}]: {e}")
 
             if stier_sig and stier_sig["action"] in ("BUY", "SELL"):
+                # ── 💀 S-TIER PRICE SANITY: entry zone must be within ±3% of current spot ──
+                stier_entry_raw = stier_sig.get("entry", price) or price
+                if price and price > 0 and abs(stier_entry_raw - price) / price > 0.03:
+                    logger.warning(f"💀 S-TIER [{disp}] REJECTED: entry ${stier_entry_raw:.2f} too far from spot ${price:.2f} ({(stier_entry_raw-price)/price*100:+.1f}%)")
+                    stier_sig = None  # suppress bogus signal
+                    continue
+
+                # ── 💀 S-TIER COOLDOWN: no repeat broadcast same pair+direction within 15 min ──
+                _stier_key = f"{disp}:{stier_sig['action']}"
+                _stier_now_t = time.time()
+                _stier_last_t = _STIER_BROADCAST_CD.get(_stier_key, 0)
+                if _stier_now_t - _stier_last_t < 900:
+                    logger.info(f"💀 S-TIER [{disp}] broadcast SKIPPED — cooldown ({_stier_now_t-_stier_last_t:.0f}s ago)")
+                    stier_sig = None  # suppress
+                    continue  # skip this pair entirely
+                _STIER_BROADCAST_CD[_stier_key] = _stier_now_t
+
                 # ── 💀 S-TIER HIGH CONVICTION: Triple Confluence, bypass killzone, near-100% accuracy ──
                 action = stier_sig["action"]
                 stier_sig = _clamp_sltp(stier_sig, disp)
@@ -7413,6 +7431,32 @@ def auto_analyze_loop():
                 except Exception as snre:
                     logger.debug(f"SnR upgrade error [{disp}]: {snre}")
 
+                # ── 💰 PRICE SANITY: clamp S-TIER entry to REAL broker spot (±1%) ──
+                # Fetch FRESH raw spot for XAUUSD (bypass XAUUSD_OFFSET) as truth anchor
+                _stier_entry = stier_sig.get("entry", price) or price
+                _anchor = price
+                if disp in ("XAUUSD", "GOLD", "XAU"):
+                    try:
+                        _raw_spot = fetch_xauusd_spot()
+                        if _raw_spot and _raw_spot > 0:
+                            _anchor = _raw_spot  # raw commodity spot = broker price for modern APIs
+                    except Exception:
+                        pass
+                _dev = abs(_stier_entry - _anchor) / _anchor if _anchor and _anchor > 0 else 0
+                if _dev > 0.01:
+                    # Entry too far from real broker price → clamp to spot
+                    pip_sz2 = 0.10 if disp in ("XAUUSD","GOLD") else (0.01 if disp=="USOIL" else 1.0)
+                    old_entry = _stier_entry
+                    # Set entry to current price, zone ±5 pips around it
+                    stier_sig["entry"] = round(_anchor, 2)
+                    stier_sig["zone_lo"] = round(_anchor - 5.0*pip_sz2, 2)
+                    stier_sig["zone_hi"] = round(_anchor + 5.0*pip_sz2, 2)
+                    # Adjust SL proportionally
+                    old_sl = stier_sig.get("sl", 0)
+                    if old_sl and old_sl != 0:
+                        stier_sig["sl"] = round(_anchor - (old_entry - old_sl) if action == "BUY" else _anchor + (old_sl - old_entry), 2)
+                    logger.info(f"💀 S-TIER [{disp}] entry CLAMPED: ${old_entry:.2f} → ${_anchor:.2f} (spot, {_dev*100:.1f}% off)")
+
                 # Format as S-TIER signal (upgraded if SnR proximity confirmed)
                 signal_label = "💀 S-TIER+ SnR" if is_snr_boosted else "💀 S-TIER HIGH CONVICTION"
                 stier_text = fmt_signal(stier_sig, price, dxy, h, disp, "$")
@@ -7441,19 +7485,20 @@ def auto_analyze_loop():
 
                 # ── PREMIUM-ONLY: S-TIER signals only for paying members ──
                 stier_entry = stier_sig.get("entry", price) or 0
-                # 1. DM to all premium members (PRO, ELITE, LIFETIME)
+                # 1. DM to all premium members (PRO, ELITE, LIFETIME) — use SUBS_PATH NOT members module
                 premium_count = 0
                 try:
-                    from members import _conn as members_conn
-                    with members_conn() as db:
-                        rows = db.execute(
-                            "SELECT chat_id FROM members WHERE status='paid' AND tier IN ('pro','elite','lifetime') AND tags NOT LIKE '%test%'"
-                        ).fetchall()
+                    db = _sql.connect(str(_P(SUBS_PATH)))
+                    db.row_factory = _sql.Row
+                    rows = db.execute(
+                        "SELECT chat_id FROM members WHERE status='paid' AND chat_id NOT LIKE 'test%' AND chat_id NOT LIKE 'vfy%'"
+                    ).fetchall()
+                    db.close()
                     for row in rows:
                         try:
                             tg_send(stier_text, str(row["chat_id"]))
                             premium_count += 1
-                            time.sleep(0.3)  # rate limit safety
+                            time.sleep(0.3)
                         except Exception as dme:
                             logger.warning(f"S-TIER DM failed for {row['chat_id']}: {dme}")
                     logger.info(f"💀 S-TIER{'⁺ SnR' if is_snr_boosted else ''} DM'd to {premium_count} premium members")

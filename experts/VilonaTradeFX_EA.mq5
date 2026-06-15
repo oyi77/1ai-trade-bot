@@ -423,7 +423,9 @@ int OpenPosition(string action, double price, double sl,
    int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    int stoplevel = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
-   double minDist = stoplevel * point * 2;  // 2x safety margin
+   // 3x safety margin + absolute floor of 100 points (extra safe for XAUUSD/BTC brokers)
+   int safeLevel = (stoplevel > 0) ? stoplevel : 100;
+   double minDist = safeLevel * point * 3;
 
    req.action    = TRADE_ACTION_DEAL;
    req.symbol    = _Symbol;
@@ -605,7 +607,9 @@ double CalculateLots(string symbol, double entry, double sl, double riskPct) {
 bool ValidateSLTP(string action, double entry, double sl, double tp) {
    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    int stoplevel = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
-   double minDist = stoplevel * point;
+   // 3x safety margin + absolute floor of 100 points (extra safe for XAUUSD/BTC brokers)
+   int safeLevel = (stoplevel > 0) ? stoplevel : 100;
+   double minDist = safeLevel * point * 3;
 
    if(action == "BUY") {
       if(sl >= entry - minDist) return false;
