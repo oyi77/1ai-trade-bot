@@ -8,6 +8,7 @@ from tests.fixtures.mock_providers import MockProvider
 from trading_bot.engine import (
     EventBus,
     PortfolioTracker,
+    RiskConfig,
     RiskManager,
     SignalExecutor,
 )
@@ -165,3 +166,55 @@ class TestSignalExecutor:
         status = executor.get_status()
         assert status["running"] is True
         assert status["last_order"] is not None
+
+    async def test_execute_risk_rejects(self) -> None:
+        """Signal rejected by risk manager's validate_order."""
+        provider = MockProvider()
+        # max_exposure_per_symbol_pct=0.1% of balance = 10.0 limit
+        risk = RiskManager(config=RiskConfig(max_exposure_per_symbol_pct=0.1))
+        portfolio = PortfolioTracker(initial_balance=10_000.0)
+        execr = SignalExecutor(
+            provider=provider,
+            risk_manager=risk,
+            portfolio=portfolio,
+            event_bus=EventBus(),
+        )
+        await execr.start()
+        signal = StrategySignal(
+            symbol="BTC/USD",
+            direction=OrderSide.BUY,
+            confidence=0.5,
+            price=2500.0,
+            strategy_name="test",
+        )
+        # balance=10k -> risk_amount=100, units=0.04, exposure=100 > limit=10 -> rejected
+        result = await execr.execute(signal)
+        assert result is None
+
+    async def test_execute_zero_price(self) -> None:
+        """Signal with price=0.0 -- falls into the risk_amount-as-units branch."""
+        provider = MockProvider()
+        risk = RiskManager()
+        portfolio = PortfolioTracker(initial_balance=10_000.0)
+        execr = SignalExecutor(
+            provider=provider,
+            risk_manager=risk,
+            portfolio=portfolio,
+            event_bus=EventBus(),
+        )
+        await execr.start()
+        signal = StrategySignal(
+            symbol="BTC/USD",
+            direction=OrderSide.BUY,
+            confidence=0.5,
+            price=0.0,
+            strategy_name="test",
+        )
+        result = await execr.execute(signal)
+        # Should succeed -- units = risk_amount (100.0), price=None on order
+        assert result is not None
+        assert result["order_id"] == "mock-order-001"
+        # Under the hood the order had quantity = risk_amount and price = None
+        assert provider.last_order is not None
+        assert provider.last_order.price is None
+        assert provider.last_order.quantity == 100.0

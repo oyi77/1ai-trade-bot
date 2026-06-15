@@ -254,6 +254,48 @@ class TestPortfolioTracker:
         result = portfolio.close_position("NONEXISTENT")
         assert result is None
 
+    def test_set_balance_updates_peak(self, portfolio: PortfolioTracker) -> None:
+        """set_balance with higher value updates _equity_peak."""
+        portfolio.set_balance(15_000.0)
+        assert portfolio.balance == 15_000.0
+        assert portfolio._equity_peak == 15_000.0
+
+    async def test_refresh_balance(self, portfolio: PortfolioTracker) -> None:
+        """refresh_balance pulls balance from provider and updates peak."""
+        provider = MockProvider()
+        provider.set_balance(12_500.0)
+        await portfolio.refresh_balance(provider)
+        assert portfolio.balance == 12_500.0
+        assert portfolio._equity_peak == 12_500.0
+
+    async def test_refresh_balance_updates_peak(self, portfolio: PortfolioTracker) -> None:
+        """refresh_balance updates peak when provider balance is higher."""
+        provider = MockProvider()
+        provider.set_balance(15_000.0)
+        await portfolio.refresh_balance(provider)
+        assert portfolio.balance == 15_000.0
+        assert portfolio._equity_peak == 15_000.0
+
+    async def test_refresh_positions(self, portfolio: PortfolioTracker) -> None:
+        """refresh_positions pulls positions from provider and tracks them."""
+        provider = MockProvider()
+        p1 = Position(symbol="XAU/USD", side=OrderSide.BUY, quantity=1.0,
+                      entry_price=2500.0, current_price=2510.0,
+                      unrealized_pnl=10.0, realized_pnl=0.0)
+        p2 = Position(symbol="BTC/USD", side=OrderSide.BUY, quantity=0.1,
+                      entry_price=30000.0, current_price=31000.0,
+                      unrealized_pnl=100.0, realized_pnl=0.0)
+        provider.add_position(p1)
+        provider.add_position(p2)
+        await portfolio.refresh_positions(provider)
+        assert portfolio.total_positions == 2
+        xau = portfolio.get_positions("XAU/USD")
+        assert len(xau) == 1
+        assert xau[0].entry_price == 2500.0
+        btc = portfolio.get_positions("BTC/USD")
+        assert len(btc) == 1
+        assert btc[0].entry_price == 30000.0
+
 
 # ===========================================================================
 #  RiskManager
@@ -333,6 +375,32 @@ class TestRiskManager:
         )
         # Kelly = 0.3 - (0.7 / 0.5) = 0.3 - 1.4 = -1.1 → clamped to 0
         assert size == 0.0
+
+    def test_position_size_stop_loss_forex(self, risk: RiskManager) -> None:
+        """Stop-loss sizing uses pip=0.0001 for forex prices (<10)."""
+        # price < 10 → pip = 0.0001 → stop_distance = 20 * 0.0001 = 0.002
+        # size_by_risk = 100, max_size = 1000 → initial size = 100
+        # stop_distance = 0.002 → 100 / 0.002 = 50_000, so no clamp
+        size = risk.calculate_position_size(
+            balance=10_000.0, price=1.2000, stop_loss_pips=20.0,
+        )
+        assert size == 100.0
+
+        # High pip count to verify clamping: stop_distance = 20_000 * 0.0001 = 2.0
+        # size = min(100, 100 / 2.0) = 50
+        size_clamped = risk.calculate_position_size(
+            balance=10_000.0, price=1.2000, stop_loss_pips=20_000.0,
+        )
+        assert size_clamped == 50.0
+
+    def test_position_size_stop_loss_crypto(self, risk: RiskManager) -> None:
+        """Stop-loss sizing uses pip=0.01 for crypto prices (>=10)."""
+        # price >= 10 → pip = 0.01 → stop_distance = 200 * 0.01 = 2.0
+        # size = min(100, 100 / 2.0) = 50
+        size = risk.calculate_position_size(
+            balance=10_000.0, price=50_000.0, stop_loss_pips=200.0,
+        )
+        assert size == 50.0
 
     # ── order validation ──
 
@@ -448,6 +516,11 @@ class TestTradingOrchestrator:
         await orchestrator.stop()
         assert orchestrator.state == EngineState.STOPPED
 
+    async def test_stop_from_idle(self, orchestrator: TradingOrchestrator) -> None:
+        """stop() is a no-op when the engine is IDLE."""
+        await orchestrator.stop()
+        assert orchestrator.state == EngineState.IDLE
+
     async def test_pause_resume(self, orchestrator: TradingOrchestrator) -> None:
         await orchestrator.start()
         await orchestrator.pause()
@@ -504,6 +577,158 @@ class TestTradingOrchestrator:
         status = orchestrator.get_status()
         assert status["state"] == "RUNNING"
         assert "strategies" in status
+
+    async def test_start_strategy_fails(self, orchestrator: TradingOrchestrator) -> None:
+        """If a strategy's on_start raises, state transitions to ERROR."""
+        from trading_bot.strategies.base import BaseStrategy
+
+        class FailingStartStrategy(BaseStrategy):
+            def __init__(self) -> None:
+                super().__init__(MockProvider())
+                self._name = "failing_start"
+
+            @property
+            def name(self) -> str:
+                return self._name
+
+            async def analyze(
+                self, symbol: str, timeframe: str = "1h",
+            ) -> StrategySignal | None:
+                return None
+
+            async def on_start(self) -> None:
+                msg = "start failed"
+                raise RuntimeError(msg)
+
+        strategy = FailingStartStrategy()
+        orchestrator.register_strategy(strategy)
+        await orchestrator.start()
+        assert orchestrator.state == EngineState.ERROR
+        assert orchestrator._last_error is not None
+
+    async def test_stop_strategy_fails(self, orchestrator: TradingOrchestrator) -> None:
+        """If on_stop raises, stop() logs warning but transitions to STOPPED."""
+        from trading_bot.strategies.base import BaseStrategy
+
+        class FailingStopStrategy(BaseStrategy):
+            def __init__(self) -> None:
+                super().__init__(MockProvider())
+                self._name = "failing_stop"
+
+            @property
+            def name(self) -> str:
+                return self._name
+
+            async def analyze(
+                self, symbol: str, timeframe: str = "1h",
+            ) -> StrategySignal | None:
+                return None
+
+            async def on_stop(self) -> None:
+                msg = "stop failed"
+                raise RuntimeError(msg)
+
+        strategy = FailingStopStrategy()
+        orchestrator.register_strategy(strategy)
+        await orchestrator.start()
+        await orchestrator.stop()
+        assert orchestrator.state == EngineState.STOPPED
+
+    async def test_resume_when_not_paused(self, orchestrator: TradingOrchestrator) -> None:
+        """resume() from RUNNING is a no-op."""
+        await orchestrator.start()
+        assert orchestrator.state == EngineState.RUNNING
+        await orchestrator.resume()
+        assert orchestrator.state == EngineState.RUNNING
+
+    async def test_run_cycle_drawdown_rejected(
+        self, orchestrator: TradingOrchestrator,
+    ) -> None:
+        """Signal is rejected when drawdown exceeds the limit."""
+        strategy = _make_mock_strategy("grid")
+        orchestrator.register_strategy(strategy)
+        await orchestrator.start()
+        # Raise equity peak so drawdown exceeds 20% limit.
+        orchestrator._portfolio._equity_peak = 20_000.0
+        orchestrator._portfolio.set_balance(10_000.0)  # equity = 10_000
+        signals = await orchestrator.run_cycle("XAU/USD")
+        assert signals == []
+
+    async def test_run_cycle_position_limit_reached(
+        self, orchestrator: TradingOrchestrator,
+    ) -> None:
+        """Signal is filtered out when max positions are reached."""
+        strategy = _make_mock_strategy("grid")
+        orchestrator.register_strategy(strategy)
+        await orchestrator.start()
+        # Default RiskConfig max_open_positions=5, add 5 positions.
+        for i in range(5):
+            pos = Position(
+                symbol="XAU/USD", side=OrderSide.BUY, quantity=1.0,
+                entry_price=2500.0 + i, current_price=2510.0 + i,
+                unrealized_pnl=10.0, realized_pnl=0.0,
+            )
+            orchestrator._portfolio.add_position(pos)
+        signals = await orchestrator.run_cycle("XAU/USD")
+        assert signals == []
+
+    async def test_run_cycle_strategy_raises(
+        self, orchestrator: TradingOrchestrator,
+    ) -> None:
+        """When strategy.analyze() raises, cycle logs error and continues."""
+        from trading_bot.strategies.base import BaseStrategy
+
+        class RaisingStrategy(BaseStrategy):
+            def __init__(self) -> None:
+                super().__init__(MockProvider())
+                self._name = "raising"
+
+            @property
+            def name(self) -> str:
+                return self._name
+
+            async def analyze(
+                self, symbol: str, timeframe: str = "1h",
+            ) -> StrategySignal | None:
+                msg = "analysis failed"
+                raise RuntimeError(msg)
+
+        strategy = RaisingStrategy()
+        orchestrator.register_strategy(strategy)
+        await orchestrator.start()
+        signals = await orchestrator.run_cycle("XAU/USD")
+        assert signals == []
+
+    async def test_get_status_after_error(
+        self, orchestrator: TradingOrchestrator,
+    ) -> None:
+        """After an error, get_status shows last_error."""
+        from trading_bot.strategies.base import BaseStrategy
+
+        class FailingStartStrategy(BaseStrategy):
+            def __init__(self) -> None:
+                super().__init__(MockProvider())
+                self._name = "fail_start"
+
+            @property
+            def name(self) -> str:
+                return self._name
+
+            async def analyze(
+                self, symbol: str, timeframe: str = "1h",
+            ) -> StrategySignal | None:
+                return None
+
+            async def on_start(self) -> None:
+                msg = "boom"
+                raise RuntimeError(msg)
+
+        strategy = FailingStartStrategy()
+        orchestrator.register_strategy(strategy)
+        await orchestrator.start()
+        status = orchestrator.get_status()
+        assert status["state"] == "ERROR"
+        assert "boom" in status["last_error"]
 
 
 # ===========================================================================

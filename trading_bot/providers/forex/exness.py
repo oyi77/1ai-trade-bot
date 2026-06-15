@@ -119,7 +119,7 @@ class ExnessProvider(BaseProvider):
         info = self._mt5.account_info()
         if info is None:
             raise ConnectionError("Failed to fetch account info")
-        return info.balance  # type: ignore[return-value]
+        return float(info.balance)
 
     async def get_positions(self) -> list[Position]:
         self._ensure_mt5()
@@ -228,7 +228,7 @@ def _parse_timeframe(timeframe: str) -> int:
         "1w": mt5.TIMEFRAME_W1,
         "1M": mt5.TIMEFRAME_MN1,
     }
-    return tf_map.get(timeframe, mt5.TIMEFRAME_H1)
+    return int(tf_map.get(timeframe, mt5.TIMEFRAME_H1))
 
 
 def _build_mt5_request(order: Order) -> dict[str, Any]:

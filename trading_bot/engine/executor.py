@@ -97,11 +97,8 @@ class SignalExecutor:
         if risk_amount <= 0:
             LOG.debug("Signal %s rejected: position size is 0", signal.strategy_name)
             return None
-
         # 2. Convert risk amount to units (lots / shares / contracts).
         units = risk_amount / price if price > 0 else risk_amount
-        if units <= 0:
-            return None
 
         # 3. Build order.
         order = Order(

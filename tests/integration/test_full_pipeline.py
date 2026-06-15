@@ -14,7 +14,7 @@ from trading_bot.engine import (
     SignalExecutor,
     TradingOrchestrator,
 )
-from trading_bot.providers.base import OrderSide
+from trading_bot.providers.base import OrderSide, Position
 from trading_bot.strategies.base import BaseStrategy, StrategySignal
 
 
@@ -193,3 +193,86 @@ def _candle(close: float, volume: float = 1000.0) -> _candle_type:
 
 # Type alias for the return type annotation.
 _candle_type = object
+
+
+class TestPipelineEdgeCases:
+    """Edge cases and error paths in the full pipeline."""
+
+    async def test_engine_start_failure(self) -> None:
+        """Strategy.on_start() raises → orchestrator transitions to ERROR."""
+        provider = MockProvider()
+        event_bus = EventBus()
+        portfolio = PortfolioTracker(initial_balance=10_000.0)
+        risk = RiskManager(RiskConfig(max_risk_per_trade_pct=1.0, max_drawdown_pct=20.0))
+
+        class _FailingStrategy(BaseStrategy):
+            """Strategy whose on_start() raises."""
+            @property
+            def name(self) -> str:
+                return "failing"
+            async def analyze(
+                self, symbol: str, timeframe: str = "1h",
+            ) -> StrategySignal | None:
+                return None
+            async def on_start(self) -> None:
+                raise RuntimeError("start failed")
+
+        orch = TradingOrchestrator(
+            event_bus=event_bus, risk_manager=risk, portfolio=portfolio,
+        )
+        orch.register_strategy(_FailingStrategy(provider))
+        await orch.start()
+        assert orch.state == EngineState.ERROR
+        assert "start failed" in (orch._last_error or "")
+
+    async def test_run_cycle_drawdown_breach(self) -> None:
+        """Run cycle rejects signals when drawdown exceeds limit."""
+        provider = MockProvider()
+        event_bus = EventBus()
+        portfolio = PortfolioTracker(initial_balance=10_000.0)
+        risk = RiskManager(RiskConfig(
+            max_risk_per_trade_pct=1.0,
+            max_drawdown_pct=10.0,
+        ))
+
+        # Inflate equity peak so current equity is in drawdown.
+        portfolio._equity_peak = 20_000.0  # 100% drawdown (10k from 20k)
+
+        orch = TradingOrchestrator(
+            event_bus=event_bus, risk_manager=risk, portfolio=portfolio,
+        )
+        strategy = _TestStrategy(provider)
+        orch.register_strategy(strategy)
+        await orch.start()
+
+        signals = await orch.run_cycle("XAU/USD", "1h")
+        assert signals == []  # filtered by drawdown check
+
+    async def test_run_cycle_position_limit_reached(self) -> None:
+        """Run cycle rejects signals when max positions reached."""
+        provider = MockProvider()
+        event_bus = EventBus()
+        portfolio = PortfolioTracker(initial_balance=10_000.0)
+        risk = RiskManager(RiskConfig(
+            max_risk_per_trade_pct=1.0,
+            max_open_positions=1,
+            max_position_size_pct=10.0,
+        ))
+
+        portfolio.add_position(Position(
+            symbol="XAU/USD", side=OrderSide.BUY, quantity=1.0,
+            entry_price=100.0, current_price=100.0,
+            unrealized_pnl=0.0, realized_pnl=0.0,
+        ))
+
+        orch = TradingOrchestrator(
+            event_bus=event_bus, risk_manager=risk, portfolio=portfolio,
+        )
+        strategy = _TestStrategy(provider)
+        orch.register_strategy(strategy)
+        await orch.start()
+
+        signals = await orch.run_cycle("XAU/USD", "1h")
+        assert signals == []
+        status = orch.get_status()
+        assert status["state"] == "RUNNING"
