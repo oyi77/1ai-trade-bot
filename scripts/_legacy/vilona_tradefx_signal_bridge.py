@@ -1628,6 +1628,94 @@ class SignalHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self._json({"error": f"Payment error: {str(e)}"}, 500)
 
+        elif path == "/api/payments/notify" or path == "/webhook/scalev":
+            """ScaleV payment callback — activate subscription from variant_id."""
+            import sqlite3 as _sql
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                data = json.loads(raw) if raw else {}
+            except json.JSONDecodeError:
+                self._json({"error": "invalid json"}, 400)
+                return
+
+            event = data.get("event", "")
+            order_data = data.get("data", {}) if isinstance(data.get("data"), dict) else {}
+            variant_id = order_data.get("variant_id") or data.get("variant_id", 0)
+            order_id = order_data.get("order_id") or data.get("order_id", "")
+            amount = order_data.get("gross_revenue") or data.get("gross_revenue", 0)
+            customer = order_data.get("customer", {}) or {}
+            phone = customer.get("phone", "") or data.get("phone", "")
+            notes = order_data.get("notes", "") or data.get("notes", "")
+            payment_status = order_data.get("payment_status") or data.get("payment_status", "")
+
+            log.info(f"[SCALEV-WEBHOOK] event={event} order={order_id} variant={variant_id} amount={amount} status={payment_status}")
+
+            # Only process paid events
+            if payment_status not in ("paid", "PAID", "complete") and event not in ("order_paid", "payment_succeeded"):
+                self._json({"status": "ack", "reason": f"skipped — status={payment_status} event={event}"})
+                return
+
+            # Map variant → tier
+            variant_map = {530141: "pro", 530142: "elite", 530143: "lifetime"}
+            tier = variant_map.get(int(variant_id) if variant_id else 0, "pro")
+
+            # Find chat_id from notes (tg://xxx) or by phone
+            chat_id = None
+            if "tg://" in str(notes):
+                try:
+                    chat_id = str(notes).split("tg://")[1].split()[0]
+                except Exception:
+                    pass
+            if not chat_id and phone:
+                try:
+                    members_path = os.path.join(PROJECT_DIR, "data", "vilona_tradefx", "members.db")
+                    db = _sql.connect(members_path)
+                    cur = db.execute("SELECT chat_id FROM members WHERE phone LIKE ?", (f"%{phone[-8:]}",))
+                    row = cur.fetchone()
+                    if row:
+                        chat_id = row[0]
+                    db.close()
+                except Exception as e:
+                    log.warning(f"[SCALEV-WEBHOOK] phone lookup failed: {e}")
+
+            if chat_id:
+                try:
+                    members_path = os.path.join(PROJECT_DIR, "data", "vilona_tradefx", "members.db")
+                    db = _sql.connect(members_path)
+                    from datetime import datetime, timedelta
+                    expiry = (datetime.now() + timedelta(days=30)).isoformat()
+                    db.execute(
+                        "UPDATE members SET tier=?, status='paid', payment_ref=?, expiry=? WHERE chat_id=?",
+                        (tier, order_id, expiry, str(chat_id))
+                    )
+                    db.commit()
+                    db.close()
+                    log.info(f"[SCALEV-WEBHOOK] ✅ Activated chat_id={chat_id} tier={tier} order={order_id}")
+                    send_telegram_alert(
+                        f"💰 <b>SCALEV PAYMENT — ✅ AUTO-ACTIVATED</b>\n\n"
+                        f"👤 Chat ID: <code>{chat_id}</code>\n"
+                        f"📋 Order: <code>{order_id}</code>\n"
+                        f"⭐ Tier: <b>{tier.upper()}</b>\n"
+                        f"💵 Amount: Rp {float(amount):,.0f}\n"
+                        f"📞 Phone: {phone}"
+                    )
+                except Exception as e:
+                    log.error(f"[SCALEV-WEBHOOK] DB update failed: {e}")
+            else:
+                send_telegram_alert(
+                    f"💰 <b>SCALEV PAYMENT — ⚠️ MANUAL</b>\n\n"
+                    f"📋 Order: <code>{order_id}</code>\n"
+                    f"🔢 Variant: {variant_id} → <b>{tier.upper()}</b>\n"
+                    f"💵 Amount: Rp {float(amount):,.0f}\n"
+                    f"📞 Phone: {phone}\n"
+                    f"👤 Name: {customer.get('name', '?')}\n\n"
+                    f"❌ Tidak bisa auto-activate — chat_id tidak ditemukan.\n"
+                    f"Cek manual di database members."
+                )
+
+            self._json({"status": "ok", "chat_id": chat_id, "tier": tier})
+
         elif path == "/webhook/tripay" or path == "/api/webhook/tripay":
             """Tripay payment callback — verify X-Callback-Signature (HMAC-SHA256), process payment, return {"success":true}."""
             import hmac as _hmac
