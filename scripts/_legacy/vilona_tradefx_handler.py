@@ -26,7 +26,7 @@ _PID_FILE.write_text(str(os.getpid()))
 PROJECT_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
-# ── Load .env BEFORE local imports (Tripay keys needed) ──
+# ── Load .env BEFORE local imports (ScaleV keys needed) ──
 _env_path = PROJECT_DIR / "strategies" / "vilona_tradefx" / ".env"
 if _env_path.exists():
     for _line in _env_path.read_text().split('\n'):
@@ -61,7 +61,7 @@ SUBS_PATH = str(Path(__file__).resolve().parent.parent.parent / "members.db")
 
 # ── Payment gateway ──
 try:
-    from members.payment import get_pricing_info, get_pricing_table, PRICING, create_tripay_payment
+    from members.payment import get_pricing_info, get_pricing_table, PRICING, create_scalev_payment
     PAYMENT_ENGINE = True
 except Exception as e:
     PAYMENT_ENGINE = False
@@ -93,7 +93,7 @@ _logging.getLogger('yfinance').setLevel(_logging.CRITICAL)
 try:
     from members import register_member, get_member, get_member_stats, mark_paid, get_due_members
     from members import is_premium, check_quota, use_quota, activate_premium, deactivate_premium
-    from members.payment import get_pricing_info, create_tripay_payment
+    from members.payment import get_pricing_info, create_scalev_payment
     MEMBERS_ENABLED = True
 except Exception as e:
     MEMBERS_ENABLED = False
@@ -988,7 +988,7 @@ def handle_payment_callback(callback_query):
         tg_send(f"⏳ <b>Membuat invoice...</b>\n"
                 f"Paket: {pkg['label']} — Rp{pkg['price_idr']:,}", chat_id)
 
-        result = create_tripay_payment(chat_id, username, tier)
+        result = create_scalev_payment(chat_id, username, tier)
         if result.get("error"):
             tg_send(f"❌ <b>Gagal membuat pembayaran</b>\n"
                     f"{result['error']}\n\n"
@@ -1031,37 +1031,33 @@ def handle_payment_callback(callback_query):
             tg_send("❌ Referensi tidak valid.", chat_id)
             return
 
-        tg_send("🔍 <b>Cek Status Pembayaran ke Tripay...</b>", chat_id)
+        tg_send("🔍 <b>Cek Status Pembayaran ke ScaleV...</b>", chat_id)
 
-        # ── Check via Tripay API ──
+        # Check via local member DB
         try:
-            from members.payment import is_tripay_paid
-            if is_tripay_paid(ref):
-                # Upgrade user!
-                from members import upgrade_tier, mark_payment_paid
-                upgrade_tier(str(chat_id), "lifetime", 9999, ref)
-                mark_payment_paid(ref)
+            from members import is_premium, get_member
+            if is_premium(str(chat_id)):
+                member = get_member(str(chat_id))
+                tier_name = member.get("tier", "premium") if member else "premium"
                 tg_send(
-                    "✅ <b>PEMBAYARAN TERKONFIRMASI!</b>\n"
-                    "━━━━━━━━━━━━━━━━\n"
-                    "👑 Status kamu sekarang: <b>Subscriber</b>\n"
-                    "♾️ /analyze — UNLIMITED\n"
-                    "🤖 EA Auto-Trade — AKTIF PERMANEN\n\n"
-                    "Mari cetak profit! 🔥",
+                    f"✅ <b>Kamu sudah subscriber!</b>\n"
+                    f"━━━━━━━━━━━━━━━━\n"
+                    f"👑 Status: <b>{tier_name.upper()}</b>\n\n"
+                    f"Nikmati akses penuh signal + EA! 🔥",
                     chat_id
                 )
             else:
                 tg_send(
                     "⏳ <b>Pembayaran Belum Terkonfirmasi</b>\n"
                     "━━━━━━━━━━━━━━━━\n"
-                    "Tripay belum menerima pembayaran untuk invoice ini.\n"
+                    "ScaleV belum menerima pembayaran untuk pesanan ini.\n"
                     "Pastikan kamu sudah menyelesaikan pembayaran.\n\n"
-                    "Biasanya butuh 1-5 menit setelah transfer.\n"
-                    "Kalau sudah lebih dari 10 menit, hubungi admin.",
+                    "💡 Setelah bayar, subscription otomatis aktif 1-5 menit.\n"
+                    "📞 Kalau lebih dari 10 menit, hubungi admin: @codergaboets",
                     chat_id
                 )
         except Exception as e:
-            logger.error(f"Tripay check failed: {e}")
+            logger.error(f"ScaleV check failed: {e}")
             tg_send(
                 "⚠️ <b>Cek status gagal</b>\n"
                 "Coba lagi nanti atau kirim bukti pembayaran ke admin: @codergaboets",
@@ -1073,8 +1069,8 @@ def handle_payment_callback(callback_query):
         sub_tier = data.split(":", 1)[1] if ":" in data else ""
         if sub_tier in ("pro", "elite", "lifetime"):
             try:
-                from members.payment import create_tripay_payment
-                result = create_tripay_payment(str(chat_id), username, tier=sub_tier)
+                from members.payment import create_scalev_payment
+                result = create_scalev_payment(str(chat_id), username, tier=sub_tier)
                 if result.get("success"):
                     payment_url = result.get("payment_url", "")
                     pay_code = result.get("pay_code", "")
@@ -1177,7 +1173,7 @@ def handle_payment_callback(callback_query):
         tier_label_text = {"pro": "⭐ PRO Rp50K", "elite": "👑 ELITE Rp150K"}
         tg_send(f"⏳ <b>Membuat link pembayaran...</b>\n{tier_label_text.get(tier_label, tier_label)} — Rp{amount:,}", chat_id)
 
-        result = create_tripay_payment(str(chat_id), username, tier=tier_label, amount=amount)
+        result = create_scalev_payment(str(chat_id), username, tier=tier_label, amount=amount)
         if result.get("error"):
             tg_send(
                 f"❌ <b>Gagal membuat pembayaran otomatis</b>\n"
@@ -5034,8 +5030,8 @@ def handle_command(cmd, text, chat_id, msg):
         if sub_arg in ("pro", "elite", "lifetime"):
             # Direct tier purchase
             try:
-                from members.payment import create_tripay_payment
-                result = create_tripay_payment(str(chat_id), username, tier=sub_arg)
+                from members.payment import create_scalev_payment
+                result = create_scalev_payment(str(chat_id), username, tier=sub_arg)
                 if result.get("success"):
                     payment_url = result.get("payment_url", "")
                     pay_code = result.get("pay_code", "")
@@ -5088,7 +5084,7 @@ def handle_command(cmd, text, chat_id, msg):
         _send_donate_menu(chat_id, username)
 
     elif cmd == "/testpay":
-        """🧪 Test payment: subscribe minimal — verifikasi webhook Tripay. ADMIN ONLY."""
+        """🧪 Test payment: subscribe minimal — verifikasi webhook ScaleV. ADMIN ONLY."""
         if not chat_id:
             return
         # Admin gate
@@ -5106,7 +5102,7 @@ def handle_command(cmd, text, chat_id, msg):
 
         tg_send("🧪 <b>Test Upgrade Tier — Rp10,000</b>\nMembuat invoice...", chat_id)
 
-        result = create_tripay_payment(str(chat_id), username, tier="pro", amount=10000)
+        result = create_scalev_payment(str(chat_id), username, tier="pro", amount=10000)
         if result.get("error"):
             tg_send(f"❌ Gagal: {result['error']}", chat_id)
             return
@@ -8176,7 +8172,7 @@ def main():
                                 elif PAYMENT_ENGINE:
                                     username = msg.get("chat", {}).get("username", "")
                                     tg_send(f"⏳ <b>Membuat invoice Rp{amount:,}...</b>", chat_id)
-                                    result = create_tripay_payment(str(chat_id), username, tier="donor", amount=amount)
+                                    result = create_scalev_payment(str(chat_id), username, tier="donor", amount=amount)
                                     if result.get("error"):
                                         tg_send(f"❌ Gagal: {result['error']}\n📞 Hubungi @codergaboets", chat_id)
                                     else:

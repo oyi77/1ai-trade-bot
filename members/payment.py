@@ -485,3 +485,73 @@ def fire_capi_purchase(
         except Exception:
             pass
         return False
+
+
+# ── ScaleV Payment Integration ─────────────────────────────────────
+SCALEV_VARIANTS = {
+    "pro":      530141,  # Vilona Trade - Pro     (Rp 50.000 / 30 hari)
+    "elite":    530142,  # Vilona Trade - Elite   (Rp 150.000 / 30 hari)
+    "lifetime": 530143,  # Vilona Trade - Lifetime (Rp 500.000 one-time)
+}
+SCALEV_CHECKOUT_URL = "https://jasahub.id/c/checkout"
+
+
+def create_scalev_payment(chat_id: str, username: str, tier: str = "pro",
+                          method: str = "", amount: int = None,
+                          merchant_ref: str = None) -> dict:
+    variant_id = SCALEV_VARIANTS.get(tier)
+    if not variant_id:
+        return {"success": False, "error": f"Tier tidak dikenal: {tier}"}
+
+    tier_info = PRICING.get(tier, {})
+    tier_label = tier_info.get("label", tier)
+    price = amount or tier_info.get("price_idr", 0)
+
+    ref = merchant_ref or f"vtfx-{tier}-{chat_id}-{int(time.time())}"
+
+    try:
+        from members import get_pending_order
+        existing = get_pending_order(str(chat_id), tier)
+        if existing:
+            logger.info(f"Returning existing pending ScaleV order: {existing['merchant_ref']}")
+            return {
+                "success": True,
+                "reference": existing["merchant_ref"],
+                "merchant_ref": existing["merchant_ref"],
+                "payment_url": existing.get("payment_url", ""),
+                "amount": existing.get("amount", price),
+                "tier": tier,
+                "tier_label": tier_label,
+                "message": "⏳ Kamu masih punya pembayaran yang belum selesai. Lanjutkan bayar!",
+            }
+    except Exception:
+        pass
+
+    payment_url = f"{SCALEV_CHECKOUT_URL}?variant_ids={variant_id}&qty=1"
+
+    try:
+        from members import save_pending_order
+        save_pending_order(
+            chat_id=str(chat_id), tier=tier, amount=price,
+            merchant_ref=ref, payment_url=payment_url, provider="scalev"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to save pending ScaleV order: {e}")
+
+    logger.info(f"ScaleV checkout: chat_id={chat_id} tier={tier} variant={variant_id} price={price}")
+
+    return {
+        "success": True,
+        "reference": ref,
+        "merchant_ref": ref,
+        "payment_url": payment_url,
+        "amount": price,
+        "tier": tier,
+        "tier_label": tier_label,
+        "message": (
+            f"🔗 <b>Pembayaran {tier_label}</b> — Rp {price:,.0f}\n\n"
+            f"Klik link berikut untuk melanjutkan pembayaran via ScaleV:\n"
+            f"{payment_url}\n\n"
+            f"💡 Setelah bayar, subscription akan otomatis aktif."
+        ),
+    }
