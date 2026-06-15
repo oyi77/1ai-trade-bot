@@ -44,9 +44,7 @@ def _build_strategy(name: str, provider: Any, params: dict[str, Any]) -> BaseStr
     """Instantiate a named strategy with the given parameters."""
     strategy_cls = _STRATEGY_TYPES.get(name)
     if strategy_cls is None:
-        raise ValueError(
-            f"Unknown strategy '{name}'. Supported: {list(_STRATEGY_TYPES)}"
-        )
+        raise ValueError(f"Unknown strategy '{name}'. Supported: {list(_STRATEGY_TYPES)}")
     return strategy_cls(provider=provider, params=params)
 
 
@@ -178,10 +176,7 @@ async def _cmd_run(config: BotConfig, db_path: Path) -> int:
 
 async def _cmd_backtest(_config: BotConfig, args: argparse.Namespace) -> int:
     """Backtest placeholder."""
-    print(
-        "backtest command is not yet implemented "
-        f"(from={args.from_date}, to={args.to_date})"
-    )
+    print(f"backtest command is not yet implemented (from={args.from_date}, to={args.to_date})")
     return 0
 
 

@@ -422,30 +422,28 @@ class SignalHandler(BaseHTTPRequestHandler):
         return False
 
     def _poll_signal(self, api_key, tier, instance_id=None):
-        """Poll signal for a specific user or instance. Priority:
-           instance_id → PENDING_BY_INSTANCE[instance_id]
-           else       → PENDING_BY_KEY[api_key]
-           fallback   → PENDING (global)"""
+        """Poll signal — keep in queue until ACKed or stale (30s)."""
         with LOCK:
-            # Instance-level queue (account_id provided)
+            now = time.time()
             if instance_id:
                 if instance_id in PENDING_BY_INSTANCE and PENDING_BY_INSTANCE[instance_id]:
-                    sig = PENDING_BY_INSTANCE[instance_id].popleft()
-                    log.info(f"Signal delivered (instance): {sig['signal_id']} → {instance_id}")
+                    sig = PENDING_BY_INSTANCE[instance_id][0]
+                    if sig.get("_acked") or (now - sig.get("_ts",0) > 30):
+                        PENDING_BY_INSTANCE[instance_id].popleft()
+                    log.info(f"Signal (instance): {sig['signal_id']} → {instance_id}")
                     return self._format_signal(sig)
-
-            # Key-level queue (backward compat / fallback)
             if api_key in PENDING_BY_KEY and PENDING_BY_KEY[api_key]:
-                sig = PENDING_BY_KEY[api_key].popleft()
-                log.info(f"Signal delivered (user): {sig['signal_id']} → {api_key}")
+                sig = PENDING_BY_KEY[api_key][0]
+                if sig.get("_acked") or (now - sig.get("_ts",0) > 30):
+                    PENDING_BY_KEY[api_key].popleft()
+                log.info(f"Signal (user): {sig['signal_id']} → {api_key}")
                 return self._format_signal(sig)
-
-            # Global fallback
             if not PENDING:
                 return self._empty_signal()
-            sig = PENDING.popleft()
-
-        log.info(f"Signal delivered (global): {sig['signal_id']} → {api_key}")
+            sig = PENDING[0]
+            if sig.get("_acked") or (now - sig.get("_ts",0) > 30):
+                PENDING.popleft()
+        log.info(f"Signal (global): {sig['signal_id']} → {api_key}")
         return self._format_signal(sig)
 
     def _format_signal(self, sig):
@@ -1200,6 +1198,7 @@ class SignalHandler(BaseHTTPRequestHandler):
                 } if (
                     data.get("trailing_stop_pips") or data.get("trail_pips")
                 ) else None,
+                "_ts": time.time(),  # queue persist
             }
 
             broadcast_count = 0
