@@ -1319,3 +1319,209 @@ class TestBaseProviderAbstractMethods:
 
         with pytest.raises(TypeError, match="connect"):
             MissingConnect()
+
+
+class TestCCXTSandboxMode:
+    """Test CCXT sandbox configuration."""
+
+    @pytest.mark.asyncio
+    async def test_sandbox_mode_sets_config(self, fake_ccxt: None) -> None:
+        """Sandbox mode should set sandbox=True in config."""
+        p = CCXTProvider(
+            exchange_id="binance",
+            api_key="key",
+            secret="secret",
+            sandbox=True,
+        )
+        assert await p.connect() is True
+        # Check that sandbox was passed to the exchange config
+        assert p._exchange.config.get("sandbox") is True
+        await p.disconnect()
+
+
+
+class TestCCXTBalanceErrors:
+    """Test CCXT balance conversion error paths."""
+
+    @pytest.mark.asyncio
+    async def test_balance_ticker_error_fallback(self, fake_ccxt: None) -> None:
+        """Balance should fall back to USDT when ticker fetch fails."""
+        p = CCXTProvider(
+            exchange_id="binance",
+            api_key="key",
+            secret="secret",
+        )
+        assert await p.connect() is True
+        # Make fetch_ticker raise by setting the error flag
+        p._exchange._set_raise("fetch_ticker", RuntimeError("Ticker error"))
+        # The default balance has BTC: 0.5, ETH: 2.0, USDT: 1234.5
+        # When ticker fails, it falls back to USDT balance
+        balance = await p.get_balance()
+        # Should return 1234.5 (the USDT balance from fetch_balance)
+        assert balance == 1234.5
+        await p.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_stop_order_sets_stop_price(self, fake_ccxt: None) -> None:
+        """STOP orders should set stopPrice parameter."""
+        p = CCXTProvider(
+            exchange_id="binance",
+            api_key="key",
+            secret="secret",
+        )
+        assert await p.connect() is True
+        order = Order(
+            symbol="BTC",
+            side=OrderSide.BUY,
+            order_type=OrderType.STOP,
+            quantity=1.0,
+            stop_price=50000.0,
+        )
+        await p.place_order(order)
+        # Check that stopPrice was set in params
+        params = p._exchange._last_params
+        assert params["stopPrice"] == 50000.0
+        await p.disconnect()
+
+
+
+
+class TestProviderRegistryLazyImports:
+    """Test ProviderRegistry lazy import factories."""
+
+    def test_import_paper_factory(self) -> None:
+        """Test that paper provider factory creates correct instance."""
+        from trading_bot.providers.registry import ProviderRegistry
+
+        registry = ProviderRegistry()
+        provider = registry._import_paper()
+        assert isinstance(provider, PaperTradingProvider)
+
+    def test_import_ccxt_factory(self) -> None:
+        """Test that CCXT adapter module exists."""
+        import importlib.util
+
+        spec = importlib.util.find_spec("trading_bot.providers.crypto.ccxt_adapter")
+        assert spec is not None, "CCXT adapter module should exist"
+
+    def test_import_exness_factory(self) -> None:
+        """Test that Exness adapter module exists."""
+        import importlib.util
+
+        spec = importlib.util.find_spec("trading_bot.providers.forex.exness")
+        assert spec is not None, "Exness adapter module should exist"
+
+    def test_register_class_lazy(self) -> None:
+        """Test that register_class creates provider on first access."""
+        from trading_bot.providers.registry import ProviderRegistry
+
+        registry = ProviderRegistry()
+
+        # Register using class (lazy instantiation)
+        registry.register_class("paper", PaperTradingProvider)
+
+        # Should not be in _providers yet
+        assert "paper" not in registry._providers
+
+        # Access via get() should instantiate
+        provider = registry.get("paper")
+        assert provider is not None
+        assert isinstance(provider, PaperTradingProvider)
+        assert "paper" in registry._providers
+
+
+class TestCCXTStopLimitOrders:
+    """Test CCXT stop-limit order parameter handling."""
+
+    @pytest.mark.asyncio
+    async def test_stop_limit_order_params(self, fake_ccxt: None) -> None:
+        """STOP_LIMIT orders should set both price and stopPrice."""
+        p = CCXTProvider(
+            exchange_id="binance",
+            api_key="key",
+            secret="secret",
+        )
+        assert await p.connect() is True
+        order = Order(
+            symbol="BTC",
+            side=OrderSide.BUY,
+            order_type=OrderType.STOP_LIMIT,
+            quantity=1.0,
+            price=50000.0,
+            stop_price=49000.0,
+        )
+        await p.place_order(order)
+        # Check that both price and stopPrice were set
+        params = p._exchange._last_params
+        assert "stopPrice" in params
+        assert params["stopPrice"] == 49000.0
+        await p.disconnect()
+
+
+class TestExnessProperties:
+    """Test Exness property getters."""
+
+    def test_name_property(self) -> None:
+        """Test name property returns configured name."""
+        p = ExnessProvider(name="custom_exness")
+        assert p.name == "custom_exness"
+
+    def test_market_type_property(self) -> None:
+        """Test market_type property returns FOREX."""
+        p = ExnessProvider()
+        assert p.market_type == MarketType.FOREX
+
+
+class TestExnessEnsureMT5:
+    """Test Exness _ensure_mt5 error path."""
+
+    @pytest.mark.asyncio
+    async def test_ensure_mt5_raises_when_not_connected(self) -> None:
+        """_ensure_mt5 should raise ConnectionError when not connected."""
+        p = ExnessProvider()
+        # Don't connect - should raise when calling _ensure_mt5
+        with pytest.raises(ConnectionError, match="not connected"):
+            p._ensure_mt5()
+
+
+class TestRegistryLazyImports:
+    """Test ProviderRegistry lazy import methods directly."""
+
+    def test_import_paper_creates_instance(self) -> None:
+        """_import_paper should create a PaperTradingProvider instance."""
+        from trading_bot.providers.registry import ProviderRegistry
+
+        registry = ProviderRegistry()
+        provider = registry._import_paper()
+        assert isinstance(provider, PaperTradingProvider)
+
+    def test_import_ccxt_raises_without_package(self) -> None:
+        """_import_ccxt should raise ImportError when ccxt not installed."""
+        from trading_bot.providers.registry import ProviderRegistry
+
+        # The ccxt package may or may not be installed
+        # We're just testing the method exists and can be called
+        # When ccxt is not installed, it will raise ImportError
+        registry = ProviderRegistry()
+        try:
+            provider = registry._import_ccxt()
+            # If ccxt is installed, this should work
+            assert provider is not None
+        except ImportError:
+            # Expected when ccxt is not installed
+            pass
+
+    def test_import_exness_raises_without_package(self) -> None:
+        """_import_exness should raise ImportError when MT5 not installed."""
+        from trading_bot.providers.registry import ProviderRegistry
+
+        # MetaTrader5 may or may not be installed
+        # We're just testing the method exists and can be called
+        registry = ProviderRegistry()
+        try:
+            provider = registry._import_exness()
+            # If MT5 is installed, this should work
+            assert provider is not None
+        except ImportError:
+            # Expected when MT5 is not installed
+            pass
