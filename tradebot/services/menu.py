@@ -5,32 +5,35 @@ from __future__ import annotations
 from typing import Any
 
 # ── Menu Structure ──
+
 MAIN_MENU: list[list[tuple[str, str]]] = [
     [("menu:signals", "🧠 SIGNAL SYSTEM"), ("menu:market", "📊 MARKET DATA")],
     [("menu:history", "📈 TRADE HISTORY"), ("menu:account", "👤 ACCOUNT")],
-    [("menu:panduan", "📘 PANDUAN"), ("menu:help", "❓ HELP")],
+    [("menu:whitelabel", "🏢 WHITELABEL"), ("menu:panduan", "📘 PANDUAN")],
+    [("menu:help", "❓ HELP")],
 ]
 
 HOME_MENU = MAIN_MENU
 
-ADMIN_MENU: list[list[tuple[str, str]]] = [
-    [("menu:signals", "🧠 SIGNAL SYSTEM"), ("menu:market", "📊 MARKET DATA")],
-    [("menu:history", "📈 TRADE HISTORY"), ("menu:account", "👤 ACCOUNT")],
-    [("menu:admin_panel", "⚙️ ADMIN"), ("menu:panduan", "📘 PANDUAN")],
-    [("menu:help", "❓ HELP")],
+SIGNAL_MENU: list[list[tuple[str, str]]] = [
+    [("cmd:signal", "🎯 Live Signal")],
+    [("menu:market_filter", "🎯 Pilih Market"), ("cmd:whale", "🐋 Whale Scan")],
+    [("menu:analysis", "🔬 Technical Analysis")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
-SIGNAL_MENU: list[list[tuple[str, str]]] = [
-    [("cmd:signal", "🎯 Live Signal (Multi-Market)")],
-    [("cmd:whale", "🐋 Whale Scan")],
-    [("menu:analysis", "🔬 Technical Analysis")],
-    [("menu:market", "📊 Market Data"), ("menu:help", "❓ Help")],
-    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
+MARKET_FILTER_MENU: list[list[tuple[str, str]]] = [
+    [("cmd:price gold", "🥇 XAUUSD — FX"), ("cmd:price btc", "₿ BTC — Crypto")],
+    [("cmd:price eth", "⟠ ETH — Crypto")],
+    [("cmd:price", "📊 IDX — Stocks")],
+    [("cmd:price", "🎲 Binary Options")],
+    [("menu:signals", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 ANALYSIS_MENU: list[list[tuple[str, str]]] = [
     [("cmd:mtf", "🧬 Matrix 5TF (MTF)"), ("cmd:engines", "🔧 Engine Consensus")],
     [("cmd:structure", "🏗 Market Structure"), ("cmd:pulse", "🔄 Market Pulse")],
+    [("cmd:signal", "🎯 Signal per Market")],
     [("menu:signals", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
@@ -45,44 +48,22 @@ MARKET_MENU: list[list[tuple[str, str]]] = [
 
 HISTORY_MENU: list[list[tuple[str, str]]] = [
     [("cmd:winrate", "📈 Win Rate"), ("cmd:recap", "📋 Daily Recap")],
-    [("cmd:history", "📜 Trade History"), ("cmd:mapping", "🗺️ Mapping")],
+    [("cmd:history", "📜 Trade History"), ("cmd:stats", "📊 Performance Stats")],
     [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 ACCOUNT_MENU: list[list[tuple[str, str]]] = [
-    [("cmd:status", "📊 Status"), ("cmd:subscribe", "⭐ Subscribe")],
-    [("menu:donate", "💚 Donate"), ("cmd:mykey", "🔑 My Key")],
-    [("cmd:earnings", "💰 Earnings"), ("cmd:buykey", "🔑 Buy EA Key")],
-    [("cmd:analyze gold", "🔍 Analyze"), ("cmd:autosync", "🔄 Autosync")],
-    [("cmd:myid", "🆔 My ID"), ("cmd:trailing", "🏃 Trailing Status")],
-    [("cmd:settings", "⚙️ Settings")],
+    [("cmd:status", "📊 My Status"), ("cmd:subscribe", "⭐ Subscribe")],
+    [("cmd:mykey", "🔑 My Key"), ("cmd:trailing", "🏃 Trailing Status")],
+    [("cmd:myid", "🆔 My ID"), ("menu:donate", "💚 Donate")],
     [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
-PLATFORMS_MENU: list[list[tuple[str, str]]] = [
-    [("cmd:platforms", "🔗 Linked Platforms")],
-    [("cmd:link", "➕ Link Platform")],
-    [("cmd:unlink", "➖ Unlink Platform")],
-    [("sub:signal_only:weekly", "📡 Signal Only Rp50K/mg")],
-    [("sub:signal_execute:weekly", "🤖 Signal+Execute Rp75K/mg")],
-    [("menu:subscriptions", "💳 All Plans")],
-    [("menu:account", "🔙 Back"), ("menu:home", "🏠 Home")],
-]
-
-SUBSCRIPTIONS_MENU: list[list[tuple[str, str]]] = [
-    [("sub:signal_only:weekly", "📡 Signal Only — Rp50K/mg")],
-    [("sub:signal_only:monthly", "📡 Signal Only — Rp100K/bln")],
-    [("sub:signal_only:lifetime", "📡 Signal Only — Rp300K")],
-    [("sub:signal_execute:weekly", "🤖 Signal+Execute — Rp75K/mg")],
-    [("sub:signal_execute:monthly", "🤖 Signal+Execute — Rp200K/bln")],
-    [("sub:signal_execute:lifetime", "🤖 Signal+Execute — Rp750K")],
-    [("menu:platforms", "🔙 Back"), ("menu:home", "🏠 Home")],
-]
-
 SUBSCRIBE_MENU: list[list[tuple[str, str]]] = [
-    [("sub:pro", "⭐ PRO — Rp50K/bulan")],
-    [("sub:elite", "👑 ELITE — Rp150K/bulan")],
-    [("sub:lifetime", "💎 LIFETIME — Rp500K"), ("cancel_input", "❌ Batal")],
+    [("sub:basic", "📡 BASIC — Rp99K/bulan")],
+    [("sub:pro", "⭐ PRO — Rp199K/bulan")],
+    [("sub:enterprise", "🏢 ENTERPRISE — Rp499K/bulan")],
+    [("cancel_input", "❌ Batal")],
     [("menu:account", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
@@ -94,6 +75,14 @@ DONATE_MENU: list[list[tuple[str, str]]] = [
     [("menu:account", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
+# ── Whitelabel / MLM ──
+WHITELABEL_MENU: list[list[tuple[str, str]]] = [
+    [("__url__", "🏪 Daftar Reseller", "https://jasahub.id/p/vilona-omni")],
+    [("cmd:wl_status", "📊 Status Whitelabel"), ("cmd:wl_earnings", "💰 Komisi")],
+    [("cmd:wl_referral", "🔗 Link Referral"), ("cmd:wl_members", "👥 Anggota")],
+    [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
+]
+
 STOCKITY_MENU: list[list[tuple[str, str] | tuple[str, str, str]]] = [
     [("__url__", "🚀 Daftar Stockity", "https://stockity-mr.com/auth?invite_code=7b8730c84b6450e3e0b02fd3fd864f69#SignUp")],
     [("cmd:status", "📊 Status Akun")],
@@ -103,6 +92,7 @@ STOCKITY_MENU: list[list[tuple[str, str] | tuple[str, str, str]]] = [
 ADMIN_PANEL_MENU: list[list[tuple[str, str]]] = [
     [("cmd:dashboard", "📊 Dashboard"), ("cmd:bridge_status", "🌉 Bridge")],
     [("cmd:genkey", "🔑 Gen Key"), ("cmd:activate", "⭐ Activate")],
+    [("cmd:wl_config", "🏢 Whitelabel Config"), ("cmd:wl_commission", "💰 Commission Log")],
     [("cmd:restart_bot", "🔄 Restart Bot")],
     [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
@@ -127,21 +117,7 @@ TRADE_MENU: list[list[tuple[str, str]]] = [
 
 PORTFOLIO_MENU: list[list[tuple[str, str]]] = [
     [("portfolio:refresh", "🔄 Refresh"), ("portfolio:trade_best", "🔥 Trade Best")],
-    [("menu:link", "🔗 Link Platform"), ("menu:autotrade", "🤖 Auto-Execute")],
     [("menu:main", "🔙 Back"), ("menu:home", "🏠 Home")],
-]
-
-LINK_MENU: list[list[tuple[str, str]]] = [
-    [("link:stockity", "📈 Stockity")],
-    [("link:deriv", "💹 Deriv")],
-    [("link:ccxt", "🔄 CCXT Exchange")],
-    [("link:mt5", "💻 MetaTrader 5")],
-    [("menu:portfolio", "🔙 Back"), ("menu:home", "🏠 Home")],
-]
-
-AUTOTRADE_MENU: list[list[tuple[str, str]]] = [
-    [("autotrade:on", "🟢 ON"), ("autotrade:off", "⚪ OFF")],
-    [("menu:portfolio", "🔙 Back"), ("menu:home", "🏠 Home")],
 ]
 
 
@@ -164,23 +140,21 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
     _menus: dict[str, list[list[tuple[str, str] | tuple[str, str, str]]]] = {
         "main": MAIN_MENU,
         "home": HOME_MENU,
-        "admin": ADMIN_MENU,
+        "admin": ADMIN_PANEL_MENU,
         "signals": SIGNAL_MENU,
+        "market_filter": MARKET_FILTER_MENU,
         "analysis": ANALYSIS_MENU,
         "market": MARKET_MENU,
         "history": HISTORY_MENU,
         "account": ACCOUNT_MENU,
-        "platforms": PLATFORMS_MENU,
-        "subscriptions": SUBSCRIPTIONS_MENU,
         "subscribe": SUBSCRIBE_MENU,
         "donate": DONATE_MENU,
+        "whitelabel": WHITELABEL_MENU,
         "stockity": STOCKITY_MENU,
         "admin_panel": ADMIN_PANEL_MENU,
         "help": HELP_MENU,
         "trade": TRADE_MENU,
         "portfolio": PORTFOLIO_MENU,
-        "link": LINK_MENU,
-        "autotrade": AUTOTRADE_MENU,
         "panduan": PANDUAN_MENU,
     }
     menu = _menus.get(menu_name, MAIN_MENU)
@@ -189,23 +163,95 @@ def get_inline_keyboard(menu_name: str) -> dict[str, list[list[dict[str, str]]]]
 
 def get_menu_text(menu_name: str, user_info: dict[str, Any] | None = None) -> str:
     texts: dict[str, str] = {
-        "main": "🔥 <b>VILONA AI — COMMAND CENTER</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih menu di bawah untuk memulai:",
-        "signals": "🧠 <b>SIGNAL SYSTEM</b>\n━━━━━━━━━━━━━━━━━━━━━\nAI MTF Top-Down Analysis dengan 9 engines.",
-        "market": "📊 <b>MARKET DATA</b>\n━━━━━━━━━━━━━━━━━━━━━\nHarga real-time, killzone, dan data pasar.",
-        "history": "📈 <b>TRADE HISTORY</b>\n━━━━━━━━━━━━━━━━━━━━━\nWin rate, daily recap, dan mapping.",
-        "account": "👤 <b>ACCOUNT</b>\n━━━━━━━━━━━━━━━━━━━━━\nStatus, subscribe, dan pengaturan.",
-        "donate": "💚 <b>DONASI PUBLIK — VILONA AI</b>\n━━━━━━━━━━━━━━━━━━━━━\nDukungan Anda membantu server AI tetap aktif & cepat.",
-        "subscribe": "⭐ <b>LANGGANAN PREMIUM</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih paket langganan Anda:",
-        "analysis": "🔬 <b>TECHNICAL ANALYSIS TOOLS</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih tools analisis teknis di bawah ini:",
-        "stockity": "💰 <b>STOCKITY INSIDER</b>\n━━━━━━━━━━━━━━━━━━━━━\nSistem bandar (insider) untuk akurasi sinyal maksimal.",
-        "admin_panel": "⚙️ <b>ADMIN PANEL</b>\n━━━━━━━━━━━━━━━━━━━━━\nManajemen bot dan pengguna.",
-        "help": "❓ <b>HELP</b>\n━━━━━━━━━━━━━━━━━━━━━\nGunakan menu atau ketik command langsung.",
-        "platforms": "🔗 <b>PLATFORM MANAGEMENT</b>\n━━━━━━━━━━━━━━━━━━━━━\nKelola akun broker Anda di sini.",
-        "subscriptions": "💳 <b>SUBSCRIPTION PLANS</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih paket langganan Anda:",
-        "portfolio": "📊 <b>PORTFOLIO</b>\n━━━━━━━━━━━━━━━━━━━━━\nAset terbaik, P&L, dan status akun Anda.",
-        "link": "🔗 <b>LINK PLATFORM</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih platform untuk ditautkan:",
-        "autotrade": "🤖 <b>AUTO-EXECUTE</b>\n━━━━━━━━━━━━━━━━━━━━━\nAktifkan/nonaktifkan eksekusi trading otomatis.",
-        "panduan": "📘 <b>PANDUAN LENGKAP</b>\n━━━━━━━━━━━━━━━━━━━━━\nPilih topik panduan yang ingin kamu pelajari:",
+        "main": (
+            "🔥 <b>VILONA OMNI — AI COMMAND CENTER</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Sistem AI trading multi-market 24/7.\n"
+            "Pilih menu di bawah untuk memulai:"
+        ),
+        "signals": (
+            "🧠 <b>SIGNAL SYSTEM</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "AI MTF Top-Down Analysis dengan 11 engines + Sequoia-X Quant.\n"
+            "Dapatkan sinyal terbaik dari setiap market."
+        ),
+        "market_filter": (
+            "🎯 <b>PILIH MARKET</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Pilih market untuk mendapatkan sinyal spesifik:\n"
+            "🥇 FX (XAUUSD, GBPUSD, EURUSD)\n"
+            "₿ Crypto (BTC, ETH, SOL)\n"
+            "📊 Stocks (IDX)\n"
+            "🎲 Binary Options (Deriv)"
+        ),
+        "analysis": (
+            "🔬 <b>TECHNICAL ANALYSIS TOOLS</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Pilih tools analisis teknis di bawah ini:"
+        ),
+        "market": (
+            "📊 <b>MARKET DATA</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Harga real-time, killzone, dan data pasar."
+        ),
+        "history": (
+            "📈 <b>TRADE HISTORY</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Win rate, daily recap, dan performance stats."
+        ),
+        "account": (
+            "👤 <b>ACCOUNT</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Status langganan, key, dan pengaturan akun."
+        ),
+        "donate": (
+            "💚 <b>DONASI PUBLIK — VILONA OMNI</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Dukungan Anda membantu server AI tetap aktif & cepat."
+        ),
+        "subscribe": (
+            "⭐ <b>VILONA OMNI — PAKET LANGGANAN</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Pilih paket yang sesuai dengan kebutuhan trading Anda:\n\n"
+            "📡 <b>BASIC — Rp99K/bln</b>\n"
+            "5 sinyal/hari, 2 market, daily report\n\n"
+            "⭐ <b>PRO — Rp199K/bln</b>\n"
+            "Unlimited sinyal, semua market, EA auto-execute\n\n"
+            "🏢 <b>ENTERPRISE — Rp499K/bln</b>\n"
+            "Semua fitur PRO + whitelabel reseller + MLM + API"
+        ),
+        "whitelabel": (
+            "🏢 <b>VILONA OMNI — WHITELABEL</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Jadi reseller dan dapatkan komisi 20% dari setiap referral!\n"
+            "Bisa whitelabel keseluruhan fitur atau per market saja.\n\n"
+            "💎 ENTERPRISE: Rp499K/bln — all-in + reseller rights"
+        ),
+        "stockity": (
+            "💰 <b>STOCKITY INSIDER</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Sistem bandar (insider) untuk akurasi sinyal maksimal."
+        ),
+        "admin_panel": (
+            "⚙️ <b>ADMIN PANEL</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Manajemen bot, pengguna, dan whitelabel."
+        ),
+        "help": (
+            "❓ <b>HELP</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Gunakan menu atau ketik command langsung."
+        ),
+        "panduan": (
+            "📘 <b>PANDUAN LENGKAP</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Pilih topik panduan yang ingin kamu pelajari:"
+        ),
+        "portfolio": (
+            "📊 <b>PORTFOLIO</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━━\n"
+            "Aset terbaik, P&L, dan status akun Anda."
+        ),
     }
     return texts.get(menu_name, texts["main"])
 
@@ -217,9 +263,10 @@ def is_admin(chat_id: str, admin_ids: list[str] | None = None) -> bool:
 
 
 __all__ = [
-    "ADMIN_MENU", "MAIN_MENU", "SIGNAL_MENU", "MARKET_MENU",
-    "HISTORY_MENU", "ACCOUNT_MENU", "SUBSCRIBE_MENU", "STOCKITY_MENU",
+    "MAIN_MENU", "SIGNAL_MENU", "MARKET_FILTER_MENU", "ANALYSIS_MENU",
+    "MARKET_MENU", "HISTORY_MENU", "ACCOUNT_MENU", "SUBSCRIBE_MENU",
+    "DONATE_MENU", "WHITELABEL_MENU", "STOCKITY_MENU",
     "ADMIN_PANEL_MENU", "HELP_MENU", "TRADE_MENU",
-    "PORTFOLIO_MENU", "LINK_MENU", "AUTOTRADE_MENU",
+    "PORTFOLIO_MENU", "PANDUAN_MENU",
     "get_inline_keyboard", "get_menu_text", "is_admin", "build_keyboard",
 ]

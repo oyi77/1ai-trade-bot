@@ -259,7 +259,10 @@ def _ccxt_symbol(symbol: str, exchange_id: str = "") -> str:
     if "/" in symbol:
         return symbol
     if exchange_id in ("binance", "bybit", "okx", "bitget"):
-        return symbol.replace("-USD", "/USDT").replace("-", "/")
+        # Convert BTC -> BTC/USDT, ETH-USD -> ETH/USDT
+        if symbol.endswith("-USD"):
+            return symbol.replace("-USD", "/USDT")
+        return f"{symbol}/USDT"
     return f"{symbol}/USDT"
 
 
@@ -289,9 +292,10 @@ def _ccxt_candle_to_model(row: list, symbol: str, timeframe: str) -> Candle:
 
 
 def _ccxt_position_to_model(p: dict[str, Any]) -> Position:
+    pos_side_str = p.get("info", {}).get("positionSide", "BOTH")
     pos_side = (
         OrderSide.BUY
-        if float(p.get("info", {}).get("positionSide", "BOTH")) == "LONG"
+        if pos_side_str == "LONG"
         else OrderSide.SELL
     )
     liq_price = (
