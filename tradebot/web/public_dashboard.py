@@ -405,8 +405,9 @@ def get_transparency_data() -> dict:
         "tier_breakdown": tier_breakdown,
         "paid_transactions": paid_count,
         "total_revenue_idr": total_revenue,
-        "donation_total": donation_total,
+        "donation_total": total_revenue,  # combined Tripay + Midtrans
         "donation_transactions": donation_count,
+        "total_subscribers": tier_breakdown.get("elite_paid", 0) + tier_breakdown.get("pro_paid", 0) + tier_breakdown.get("donor_paid", 0),
         "signals_total": signals_total,
         "active_users_today": active_users,
         "revenue_trend": revenue_trend,

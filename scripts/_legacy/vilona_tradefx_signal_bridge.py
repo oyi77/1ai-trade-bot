@@ -1894,6 +1894,7 @@ class SignalHandler(BaseHTTPRequestHandler):
             "/api/user_activity", "/api/daily_analyze", "/api/daily_recap",
             "/api/fuel/stats", "/api/feed/stats", "/api/mapping",
             "/api/today_trades", "/api/engine-readings", "/api/recent-activity",
+            "/api/user-growth",
         ):
             try:
                 req = urllib.request.Request(

@@ -6365,11 +6365,17 @@ def handle_command(cmd, text, chat_id, msg):
                     logger.info(f"   [/signal {disp}] BLOCKED: outside killzone (London/NY only)")
                     tg_send(f"⛔ <b>Signal ditahan — di luar Killzone</b>\n\n{disp} hanya trading di sesi London (14:00-17:00 WIB) & NY (19:00-22:00 WIB).\n\nGunakan /analyze untuk analisis only.", chat_id)
                     return
-            # ── Post to channel FIRST, then bridge with message_id ──
-            # BLOCKED: only S-TIER signals (teaser) go to public channel now.
-            # Regular /signal posts show full entry/SL/TP — removed by user request.
+            # ── Post teaser to channel FIRST → get message_id → bridge ──
             tg_msg_id = None
+            try:
+                tease = f"🤖 <b>AI Signal Generated</b> — {disp} {sig['action']}\nConfidence: {sig.get('confidence',0):.0%} | Grade: {sig.get('grade','?')}\n⏳ Menunggu eksekusi EA..."
+                result = tg_send(tease, SIGNAL_CHANNEL_ID)
+                if result and isinstance(result, dict):
+                    tg_msg_id = result.get("result", {}).get("message_id")
+            except Exception:
+                pass
             # ── Post to bridge for EA pickup ──
+            sig["telegram_message_id"] = tg_msg_id
             try:
                 post_signal_to_bridge(sig, 0, disp)
                 logger.info(f"🤖 Auto-executed {disp} {sig['action']} via /signal (msg_id={tg_msg_id})")

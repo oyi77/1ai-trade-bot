@@ -786,6 +786,37 @@ async def api_recent_activity():
     return {"activities": _get_recent_activity(15)}
 
 
+@app.get("/api/user-growth")
+async def api_user_growth():
+    """User growth tracking — first activity per user by month."""
+    import sqlite3 as _sqlite3
+    db_path = DATA_DIR / "members.db"
+    try:
+        conn = _sqlite3.connect(str(db_path))
+        conn.row_factory = _sqlite3.Row
+        c = conn.cursor()
+        # First activity per user
+        c.execute("""
+            SELECT DISTINCT chat_id, MIN(created_at) as first_activity
+            FROM subscriber_activity
+            GROUP BY chat_id
+        """)
+        from collections import Counter
+        months = Counter()
+        for r in c.fetchall():
+            m = r["first_activity"][:7] if r["first_activity"] else "unknown"
+            months[m] += 1
+        # Total unique users
+        c.execute("SELECT COUNT(DISTINCT chat_id) FROM subscriber_activity")
+        total = c.fetchone()[0] or 0
+        # Growth timeline
+        timeline = [{"month": k, "new_users": v, "cumulative": sum(months[m] for m in sorted(months.keys()) if m <= k)} for k in sorted(months.keys())]
+        conn.close()
+        return {"total_users": total, "timeline": timeline}
+    except Exception as e:
+        return {"total_users": 0, "timeline": [], "error": str(e)}
+
+
 @app.get("/api/trade_stats")
 async def api_trade_stats():
     """Trade history summary stats."""
