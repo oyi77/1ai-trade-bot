@@ -106,6 +106,22 @@ class QualityGate:
     * ``current_price``     — float (market price at signal time)
     """
 
+    def __init__(
+        self,
+        min_confidence: float = 0.50,
+        max_latency_ms: int = 1000,
+        retry_attempts: int = 3,
+        fallback_strategies: list[str] | None = None,
+        ai_consensus_fn=None,
+        **_: object,
+    ) -> None:
+        """Accept brand/unified-engine config without breaking legacy callers."""
+        self.min_confidence = float(min_confidence or 0.50)
+        self.max_latency_ms = int(max_latency_ms or 1000)
+        self.retry_attempts = int(retry_attempts or 3)
+        self.fallback_strategies = fallback_strategies or []
+        self._ai_consensus_fn = ai_consensus_fn
+
     # ------------------------------------------------------------------
     #  Validation (quality gate)
     # ------------------------------------------------------------------
@@ -130,8 +146,9 @@ class QualityGate:
         macro = meta.get("macro_trend", "NEUTRAL")
         tfs = meta.get("timeframes", {})
 
-        # ── Check 1: consensus score threshold (50%) ──
-        score_ok = hier_score >= 0.50
+        # ── Check 1: consensus score threshold (brand-configurable, default 50%) ──
+        min_conf = self.min_confidence
+        score_ok = hier_score >= min_conf
 
         # ── Check 2: MTF alignment ──
         align_ok = alignment != "CONFLICT"
@@ -178,7 +195,7 @@ class QualityGate:
         if not passed:
             # Build diagnostic reason
             if not score_ok:
-                reason = f"Consensus {hier_score*100:.0f}% < 50%"
+                reason = f"Consensus {hier_score*100:.0f}% < {min_conf*100:.0f}%"
             elif not align_ok:
                 reason = f"MTF alignment conflict ({alignment})"
             elif not ct_ok:
@@ -200,7 +217,7 @@ class QualityGate:
                 "consensus_threshold": {
                     "passed": score_ok,
                     "value": round(hier_score, 3),
-                    "min": 0.50,
+                    "min": round(min_conf, 3),
                 },
                 "alignment": {"passed": align_ok, "value": alignment},
                 "counter_trend": {
