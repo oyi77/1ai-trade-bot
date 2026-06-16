@@ -4824,15 +4824,19 @@ def handle_command(cmd, text, chat_id, msg):
                 # ── SL/TP CLAMPING: enforce 20-35 pip SL, realistic TP ──
                 sig = _clamp_sltp(sig, disp)
                 curr = "Rp" if is_idx else "$"
-                # Quality gate for manual analyze
+                # Quality gate for manual analyze — solo bypass at 80%+ conf
                 voters = sig.get("voters", 0)
+                conf = float(sig.get("confidence", 0) or 0)
+                if isinstance(conf, (int,float)) and conf > 10:
+                    conf = conf / 100
+                if sig.get("action") in ("BUY","SELL") and voters < 2 and conf < 0.80:
+                    tg_send(f"⚠️ Sinyal ditahan: hanya {voters} model setuju (min 2). Coba /analyze lagi.", chat_id)
+                    return
+                # ── RR QUALITY GATE ──
                 rr = sig.get("rr_ratio", 0)
                 if isinstance(rr, str) and rr.startswith("1:"):
                     rr = float(rr[2:]) if rr[2:] else 0
                 rr = float(rr) if rr else 0
-                if sig.get("action") in ("BUY","SELL") and voters < 2:
-                    tg_send(f"⚠️ Sinyal ditahan: hanya {voters} model setuju (min 2). Coba /analyze lagi.", chat_id)
-                    return
                 if sig.get("action") in ("BUY","SELL") and rr > 0 and (rr < 1.5 or rr > 5.0):
                     tg_send(f"⚠️ Sinyal ditahan: RR 1:{rr:.1f} di luar 1:1.5-5. Coba /analyze lagi.", chat_id)
                     return
@@ -5118,13 +5122,16 @@ def handle_command(cmd, text, chat_id, msg):
                             sig["confidence"] = c / 100
                         # Apply Elite custom params
                         sig = apply_elite_params(sig, elite_params, price, sub.upper())
-                        # Quality gate
+                        # Quality gate — solo bypass at 80%+ conf
                         voters = sig.get("voters", 0)
+                        conf_g = float(sig.get("confidence", 0) or 0)
+                        if isinstance(conf_g, (int,float)) and conf_g > 10:
+                            conf_g = conf_g / 100
                         rr = sig.get("rr_ratio", 0)
                         if isinstance(rr, str) and rr.startswith("1:"):
                             rr = float(rr[2:]) if rr[2:] else 0
                         rr = float(rr) if rr else 0
-                        if sig.get("action") in ("BUY","SELL") and voters < 2:
+                        if sig.get("action") in ("BUY","SELL") and voters < 2 and conf_g < 0.80:
                             tg_send(f"⚠️ Sinyal ditahan: hanya {voters} model setuju (min 2). Coba /analyze lagi.", chat_id)
                             return
                         if sig.get("action") in ("BUY","SELL") and rr > 0 and (rr < 1.5 or rr > 5.0):
@@ -6615,7 +6622,8 @@ def handle_command(cmd, text, chat_id, msg):
             # ── Post to bridge for EA pickup ──
             sig["telegram_message_id"] = tg_msg_id
             try:
-                post_signal_to_bridge(sig, 0, disp)
+                live_price = fetch_price(pair)
+                post_signal_to_bridge(sig, live_price or 0, disp)
                 logger.info(f"🤖 Auto-executed {disp} {sig['action']} via /signal (msg_id={tg_msg_id})")
             except Exception as ex:
                 logger.warning(f"Bridge post [/signal] failed: {ex}")
