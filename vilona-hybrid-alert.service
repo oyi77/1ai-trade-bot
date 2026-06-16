@@ -1,0 +1,15 @@
+[Unit]
+Description=Vilona Hybrid Alert Daemon (Phase 4)
+After=network.target vilona-hybrid-engine.service
+Wants=vilona-hybrid-engine.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/openclaw/projects/1ai-trade-bot
+EnvironmentFile=/home/openclaw/projects/1ai-trade-bot/.env
+ExecStart=/home/openclaw/projects/1ai-trade-bot/.venv/bin/python -m hybrid_decision_engine.alert_daemon
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
