@@ -6,6 +6,7 @@ Grab forex data + generate signals even without MT5/EA.
 Commands: /start /help /price /analyze /data /killzone /status /subscribe /autosync /genkey /listkeys /mykey /myid
 """
 import hashlib, json, logging, os, re, sqlite3, sys, threading, time, urllib.parse, urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -2575,6 +2576,150 @@ def _compute_levels(ohlcv_bars: list, price: float) -> str:
         return "\\n".join(parts)
     except:
         return ""
+
+
+# ── MT5 POINTS → PIPS NORMALIZER ─────────────────────────────────────
+# MT5 "points" = smallest price increment. Pip = standard unit.
+# XAUUSD 3-digit broker: 1 point = 0.01, 1 pip = 0.10 (100 pts)
+# EURUSD 5-digit broker: 1 point = 0.00001, 1 pip = 0.0001 (10 pts)
+# USOIL 3-digit broker:  1 point = 0.01, 1 pip = 0.01 (1 pt = 1 pip)
+# BTCUSD:               1 point = 0.01, 1 pip = 1.0 (100 pts)
+
+_MT5_POINTS_PER_PIP = {
+    "XAUUSD": 100, "GOLD": 100, "XAU": 100,
+    "EURUSD": 10, "GBPUSD": 10, "USDJPY": 100, "USDCHF": 10,
+    "AUDUSD": 10, "USDCAD": 10, "NZDUSD": 10,
+    "EURJPY": 100, "GBPJPY": 100, "EURAUD": 10,
+    "USOIL": 1, "CRUDE": 1,
+    "BTCUSD": 100, "ETHUSD": 100,
+}
+
+def mt5_points_to_pips(points: float, display: str) -> float:
+    """Convert MT5 points to standard pips for the given instrument.
+    XAUUSD: 1500 points → 15.0 pips.  EURUSD: 150 points → 15.0 pips."""
+    pts_per_pip = _MT5_POINTS_PER_PIP.get(display.upper(), 10)
+    return round(points / pts_per_pip, 2)
+
+def pips_to_mt5_points(pips: float, display: str) -> float:
+    """Convert standard pips back to MT5 points for EA payload."""
+    pts_per_pip = _MT5_POINTS_PER_PIP.get(display.upper(), 10)
+    return round(pips * pts_per_pip, 0)
+
+def get_pip_size(display: str) -> float:
+    """Return the price delta of 1 standard pip for the instrument."""
+    _sizes = {
+        "XAUUSD": 0.10, "GOLD": 0.10, "XAU": 0.10,
+        "EURUSD": 0.0001, "GBPUSD": 0.0001, "USDJPY": 0.01,
+        "USDCHF": 0.0001, "AUDUSD": 0.0001, "USDCAD": 0.0001,
+        "NZDUSD": 0.0001, "EURJPY": 0.01, "GBPJPY": 0.01,
+        "USOIL": 0.01, "CRUDE": 0.01,
+        "BTCUSD": 1.0, "ETHUSD": 0.01,
+    }
+    return _sizes.get(display.upper(), 0.0001)
+
+
+# ── PARALLEL ENGINE EXECUTOR ──────────────────────────────────────────
+# Runs S-TIER, AI Consensus, and SBR/BRS concurrently via ThreadPoolExecutor.
+# Priority evaluation: S-TIER > SBR/BRS > AI Consensus.
+
+class _EngineResult:
+    """Lightweight container for engine results."""
+    __slots__ = ("source", "signal", "error")
+    def __init__(self, source: str, signal: dict | None = None, error: str | None = None):
+        self.source = source
+        self.signal = signal
+        self.error = error
+
+def _run_stier(display: str, pair: str, price: float, ohlcv_bars: list) -> _EngineResult:
+    """Run S-TIER Zone detection (fast, mechanical — no LLM)."""
+    try:
+        if not ohlcv_bars or len(ohlcv_bars) < 30:
+            return _EngineResult("stier", None)
+        sig, reason = detect_stier_zone(display, pair, price, ohlcv_bars)
+        if sig:
+            logger.info(f"⚡ [PARALLEL] S-TIER fired: {sig.get('action')} @ {sig.get('entry')}")
+        return _EngineResult("stier", sig)
+    except Exception as e:
+        return _EngineResult("stier", error=str(e))
+
+def _run_ai_consensus(pair: str, price: float, dxy, sess: str, kz: str,
+                      loss_count: int, ohlcv: list, display: str) -> _EngineResult:
+    """Run AI Consensus (slow, LLM-based — 2-5 seconds)."""
+    try:
+        sig = ask_ai(price, dxy, sess, kz, loss_count, premium=True, ohlcv=ohlcv, display=display)
+        if sig and sig.get("action") in ("BUY", "SELL"):
+            logger.info(f"⚡ [PARALLEL] AI Consensus fired: {sig.get('action')} conf={sig.get('confidence',0):.0%}")
+        return _EngineResult("ai_consensus", sig)
+    except Exception as e:
+        return _EngineResult("ai_consensus", error=str(e))
+
+def _run_sbr_killer(display: str, ohlcv_bars: list) -> _EngineResult:
+    """Run SBR/BRS Killer Zone engine (medium speed, no LLM)."""
+    try:
+        from tradebot.services.apex_hunt_radar import SBRKillerEngine
+        engine = SBRKillerEngine()
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            # Already inside an async context — use a separate thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, engine.analyze_h1_m15(ohlcv_bars[:80], ohlcv_bars[:40]))
+                verdict = future.result(timeout=30)
+        else:
+            verdict = asyncio.run(engine.analyze_h1_m15(ohlcv_bars[:80], ohlcv_bars[:40]))
+        if verdict and verdict.get("action") in ("BUY", "SELL") and verdict.get("confidence", 0) >= 50:
+            logger.info(f"⚡ [PARALLEL] SBR/BRS fired: {verdict.get('action')} conf={verdict.get('confidence',0)}%")
+            return _EngineResult("sbr_killer", verdict)
+        return _EngineResult("sbr_killer", None)
+    except Exception as e:
+        logger.debug(f"SBR/BRS engine error: {e}")
+        return _EngineResult("sbr_killer", error=str(e))
+
+def _parallel_engine_scan(pair: str, display: str, price: float, dxy, sess: str, kz: str,
+                          loss_count: int, ohlcv_bars: list) -> dict | None:
+    """Run all 3 engines in parallel, evaluate by priority.
+    
+    Returns the winning signal dict or None.
+    Priority: S-TIER > SBR/BRS > AI Consensus.
+    """
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="engine") as pool:
+        futures = {
+            pool.submit(_run_stier, display, pair, price, ohlcv_bars): "stier",
+            pool.submit(_run_ai_consensus, pair, price, dxy, sess, kz, loss_count, ohlcv_bars, display): "ai_consensus",
+            pool.submit(_run_sbr_killer, display, ohlcv_bars): "sbr_killer",
+        }
+        results = {}
+        for future in as_completed(futures, timeout=35):
+            name = futures[future]
+            try:
+                results[name] = future.result(timeout=5)
+            except Exception as e:
+                results[name] = _EngineResult(name, error=str(e))
+
+    # ── Priority evaluation ──
+    # 1. S-TIER (highest conviction, mechanical)
+    stier = results.get("stier")
+    if stier and stier.signal:
+        logger.info(f"🏆 PARALLEL WINNER: S-TIER → {stier.signal.get('action')}")
+        return stier.signal
+
+    # 2. SBR/BRS Killer Zone
+    sbr = results.get("sbr_killer")
+    if sbr and sbr.signal:
+        logger.info(f"🏆 PARALLEL WINNER: SBR/BRS → {sbr.signal.get('action')}")
+        return sbr.signal
+
+    # 3. AI Consensus (slowest, lowest priority)
+    ai = results.get("ai_consensus")
+    if ai and ai.signal and ai.signal.get("action") in ("BUY", "SELL"):
+        logger.info(f"🏆 PARALLEL WINNER: AI Consensus → {ai.signal.get('action')}")
+        return ai.signal
+
+    return None
 
 
 def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
@@ -7345,11 +7490,11 @@ def auto_analyze_loop():
     def _slippage_guard(display, signal_entry, signal_action):
         """Re-fetch live price and check if price moved >15 pip during AI thinking.
         Returns (ok: bool, live_price: float, drift_pips: float)."""
-        pip_s = 0.10 if display in ("XAUUSD","GOLD") else 0.01
+        pip_s = get_pip_size(display)  # instrument-aware pip size
         max_drift = 1.5  # 15 pip — hard limit for late-execution kill switch
         live = None
         try:
-            if display in ("XAUUSD","GOLD"):
+            if display in ("XAUUSD", "GOLD"):
                 spot = fetch_xauusd_spot()
                 if spot:
                     live = round(spot + XAUUSD_OFFSET, 2)
@@ -7418,14 +7563,15 @@ def auto_analyze_loop():
         except Exception:
             pass
         return {}
-    def _check_missed_move(price, state):
-        """Check if price moved >500 pips since last scan (1 pip = 0.10 for XAUUSD).
+    def _check_missed_move(price, state, display="XAUUSD"):
+        """Check if price moved >500 pips since last scan (instrument-aware).
         Returns (missed: bool, gap_pips: float)."""
         last_price = state.get('last_price')
         if last_price is None:
             return False, 0.0
         gap = abs(price - last_price)
-        gap_pips = gap / 0.10
+        pip_s = get_pip_size(display)
+        gap_pips = gap / pip_s
         if gap_pips > 500:
             return True, round(gap_pips, 1)
         return False, round(gap_pips, 1)
@@ -7493,7 +7639,7 @@ def auto_analyze_loop():
 
             # ── Missed move detection ──
             _ss = _load_scan_state()
-            _missed, _gap_pips = _check_missed_move(price, _ss)
+            _missed, _gap_pips = _check_missed_move(price, _ss, disp)
             if _missed:
                 logger.warning(f"⚠️ MISSED MOVE [{disp}]: price moved {_gap_pips} pips since last scan")
             # Seed state immediately so any crash before save still has datum
@@ -7550,6 +7696,24 @@ def auto_analyze_loop():
                                         symbol = ct.get("symbol", disp)
                                         pips = ct.get("pips", 0)
                                         broadcast_tp_hit_and_upsell(symbol, pips)
+                                        # ── GRADE A FLEX: broadcast to public channel ──
+                                        _ct_grade = str(ct.get("grade", "")).upper()
+                                        _ct_source = str(ct.get("source", "")).lower()
+                                        _is_grade_a = _ct_grade == "A" or "stier" in _ct_source or "sbr" in _ct_source
+                                        if _is_grade_a and float(pips or 0) > 0:
+                                            try:
+                                                _tp_level = "TP1" if float(pips or 0) < 30 else "TP2"
+                                                _flex_msg = (
+                                                    f"🚨 RECAP VIP: Sinyal GRADE {_ct_grade} {symbol} "
+                                                    f"pagi ini sukses tembus {_tp_level} "
+                                                    f"(+{float(pips):.1f} Pips)!\n"
+                                                    f"Anda ketinggalan? Chat @berkahkaryaforexbotbot "
+                                                    f"dan ketik /subscribe sekarang."
+                                                )
+                                                send_to_channel(_flex_msg)
+                                                logger.info(f"📢 GRADE {_ct_grade} FLEX [{symbol}]: TP hit +{float(pips):.1f} pip → channel broadcast")
+                                            except Exception as flex_e:
+                                                logger.debug(f"Grade A flex error: {flex_e}")
                                 except Exception as lle:
                                     logger.debug("Learning loop error: %s", lle)
                         except Exception: pass
@@ -7559,19 +7723,39 @@ def auto_analyze_loop():
             lkz, nykz = killzone(h)
             kz = "London" if lkz else ("NY" if nykz else "Outside")
 
-            # ── S-TIER ZONE DETECTOR: Triple Confluence (highest priority, runs first) ──
+            # ── PARALLEL ENGINE SCAN: S-TIER + SBR/BRS + AI run simultaneously ──
             stier_sig = None
+            sbr_sig = None
+            ai_sig = None
+            _parallel_source = None
+
             if is_forex:
                 try:
-                    stier_bars = _fetch_ohlcv_for_ai(pair, keep=60)
-                    if stier_bars and len(stier_bars) >= 30:
-                        stier_sig, stier_reason = detect_stier_zone(
-                            pair.upper(), disp, price, stier_bars)
-                        if stier_sig:
-                            logger.info(f"💀 S-TIER ZONE [{disp}]: {stier_sig['action']} "
-                                       f"@ ${stier_sig.get('entry',0):.2f} | Grade={stier_sig.get('grade','?')}")
+                    ohlcv_for_engines = _fetch_ohlcv_for_ai(pair, keep=80)
+                    _sess_str = session(h)
+                    _kz_str = kz
+                    _loss = log.get("loss_count", 0)
+
+                    # Run all 3 engines concurrently (max ~35s total instead of ~10s sequential)
+                    winner = _parallel_engine_scan(
+                        pair=pair, display=disp, price=price,
+                        dxy=dxy, sess=_sess_str, kz=_kz_str,
+                        loss_count=_loss, ohlcv_bars=ohlcv_for_engines or []
+                    )
+
+                    if winner:
+                        _parallel_source = winner.get("source", "unknown")
+                        logger.info(f"⚡ PARALLEL SCAN [{disp}]: winner={_parallel_source} "
+                                   f"action={winner.get('action')} conf={winner.get('confidence',0)}")
+
+                        if _parallel_source in ("stier", "stier-snr-god-tier"):
+                            stier_sig = winner
+                        elif _parallel_source == "sbr_killer":
+                            sbr_sig = winner
+                        elif _parallel_source in ("ai_consensus", "ai"):
+                            ai_sig = winner
                 except Exception as e:
-                    logger.debug(f"S-TIER check [{disp}]: {e}")
+                    logger.debug(f"Parallel scan error [{disp}]: {e}")
 
             if stier_sig and stier_sig["action"] in ("BUY", "SELL"):
                 # ── 💀 S-TIER PRICE SANITY: entry zone must be within ±3% of current spot ──
@@ -7775,9 +7959,112 @@ def auto_analyze_loop():
                 time.sleep(60)
                 continue
 
-            # ── AI Consensus — ONLY source of signals ──
-            sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=True,
-                          ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
+            # ── SBR/BRS KILLER ZONE: MTF S/R break + FVG confluence ──
+            if sbr_sig and sbr_sig.get("action") in ("BUY", "SELL"):
+                sbr_action = sbr_sig["action"]
+                sbr_entry = sbr_sig.get("entry", price) or price
+                sbr_sl = sbr_sig.get("sl", 0)
+                sbr_tp = sbr_sig.get("tp", 0)
+                sbr_conf = sbr_sig.get("confidence", 0)
+                if isinstance(sbr_conf, (int, float)) and sbr_conf > 10:
+                    sbr_conf = sbr_conf / 100
+                    sbr_sig["confidence"] = sbr_conf
+
+                # Price sanity: entry within ±3% of spot
+                if price and price > 0 and abs(sbr_entry - price) / price > 0.03:
+                    logger.warning(f"🎯 SBR/BRS [{disp}] REJECTED: entry ${sbr_entry:.2f} too far from spot ${price:.2f}")
+                    sbr_sig = None
+                else:
+                    # Clamp SL/TP
+                    sbr_sig = _clamp_sltp(sbr_sig, disp)
+                    sbr_sig["source"] = "sbr_killer_zone"
+                    sbr_sig["grade"] = "A"
+                    sbr_sig["risk_percent"] = 1.5
+
+                    # Format signal
+                    sbr_text = fmt_signal(sbr_sig, price, dxy, h, disp, "$")
+                    sbr_text = sbr_text.replace(
+                        "SINYAL SELL", f"🎯 Apex SBR/BRS Killer SELL"
+                    ).replace(
+                        "SINYAL BUY", f"🎯 Apex SBR/BRS Killer BUY"
+                    ).replace(
+                        "MARKET PULSE", "🎯 Apex SBR/BRS Killer Zone"
+                    )
+                    sbr_text += (
+                        "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                        "🔥 <b>SBR/BRS KILLER ZONE</b>\n"
+                        "   MTF H1→M15: BOS + Displacement + FVG\n"
+                    )
+                    meta = sbr_sig.get("meta", {})
+                    if meta.get("bos_timeframe"):
+                        sbr_text += f"   BOS: {meta.get('bos_timeframe')} @ ${meta.get('bos_level', 0):.2f}\n"
+                    if meta.get("fvg_detected"):
+                        sbr_text += f"   FVG Confirmed ✅\n"
+                    sbr_text += f"   SL: structural + ATR buffer\n"
+
+                    # Killzone gate
+                    lkz, nykz = killzone(h)
+                    should_bridge_sbr = True
+                    if not lkz and not nykz:
+                        logger.info(f"🎯 SBR/BRS [{disp}] bridge BLOCKED: outside killzone")
+                        should_bridge_sbr = False
+
+                    # DM to premium members
+                    try:
+                        db = sqlite3.connect(SUBS_PATH)
+                        db.row_factory = sqlite3.Row
+                        rows = db.execute(
+                            "SELECT chat_id FROM members WHERE status='paid' AND chat_id NOT LIKE 'test%' AND chat_id NOT LIKE 'vfy%'"
+                        ).fetchall()
+                        db.close()
+                        for row in rows:
+                            try:
+                                tg_send(sbr_text, str(row["chat_id"]))
+                                time.sleep(0.3)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # Teaser to channel
+                    tg_msg_id = None
+                    try:
+                        tease = (
+                            f"<b>🎯 Apex SBR/BRS Killer — {sbr_action} {disp}</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🔥 MTF S/R Break + FVG Confluence\n"
+                            f"   BOS {meta.get('bos_timeframe','H1')} → M15 execution\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"👑 <b>Signal dikirim ke SEMUA subscriber Premium</b>\n"
+                            f"⭐ Upgrade ke PRO/ELITE untuk akses penuh:\n"
+                        )
+                        result = send_to_channel(tease)
+                        if result:
+                            tg_msg_id = result.get('result', {}).get('message_id')
+                    except Exception:
+                        pass
+
+                    # Bridge POST
+                    if should_bridge_sbr:
+                        if tg_msg_id:
+                            sbr_sig["telegram_message_id"] = tg_msg_id
+                        post_signal_to_bridge(sbr_sig, price, disp)
+
+                    logger.info(f"🎯 SBR/BRS [{disp}]: {sbr_action} @ ${sbr_entry:.2f} | "
+                               f"conf={sbr_conf:.0%} | bridge={'ON' if should_bridge_sbr else 'OFF'}")
+                    log["signals_sent"] = log.get("signals_sent", 0) + 1
+                    time.sleep(60)
+                    continue
+
+            # ── AI Consensus: use pre-computed result from parallel scan ──
+            sig = ai_sig  # already computed by _parallel_engine_scan()
+            if not sig:
+                # Fallback: sequential AI call (parallel didn't run or timed out)
+                try:
+                    sig = ask_ai(price, dxy, session(h), kz, log["loss_count"], premium=True,
+                                  ohlcv=_fetch_ohlcv_for_ai(pair), display=disp)
+                except Exception:
+                    sig = None
             if not sig:
                 time.sleep(30)
                 continue
