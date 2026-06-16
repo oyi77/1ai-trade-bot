@@ -10,17 +10,23 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-# ── PID LOCK: prevent duplicate bot instances ──
+# ── PID LOCK: kill any stale instance ──
 _PID_FILE = Path(__file__).resolve().parent.parent.parent / "data" / ".bot_handler.pid"
-if _PID_FILE.exists():
-    try:
+try:
+    if _PID_FILE.exists():
         _old_pid = int(_PID_FILE.read_text().strip())
-        os.kill(_old_pid, 0)  # check if process exists
-        logging.warning(f"Bot handler already running (PID {_old_pid}). Exiting.")
-        sys.exit(0)
-    except (OSError, ValueError):
-        pass  # PID is stale — continue
-_PID_FILE.write_text(str(os.getpid()))
+        try:
+            os.kill(_old_pid, 0)  # still running?
+            import signal as _sig
+            os.kill(_old_pid, _sig.SIGTERM)
+            logging.warning(f"Killed stale bot PID={_old_pid}; waiting 2s for cleanup...")
+            time.sleep(2)
+        except (OSError, ProcessLookupError, ValueError):
+            pass  # already dead
+    _PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _PID_FILE.write_text(str(os.getpid()))
+except Exception as _pid_e:
+    logging.warning(f"PID lock error (non-fatal): {_pid_e}")
 
 # ── Project path (MUST be before any local imports) ──
 # 3 levels up: _legacy → scripts → project root

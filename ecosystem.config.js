@@ -15,6 +15,7 @@ module.exports = {
       restart_delay: 10000,
       kill_timeout: 10000,
     },
+    {
       name: 'vilona-bot',
       script: 'scripts/_legacy/vilona_tradefx_handler.py',
       interpreter: 'python3',

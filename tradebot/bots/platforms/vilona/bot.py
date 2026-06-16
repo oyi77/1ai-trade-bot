@@ -227,13 +227,7 @@ class VilonaBot(
             "fvg": self._cmd_fvg,
             "sweep": self._cmd_sweep,
             "whale": self._cmd_whale,
-            "panduan": self._cmd_panduan,
-            "cara_analisa": self._cmd_cara_analisa,
-            "cara_baca": self._cmd_cara_baca,
-            "cara_pasang": self._cmd_cara_pasang,
-            "cara_ea": self._cmd_cara_ea,
-            "cara_trailing": self._cmd_cara_trailing,
-            "alasan_sinyal": self._cmd_alasan_sinyal,
+            # Panduan commands handled via panduan.py dynamic lookup below
         }
         # Panduan commands handled via panduan.py dynamic lookup
         from tradebot.bots.platforms.vilona.panduan import PANDUAN_COMMANDS
