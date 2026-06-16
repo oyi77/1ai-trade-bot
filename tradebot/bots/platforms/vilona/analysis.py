@@ -124,11 +124,19 @@ class AnalysisHandlersMixin(_BaseAN):
                             )
                         elif ai_direction and ai_models_used == 1:
                             # Single AI mode (starter tier) — solo model decides
+                            # ENFORCE: confidence must be ≥80% for solo signals
+                            solo_confidence = float(ai_result.get("confidence", 0) or 0)
                             if ai_direction != mech_direction:
                                 consensus_ok = False
                                 LOG.info(
-                                    "🔇 QA (SOLO) BLOCKED: %s %s — AI says %s",
+                                    "🔇 QA (SOLO) BLOCKED: %s %s — AI says %s (direction mismatch)",
                                     display, mech_direction, ai_direction
+                                )
+                            elif solo_confidence < 0.80:
+                                consensus_ok = False
+                                LOG.info(
+                                    "🔇 QA (SOLO) BLOCKED: %s %s — confidence %.1f%% < 80%% minimum",
+                                    display, mech_direction, solo_confidence * 100
                                 )
 
                         if not consensus_ok:
