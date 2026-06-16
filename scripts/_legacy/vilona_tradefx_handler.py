@@ -7547,15 +7547,105 @@ def _mark_channel_post(asset_key: str = "", direction: str = "", entry=0, sl=0, 
         _set_last_post(asset_key, direction, entry)
     _save_channel_state()
 
+def _stable_trade_result_key(trade: dict) -> str:
+    """Stable duplicate key for channel trade-result alerts.
+
+    Some producers do not provide a stable trade_id, so do not rely on timestamp.
+    Use the actual result identity instead.
+    """
+    symbol = str(trade.get("symbol", "")).upper()
+    action = str(trade.get("action", "")).upper()
+    outcome = str(trade.get("outcome", "")).upper()
+    entry = trade.get("entry", trade.get("entry_price", 0))
+    close_p = trade.get("close_price", trade.get("close", 0))
+    tg_msg_id = trade.get("telegram_message_id") or trade.get("message_id") or ""
+    try:
+        entry_s = f"{float(entry):.2f}"
+    except Exception:
+        entry_s = str(entry)
+    try:
+        close_s = f"{float(close_p):.2f}"
+    except Exception:
+        close_s = str(close_p)
+    return f"result:{symbol}:{action}:{outcome}:{entry_s}:{close_s}:{tg_msg_id}"
+
+
 def _can_post_tpsl_alert(trade_id: str) -> bool:
-    """Prevent duplicate TP/SL alerts within 5 min for the same trade. Persisted to disk."""
+    """Prevent duplicate TP/SL alerts within 24h. Persisted to disk."""
     now = time.time()
     last = _last_tpsl_alert.get(trade_id, 0)
-    if (now - last) < 300:
+    if (now - last) < 86400:
         return False
     _last_tpsl_alert[trade_id] = now
     _save_tpsl_state()
     return True
+
+
+def _trade_result_reject_reason(trade: dict, *, require_signal_reply: bool = True) -> str | None:
+    """Return reason if a public TRADE RESULT must NOT be broadcast.
+
+    Rule: channel result reports must prove they came from an original signal.
+    No message_id, entry=0, absurd pips, or tiny TP flex = skip.
+    """
+    if not isinstance(trade, dict):
+        return "payload is not dict"
+    outcome = str(trade.get("outcome", "")).upper()
+    if outcome not in ("TP_HIT", "SL_HIT", "MANUAL", "BREAKEVEN"):
+        return f"unsupported outcome {outcome or '?'}"
+    if require_signal_reply and not trade.get("telegram_message_id"):
+        return "missing original signal telegram_message_id"
+
+    symbol = str(trade.get("symbol", "")).upper()
+    action = str(trade.get("action", "")).upper()
+    if action not in ("BUY", "SELL"):
+        return f"invalid action {action or '?'}"
+    try:
+        entry = float(trade.get("entry", trade.get("entry_price", 0)) or 0)
+        close_p = float(trade.get("close_price", trade.get("close", 0)) or 0)
+    except Exception:
+        return "entry/close not numeric"
+    if entry <= 0 or close_p <= 0:
+        return f"invalid entry/close entry={entry} close={close_p}"
+
+    # Basic instrument price ranges; prevents Entry=0 and accidental wrong-symbol prices.
+    if symbol in ("XAUUSD", "GOLD") and not (2000 <= entry <= 6000 and 2000 <= close_p <= 6000):
+        return f"XAUUSD price out of range entry={entry} close={close_p}"
+    if symbol in ("BTCUSD", "BTC") and not (10000 <= entry <= 200000 and 10000 <= close_p <= 200000):
+        return f"BTCUSD price out of range entry={entry} close={close_p}"
+    if symbol in ("ETHUSD", "ETH") and not (500 <= entry <= 10000 and 500 <= close_p <= 10000):
+        return f"ETHUSD price out of range entry={entry} close={close_p}"
+    if symbol in ("USOIL", "OIL", "CL") and not (20 <= entry <= 200 and 20 <= close_p <= 200):
+        return f"USOIL price out of range entry={entry} close={close_p}"
+
+    pip_size = 0.0001
+    min_public_pips = 10.0
+    max_public_pips = 500.0
+    if symbol in ("XAUUSD", "GOLD"):
+        pip_size, min_public_pips, max_public_pips = 0.1, 20.0, 1000.0
+    elif symbol in ("BTCUSD", "BTC"):
+        pip_size, min_public_pips, max_public_pips = 1.0, 50.0, 10000.0
+    elif symbol in ("ETHUSD", "ETH"):
+        pip_size, min_public_pips, max_public_pips = 0.01, 30.0, 50000.0
+    elif symbol in ("USOIL", "OIL", "CL"):
+        pip_size, min_public_pips, max_public_pips = 0.01, 20.0, 1000.0
+    elif symbol.endswith("JPY"):
+        pip_size, min_public_pips, max_public_pips = 0.01, 10.0, 300.0
+
+    expected = (close_p - entry) / pip_size if action == "BUY" else (entry - close_p) / pip_size
+    try:
+        pips = float(trade.get("pips", expected) or expected)
+    except Exception:
+        pips = expected
+    if abs(pips - expected) > max(2.0, abs(expected) * 0.10):
+        # Producer pip calc is wrong; normalize before formatting.
+        trade["pips"] = round(expected, 1)
+        pips = expected
+    abs_pips = abs(pips)
+    if abs_pips < min_public_pips:
+        return f"pips below public threshold {abs_pips:.1f} < {min_public_pips:.1f}"
+    if abs_pips > max_public_pips:
+        return f"pips absurd {abs_pips:.1f} > {max_public_pips:.1f}"
+    return None
 
 
 # ── Auto-DM Upsell / Donasi Trigger ───────────────────────────────
@@ -7783,8 +7873,15 @@ def auto_analyze_loop():
             if not isinstance(ct, dict):
                 continue
             try:
-                trade_id = str(ct.get("id") or ct.get("trade_id") or f"ea:{ct.get('symbol')}:{ct.get('timestamp')}:{ct.get('outcome')}")
-                if trade_id and not _can_post_tpsl_alert(trade_id):
+                reject = _trade_result_reject_reason(ct, require_signal_reply=True)
+                if reject:
+                    logger.warning("⛔ EA trade result skipped: %s | %s", reject, ct)
+                    continue
+                trade_id = str(ct.get("id") or ct.get("trade_id") or _stable_trade_result_key(ct))
+                stable_key = _stable_trade_result_key(ct)
+                if not _can_post_tpsl_alert(stable_key):
+                    continue
+                if trade_id != stable_key and not _can_post_tpsl_alert(trade_id):
                     continue
 
                 if ct.get("outcome") == "SL_HIT":
@@ -7893,8 +7990,15 @@ def auto_analyze_loop():
                     closed_trades = check_outcomes({disp: price})
                     for ct in closed_trades:
                         try:
-                            trade_id = ct.get("id", ct.get("trade_id", ""))
-                            if trade_id and not _can_post_tpsl_alert(str(trade_id)):
+                            reject = _trade_result_reject_reason(ct, require_signal_reply=True)
+                            if reject:
+                                logger.warning("⛔ Trade result skipped: %s | %s", reject, ct)
+                                continue
+                            trade_id = str(ct.get("id") or ct.get("trade_id") or _stable_trade_result_key(ct))
+                            stable_key = _stable_trade_result_key(ct)
+                            if not _can_post_tpsl_alert(stable_key):
+                                continue
+                            if trade_id != stable_key and not _can_post_tpsl_alert(trade_id):
                                 continue
                             # Increment daily loss counter on SL
                             if ct.get("outcome") == "SL_HIT":

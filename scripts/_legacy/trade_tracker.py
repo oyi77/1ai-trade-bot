@@ -149,6 +149,7 @@ def check_outcomes(current_prices: dict[str, float] | None = None) -> list[dict]
 
     data = _load()
     closed = []
+    dirty = False
 
     for trade in data["trades"]:
         if trade.get("outcome") != "OPEN":
@@ -164,7 +165,22 @@ def check_outcomes(current_prices: dict[str, float] | None = None) -> list[dict]
         action = trade.get("action", "BUY")
         sl = trade.get("sl", 0)
         tp = trade.get("tp", 0)
-        entry = trade.get("entry", price)
+        try:
+            entry = float(trade.get("entry", price) or 0)
+        except Exception:
+            entry = 0.0
+        if entry <= 0:
+            trade["outcome"] = "IGNORED_INVALID_ENTRY"
+            trade["close_time"] = datetime.now(WIB).isoformat()
+            logger.warning("Trade ignored: invalid entry=%s id=%s symbol=%s", entry, trade.get("id"), symbol)
+            dirty = True
+            continue
+        if not trade.get("telegram_message_id"):
+            trade["outcome"] = "IGNORED_NO_SIGNAL_REPLY"
+            trade["close_time"] = datetime.now(WIB).isoformat()
+            logger.warning("Trade ignored: missing telegram_message_id id=%s symbol=%s", trade.get("id"), symbol)
+            dirty = True
+            continue
 
         hit = None
         close_price = price
@@ -229,7 +245,7 @@ def check_outcomes(current_prices: dict[str, float] | None = None) -> list[dict]
         emoji = "✅" if is_win else "❌"
         logger.info(f"{emoji} Trade closed: {trade['id']} {hit} | {pip_diff:.1f} pips | ${profit_loss:+.2f}")
 
-    if closed:
+    if closed or dirty:
         _save(data)
 
     return closed

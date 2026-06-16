@@ -164,16 +164,25 @@ def _write_trade_result(pos: dict, reason: str):
     """Write trade result to file so handler can broadcast via send_to_channel.
     SINGLE SOURCE OF TRUTH — no independent Telegram sending from ea_executor.
     """
-    entry = pos.get("entry", 0)
-    close_price = pos.get("close_price", 0)
-    if close_price in (0, None):
-        logger.warning("_write_trade_result: close_price is %s for closed trade %s (reason=%s)",
-                       close_price, pos.get("id", "?"), reason)
+    entry = float(pos.get("entry", 0) or 0)
+    close_price = float(pos.get("close_price", 0) or 0)
     symbol = pos.get("symbol", "XAUUSD")
     action = pos.get("action", "?")
+    if entry <= 0 or close_price <= 0:
+        logger.warning("_write_trade_result SKIP invalid price: entry=%s close=%s trade=%s reason=%s",
+                       entry, close_price, pos.get("id", "?"), reason)
+        return
+    if not pos.get("telegram_message_id"):
+        logger.warning("_write_trade_result SKIP missing telegram_message_id for trade=%s reason=%s",
+                       pos.get("id", "?"), reason)
+        return
+    ps = _pip_size(symbol)
+    if ps <= 0:
+        logger.warning("_write_trade_result SKIP invalid pip_size for %s trade=%s", symbol, pos.get("id", "?"))
+        return
     pnl = pos.get("pnl", 0)
-    pips = abs(entry - close_price) / _pip_size(symbol) if _pip_size(symbol) > 0 else 0.0
-    is_tp = reason == "TP_HIT"
+    raw_pips = (close_price - entry) / ps if action == "BUY" else (entry - close_price) / ps
+    pips = round(raw_pips, 1)
 
     result = {
         "timestamp": wib_now().isoformat(),
