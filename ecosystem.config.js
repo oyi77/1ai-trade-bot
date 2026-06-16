@@ -7,9 +7,9 @@ module.exports = {
       cwd: '/home/openclaw/projects/1ai-trade-bot',
       args: '--bot-only',
       env: {
+        TELEGRAM_BOT_TOKEN: '8343388239:AAHWOVrRzwVeyGHav-DY9RvfSosDYteHuIg',
         PYTHONUNBUFFERED: '1',
       },
-      watch: false,
       autorestart: true,
       max_restarts: 10,
       restart_delay: 10000,

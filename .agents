@@ -1,0 +1,62 @@
+# Agent Context for 1ai-trade-bot
+
+## E2E Testing — MUST READ before any bot test or change
+
+### Target Bot
+
+- **@agent_1ai2_bot** is the unified bot (VilonaBot).
+- **@berkahkaryaforexbotbot** is the legacy Forex handler; do not test it.
+- PM2 process `agent-1ai2-bot` runs the unified bot.
+
+### Sessions
+
+All sessions are in `~/.telethon_session/`:
+
+| File | Telegram User | Status |
+|------|---------------|--------|
+| `codergaboets.session` | @codergaboets | ✅ Primary |
+| `alwayscuanbos.session` | @alwayscuanbos | ✅ Fallback |
+
+### Environment
+
+```bash
+export TELEGRAM_API_ID="23913448"
+export TELEGRAM_API_HASH="78d168f985edf365a5cd9679a917a0b2"
+export TELETHON_SESSION="$HOME/.telethon_session/codergaboets.session"
+export TELETHON_BOT_USERNAME="agent_1ai2_bot"
+```
+
+### Mandatory Test Coverage
+
+Every bot feature must be E2E tested end-to-end against @agent_1ai2_bot:
+
+- commands
+- functions
+- buttons
+- keyboards
+- happy flow / sad flow
+- fraud
+- signals
+- connection
+- input → output path
+
+### Docs
+
+- `~/.telethon_session/README.md`
+- `~/.telethon_session/AGENTS.md`
+- `tests/e2e/README.md`
+- `docs/AGENTS_QA.md`
+- `llms.txt`
+
+### How to Run
+
+```bash
+cd tests/e2e
+pytest test_vilona_commands.py -v
+```
+
+### If It Breaks
+
+- `pm2 status | grep agent-1ai2`
+- `pm2 logs agent-1ai2-bot --lines 50`
+- `pm2 stop vilona-bot && pkill -f vilona_tradefx_handler && pm2 restart agent-1ai2-bot`

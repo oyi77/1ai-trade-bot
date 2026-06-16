@@ -16,6 +16,7 @@ Environment:
     TELETHON_SESSION_NAME— Session file name (default: test_bot_session)
     ADMIN_CHAT_ID        — Admin Telegram chat ID for privileged tests
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,7 +27,7 @@ import sys
 import time
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 # ── Optional dependency guard ─────────────────────────────────────────
@@ -53,6 +54,7 @@ MAX_RESPONSE_TIME = float(os.environ.get("MAX_RESPONSE_TIME", "10.0"))
 
 if not API_ID or not API_HASH:
     import pytest
+
     pytestmark = pytest.mark.skip(reason="Set TELETHON_API_ID and TELETHON_API_HASH env vars")
 
 # ── Result tracking ──────────────────────────────────────────────────
@@ -96,14 +98,12 @@ class TestRunner:
         start = time.perf_counter()
         await self.client.send_message(self.bot_username, text)
         try:
-            msg = await asyncio.wait_for(
-                self._wait_for_bot_response(), timeout=timeout
-            )
+            msg = await asyncio.wait_for(self._wait_for_bot_response(), timeout=timeout)
             elapsed = (time.perf_counter() - start) * 1000
             if msg:
                 msg._response_time_ms = elapsed  # type: ignore[attr-defined]
             return msg
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     async def _wait_for_bot_response(self) -> Message:
@@ -155,8 +155,12 @@ class TestRunner:
             r.details["response_time_ms"] = getattr(msg, "_response_time_ms", 0)
             r.details["has_welcome_text"] = "VILONA" in text or "COMMAND CENTER" in text
             r.details["has_buttons"] = msg.reply_markup is not None
-            r.passed = r.details["has_welcome_text"] and r.details["has_buttons"] and self._response_time_ok(msg)
-        except Exception as exc:
+            r.passed = (
+                r.details["has_welcome_text"]
+                and r.details["has_buttons"]
+                and self._response_time_ok(msg)
+            )
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -178,7 +182,7 @@ class TestRunner:
             r.details["buttons"] = buttons
             r.details["all_required_found"] = found
             r.passed = found and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -197,7 +201,7 @@ class TestRunner:
             r.details["response_time_ms"] = getattr(clicked, "_response_time_ms", 0)
             r.details["has_signal_menu"] = "SIGNAL" in text or "ANALYSIS" in text
             r.passed = r.details["has_signal_menu"] and self._response_time_ok(clicked)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -216,7 +220,7 @@ class TestRunner:
             r.details["response_time_ms"] = getattr(clicked, "_response_time_ms", 0)
             r.details["has_market_menu"] = "MARKET DATA" in text or "Gold" in text or "BTC" in text
             r.passed = r.details["has_market_menu"] and self._response_time_ok(clicked)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -239,7 +243,7 @@ class TestRunner:
             r.details["response_time_ms"] = getattr(back, "_response_time_ms", 0)
             r.details["returned_to_main"] = "COMMAND CENTER" in text or "VILONA" in text
             r.passed = r.details["returned_to_main"] and self._response_time_ok(back)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -265,7 +269,7 @@ class TestRunner:
             r.details["average_ms"] = avg
             r.details["slow_commands"] = failed_slow
             r.passed = len(failed_slow) == 0
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -291,7 +295,7 @@ class TestRunner:
             r.details["has_mtf"] = has_mtf
             r.details["has_consensus"] = has_consensus
             r.passed = has_verdict and has_mtf and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -309,7 +313,7 @@ class TestRunner:
             has_signal_info = any(k in text for k in ["BUY", "SELL", "HOLD", "entry", "SL", "TP"])
             r.details["has_signal_info"] = has_signal_info
             r.passed = has_signal_info and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -328,7 +332,7 @@ class TestRunner:
             r.details["has_matrix"] = has_matrix
             r.details["has_engines"] = has_engines
             r.passed = has_matrix and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -348,10 +352,12 @@ class TestRunner:
                 raise RuntimeError("Could not click STOCKITY INSIDER")
             text = stockity.text or ""
             r.details["response_time_ms"] = getattr(stockity, "_response_time_ms", 0)
-            has_referral = "referral" in text.lower() or "invite" in text.lower() or "stockity" in text.lower()
+            has_referral = (
+                "referral" in text.lower() or "invite" in text.lower() or "stockity" in text.lower()
+            )
             r.details["has_referral_info"] = has_referral
             r.passed = has_referral and self._response_time_ok(stockity)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -374,7 +380,7 @@ class TestRunner:
             r.details["has_win_rate"] = has_win_rate
             r.details["has_stats"] = has_stats
             r.passed = has_win_rate and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -391,7 +397,7 @@ class TestRunner:
             has_history = "RIWAYAT" in text or "History" in text or "trade" in text.lower()
             r.details["has_history"] = has_history
             r.passed = has_history and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -410,7 +416,7 @@ class TestRunner:
             r.details["has_recap"] = has_recap
             r.details["has_pips"] = has_pips
             r.passed = has_recap and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -427,7 +433,7 @@ class TestRunner:
             has_levels = "R1" in text or "S1" in text or "Pivot" in text or "Support" in text
             r.details["has_levels"] = has_levels
             r.passed = has_levels and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -446,7 +452,7 @@ class TestRunner:
             r.details["has_engines"] = has_engines
             r.details["has_bridge"] = has_bridge
             r.passed = has_engines and has_bridge and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -476,12 +482,14 @@ class TestRunner:
             if self.admin_chat_id:
                 r.passed = has_admin_button
                 if not has_admin_button:
-                    r.error = f"Admin button not shown for chat_id (expected admin: {self.admin_chat_id})"
+                    r.error = (
+                        f"Admin button not shown for chat_id (expected admin: {self.admin_chat_id})"
+                    )
             else:
                 # Non-admin test — just verify no admin button + no crash
                 r.passed = not has_admin_button
                 r.details["note"] = "Non-admin user — verified no admin button visible"
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -499,7 +507,7 @@ class TestRunner:
             is_rejected = "Hanya admin" in text or "admin only" in text.lower() or "⛔" in text
             r.details["is_rejected"] = is_rejected
             r.passed = is_rejected and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -517,7 +525,7 @@ class TestRunner:
             is_rejected = "Hanya admin" in text or "admin only" in text.lower() or "⛔" in text
             r.details["is_rejected"] = is_rejected
             r.passed = is_rejected and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -535,7 +543,7 @@ class TestRunner:
             is_rejected = "Hanya admin" in text or "admin only" in text.lower() or "⛔" in text
             r.details["is_rejected"] = is_rejected
             r.passed = is_rejected and self._response_time_ok(msg)
-        except Exception as exc:
+        except Exception:
             r.error = traceback.format_exc()
         r.duration_ms = (time.perf_counter() - t0) * 1000
         return r
@@ -545,7 +553,12 @@ class TestRunner:
     async def run_all(self) -> None:
         LOG.info("=" * 60)
         LOG.info("VILONA BOT E2E TEST SUITE via Telethon")
-        LOG.info("Target: @%s | Timeout: %ds | Max RT: %.1fs", self.bot_username, TEST_TIMEOUT, MAX_RESPONSE_TIME)
+        LOG.info(
+            "Target: @%s | Timeout: %ds | Max RT: %.1fs",
+            self.bot_username,
+            TEST_TIMEOUT,
+            MAX_RESPONSE_TIME,
+        )
         LOG.info("=" * 60)
 
         await self.init_client()
@@ -613,7 +626,7 @@ class TestRunner:
 
         # JSON report for CI
         report = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "target_bot": self.bot_username,
             "total": total,
             "passed": passed,

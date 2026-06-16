@@ -147,58 +147,108 @@ class Signal:
 
 ## Telethon Sessions for E2E Testing
 
-### Location
-All authenticated Telethon sessions are stored in: `~/.telethon_session/`
+### Target Bot
 
-### Primary Session (Use This One)
-- **File**: `paijo_fixed.session`
-- **Phone**: +6285732740006
-- **User**: @alwayscuanbos
-- **Version**: 11 (compatible with Telethon 1.44+)
-- **Status**: ✅ Working
+- **Unified bot to test:** `@agent_1ai2_bot`
+- **Legacy bot (do not test):** `@berkahkaryaforexbotbot`
+- **PM2 process:** `agent-1ai2-bot`
+- **Token:** `8343388239:AAHWOVrRzwVeyGHav-DY9RvfSosDYteHuIg`
+
+### Session Files (VERIFIED)
+
+All authenticated sessions are centralized in `~/.telethon_session/`. Unauthenticated sessions discovered across the machine have been deleted.
+
+| File | Telegram User | Phone | API ID / Hash | Status |
+|------|---------------|-------|---------------|--------|
+| `codergaboets.session` | **@codergaboets** | +6281347241993 | 23913448 / `78d168f985edf365a5cd9679a917a0b2` | ✅ Primary |
+| `alwayscuanbos.session` | **@alwayscuanbos** | +6285732740006 | 23647272 / `1f69a4e0f03e5f51ddfa5b67ac7b5c49` | ✅ Fallback |
+
+### Environment Setup
+
+```bash
+# Primary session — @codergaboets
+export TELEGRAM_API_ID="23913448"
+export TELEGRAM_API_HASH="78d168f985edf365a5cd9679a917a0b2"
+export TELETHON_SESSION="$HOME/.telethon_session/codergaboets.session"
+export TELETHON_BOT_USERNAME="agent_1ai2_bot"  # Unified bot
+
+# Alternative session — @alwayscuanbos
+export TELEGRAM_API_ID="23647272"
+export TELEGRAM_API_HASH="1f69a4e0f03e5f51ddfa5b67ac7b5c49"
+export TELETHON_SESSION="$HOME/.telethon_session/alwayscuanbos.session"
+export TELETHON_BOT_USERNAME="agent_1ai2_bot"
+```
 
 ### Usage
+
 ```python
 from telethon.sync import TelegramClient
 
 client = TelegramClient(
-    "/home/openclaw/.telethon_session/paijo_fixed",
-    api_id=23647272,
-    api_hash="1f69a4e0f03e5f51ddfa5b67ac7b5c49"
+    "/home/openclaw/.telethon_session/codergaboets",
+    api_id=23913448,
+    api_hash="78d168f985edf365a5cd9679a917a0b2"
 )
 client.connect()
 
 if client.is_user_authorized():
-    bot = client.get_entity("berkahkaryaforexbotbot")
+    # Unified bot username — this is the bot to test
+    bot = client.get_entity("agent_1ai2_bot")
     client.send_message(bot, "/start")
 ```
 
-### Testing Checklist
-When testing Telegram bots, verify ALL of the following:
-- **Commands**: All variations (happy flow + sad flow)
-- **Functions**: Signal generation, price fetching, analysis engines
-- **Buttons**: Inline keyboards, callback data, navigation
-- **Security**: Admin commands, rate limiting, malformed input
-- **Signals**: Full pipeline from input to output
-- **Connection**: Connect/disconnect/reconnect cycles
+### Mandatory E2E Test Coverage
 
-See `docs/AGENTS_QA.md` for complete testing guidelines.
+**ALL bot features must be E2E tested against @agent_1ai2_bot, from input to output.**
+
+Required coverage:
+1. **Commands** — every command, happy + sad + edge cases
+2. **Functions** — signal generation, price fetch, engine consensus
+3. **Buttons** — all inline buttons and callbacks
+4. **Keyboards** — all reply keyboard options
+5. **Happy flow / Sad flow** — valid and invalid input paths
+6. **Fraud** — invalid payments, duplicates, expired tiers, wrong-user access
+7. **Signals** — full pipeline: user input → market data → engines → formatted response
+8. **Connection** — reconnect, rate limiting, no duplicates
+9. **Admin** — role-based access control
+
+### Running Tests
+
+```bash
+cd tests/e2e
+pytest test_vilona_commands.py -v
+```
 
 ### Session Errors and Fixes
 
-#### `ValueError: too many values to unpack (expected 5, got 6)`
-**Fix**: Upgrade to Telethon 1.44.0+
+#### `Conflict: terminated by other getUpdates request`
+**Cause:** Legacy bot `@berkahkaryaforexbotbot` is still running.
+**Fix:**
 ```bash
-uv pip install 'telethon>=1.44.0' --upgrade
+pm2 stop vilona-bot
+pkill -f vilona_tradefx_handler
+pm2 restart agent-1ai2-bot
 ```
 
-#### `ValueError: not enough values to unpack (expected 6, got 4)`
-**Fix**: Session schema issue - use `paijo_fixed.session` instead
+#### `Timeout waiting for bot response`
+**Fix:**
+```bash
+pm2 status | grep agent-1ai2
+pm2 logs agent-1ai2-bot --lines 50
+```
 
-#### `ApiIdInvalidError`
-**Fix**: API credentials revoked - create new at https://my.telegram.org/apps
+#### `Session not authorized`
+**Fix:** Use `alwayscuanbos.session` as fallback, or re-authenticate with `scripts/setup_session.py`.
+
+#### `FloodWaitError`
+**Fix:** Increase `RateLimiter(min_delay=...)` delay and wait before retrying.
+
+### Rate Limiting
+**CRITICAL:** Telegram enforces flood limits. Always use `RateLimiter(min_delay=2.0)` between commands.
 
 ### Documentation
-- `~/.telethon_session/README.md` - Human documentation
-- `~/.telethon_session/AGENTS.md` - Agent instructions
-- `docs/AGENTS_QA.md` - Complete testing checklist and Q&A
+- `~/.telethon_session/README.md`
+- `~/.telethon_session/AGENTS.md`
+- `tests/e2e/README.md`
+- `docs/AGENTS_QA.md`
+- `.agents`

@@ -1,362 +1,164 @@
-# AGENTS Q&A - Testing Guidelines
+# E2E QA Guide — Unified Bot @agent_1ai2_bot
 
-## Telegram Bot E2E Testing
+> This guide is mandatory reading for every agent before modifying or testing bot behavior.
 
-### Q: How do I test the VilonaBot from a user's perspective?
+## Bot Under Test
 
-**A:** Use the pre-authenticated Telethon sessions in `~/.telethon_session/`:
+- **Telegram username:** `@agent_1ai2_bot`
+- **PM2 process:** `agent-1ai2-bot`
+- **Role:** Unified bot (VilonaBot)
+- **Token:** `8343388239:AAHWOVrRzwVeyGHav-DY9RvfSosDYteHuIg`
 
-```python
+Do **not** test `@berkahkaryaforexbotbot`. It is the legacy Forex handler run by a script in `scripts/`.
+
+## Session Files
+
+All sessions are centralized in `~/.telethon_session/`.
+
+| File | Telegram User | Phone | API ID / Hash | Status |
+|------|---------------|-------|---------------|--------|
+| `codergaboets.session` | @codergaboets | +6281347241993 | 23913448 / `78d168f985edf365a5cd9679a917a0b2` | ✅ Primary |
+| `alwayscuanbos.session` | @alwayscuanbos | +6285732740006 | 23647272 / `1f69a4e0f03e5f51ddfa5b67ac7b5c49` | ✅ Fallback |
+
+Unauthenticated sessions found across the machine have been removed.
+
+## Environment Setup
+
+```bash
+export TELEGRAM_API_ID="23913448"
+export TELEGRAM_API_HASH="78d168f985edf365a5cd9679a917a0b2"
+export TELETHON_SESSION="$HOME/.telethon_session/codergaboets.session"
+export TELETHON_BOT_USERNAME="agent_1ai2_bot"
+```
+
+## Required Testing Coverage
+
+Every change must be validated with **real** E2E tests from user input to bot output. Test **all** of the following:
+
+### 1. Commands
+
+- Every bot command (currently 29+).
+- Happy flow: valid command → correct response.
+- Sad flow: invalid command, missing args, malformed text → clear error, no crash.
+- Edge cases: empty command, unicode, very long input, rapid repeats.
+
+### 2. Functions
+
+- Signal generation: `/signal gold`, `/signal btc`, `/signal eurusd`.
+- Price fetch: `/price gold`.
+- Engine consensus output: confidence, entry, SL, TP.
+- Formatting: no broken markdown, correct symbols.
+
+### 3. Buttons
+
+- All inline buttons from `/start` and menus.
+- Callback data: `menu:*`, `cmd:*`, `__url__`, and any custom callbacks.
+- Back/close navigation.
+
+### 4. Keyboards
+
+- Reply keyboards where used.
+- Keyboard button presses produce the expected command or menu.
+
+### 5. Happy Flow / Sad Flow
+
+- Valid input path → success state.
+- Invalid input path → graceful failure state.
+- Both must return correct Telegram messages.
+
+### 6. Fraud
+
+- Invalid payment callback signatures rejected.
+- Duplicate subscription payments handled.
+- Expired subscription tier downgraded correctly.
+- Wrong user accessing admin/paid features blocked.
+
+### 7. Signals
+
+Full pipeline must be verified:
+
+```
+User sends /signal gold
+  ↓ command parsed
+  ↓ market data fetched
+  ↓ 11 engines run
+  ↓ consensus calculated
+  ↓ signal formatted (entry, SL, TP, confidence)
+  ↓ message sent to user
+```
+
+### 8. Connection
+
+- Bot reconnects after restart.
+- Rate limiting / flood protection active.
+- No duplicate messages after reconnect.
+- Commands still work after a bot crash/restart cycle.
+
+### 9. Admin
+
+- Admin-only commands blocked for normal users.
+- Admin commands succeed for admin user.
+- Broadcast, ban, status commands tested.
+
+## Test Checklist
+
+Before any PR or commit that touches bot code:
+
+- [ ] Commands — all variations tested
+- [ ] Functions — signal/price/consensus tested
+- [ ] Buttons — all inline buttons tested
+- [ ] Keyboards — all reply buttons tested
+- [ ] Happy flow verified
+- [ ] Sad flow verified
+- [ ] Fraud scenarios verified
+- [ ] Signal pipeline end-to-end verified
+- [ ] Connection/reconnect verified
+- [ ] Rate limiting verified
+- [ ] Admin access control verified
+- [ ] Every path makes sense and passes 100%
+
+## How to Run Tests
+
+```bash
+cd tests/e2e
+pytest test_vilona_commands.py -v
+pytest test_vilona_commands.py::TestCoreCommandsHappy -v
+```
+
+Run a single test with full output:
+
+```bash
+pytest test_vilona_commands.py::TestCoreCommandsHappy::test_start_welcome_message -xvs
+```
+
+## When Tests Fail
+
+1. Confirm the unified bot is running:
+   ```bash
+   pm2 status | grep agent-1ai2
+   ```
+2. Check the logs:
+   ```bash
+   pm2 logs agent-1ai2-bot --lines 50
+   ```
+3. Kill any legacy bot conflict:
+   ```bash
+   pm2 stop vilona-bot
+   pkill -f vilona_tradefx_handler
+   pm2 restart agent-1ai2-bot
+   ```
+4. Verify the session:
+   ```bash
+   python3 -c "
 from telethon.sync import TelegramClient
-
-# Use the fixed session (recommended)
-client = TelegramClient(
-    "/home/openclaw/.telethon_session/paijo_fixed",
-    api_id=23647272,
-    api_hash="1f69a4e0f03e5f51ddfa5b67ac7b5c49"
-)
-client.connect()
-
-if client.is_user_authorized():
-    me = client.get_me()
-    print(f"Authorized: {me.first_name} (@{me.username})")
-    
-    # Test bot
-    bot = client.get_entity("berkahkaryaforexbotbot")
-    client.send_message(bot, "/start")
-```
-
-### Q: Which session should I use?
-
-**A:** Use `paijo_fixed.session` - it's the only session compatible with Telethon 1.44+:
-
-| Session | Phone | User | Version | Status |
-|---------|-------|------|---------|--------|
-| `paijo_fixed.session` | +6285732740006 | @alwayscuanbos | 11 | ✅ Working |
-| `vilona_session.session` | +6285732740006 | @alwayscuanbos | 8 | ⚠️ Needs fix |
-| `paijo.session` | +6285732740006 | @alwayscuanbos | 8 | ⚠️ Needs fix |
-
-### Q: What if I get a Telethon session error?
-
-**A:** Check the error type:
-
-#### Error: `ValueError: too many values to unpack (expected 5, got 6)`
-**Cause:** Telethon 1.43.2 or older expecting old schema.
-**Fix:** Upgrade to Telethon 1.44.0+
-```bash
-uv pip install 'telethon>=1.44.0' --upgrade
-```
-
-#### Error: `ValueError: not enough values to unpack (expected 6, got 4)`
-**Cause:** Session has wrong schema (takeout_id has empty bytes instead of NULL).
-**Fix:** Fix the session:
-```python
-import sqlite3
-import shutil
-
-def fix_session(old_path, new_path):
-    shutil.copy(old_path, new_path)
-    conn = sqlite3.connect(new_path)
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT auth_key FROM sessions")
-    auth_key = cursor.fetchone()[0]
-    
-    cursor.execute("DROP TABLE sessions")
-    cursor.execute("""
-        CREATE TABLE sessions (
-            dc_id INTEGER PRIMARY KEY,
-            server_address TEXT,
-            port INTEGER,
-            auth_key BLOB,
-            takeout_id INTEGER,
-            tmp_auth_key BLOB
-        )
-    """)
-    cursor.execute("INSERT INTO sessions VALUES (?, ?, ?, ?, NULL, NULL)",
-                    (5, '91.108.56.170', 443, auth_key))
-    cursor.execute("UPDATE version SET version = 11")
-    conn.commit()
-    conn.close()
-```
-
-#### Error: `ApiIdInvalidError: The api_id/api_hash combination is invalid`
-**Cause:** API credentials revoked or don't match the phone number.
-**Fix:** 
-1. Create new credentials at https://my.telegram.org/apps
-2. Update `strategies/vilona_tradefx/.env`:
-```
-TELEGRAM_API_ID=<new_id>
-TELEGRAM_API_HASH=<new_hash>
-```
-
-### Q: How do I test all bot commands systematically?
-
-**A:** Follow this comprehensive testing checklist:
-
-## Testing Checklist
-
-### 1. Commands - Happy Flow
-
-Test all command variations with valid input:
-
-```python
-commands = {
-    "Core": ["/start", "/help"],
-    "Signals": ["/signal", "/signal xauusd", "/price", "/price btc"],
-    "Analysis": ["/analyze", "/analyze xauusd", "/mtf", "/engines"],
-    "Market": ["/killzone", "/session", "/mapping", "/news", "/data"],
-    "Status": ["/status", "/myid", "/history", "/winrate"],
-    "Subscription": ["/subscribe", "/mykey", "/listkeys"],
-    "Trading": ["/zones", "/structure", "/levels", "/stier", "/trailing"],
-}
-
-for category, cmds in commands.items():
-    for cmd in cmds:
-        client.send_message(bot, cmd)
-        time.sleep(2)  # Rate limit
-        msg = client.get_messages(bot, limit=1)[0]
-        assert msg.message, f"No response for {cmd}"
-        print(f"✅ {cmd}")
-```
-
-### 2. Commands - Sad Flow (Invalid Input)
-
-Test error handling with invalid input:
-
-```python
-# Invalid parameters
-sad_commands = [
-    "/signal invalidasset",  # Non-existent asset
-    "/analyze",  # Missing asset (should prompt)
-    "/price xyz",  # Unknown symbol
-    "/subscribe",  # Already subscribed (if applicable)
-]
-
-for cmd in sad_commands:
-    client.send_message(bot, cmd)
-    time.sleep(2)
-    msg = client.get_messages(bot, limit=1)[0]
-    # Should show helpful error, not crash
-    assert msg.message, f"No error message for {cmd}"
-    print(f"✅ {cmd} - Error handled")
-```
-
-### 3. Functions - Signal Generation
-
-Test signal generation pipeline:
-
-```python
-# Test signal generation
-client.send_message(bot, "/signal xauusd")
-time.sleep(5)  # Wait for AI analysis
-msg = client.get_messages(bot, limit=1)[0]
-
-# Verify signal format
-response = msg.message.lower()
-assert "xauusd" in response or "gold" in response, "Missing symbol"
-assert "confidence" in response or "conf" in response, "Missing confidence"
-# Direction may be blocked outside killzone - that's correct behavior
-print(f"✅ Signal format verified")
-```
-
-### 4. Functions - Price Fetching
-
-Test price fetching for all supported assets:
-
-```python
-assets = ["xauusd", "btc", "eurusd", "gbpusd"]
-
-for asset in assets:
-    client.send_message(bot, f"/price {asset}")
-    time.sleep(2)
-    msg = client.get_messages(bot, limit=1)[0]
-    assert "price" in msg.message.lower() or asset in msg.message.lower()
-    print(f"✅ Price for {asset}")
-```
-
-### 5. Inline Buttons & Keyboards
-
-Test all button interactions:
-
-```python
-# Get main menu
-client.send_message(bot, "/start")
-time.sleep(2)
-msg = client.get_messages(bot, limit=1)[0]
-
-if msg.buttons:
-    for i, row in enumerate(msg.buttons):
-        for j, btn in enumerate(row):
-            # Test button click
-            if hasattr(btn, 'data'):  # Callback button
-                client.callback_query(msg, data=btn.data)
-                time.sleep(1)
-                response = client.get_messages(bot, limit=1)[0]
-                print(f"✅ Button [{i}][{j}] {btn.text}: {response.message[:50]}...")
-```
-
-### 6. Happy Flow vs Sad Flow
-
-| Test Case | Happy Flow | Sad Flow |
-|-----------|------------|----------|
-| Command | Valid input → Expected output | Invalid input → Helpful error |
-| Button | Valid callback → Correct action | Invalid callback → Graceful handling |
-| Signal | In killzone → Full signal | Outside killzone → "Wait for killzone" message |
-| Price | Known asset → Live price | Unknown asset → "Asset not found" |
-| Analysis | Valid symbol → AI analysis | Invalid symbol → Prompt for valid input |
-
-### 7. Fraud & Security Testing
-
-Test security boundaries:
-
-```python
-# Test admin commands as regular user
-admin_commands = ["/genkey", "/autosync", "/restart_bot"]
-
-for cmd in admin_commands:
-    client.send_message(bot, cmd)
-    time.sleep(2)
-    msg = client.get_messages(bot, limit=1)[0]
-    # Should deny access, not crash
-    assert "admin" in msg.message.lower() or "unauthorized" in msg.message.lower()
-    print(f"✅ {cmd} - Access denied correctly")
-
-# Test callback data injection
-try:
-    client.callback_query(msg, data="malformed:data:here")
-    print("✅ Malformed callback handled")
-except:
-    print("✅ Malformed callback rejected")
-```
-
-### 8. Signals - Full Pipeline
-
-Test complete signal generation from input to output:
-
-```python
-# Input: User requests signal
-client.send_message(bot, "/signal xauusd")
-
-# Processing: Wait for AI consensus
-time.sleep(5)
-
-# Output: Verify complete signal
-msg = client.get_messages(bot, limit=1)[0]
-response = msg.message
-
-# Check signal components
-checks = {
-    "has_symbol": any(x in response.lower() for x in ["xauusd", "gold", "xau"]),
-    "has_analysis": any(x in response.lower() for x in ["smc", "support", "resistance", "fvg", "liquidity"]),
-    "has_session_info": "session" in response.lower() or "asia" in response.lower() or "london" in response.lower(),
-    "has_killzone_status": "killzone" in response.lower() or "kz" in response.lower(),
-}
-
-for check, passed in checks.items():
-    status = "✅" if passed else "⚠️"
-    print(f"{status} {check}: {passed}")
-
-# Verify button presence (if signal has action buttons)
-if msg.buttons:
-    print(f"✅ Action buttons: {sum(len(row) for row in msg.buttons if row)}")
-```
-
-### 9. Connection & Reliability
-
-Test connection handling:
-
-```python
-# Test reconnection
+client = TelegramClient('$HOME/.telethon_session/codergaboets', 23913448, '78d168f985edf365a5cd9679a917a0b2')
+client.start()
+print(client.get_me().username)
 client.disconnect()
-time.sleep(2)
-client.connect()
-assert client.is_user_authorized()
-print("✅ Reconnection works")
+"
+   ```
+5. Re-run the failing test in isolation.
 
-# Test rate limiting (rapid commands)
-for i in range(5):
-    client.send_message(bot, "/price xauusd")
-    time.sleep(0.5)  # Rapid requests
+## Success Criteria
 
-# Should handle gracefully, not flood wait
-print("✅ Rate limiting handled")
-```
-
-### 10. Connection Test Template
-
-```python
-def test_connection():
-    """Test full connection lifecycle."""
-    client = TelegramClient(SESSION, API_ID, API_HASH)
-    
-    # Test 1: Connect
-    client.connect()
-    assert client.is_connected(), "Not connected"
-    print("✅ Connected")
-    
-    # Test 2: Authorization
-    assert client.is_user_authorized(), "Not authorized"
-    me = client.get_me()
-    print(f"✅ Authorized: {me.first_name}")
-    
-    # Test 3: Bot access
-    bot = client.get_entity("berkahkaryaforexbotbot")
-    assert bot, "Bot not found"
-    print(f"✅ Bot accessible: {bot.first_name}")
-    
-    # Test 4: Send message
-    client.send_message(bot, "/start")
-    time.sleep(2)
-    msg = client.get_messages(bot, limit=1)[0]
-    assert msg.message, "No response"
-    print("✅ Message sent/received")
-    
-    # Test 5: Disconnect
-    client.disconnect()
-    print("✅ Disconnected cleanly")
-    
-    return True
-```
-
-## Full E2E Test Script
-
-See: `/home/openclaw/.telethon_session/AGENTS.md` for complete test script.
-
-## Sessions Location
-
-```
-~/.telethon_session/
-├── README.md              # Human documentation
-├── AGENTS.md              # Agent instructions (this file)
-├── manifest.json          # Session metadata
-├── paijo_fixed.session    # ⭐ Primary (use this one)
-├── vilona_session.session # Backup (needs fix)
-├── paijo.session          # Original (needs fix)
-└── leak_finder.session    # Service account
-```
-
-## API Credentials
-
-Location: `strategies/vilona_tradefx/.env`
-```bash
-TELEGRAM_API_ID=23647272
-TELEGRAM_API_HASH=1f69a4e0f03e5f51ddfa5b67ac7b5c49
-```
-
-## Integration with CI/CD
-
-Add to test pipeline:
-
-```yaml
-# .github/workflows/e2e-test.yml
-- name: Install Telethon
-  run: uv pip install 'telethon>=1.44.0'
-
-- name: Run E2E Tests
-  env:
-    TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
-    TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
-  run: |
-    python tests/e2e/test_bot_user_level.py
-```
+All tests pass, the bot does not crash, response times are reasonable, and **every path from input to output is validated against the real bot**.
