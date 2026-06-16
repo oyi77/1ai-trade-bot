@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'agent-1ai2-bot',
       script: 'tradebot/__main__.py',
-      interpreter: 'python3',
+      interpreter: '.venv/bin/python',
       cwd: '/home/openclaw/projects/1ai-trade-bot',
       args: '--bot-only',
       env: {
@@ -12,12 +12,9 @@ module.exports = {
       watch: false,
       autorestart: true,
       max_restarts: 10,
-      restart_delay: 5000,
-      kill_timeout: 5000,
-      wait_ready: true,
-      listen_timeout: 10000,
+      restart_delay: 10000,
+      kill_timeout: 10000,
     },
-    {
       name: 'vilona-bot',
       script: 'scripts/_legacy/vilona_tradefx_handler.py',
       interpreter: 'python3',

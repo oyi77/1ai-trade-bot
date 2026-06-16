@@ -15,7 +15,7 @@ from __future__ import annotations
 import html
 from datetime import datetime, timedelta, timezone
 
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.models import Signal
 
 LOG = get_logger(__name__)

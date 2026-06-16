@@ -1,7 +1,7 @@
 """Onboarding service — drives the step-by-step setup + feature gating"""
 from sqlalchemy.orm import Session
 
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.saas.models.onboarding import (
     OnboardingStep,
     ONBOARDING_STEP_ORDER,

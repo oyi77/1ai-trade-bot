@@ -1,4 +1,4 @@
-"""Tests for tradebot.logging — JSON formatter, correlation IDs, setup."""
+"""Tests for tradebot.logutils — JSON formatter, correlation IDs, setup."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import logging
 import threading
 
-from tradebot.logging import (
+from tradebot.logutils import (
     CorrelationIDFilter,
     JSONFormatter,
     get_correlation_id,
@@ -15,7 +15,7 @@ from tradebot.logging import (
     set_correlation_id,
     setup_logging,
 )
-from tradebot.logging.middleware import _local
+from tradebot.logutils.middleware import _local
 
 # ------------------------------------------------------------------
 # Helpers

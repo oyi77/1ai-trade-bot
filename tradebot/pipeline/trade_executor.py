@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from tradebot.brokers import BaseBroker as Broker
 from tradebot.config.settings import settings
 from tradebot.events import bus as event_bus
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.models import Order, Signal, Trade, TradeResult
 
 from .middleware import MiddlewareChain

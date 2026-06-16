@@ -104,7 +104,7 @@ def get_logger(name: str | None = None) -> logging.Logger:
 
     Usage::
 
-        from tradebot.logging import get_logger
+        from tradebot.logutils import get_logger
         logger = get_logger(__name__)
     """
     return logging.getLogger(name)

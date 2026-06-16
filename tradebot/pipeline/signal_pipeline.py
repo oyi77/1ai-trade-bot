@@ -30,7 +30,7 @@ from tradebot.engines.mtf_consensus import (
 )
 from tradebot.events import bus as event_bus
 from tradebot.exceptions import PipelineError
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.models import Signal, Tick
 from tradebot.services.vilona_dispatcher import VilonaSignalDispatcher
 

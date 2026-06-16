@@ -47,7 +47,7 @@ from tradebot.brokers.deriv.config import (
     DEFAULT_SYMBOL,
 )
 from tradebot.config import settings
-from tradebot.logging import setup_logging
+from tradebot.logutils import setup_logging
 from tradebot.monitoring.health import HealthProbe
 from tradebot.services.health import HealthService, HealthStatus
 

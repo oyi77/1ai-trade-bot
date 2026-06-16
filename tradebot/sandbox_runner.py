@@ -38,13 +38,13 @@ from tradebot.engines.mtf_consensus import (
     meso_from_signal,
 )
 from tradebot.engines.registry import Registry
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.models import Signal, Tick
 from tradebot.pipeline.quality_gate import ASSET_CONFIG, DEFAULT_CONFIG
 from tradebot.signals.market import MarketAggregator
 
 # Initialize logging for sandbox output
-from tradebot.logging import setup_logging
+from tradebot.logutils import setup_logging
 setup_logging(level="INFO", log_format="console")
 
 LOG = get_logger(__name__)

@@ -9,6 +9,7 @@ Run: pytest tests/e2e/test_vilona_commands.py -v --tb=short
 from __future__ import annotations
 
 import time
+import pytest
 
 from tests.e2e.conftest import (
     RateLimiter,
@@ -25,9 +26,10 @@ from tests.e2e.conftest import (
 class TestCoreCommandsHappy:
     """Test core commands with valid input - REAL BOT RESPONSES."""
 
-    def test_start_welcome_message(self, telethon_client, bot_entity, rate_limiter):
+    @pytest.mark.asyncio
+    async def test_start_welcome_message(self, telethon_client, bot_entity, rate_limiter):
         """Test /start returns welcome message with AI branding."""
-        result = send_command(telethon_client, bot_entity, "/start", rate_limiter)
+        result = await send_command(telethon_client, bot_entity, "/start", rate_limiter)
 
         assert result.success, f"/start failed: {result.error}"
         assert result.response_text is not None
@@ -40,9 +42,10 @@ class TestCoreCommandsHappy:
             f"Expected branding keywords: {result.response_text[:200]}"
         )
 
-    def test_help_command_list(self, telethon_client, bot_entity, rate_limiter):
+    @pytest.mark.asyncio
+    async def test_help_command_list(self, telethon_client, bot_entity, rate_limiter):
         """Test /help returns organized command list by category."""
-        result = send_command(telethon_client, bot_entity, "/help", rate_limiter)
+        result = await send_command(telethon_client, bot_entity, "/help", rate_limiter)
 
         assert result.success, f"/help failed: {result.error}"
         assert result.response_text is not None
@@ -53,9 +56,10 @@ class TestCoreCommandsHappy:
             f"Expected command categories: {result.response_text[:200]}"
         )
 
-    def test_status_bot_info(self, telethon_client, bot_entity, rate_limiter):
+    @pytest.mark.asyncio
+    async def test_status_bot_info(self, telethon_client, bot_entity, rate_limiter):
         """Test /status returns subscriber tier and quota info."""
-        result = send_command(telethon_client, bot_entity, "/status", rate_limiter)
+        result = await send_command(telethon_client, bot_entity, "/status", rate_limiter)
 
         assert result.success, f"/status failed: {result.error}"
         assert result.response_text is not None
@@ -66,9 +70,10 @@ class TestCoreCommandsHappy:
             f"Expected status keywords: {result.response_text[:200]}"
         )
 
-    def test_myid_returns_user_id(self, telethon_client, bot_entity, rate_limiter):
+    @pytest.mark.asyncio
+    async def test_myid_returns_user_id(self, telethon_client, bot_entity, rate_limiter):
         """Test /myid returns user's Telegram ID."""
-        result = send_command(telethon_client, bot_entity, "/myid", rate_limiter)
+        result = await send_command(telethon_client, bot_entity, "/myid", rate_limiter)
 
         assert result.success, f"/myid failed: {result.error}"
         assert result.response_text is not None
@@ -79,9 +84,10 @@ class TestCoreCommandsHappy:
             f"Expected ID keyword: {result.response_text}"
         )
 
-    def test_symbols_supported_pairs(self, telethon_client, bot_entity, rate_limiter):
+    @pytest.mark.asyncio
+    async def test_symbols_supported_pairs(self, telethon_client, bot_entity, rate_limiter):
         """Test /symbols returns Telegram ID (alias for /myid)."""
-        result = send_command(telethon_client, bot_entity, "/symbols", rate_limiter)
+        result = await send_command(telethon_client, bot_entity, "/symbols", rate_limiter)
 
         assert result.success, f"/symbols failed: {result.error}"
         assert result.response_text is not None
@@ -91,13 +97,6 @@ class TestCoreCommandsHappy:
         assert assert_response_contains(result, ["telegram id"]), (
             f"Expected ID in response: {result.response_text}"
         )
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Phase 1: Core Commands (Sad Flow)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
 class TestCoreCommandsSad:
     """Test core commands error handling."""
 

@@ -15,7 +15,7 @@ from tradebot.exceptions import (
     LimitExceededError,
     TradingPlatformError,
 )
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.models.signal import SignalSource, SignalType
 from tradebot.saas.repositories.signal_repo import SignalRepository
 from tradebot.saas.repositories.user_repo import UserRepository

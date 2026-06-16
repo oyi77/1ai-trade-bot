@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from tradebot.config import get_settings
 from tradebot.exceptions import PaymentError
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.saas.repositories.payment_repo import PaymentRepository
 from tradebot.saas.repositories.user_repo import UserRepository
 

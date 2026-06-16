@@ -1,10 +1,11 @@
 """Shared pytest fixtures for VilonaBot E2E tests.
 
-Uses Telethon sync client for testing real bot behavior.
+Uses Telethon async client for testing real bot behavior.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from dataclasses import dataclass, field
@@ -12,10 +13,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import pytest_asyncio
 
 # Try to import telethon, skip tests if not available
 try:
-    from telethon.sync import TelegramClient
+    from telethon import TelegramClient
     from telethon.tl.custom import Message
 except ImportError:
     pytestmark = pytest.mark.skip(reason="telethon not installed: pip install telethon")
@@ -29,7 +31,7 @@ API_ID = int(os.environ.get("TELEGRAM_API_ID", "23647272"))
 API_HASH = os.environ.get("TELEGRAM_API_HASH", "1f69a4e0f03e5f51ddfa5b67ac7b5c49")
 BOT_USERNAME = os.environ.get("TELETHON_BOT_USERNAME", "agent_1ai2_bot")
 SESSION_PATH = Path(
-    os.environ.get("TELETHON_SESSION", Path.home() / ".telethon_session" / "paijo.session")
+    os.environ.get("TELETHON_SESSION", Path.home() / ".telethon_session" / "vilona_session_fixed.session")
 )
 ADMIN_CHAT_ID = os.environ.get("ADMIN_CHAT_ID", "5365607425")
 TEST_TIMEOUT = int(os.environ.get("TEST_TIMEOUT", "30"))
@@ -95,19 +97,19 @@ def rate_limiter() -> RateLimiter:
     return RateLimiter(min_delay=2.0)
 
 
-@pytest.fixture
-def telethon_client() -> TelegramClient:
+@pytest_asyncio.fixture
+async def telethon_client() -> Any:  # type: ignore[misc]
     """Create and connect a Telethon client using the test session.
 
-    Uses paijo.session which is pre-authorized.
-    Falls back to creating a new session if needed.
+    Uses async TelegramClient (not telethon.sync) for pytest-asyncio compatibility.
     """
     session_str = str(SESSION_PATH).replace(".session", "")
     client = TelegramClient(session_str, API_ID, API_HASH)
-    client.connect()
+    await client.start()
 
     # Verify authorization
-    if not client.is_user_authorized():
+    if not await client.is_user_authorized():
+        await client.disconnect()
         pytest.skip(
             "Telethon session not authorized. Run: python scripts/setup_telethon_session.py"
         )
@@ -115,13 +117,13 @@ def telethon_client() -> TelegramClient:
     yield client
 
     # Cleanup
-    client.disconnect()
+    await client.disconnect()
 
 
-@pytest.fixture
-def bot_entity(telethon_client: TelegramClient) -> Any:
+@pytest_asyncio.fixture
+async def bot_entity(telethon_client: Any) -> Any:
     """Get the bot entity for VilonaBot."""
-    return telethon_client.get_entity(BOT_USERNAME)
+    return await telethon_client.get_entity(BOT_USERNAME)
 
 
 @pytest.fixture
@@ -133,7 +135,7 @@ def admin_user_id() -> str:
 # ── Test Helper Functions ──────────────────────────────────────────────────
 
 
-def send_command(
+async def send_command(
     client: TelegramClient,
     bot: Any,
     command: str,
@@ -157,11 +159,11 @@ def send_command(
 
     try:
         # Get current last message ID before sending
-        last_msg = client.get_messages(bot, limit=1)
+        last_msg = await client.get_messages(bot, limit=1)
         last_msg_id = last_msg[0].id if last_msg else 0
 
         # Send command
-        client.send_message(bot, command)
+        await client.send_message(bot, command)
 
         # Wait for bot's response
         # When we send a message, it gets ID: last_msg_id + 1
@@ -172,11 +174,11 @@ def send_command(
         elapsed = 0.0
 
         while elapsed < max_wait:
-            time.sleep(poll_interval)
+            await asyncio.sleep(poll_interval)
             elapsed += poll_interval
 
             # Get latest message
-            messages = client.get_messages(bot, limit=1)
+            messages = await client.get_messages(bot, limit=1)
             if messages and messages[0].id > last_msg_id:
                 # Found a new message
                 response = messages[0]
@@ -219,7 +221,7 @@ def send_command(
         )
 
 
-def send_callback(
+async def send_callback(
     client: TelegramClient,
     bot: Any,
     callback_data: str,
@@ -236,7 +238,7 @@ def send_callback(
 
     try:
         # Get recent messages to find inline buttons
-        messages = client.get_messages(bot, limit=5)
+        messages = await client.get_messages(bot, limit=5)
 
         if not messages:
             return CallbackResult(
@@ -253,10 +255,10 @@ def send_callback(
                     for button in row:
                         if hasattr(button, "data") and button.data == callback_data.encode():
                             start_time = time.time()
-                            client.click(msg, data=callback_data)
-                            time.sleep(1)
+                            await client.click(msg, data=callback_data)
+                            await asyncio.sleep(1)
 
-                            response_msgs = client.get_messages(bot, limit=1)
+                            response_msgs = await client.get_messages(bot, limit=1)
                             response_time = time.time() - start_time
 
                             if response_msgs:

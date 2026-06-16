@@ -1,4 +1,4 @@
-"""tradebot.logging — structured JSON logging for 1ai-trade-bot."""
+"""tradebot.logutils — structured JSON logging for 1ai-trade-bot."""
 
 from .formatter import JSONFormatter
 from .middleware import (

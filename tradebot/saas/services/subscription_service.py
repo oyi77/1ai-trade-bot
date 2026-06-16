@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from tradebot.config import get_settings
 from tradebot.exceptions import SubscriptionError
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.models.user import SubscriptionTier
 from tradebot.saas.repositories.user_repo import UserRepository
 from tradebot.saas.services.tripay_service import TriPayService

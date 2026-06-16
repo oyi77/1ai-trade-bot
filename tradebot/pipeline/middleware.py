@@ -15,7 +15,7 @@ from collections.abc import Awaitable, Callable
 
 from tradebot.config.settings import settings
 from tradebot.exceptions import PipelineError
-from tradebot.logging import get_logger
+from tradebot.logutils import get_logger
 from tradebot.models import Signal
 from tradebot.utils.rate_limiter import AsyncRateLimiter
 

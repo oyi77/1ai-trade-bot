@@ -3892,6 +3892,12 @@ def _send_donate_menu(chat_id, username=""):
 
 # ── Command handler ──
 def handle_command(cmd, text, chat_id, msg):
+    # ── Force datetime as local variable to avoid scoping shadow from re-imports below ──
+    import datetime as _dt
+    datetime = _dt.datetime
+    timezone = _dt.timezone
+    timedelta = _dt.timedelta
+
     # ── ACTIVITY TRACKING: update last_activity + cmd_count in root members.db ──
     try:
         _adb = sqlite3.connect(SUBS_PATH)
@@ -3950,7 +3956,6 @@ def handle_command(cmd, text, chat_id, msg):
                 if ref_count == 3:
                     try:
                         from members import upgrade_tier
-                        from datetime import datetime, timezone, timedelta
                         WIB = timezone(timedelta(hours=7))
                         expiry = (datetime.now(WIB) + timedelta(days=7)).isoformat()
                         upgrade_tier(str(referrer_id), "pro", 7,
@@ -3980,7 +3985,6 @@ def handle_command(cmd, text, chat_id, msg):
                 elif ref_count == 10:
                     try:
                         from members import upgrade_tier
-                        from datetime import datetime, timezone, timedelta
                         WIB = timezone(timedelta(hours=7))
                         expiry = (datetime.now(WIB) + timedelta(days=30)).isoformat()
                         upgrade_tier(str(referrer_id), "elite", 30,
@@ -5762,7 +5766,7 @@ def handle_command(cmd, text, chat_id, msg):
             if sbr_text:
                 lines.append(sbr_text)
             lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-            lines.append(f"⏰ {datetime.now(WIB).strftime('%H:%M WIB')}")
+            lines.append(f"⏰ {wib_now().strftime('%H:%M WIB')}")
             lines.append("🎯 Powered by Harmonic AHZ + SBR/BRS Engine")
             tg_send("\n".join(lines), chat_id)
         except Exception as e:
@@ -8399,9 +8403,25 @@ def main():
         logger.error("VILONA_TRADEFX_TELEGRAM_BOT_TOKEN not set!")
         sys.exit(1)
 
-    # ── PID check disabled (simplified for Phase 1) ──
-    import subprocess
-    # ──────────────────────────────────────────────────────────────
+    # ── PID singleton: kill any previous instance ──
+    PID_FILE = os.path.join(DATA_DIR, ".bot_handler.pid")
+    try:
+        if os.path.exists(PID_FILE):
+            with open(PID_FILE) as f:
+                old_pid = int(f.read().strip())
+            try:
+                os.kill(old_pid, 0)  # still running?
+                import signal as _sig
+                os.kill(old_pid, _sig.SIGTERM)
+                logger.warning(f"Killed stale bot PID={old_pid}")
+                time.sleep(2)
+            except (OSError, ProcessLookupError):
+                pass  # already dead
+        with open(PID_FILE, "w") as f:
+            f.write(str(os.getpid()))
+    except Exception as e:
+        logger.warning(f"PID file error: {e}")
+    # ──────────────────────────────────────────────
 
     # Start background threads
     if LEARNING_ENGINE:

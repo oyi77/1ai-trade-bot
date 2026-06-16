@@ -108,7 +108,7 @@ from tradebot.exceptions import (
 )
 
 # ── Logging ──
-from tradebot.logging import (
+from tradebot.logutils import (
     CorrelationIDFilter,
     JSONFormatter,
     get_correlation_id,
