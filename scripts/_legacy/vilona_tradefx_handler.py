@@ -7747,6 +7747,70 @@ def auto_analyze_loop():
         if gap_pips > 500:
             return True, round(gap_pips, 1)
         return False, round(gap_pips, 1)
+
+    # ── EA result bridge: drain engines/ea_executor.py output and reply to original signal ──
+    EA_TRADE_RESULT_FILE = DATA_DIR / "trade_result.json"
+
+    def _drain_ea_trade_results(max_items: int = 20):
+        """Broadcast EA TP/SL results written by ea_executor.py.
+
+        Reply-chain path:
+          channel signal message_id → ea_signal.json.telegram_message_id
+          → EA position.telegram_message_id → trade_result.json.telegram_message_id
+          → Telegram reply_to_message_id here.
+        """
+        if not EA_TRADE_RESULT_FILE.exists():
+            return
+        try:
+            raw = EA_TRADE_RESULT_FILE.read_text().strip()
+            if not raw:
+                return
+            rows = json.loads(raw)
+            if isinstance(rows, dict):
+                rows = [rows]
+            if not isinstance(rows, list):
+                logger.warning("EA trade result file has invalid payload type: %s", type(rows).__name__)
+                return
+        except Exception as exc:
+            logger.warning("Failed to read EA trade result file: %s", exc)
+            return
+
+        remaining = []
+        for idx, ct in enumerate(rows):
+            if idx >= max_items:
+                remaining.append(ct)
+                continue
+            if not isinstance(ct, dict):
+                continue
+            try:
+                trade_id = str(ct.get("id") or ct.get("trade_id") or f"ea:{ct.get('symbol')}:{ct.get('timestamp')}:{ct.get('outcome')}")
+                if trade_id and not _can_post_tpsl_alert(trade_id):
+                    continue
+
+                if ct.get("outcome") == "SL_HIT":
+                    new_count = _increment_daily_loss()
+                    logger.warning("⛔ EA SL HIT — daily losses: %s/3", new_count)
+
+                alert_text = format_trade_close_alert(ct)
+                tg_msg_id = ct.get("telegram_message_id")
+                sent = None
+                if tg_msg_id and SIGNAL_CHANNEL_ID:
+                    sent = tg_send(alert_text, SIGNAL_CHANNEL_ID, reply_to=tg_msg_id)
+                if sent is None:
+                    sent = send_to_channel(alert_text)
+                if sent is None:
+                    remaining.append(ct)
+                else:
+                    logger.info("📤 EA trade result posted%s: %s %s", " as reply" if tg_msg_id else "", ct.get("outcome"), ct.get("symbol"))
+            except Exception as exc:
+                logger.warning("Failed to broadcast EA trade result: %s", exc)
+                remaining.append(ct)
+
+        try:
+            EA_TRADE_RESULT_FILE.write_text(json.dumps(remaining, indent=2, ensure_ascii=False) if remaining else "[]")
+        except Exception as exc:
+            logger.warning("Failed to update EA trade result file: %s", exc)
+
     last_mapping_day = _get_last_mapping()  # init from disk
 
     while True:
@@ -7756,6 +7820,9 @@ def auto_analyze_loop():
             h = now.hour
             weekday = now.weekday()
             today_str = now.strftime("%Y%m%d")
+
+            # ── EA result bridge: post TP/SL written by ea_executor.py before any scan gating ──
+            _drain_ea_trade_results()
 
             # ── DAILY MAX LOSS CIRCUIT BREAKER (3 losses = STOP all signals) ──
             daily_losses = _get_daily_loss_count()
