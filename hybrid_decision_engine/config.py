@@ -51,7 +51,10 @@ ZF_VOLUME_LOOKBACK = 20          # Bars for volume Z-Score
 MIN_CONFIDENCE_SOLO = 0.85       # Minimum confidence for solo analyzer signal
 MIN_CONFIDENCE_DUAL = 0.60       # Minimum confidence for dual consensus
 SOLO_CONFIDENCE_BOOST = 1.2      # Multiplier when dual analyzers agree
+DUAL_CONFIDENCE_BOOST = 1.15     # Confidence multiplier for dual consensus
+INTEGRITY_PENALTY = 0.20         # Confidence penalty when integrity=warn
 MAX_DAILY_SIGNALS = 10           # Circuit breaker: max signals per day
+VERSION = "1.0.0"
 SIGNAL_COOLDOWN = 300            # Seconds between same-pair signals
 
 # ── Circuit Breaker ────────────────────────────────────────────────
@@ -67,6 +70,12 @@ YFINANCE_INTERVAL_MAP = {
     "H1": "1h", "H4": "4h", "D1": "1d",
 }
 YFINANCE_MAX_PERIOD = "60d"      # yfinance limit for intraday
+
+# ── SL/TP Defaults ──────────────────────────────────────────────
+DEFAULT_SL_PCT = 0.005            # 0.5% stop loss fallback
+DEFAULT_TP_PCT = 0.010            # 1.0% take profit fallback (2:1 R:R)
+MIN_SL_PIPS = 10                  # Minimum SL distance in pips
+MIN_RISK_REWARD = 1.5             # Minimum risk/reward ratio
 
 # ── Logging ────────────────────────────────────────────────────────
 LOG_LEVEL = os.environ.get("HYBRID_LOG_LEVEL", "INFO")

@@ -41,6 +41,8 @@ sys.path.insert(0, str(PROJECT_DIR))
 from hybrid_decision_engine import config, __version__, __phase__
 from hybrid_decision_engine.data_fetcher import get_ohlcv, get_live_price, get_cache_stats
 from hybrid_decision_engine.analyzers import LSTMAnalyzer, ZFCoreAnalyzer, MarketIntegrityAnalyzer
+from hybrid_decision_engine.signal_generator import generate_signal
+from hybrid_decision_engine.decision_engine import evaluate_decision, write_signal_file
 
 # ── Logging ──
 logging.basicConfig(
@@ -249,8 +251,20 @@ async def api_run_analysis(req: RunAnalysisRequest):
                 analyzer_results[name] = None
                 analyzer_meta[name] = {"success": False, "action": None, "confidence": 0, "blocked": False, "execution_time_ms": round(elapsed, 1), "error": str(e)}
 
-    # ── Hybrid Signal Generator (cross-validation) ──
-    decision = _hybrid_cross_validate(analyzer_results, current_price)
+    # ── Signal Generator (cross-validation) ──
+    signal_decision = generate_signal(analyzer_results, current_price)
+
+    # ── Decision Engine (SL/TP + grade + JSON output) ──
+    final_decision = evaluate_decision(
+        signal=signal_decision,
+        symbol=req.symbol.upper(),
+        timeframe=req.timeframe.upper(),
+        current_price=current_price,
+    )
+
+    # Write to file for Phase 4 alert pickup
+    signal_file = write_signal_file(final_decision)
+
     pipeline_elapsed = (time.time() - pipeline_start) * 1000
 
     return {
@@ -260,94 +274,10 @@ async def api_run_analysis(req: RunAnalysisRequest):
         "candles_available": len(df),
         "current_price": current_price,
         "analyzers": analyzer_meta,
-        "hybrid_decision": decision,
+        "hybrid_decision": final_decision.to_dict(),
+        "signal_file": str(signal_file),
         "pipeline_ms": round(pipeline_elapsed, 1),
         "timestamp": datetime.now(WIB).isoformat(),
-    }
-
-
-def _hybrid_cross_validate(results: dict, current_price: Optional[float] = None) -> dict:
-    """Cross-validate analyzer outputs and produce final decision."""
-    lstm = results.get("lstm")
-    zf = results.get("zf_core")
-    integrity = results.get("integrity")
-
-    # Rule 1: Market Integrity BLOCK → no signal
-    if integrity and integrity.blocked:
-        return {
-            "signal": None,
-            "confidence": 0,
-            "reasoning": f"⛔ INTEGRITY BLOCK: {integrity.block_reason}",
-            "mode": "BLOCKED",
-        }
-
-    # Rule 2: Integrity WARN → reduce confidence of any signal
-    integrity_penalty = 0.0
-    if integrity and integrity.action == "WARN":
-        integrity_penalty = 0.2
-
-    # Rule 3: Both LSTM and ZF-Core present → cross-validate
-    if lstm and lstm.success and zf and zf.success:
-        if lstm.action == zf.action and lstm.action in ("BUY", "SELL"):
-            # Agreement → strong signal
-            avg_conf = (lstm.confidence + zf.confidence) / 2
-            boosted = min(avg_conf * config.SOLO_CONFIDENCE_BOOST, 0.95)
-            boosted = max(boosted - integrity_penalty, 0.0)
-
-            sl = lstm.metadata.get("sl") or zf.metadata.get("sl")
-            tp = lstm.metadata.get("tp") or zf.metadata.get("tp")
-
-            return {
-                "signal": lstm.action,
-                "confidence": round(boosted, 4),
-                "reasoning": f"DUAL CONSENSUS: LSTM({lstm.confidence:.2f}) ∩ ZF({zf.confidence:.2f}) agree → {lstm.action}",
-                "mode": "DUAL",
-                "sl": sl,
-                "tp": tp,
-                "lstm_confidence": lstm.confidence,
-                "zf_confidence": zf.confidence,
-            }
-        else:
-            # Disagreement → no signal
-            return {
-                "signal": None,
-                "confidence": 0,
-                "reasoning": f"CONFLICT: LSTM={lstm.action}({lstm.confidence:.2f}) vs ZF={zf.action}({zf.confidence:.2f})",
-                "mode": "CONFLICT",
-            }
-
-    # Rule 4: Solo mode (one analyzer failed/crashed) — strict threshold
-    solo = None
-    if lstm and lstm.success and lstm.action in ("BUY", "SELL"):
-        solo = lstm
-    elif zf and zf.success and zf.action in ("BUY", "SELL"):
-        solo = zf
-
-    if solo:
-        if solo.confidence >= config.MIN_CONFIDENCE_SOLO:
-            final_conf = max(solo.confidence - integrity_penalty, 0.0)
-            return {
-                "signal": solo.action,
-                "confidence": round(final_conf, 4),
-                "reasoning": f"SOLO {solo.analyzer.upper()}: {solo.action} (conf={solo.confidence:.2f}, min={config.MIN_CONFIDENCE_SOLO})",
-                "mode": "SOLO",
-                "sl": solo.metadata.get("sl"),
-                "tp": solo.metadata.get("tp"),
-            }
-        else:
-            return {
-                "signal": None,
-                "confidence": 0,
-                "reasoning": f"SOLO {solo.analyzer.upper()} BLOCKED: {solo.action} confidence {solo.confidence:.2f} < {config.MIN_CONFIDENCE_SOLO} minimum",
-                "mode": "SOLO_BLOCKED",
-            }
-
-    # Rule 5: No valid analyzer output
-    return {
-        "signal": None,
-        "confidence": 0,
-        "reasoning": "NO SIGNAL: insufficient analyzer output",
-        "mode": "NO_DATA",
     }
 
 
