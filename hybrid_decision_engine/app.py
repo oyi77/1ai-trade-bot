@@ -23,6 +23,7 @@ import logging
 import os
 import sys
 import time
+import concurrent.futures
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -39,6 +40,7 @@ sys.path.insert(0, str(PROJECT_DIR))
 
 from hybrid_decision_engine import config, __version__, __phase__
 from hybrid_decision_engine.data_fetcher import get_ohlcv, get_live_price, get_cache_stats
+from hybrid_decision_engine.analyzers import LSTMAnalyzer, ZFCoreAnalyzer, MarketIntegrityAnalyzer
 
 # ── Logging ──
 logging.basicConfig(
@@ -53,6 +55,11 @@ logger = logging.getLogger("hybrid.api")
 
 WIB = timezone(timedelta(hours=7))
 START_TIME = time.time()
+
+# ── Analyzer instances (thread-safe, stateless) ──
+_lstm = LSTMAnalyzer()
+_zf_core = ZFCoreAnalyzer()
+_integrity = MarketIntegrityAnalyzer()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -188,39 +195,159 @@ async def api_run_analysis(req: RunAnalysisRequest):
       2. ZF-Core Analysis (ZF-Score 68/32, Position)
       3. Market Integrity (Liquidity Void, Spoofing, Risk)
       → Hybrid Signal Generator → Final Decision
-
-    Phase 2: Will wire up analyzers.
-    Phase 1: Returns placeholder acknowledging data receipt.
     """
     logger.info("🔬 POST /api/run-analysis: %s %s", req.symbol, req.timeframe)
+    pipeline_start = time.time()
 
     # Fetch data first
     df = get_ohlcv(req.symbol, req.timeframe, req.limit)
     if df is None or df.empty:
         raise HTTPException(status_code=503, detail=f"No data available for {req.symbol}")
 
-    # Get current price
     current_price = req.current_price or get_live_price(req.symbol)
 
-    # Phase 2 placeholder — analyzers will be wired here
+    # ── Parallel analyzer execution with timeout circuit breaker ──
+    analyzer_results = {}
+    analyzer_meta = {}
+    analyzers = [
+        ("lstm", _lstm, config.TIMEOUT_LSTM),
+        ("zf_core", _zf_core, config.TIMEOUT_ZF),
+        ("integrity", _integrity, config.TIMEOUT_INTEGRITY),
+    ]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3, thread_name_prefix="analyzer") as pool:
+        future_map = {}
+        for name, analyzer, timeout in analyzers:
+            t0 = time.time()
+            future = pool.submit(analyzer.safe_analyze, df, req.symbol, current_price=current_price)
+            future_map[future] = (name, timeout, t0)
+
+        for future in concurrent.futures.as_completed(future_map, timeout=config.TIMEOUT_TOTAL_PIPELINE):
+            name, timeout, t0 = future_map[future]
+            elapsed = (time.time() - t0) * 1000
+            try:
+                result = future.result(timeout=timeout)
+                analyzer_results[name] = result
+                analyzer_meta[name] = {
+                    "success": result.success,
+                    "action": result.action,
+                    "confidence": result.confidence,
+                    "blocked": result.blocked,
+                    "execution_time_ms": round(elapsed, 1),
+                    "error": result.error if not result.success else None,
+                }
+                if result.success:
+                    logger.info("  ✅ %s: %s (conf=%.2f, %.0fms)", name, result.action, result.confidence, elapsed)
+                else:
+                    logger.warning("  ❌ %s: CRASH — %s (%.0fms)", name, result.error, elapsed)
+            except concurrent.futures.TimeoutError:
+                logger.warning("  ⏰ %s: TIMEOUT after %.0fms", name, elapsed)
+                analyzer_results[name] = None
+                analyzer_meta[name] = {"success": False, "action": None, "confidence": 0, "blocked": False, "execution_time_ms": round(elapsed, 1), "error": f"TIMEOUT after {timeout}s"}
+            except Exception as e:
+                logger.error("  💥 %s: UNEXPECTED — %s (%.0fms)", name, e, elapsed)
+                analyzer_results[name] = None
+                analyzer_meta[name] = {"success": False, "action": None, "confidence": 0, "blocked": False, "execution_time_ms": round(elapsed, 1), "error": str(e)}
+
+    # ── Hybrid Signal Generator (cross-validation) ──
+    decision = _hybrid_cross_validate(analyzer_results, current_price)
+    pipeline_elapsed = (time.time() - pipeline_start) * 1000
+
     return {
         "status": "ok",
         "symbol": req.symbol.upper(),
         "timeframe": req.timeframe.upper(),
         "candles_available": len(df),
         "current_price": current_price,
-        "analyzers": {
-            "lstm": {"status": "pending_phase_2", "action": None, "confidence": 0},
-            "zf_core": {"status": "pending_phase_2", "action": None, "confidence": 0},
-            "integrity": {"status": "pending_phase_2", "action": None, "confidence": 0},
-        },
-        "hybrid_decision": {
+        "analyzers": analyzer_meta,
+        "hybrid_decision": decision,
+        "pipeline_ms": round(pipeline_elapsed, 1),
+        "timestamp": datetime.now(WIB).isoformat(),
+    }
+
+
+def _hybrid_cross_validate(results: dict, current_price: Optional[float] = None) -> dict:
+    """Cross-validate analyzer outputs and produce final decision."""
+    lstm = results.get("lstm")
+    zf = results.get("zf_core")
+    integrity = results.get("integrity")
+
+    # Rule 1: Market Integrity BLOCK → no signal
+    if integrity and integrity.blocked:
+        return {
             "signal": None,
             "confidence": 0,
-            "reasoning": "Phase 2 not yet implemented — data pipeline ready",
-            "mode": "STANDBY",
-        },
-        "timestamp": datetime.now(WIB).isoformat(),
+            "reasoning": f"⛔ INTEGRITY BLOCK: {integrity.block_reason}",
+            "mode": "BLOCKED",
+        }
+
+    # Rule 2: Integrity WARN → reduce confidence of any signal
+    integrity_penalty = 0.0
+    if integrity and integrity.action == "WARN":
+        integrity_penalty = 0.2
+
+    # Rule 3: Both LSTM and ZF-Core present → cross-validate
+    if lstm and lstm.success and zf and zf.success:
+        if lstm.action == zf.action and lstm.action in ("BUY", "SELL"):
+            # Agreement → strong signal
+            avg_conf = (lstm.confidence + zf.confidence) / 2
+            boosted = min(avg_conf * config.SOLO_CONFIDENCE_BOOST, 0.95)
+            boosted = max(boosted - integrity_penalty, 0.0)
+
+            sl = lstm.metadata.get("sl") or zf.metadata.get("sl")
+            tp = lstm.metadata.get("tp") or zf.metadata.get("tp")
+
+            return {
+                "signal": lstm.action,
+                "confidence": round(boosted, 4),
+                "reasoning": f"DUAL CONSENSUS: LSTM({lstm.confidence:.2f}) ∩ ZF({zf.confidence:.2f}) agree → {lstm.action}",
+                "mode": "DUAL",
+                "sl": sl,
+                "tp": tp,
+                "lstm_confidence": lstm.confidence,
+                "zf_confidence": zf.confidence,
+            }
+        else:
+            # Disagreement → no signal
+            return {
+                "signal": None,
+                "confidence": 0,
+                "reasoning": f"CONFLICT: LSTM={lstm.action}({lstm.confidence:.2f}) vs ZF={zf.action}({zf.confidence:.2f})",
+                "mode": "CONFLICT",
+            }
+
+    # Rule 4: Solo mode (one analyzer failed/crashed) — strict threshold
+    solo = None
+    if lstm and lstm.success and lstm.action in ("BUY", "SELL"):
+        solo = lstm
+    elif zf and zf.success and zf.action in ("BUY", "SELL"):
+        solo = zf
+
+    if solo:
+        if solo.confidence >= config.MIN_CONFIDENCE_SOLO:
+            final_conf = max(solo.confidence - integrity_penalty, 0.0)
+            return {
+                "signal": solo.action,
+                "confidence": round(final_conf, 4),
+                "reasoning": f"SOLO {solo.analyzer.upper()}: {solo.action} (conf={solo.confidence:.2f}, min={config.MIN_CONFIDENCE_SOLO})",
+                "mode": "SOLO",
+                "sl": solo.metadata.get("sl"),
+                "tp": solo.metadata.get("tp"),
+            }
+        else:
+            return {
+                "signal": None,
+                "confidence": 0,
+                "reasoning": f"SOLO {solo.analyzer.upper()} BLOCKED: {solo.action} confidence {solo.confidence:.2f} < {config.MIN_CONFIDENCE_SOLO} minimum",
+                "mode": "SOLO_BLOCKED",
+            }
+
+    # Rule 5: No valid analyzer output
+    return {
+        "signal": None,
+        "confidence": 0,
+        "reasoning": "NO SIGNAL: insufficient analyzer output",
+        "mode": "NO_DATA",
     }
 
 
