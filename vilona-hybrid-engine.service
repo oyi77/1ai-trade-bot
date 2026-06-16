@@ -1,0 +1,20 @@
+[Unit]
+Description=Vilona Hybrid Decision Engine (Phase 1)
+After=network.target vilona-tradefx-bridge.service
+Wants=vilona-tradefx-bridge.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/projects/1ai-trade-bot
+ExecStart=%h/projects/1ai-trade-bot/.venv/bin/python3 -m uvicorn hybrid_decision_engine.app:app --host 127.0.0.1 --port 8770 --log-level info
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=HYBRID_HOST=127.0.0.1
+Environment=HYBRID_PORT=8770
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vilona-hybrid-engine
+
+[Install]
+WantedBy=default.target

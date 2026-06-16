@@ -1,0 +1,17 @@
+2026-06-16 13:24:30,796 [hybrid.api] INFO 🚀 Hybrid Decision Engine starting on 127.0.0.1:8770
+2026-06-16 13:24:30,797 [hybrid.api] INFO    Data sources: MT5 Bridge → ccxt → yfinance → CSV cache
+2026-06-16 13:24:30,797 [hybrid.api] INFO    Cache TTL: OHLCV=60s, Price=5s
+2026-06-16 13:25:12,957 [hybrid.api] INFO 📡 GET /api/get-data: XAUUSD M1 limit=50
+2026-06-16 13:25:13,925 [yfinance] ERROR $GC=F: possibly delisted; no price data found  (period=60d) (Yahoo error = "1m data not available for startTime=1776407113 and endTime=1781591113. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")
+2026-06-16 13:25:13,926 [hybrid.fetcher] WARNING ⛔ ALL SOURCES FAILED for XAUUSD M1
+2026-06-16 13:25:22,148 [hybrid.api] INFO 📡 GET /api/get-data: XAUUSD M1 limit=50
+2026-06-16 13:25:22,492 [yfinance] ERROR $GC=F: possibly delisted; no price data found  (period=60d) (Yahoo error = "1m data not available for startTime=1776407122 and endTime=1781591122. Only 8 days worth of 1m granularity data are allowed to be fetched per request.")
+2026-06-16 13:25:22,493 [hybrid.fetcher] WARNING ⛔ ALL SOURCES FAILED for XAUUSD M1
+2026-06-16 13:25:36,372 [hybrid.api] INFO 📡 GET /api/get-data: BTCUSD M1 limit=50
+2026-06-16 13:25:38,652 [hybrid.fetcher] INFO ✅ ccxt OHLCV: 50 candles for BTCUSD M1
+2026-06-16 13:25:38,660 [hybrid.fetcher] INFO 📊 OHLCV ready: BTCUSD M1 — 50 candles (source: ccxt)
+2026-06-16 13:25:57,192 [hybrid.api] INFO 📡 GET /api/get-data: ETHUSD M5 limit=100
+2026-06-16 13:25:57,299 [hybrid.fetcher] INFO ✅ ccxt OHLCV: 100 candles for ETHUSD M5
+2026-06-16 13:25:57,301 [hybrid.fetcher] INFO 📊 OHLCV ready: ETHUSD M5 — 100 candles (source: ccxt)
+2026-06-16 13:25:57,417 [hybrid.api] INFO 🔬 POST /api/run-analysis: BTCUSD M1
+2026-06-16 13:26:13,359 [hybrid.api] INFO 🛑 Hybrid Decision Engine shutting down
