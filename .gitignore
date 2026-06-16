@@ -75,3 +75,4 @@ config/rapidapi_key.json
 backups/
 scripts/logs/
 :memory:.session
+__pycache__/
