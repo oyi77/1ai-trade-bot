@@ -1249,7 +1249,8 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
     action = sig.get("action", "HOLD")
 
     # ── Minimum SL distance guard (prevents MT5 error 4756) ──
-    _min_sl_pips = {"XAUUSD": 5.0, "GOLD": 5.0, "BTCUSD": 20.0, "ETHUSD": 8.0,
+    # XAUUSD/GOLD needs wider minimum; forex can be tighter
+    _min_sl_pips = {"XAUUSD": 15, "GOLD": 15, "BTCUSD": 30, "ETHUSD": 15,
                     "USOIL": 3.0, "EURUSD": 3.0, "GBPUSD": 3.0, "USDJPY": 3.0}
     _pip_size = 0.10 if display in ("XAUUSD","GOLD") else 0.01 if display=="USOIL" else 1.0
     _min_sl_dist = _min_sl_pips.get(display.upper(), 3.0) * _pip_size
@@ -1926,14 +1927,15 @@ def detect_stier_zone(symbol="XAUUSD", display="XAUUSD", price=None, ohlcv_bars=
     
     reason = f"🤖 S-TIER ZONE [{grade}]: {grade_label}\n" + "\n".join(f"  • {r}" for r in best["reasons"])
     
-    zone_half = 0.20 if display in ("XAUUSD", "GOLD") else (entry * 0.0005 if entry > 0 else 0)
+    zone_half = max(15 * pip_s, atr * 0.15) if atr else 15 * pip_s  # min 15 pip zone radius
     sig = {
         "action": direction, "entry": entry,
         "zone_lo": entry - zone_half if zone_half else entry,
         "zone_hi": entry + zone_half if zone_half else entry,
         "entry_mode": "zone",
         "sl": sl, "tp": tp,
-        "tp1": tp, "tp2": 0,
+        "tp1": tp,
+        "tp2": tp2 if tp2 else 0,
         "confidence": min(0.95, 0.65 + best["score"] * 0.04),
         "rr_ratio": 2.0,
         "reasoning": reason, "ensemble": "mechanical", "voters": 0,
@@ -2750,9 +2752,11 @@ def _clamp_sltp(sig: dict, display: str = "XAUUSD") -> dict:
     sl_pips = sl_dist_pts / pip_size
     logger.info(f"_clamp_sltp [{display}]: {action} entry={entry} sl={sl} sl_pips={sl_pips:.0f}")
     
-    MIN_SL = 20   # min 20 pip
-    MAX_SL = 35   # max 35 pip
-    MAX_TP = 100  # max 100 pip TP
+    # Asset-aware bounds: gold/indices need wider, forex tighter
+    _is_gold = display.upper() in ("XAUUSD", "GOLD")
+    MIN_SL = 30 if _is_gold else 20   # min pip SL
+    MAX_SL = 65 if _is_gold else 40   # max pip SL
+    MAX_TP = 200 if _is_gold else 120  # max pip TP
     
     clamped = False
     
@@ -7908,30 +7912,11 @@ def auto_analyze_loop():
                     logger.warning(f"S-TIER premium DM error: {me}")
                 # 1.5. POST to signal bridge → EA auto-execution
                 try:
-                    bridge_data = {
-                        "symbol": disp,
-                        "action": action,
-                        "entry": stier_sig.get("entry"),
-                        "sl": stier_sig.get("sl"),
-                        "tp": stier_sig.get("tp"),
-                        "tp1": stier_sig.get("tp1", stier_sig.get("tp")),
-                        "tp2": stier_sig.get("tp2"),
-                        "confidence": stier_sig.get("confidence"),
-                        "rr_ratio": stier_sig.get("rr_ratio", 0),
-                        "comment": f"S-TIER {'SnR+' if is_snr_boosted else 'ZC'} {action} {disp}",
-                        "source": "stier_zone_detector",
-                    }
-                    req = urllib.request.Request(
-                        f"http://localhost:8765/signal?api_key=VT-PRO-LAUNCH",
-                        data=json.dumps(bridge_data).encode(),
-                        headers={"Content-Type": "application/json"},
-                        method="POST",
-                    )
-                    with urllib.request.urlopen(req, timeout=5) as resp:
-                        br_resp = json.loads(resp.read())
-                        logger.info(f"🔗 S-TIER → Bridge POST: {br_resp.get('status','?')} ({br_resp.get('pending_signals',0)} pending)")
-                except Exception as be:
-                    logger.warning(f"S-TIER bridge POST failed: {be}")
+                    if tg_msg_id:
+                        stier_sig["telegram_message_id"] = tg_msg_id
+                    post_signal_to_bridge(stier_sig, price, disp)
+                except Exception as spbe:
+                    logger.warning(f"S-TIER bridge POST failed: {spbe}")
                 # 2. Teaser to public channel (no entry/SL/TP details)
                 tg_msg_id = None
                 try:
