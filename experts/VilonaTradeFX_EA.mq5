@@ -236,6 +236,9 @@ void PollBridge() {
    double riskPct    = StringToDouble(ExtractValue(response, "risk_percent"));
    double confidence = StringToDouble(ExtractValue(response, "confidence"));
    string comment    = ExtractValue(response, "comment");
+   string entryMode  = ExtractValue(response, "entry_mode");
+   double zoneLo     = StringToDouble(ExtractValue(response, "zone_lo"));
+   double zoneHi     = StringToDouble(ExtractValue(response, "zone_hi"));
    string layersRaw  = ExtractValue(response, "layers"); // JSON array string
 
    if(riskPct <= 0) riskPct = RiskPercent;
@@ -261,7 +264,7 @@ void PollBridge() {
       ExecuteLayers(symbol, action, sl, layersRaw, confidence, comment);
    } else {
       // ── Single Entry ──
-      ExecuteSingle(symbol, action, entry, sl, tp, riskPct, confidence, comment);
+      ExecuteSingle(symbol, action, entry, sl, tp, riskPct, confidence, comment, entryMode, zoneLo, zoneHi);
    }
 
    // Acknowledge signal
@@ -374,7 +377,8 @@ void ExecuteLayers(string symbol, string action, double sl, string layersRaw,
 //| SINGLE ENTRY — Execute Single Position                             |
 //+------------------------------------------------------------------+
 void ExecuteSingle(string symbol, string action, double entry, double sl, double tp,
-                   double riskPct, double confidence, string comment) {
+                   double riskPct, double confidence, string comment,
+                   string entryMode="market", double zoneLo=0, double zoneHi=0) {
    // ── CLOSE ACTION: Close all open positions ──
    if(action == "CLOSE") {
       int closed = CloseAllPositions(symbol);
@@ -400,7 +404,7 @@ void ExecuteSingle(string symbol, string action, double entry, double sl, double
       return;
    }
 
-   int ticket = OpenPosition(action, entry, sl, tp, lots, confidence, comment);
+   int ticket = OpenPosition(action, entry, sl, tp, lots, confidence, comment, entryMode, zoneLo, zoneHi);
    if(ticket > 0) {
       g_totalTrades++;
       Print("✅ Position opened: ", action, " ", _Symbol, " @ ", entry,
@@ -416,7 +420,8 @@ void ExecuteSingle(string symbol, string action, double entry, double sl, double
 //| OPEN POSITION                                                      |
 //+------------------------------------------------------------------+
 int OpenPosition(string action, double price, double sl,
-                 double tp, double lots, double confidence, string comment) {
+                 double tp, double lots, double confidence, string comment,
+                 string entryMode="market", double zoneLo=0, double zoneHi=0) {
    MqlTradeRequest req = {};
    MqlTradeResult  res = {};
 
@@ -427,12 +432,33 @@ int OpenPosition(string action, double price, double sl,
    int safeLevel = (stoplevel > 0) ? stoplevel : 100;
    double minDist = safeLevel * point * 3;
 
-   req.action    = TRADE_ACTION_DEAL;
+   double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   bool zoneMode = (entryMode == "zone" || entryMode == "ZONE") && zoneLo > 0 && zoneHi > 0 && zoneLo < zoneHi;
+   bool liveInsideZone = zoneMode && ((action == "BUY" && ask >= zoneLo && ask <= zoneHi) ||
+                                      (action == "SELL" && bid >= zoneLo && bid <= zoneHi));
+
    req.symbol    = _Symbol;
    req.volume    = lots;
-   req.type      = (action == "BUY") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
-   req.price     = (action == "BUY") ? SymbolInfoDouble(_Symbol, SYMBOL_ASK)
-                                     : SymbolInfoDouble(_Symbol, SYMBOL_BID);
+
+   // Zone mode: if live price is outside entry zone, place a pending order at signal entry.
+   // If live is already inside zone, execute market immediately.
+   if(zoneMode && !liveInsideZone && price > 0) {
+      req.action = TRADE_ACTION_PENDING;
+      if(action == "BUY") {
+         req.type = (price < ask) ? ORDER_TYPE_BUY_LIMIT : ORDER_TYPE_BUY_STOP;
+      } else {
+         req.type = (price > bid) ? ORDER_TYPE_SELL_LIMIT : ORDER_TYPE_SELL_STOP;
+      }
+      req.price = price;
+      Print("⏳ Zone pending order: ", action, " ", _Symbol, " @ ", price,
+            " zone=[", zoneLo, "-", zoneHi, "] live=", (action == "BUY" ? ask : bid));
+   } else {
+      req.action = TRADE_ACTION_DEAL;
+      req.type   = (action == "BUY") ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+      req.price  = (action == "BUY") ? ask : bid;
+      if(zoneMode) Print("🎯 Live price already inside zone — market execution");
+   }
 
    // Normalize and enforce minimum distance
    sl = NormalizeDouble(sl, digits);

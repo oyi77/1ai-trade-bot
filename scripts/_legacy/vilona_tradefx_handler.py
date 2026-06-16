@@ -190,11 +190,12 @@ except Exception as e:
 
 # ── Unified Signal Feed ──
 try:
-    from scripts.signal_feed import add_signal as _feed_add, update_outcome as _feed_update
+    from scripts._legacy.signal_feed import add_signal as _feed_add, update_outcome as _feed_update
     SIGNAL_FEED = True
+    print("✅ Signal feed loaded")
 except Exception as e:
     SIGNAL_FEED = False
-    print(f"Signal feed unavailable: {e}")
+    print(f"⚠️ Signal feed unavailable: {e}")
     def _feed_add(*a, **kw): return ""
     def _feed_update(*a, **kw): pass
 
@@ -4268,10 +4269,10 @@ def handle_command(cmd, text, chat_id, msg):
             "  /analyze — AI scan market (FREE 3x/hari)",
             "  /signal — Signal MTF + 9 engines 👑",
             "  /mtf — Matrix 5TF × 9 engines 👑",
-            "  /stier — S-TIER Zone GOD TIER 👑\n"
-            "  /ahz_radar — Apex Hunt Radar + Killer Zone 👑\n"
-            "  /sbr — SBR/BRS Killer Zone 👑\n"
-            "  /engines — Detail semua engines active\n"
+            "  /stier — S-TIER Zone GOD TIER 👑",
+            "  /ahz_radar — Apex Hunt Radar + Killer Zone 👑",
+            "  /sbr — SBR/BRS Killer Zone 👑",
+            "  /engines — Detail semua engines active",
             "",
             "📊 <b>MARKET ANALYSIS</b>",
             "  /zones — OB + FVG + Supply/Demand 👑",
@@ -4279,16 +4280,19 @@ def handle_command(cmd, text, chat_id, msg):
             "  /structure — BOS/CHoCH + Trend Alignment 👑",
             "  /data — Data OHLCV mentah 👑",
             "  /news — Market intel dari X/Twitter 👑",
-            "  /mapping — Multi-symbol mapping view 👑",
+            "  /mapping — Peta peluang multi-symbol 👑",
+            "  /portfolio — Aset terbaik sesi ini (beta) 👑",
+            "  /trade &lt;asset&gt; — Simulasi eksekusi aset beta 👑",
             "",
             "⚙️ <b>TRADING SYSTEMS</b>",
-            "  /autosync — Auto-trade ke EA 👑",
-            "  /bridge_status — Status koneksi EA 👑",
-            "  /mykey — Cek license EA kamu 👑",
-            "  /dashboard — Live dashboard web 👑",
-            "  /trailing — Set trailing stop EA 👑",
+            "  /autosync — Hubungkan sinyal bot ke EA 👑",
+            "  /bridge_status — Cek koneksi EA/bridge 👑",
+            "  /mykey — Lihat license key EA kamu 👑",
+            "  /dashboard — Buka dashboard web 👑",
+            "  /trailing — Menu auto-trailing SL 👑",
+            "  /trailmanual — Daftarkan posisi manual ke trailing 👑",
             "  /recap — Rekap performa trading harian",
-            "  /winrate — Statistik win rate",
+            "  /winrate — Statistik win rate sinyal",
             "  /history — Riwayat sinyal terakhir",
             "",
             "👑 <b>PREMIUM TOOLS</b>",
@@ -4847,7 +4851,6 @@ def handle_command(cmd, text, chat_id, msg):
                     if LAYERING_ENGINE and sig.get("action") != "HOLD":
                         sig = enrich_signal_with_layers(sig)
                     sig["target_user"] = str(chat_id)
-                    post_signal_to_bridge(sig, price, disp)
                     action = sig.get("action", "HOLD")
                     auto_text = f"🤖 <b>Auto Sync</b> — {action} {disp} @ {price}\n"
                     # Quant Consensus bloc for autosync
@@ -4911,7 +4914,14 @@ def handle_command(cmd, text, chat_id, msg):
                             "Analisa solo 1 model AI. Upgrade untuk multi-model consensus:\n"
                             "👉 /subscribe — Upgrade Tier"
                         )
-                    tg_send(auto_text, chat_id)
+                    _sent = tg_send(auto_text, chat_id)
+                    try:
+                        _msg_id = (_sent or {}).get("result", {}).get("message_id")
+                        if _msg_id:
+                            sig["telegram_message_id"] = _msg_id
+                    except Exception:
+                        pass
+                    post_signal_to_bridge(sig, price, disp)
                     # ── Log activity ──
                     try:
                         username = (msg.get("chat", {}).get("username", "") or
@@ -5144,7 +5154,6 @@ def handle_command(cmd, text, chat_id, msg):
                             if LAYERING_ENGINE and sig.get("action") != "HOLD":
                                 sig = enrich_signal_with_layers(sig)
                             sig["target_user"] = str(chat_id)
-                            post_signal_to_bridge(sig, price, sub.upper())
                             action = sig.get("action", "HOLD")
                             auto_text = f"🤖 <b>Auto Sync</b> — {action} {sub.upper()} @ {price}\n"
                             if QUANT_ENGINE and ohlcv_bars2:
@@ -5185,7 +5194,14 @@ def handle_command(cmd, text, chat_id, msg):
                                                 auto_text += f"{w}\n"
                                 except: pass
                             auto_text += "<i>EA auto-eksekusi... 3-5 detik</i>"
-                            tg_send(auto_text, chat_id)
+                            _sent = tg_send(auto_text, chat_id)
+                            try:
+                                _msg_id = (_sent or {}).get("result", {}).get("message_id")
+                                if _msg_id:
+                                    sig["telegram_message_id"] = _msg_id
+                            except Exception:
+                                pass
+                            post_signal_to_bridge(sig, price, sub.upper())
                         else:
                             PENDING_SIGNALS[str(chat_id)] = {
                                 "sig": sig, "price": price,
@@ -5740,8 +5756,7 @@ def handle_command(cmd, text, chat_id, msg):
             tg_send(
                 "🔥 <b>SBR/BRS Killer Zone</b> [🔒 PREMIUM]\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Structural S/R Break + FVG confluence di session\
- killzone.\n\n"
+                "Structural S/R Break + FVG confluence di session killzone.\n\n"
                 "🔒 Fitur ini khusus Member Premium\n\n"
                 "⚡ /subscribe — mulai dari Rp 50k/bln",
                 chat_id
@@ -5773,12 +5788,23 @@ def handle_command(cmd, text, chat_id, msg):
             lines.append("")
 
             if sbr_setup:
+                sbr_action = getattr(sbr_setup, "direction", "HOLD")
+                sbr_entry = float(getattr(sbr_setup, "entry_mid", 0) or 0)
+                sbr_zone_lo = float(getattr(sbr_setup, "entry_low", sbr_entry) or sbr_entry)
+                sbr_zone_hi = float(getattr(sbr_setup, "entry_high", sbr_entry) or sbr_entry)
+                sbr_sl = float(getattr(sbr_setup, "sl", 0) or 0)
+                sbr_tp1 = float(getattr(sbr_setup, "tp1", 0) or 0)
+                sbr_tp2 = float(getattr(sbr_setup, "tp2", 0) or 0)
+                sbr_conf = float(getattr(sbr_setup, "confidence", 0) or 0)
+                sbr_rr = float(getattr(sbr_setup, "rr_ratio", 0) or 0)
                 lines.append(engine.format_setup_text(sbr_setup))
-                lines.append(f"")
-                lines.append(f"🎯 Direction: {sbr_setup.get('action','HOLD')} | "
-                           f"Entry: ${sbr_setup.get('entry',0):.2f} | "
-                           f"SL: ${sbr_setup.get('sl',0):.2f} | "
-                           f"TP: ${sbr_setup.get('tp',0):.2f}")
+                lines.append("")
+                lines.append("📌 <b>Ringkas untuk entry:</b>")
+                lines.append(f"• Arah: <b>{sbr_action}</b>")
+                lines.append(f"• Area Entry: <b>${sbr_zone_lo:.2f} — ${sbr_zone_hi:.2f}</b>")
+                lines.append(f"• SL: <b>${sbr_sl:.2f}</b>")
+                lines.append(f"• TP1: <b>${sbr_tp1:.2f}</b> | TP2: <b>${sbr_tp2:.2f}</b>")
+                lines.append(f"• Confidence: <b>{sbr_conf:.0%}</b> | RR: <b>1:{sbr_rr:.1f}</b>")
             else:
                 lines.append("🔍 No SBR/BRS setup detected at current price level.")
                 lines.append("💡 SBR/BRS terbentuk saat S/R Break + FVG confluence")
@@ -5789,31 +5815,40 @@ def handle_command(cmd, text, chat_id, msg):
             lines.append(f"⏰ {wib_now().strftime('%H:%M WIB')}")
             lines.append("📡 Powered by Structure Break & Retest + FVG Engine")
 
-            # ── Auto-bridge for premium users with autosync ──
-            if sbr_setup and sbr_setup.get("action") in ("BUY","SELL") and kz_active:
+            _sbr_sig = None
+            _sb_price = 0
+            # ── Prepare auto-bridge payload; post AFTER Telegram send so reply-chain msg_id is attached ──
+            if sbr_setup and sbr_action in ("BUY","SELL") and kz_active:
                 try:
                     _sb_price = fetch_price(_sbr_pair)
                     _sbr_sig = {
-                        "action": sbr_setup.get("action"),
-                        "entry": sbr_setup.get("entry", _sb_price or 0),
-                        "sl": sbr_setup.get("sl"),
-                        "tp": sbr_setup.get("tp"),
-                        "tp1": sbr_setup.get("tp"),
-                        "tp2": 0,
+                        "action": sbr_action,
+                        "entry": sbr_entry or (_sb_price or 0),
+                        "sl": sbr_sl,
+                        "tp": sbr_tp1,
+                        "tp1": sbr_tp1,
+                        "tp2": sbr_tp2,
                         "entry_mode": "zone",
-                        "zone_lo": sbr_setup.get("entry", _sb_price or 0) - 10 * (0.10 if _sbr_disp in ("XAUUSD","GOLD") else 0.01),
-                        "zone_hi": sbr_setup.get("entry", _sb_price or 0) + 10 * (0.10 if _sbr_disp in ("XAUUSD","GOLD") else 0.01),
-                        "confidence": sbr_setup.get("confidence", 0.75),
-                        "rr_ratio": 2.0,
+                        "zone_lo": sbr_zone_lo,
+                        "zone_hi": sbr_zone_hi,
+                        "confidence": sbr_conf or 0.75,
+                        "rr_ratio": sbr_rr or 2.0,
                         "source": "sbr_killer",
-                        "comment": f"SBR/BRS {sbr_setup['action']} {_sbr_disp}",
+                        "comment": f"SBR/BRS {sbr_action} {_sbr_disp}",
                     }
+                    lines.append(f"✅ Auto-execute: {sbr_action} {_sbr_disp} → EA bridge")
+                except Exception as sbr_be:
+                    logger.warning(f"/sbr bridge prepare failed: {sbr_be}")
+
+            _sent = tg_send("\n".join(lines), chat_id)
+            if _sbr_sig:
+                try:
+                    _msg_id = (_sent or {}).get("result", {}).get("message_id")
+                    if _msg_id:
+                        _sbr_sig["telegram_message_id"] = _msg_id
                     post_signal_to_bridge(_sbr_sig, _sb_price or 0, _sbr_disp)
-                    lines.append(f"✅ Auto-execute: {_sbr_sig['action']} {_sbr_disp} → EA bridge")
                 except Exception as sbr_be:
                     logger.warning(f"/sbr bridge post failed: {sbr_be}")
-
-            tg_send("\n".join(lines), chat_id)
             logger.info(f"🔥 /sbr [{_sbr_disp}]: setup={'YES' if sbr_setup else 'NONE'} | kz={kz_active}")
         except Exception as e:
             logger.error(f"/sbr error: {e}")
@@ -8725,7 +8760,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/ahz_radar","/sbr","/download","/referral","/learn_report"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/trailmanual","/portfolio","/trade","/stier","/ahz_radar","/sbr","/download","/referral","/learn_report"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
