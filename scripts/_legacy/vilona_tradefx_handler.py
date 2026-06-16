@@ -1288,8 +1288,25 @@ def post_signal_to_bridge(sig, price, display="XAUUSD"):
         # AI didn't set entry — fallback to live price (market only, no zone possible)
         entry = price
         entry_mode = "market"
+        sig["entry"] = entry
+        sig["entry_mode"] = "market"
     else:
         entry = entry_from_sig
+        sig["entry_mode"] = entry_mode
+
+    # ── PENDING ORDER TYPE ──
+    # MT5 semantics:
+    # - BUY below live price  => BUY LIMIT
+    # - BUY above live price  => BUY STOP
+    # - SELL above live price => SELL LIMIT
+    # - SELL below live price => SELL STOP
+    order_type = action
+    if action in ("BUY", "SELL") and sig.get("entry_mode") == "zone" and price and entry:
+        if action == "BUY":
+            order_type = "BUY LIMIT" if entry < price else "BUY STOP" if entry > price else "BUY"
+        else:
+            order_type = "SELL LIMIT" if entry > price else "SELL STOP" if entry < price else "SELL"
+        sig["order_type"] = order_type
 
     # ── QUALITY GATE ──
     if action in ("BUY", "SELL"):
@@ -3605,23 +3622,24 @@ def _save_ultimatum(chat_id):
 def send_ultimatum_video(chat_id):
     """Send ultimatum: video (short caption) + text message (full copy + keyboard)."""
     ultimatum_text = (
-        "🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
+        "🔥 <b>VILONA AI TRADING ECOSYSTEM</b>\n"
         "━━━━━━━━━━━━━━━━\n"
-        "Selamat datang di markas besar Vilona Trade FX.\n"
-        "Seluruh infrastruktur di sini — dari analisa teknikal\n"
-        "hingga eksekusi sinyal — dijalankan oleh\n"
-        "<b>FULL AI AGENTS 24/7.</b> Mesin ini mengonsumsi\n"
-        "resource besar untuk satu tujuan: <b>MENCETAK PROFIT.</b>\n"
+        "Selamat datang di ekosistem trading berbasis AI.\n"
+        "Di sini kamu bisa cek market, membaca area entry,\n"
+        "dan menghubungkan sinyal ke EA secara otomatis.\n"
         "\n"
-        "<b>KAMI TIDAK MENJUAL TIKET MASUK.</b>\n"
-        "Akses ini GRATIS. Tapi ekosistem ini dibangun\n"
-        "dengan mental <b>GOTONG ROYONG.</b> Jika AI kami\n"
-        "memberi Anda profit, kami menuntut apresiasi\n"
-        "Anda untuk mengisi bahan bakar server AI.\n"
+        "🧠 Sistem membaca SMC, Liquidity, Structure,\n"
+        "Multi-Timeframe, Quant, S-TIER, AHZ, dan SBR/BRS.\n"
         "\n"
-        "Jika Anda hanya ingin menjadi parasit, silakan keluar.\n"
+        "🤝 <b>Model kami: Gotong Royong.</b>\n"
+        "Akses awal dibuka agar kamu bisa uji kualitas AI dulu.\n"
+        "Jika sistem membantu portofolio kamu hijau, dukungan\n"
+        "kamu membantu server AI tetap cepat dan terus berkembang.\n"
+        "\n"
+        "📌 Trading tetap punya risiko. Gunakan lot bijak,\n"
+        "ikuti SL, dan jangan overtrade.\n"
         "━━━━━━━━━━━━━━━━\n"
-        "Apakah Anda setuju dengan aturan main ini? 👇"
+        "Lanjut masuk ke markas Vilona? 👇"
     )
     markup = {
         "inline_keyboard": [[
@@ -3707,27 +3725,28 @@ def handle_ultimatum_callback(cb):
         except Exception:
             pass
         welcome = (
-            "🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT.</b>\n"
+            "🔥 <b>SELAMAT DATANG DI VILONA AI</b>\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
-            "Selamat bergabung di markas besar Vilona Trade FX.\n"
-            "Seluruh infrastruktur di sini dijalankan oleh\n"
-            "<b>FULL AI AGENTS 24/7.</b>\n"
+            "Akses kamu sudah aktif. Sekarang kamu bisa mulai\n"
+            "cek market dengan AI dan belajar membaca area entry.\n"
             "\n"
-            "<b>KAMI TIDAK MENJUAL TIKET MASUK.</b>\n"
-            "Akses ini GRATIS dengan mental GOTONG ROYONG.\n"
+            "📌 <b>Mulai dari sini:</b>\n"
+            "• /analyze xauusd — scan market cepat\n"
+            "• /price xauusd — cek harga realtime\n"
+            "• /killzone — cek session market aktif\n"
+            "• /help — lihat semua command\n"
+            "\n"
+            "👑 <b>Fitur PRO:</b>\n"
+            "• /signal — sinyal MTF 9 engines\n"
+            "• /stier — setup high probability\n"
+            "• /sbr — SBR/BRS Killer Zone\n"
+            "• /autosync — hubungkan sinyal ke EA\n"
+            "\n"
+            "⚠️ <b>Wajib disiplin:</b> trading tetap berisiko.\n"
+            "Gunakan lot bijak, ikuti SL, dan jangan overtrade.\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
-            "⚠️ <b>WAJIB BACA SEBELUM TRADING:</b>\n"
-            "📖 Baca Panduan Markas:\n"
-            "https://telegra.ph/Kolom-Title-Judul-VILONA-AI-TRADING-PROTOCOL-Panduan-Eksekusi--Aturan-Markas-06-07\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "📊 XAUUSD · BTC · EURUSD · GBPUSD · USOIL\n"
-            "📐 Mapping harian: 10:00 WIB\n"
-            f"⚡️ Kuota AI: {FREE_DAILY_LIMIT}x analisa/hari\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
-            "📱 /help — Semua command\n"
-            "📊 /analyze xauusd — Mulai analisa\n"
-            "⚡ Upgrade Tier → @berkahkaryaforexbotbot\n"
-            "━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚡ Kuota free: {FREE_DAILY_LIMIT}x analisa/hari\n"
+            "📖 Panduan: /help\n"
             "📞 Admin: @codergaboets"
         )
         tg_send(welcome, chat_id)
@@ -4059,20 +4078,21 @@ def handle_command(cmd, text, chat_id, msg):
 
             # ── 1. HEADER (semua user) ──
             welcome = (
-                f"🔥 <b>REVOLUSI TRADING DIMULAI: FULL AI, NO BULLSHIT!</b> 🔥\n"
+                f"🔥 <b>VILONA AI TRADING ECOSYSTEM</b> 🔥\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Selamat datang di ekosistem trading berbasis AI.\n"
+                f"Di sini kamu bisa cek market, baca area entry,\n"
+                f"dan hubungkan sinyal ke EA secara otomatis.\n"
                 f"\n"
-                f"Selamat datang di <b>Vilona AI Trading Ecosystem.</b>\n"
-                f"Kami tidak berjualan ludah atau grup VIP abal-abal.\n"
-                f"Seluruh ekosistem ini (Analisa SMC, Liquidity, Quant)\n"
-                f"dieksekusi murni oleh <b>FULL AI AGENTS</b> yang bekerja 24/7.\n"
+                f"🧠 <b>Yang dianalisa AI:</b>\n"
+                f"• SMC / Liquidity / Structure\n"
+                f"• Multi-Timeframe + 9 Engines\n"
+                f"• S-TIER, AHZ, SBR/BRS Killer Zone\n"
                 f"\n"
-                f"<b>Aturan Main Kami:</b>\n"
-                f"✅ AKSES GRATIS: Buktikan tajamnya sinyal AI kami\n"
-                f"   tanpa bayar di depan.\n"
-                f"🤝 GOTONG ROYONG: Jika AI kami berhasil mencetak\n"
-                f"   hijau di portofolio Anda, sisihkan sedikit profit\n"
-                f"   Anda untuk \"menyiram bensin\" server AI kami\n"
-                f"   agar makin buas!\n"
+                f"🤝 <b>Model kami: Gotong Royong</b>\n"
+                f"Akses awal tetap dibuka. Kalau sinyal AI membantu\n"
+                f"portofolio kamu hijau, dukung server AI agar sistem\n"
+                f"tetap hidup, cepat, dan makin tajam.\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
             )
 
@@ -4082,47 +4102,55 @@ def handle_command(cmd, text, chat_id, msg):
                     f"📊 <b>STATUS: SUBSCRIBER 👑</b>\n"
                     f"⚡ Kuota AI: <b>UNLIMITED ♾️</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"📥 EA Download: phantomfx.aitradepulse.com/ea/\n"
-                    f"🔑 Licensi: /mykey | 🌐 Dashboard: /dashboard\n"
+                    f"📥 <b>EA:</b> phantomfx.aitradepulse.com/ea/\n"
+                    f"🔑 <b>Lisensi:</b> /mykey | 🌐 <b>Dashboard:</b> /dashboard\n"
+                    f"🔌 <b>Cek koneksi EA:</b> /bridge_status\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🧠 <b>AI SIGNALS</b>\n"
-                    f"  /signal — 9 Engines MTF | /stier — S-TIER\n"
-                    f"  /ahz_radar — AHZ + Killer Zone\n"
-                    f"  /sbr — SBR/BRS Killer Zone 👑\n"
+                    f"🧠 <b>SINYAL AI</b>\n"
+                    f"• /signal — Sinyal MTF dari 9 engines\n"
+                    f"• /stier — Setup S-TIER high probability\n"
+                    f"• /ahz_radar — Apex Hunt + Killer Zone\n"
+                    f"• /sbr — SBR/BRS Killer Zone\n"
                     f"\n"
-                    f"📊 <b>ANALYSIS</b>\n"
-                    f"  /levels — SnR+FIBO | /zones — OB+FVG\n"
-                    f"  /structure — BOS/CHoCH | /session — Killzone\n"
-                    f"  /news — Market Intel | /dashboard — Web\n"
+                    f"📊 <b>ANALISA MARKET</b>\n"
+                    f"• /levels — Support/Resistance + Fibo\n"
+                    f"• /zones — OB + FVG + Supply/Demand\n"
+                    f"• /structure — BOS/CHoCH + trend\n"
+                    f"• /mtf — Matrix multi-timeframe\n"
+                    f"• /mapping — Peta peluang multi-symbol\n"
                     f"\n"
-                    f"⏰ <b>REALTIME</b>\n"
-                    f"  /autosync — Auto EA | /trailing — Trailing\n"
-                    f"  /price — Harga | /killzone — Session Radar\n"
+                    f"⚙️ <b>EKSEKUSI & MONITORING</b>\n"
+                    f"• /autosync — Hubungkan sinyal ke EA\n"
+                    f"• /trailing — Auto trailing stop\n"
+                    f"• /price — Harga realtime\n"
+                    f"• /killzone — Session/Killzone aktif\n"
                     f"\n"
-                    f"📱 /help — Semua command lengkap\n"
-                    f"\n"
+                    f"📱 /help — Lihat semua command lengkap\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"🤝 <b>GOTONG ROYONG:</b>\n"
-                    f"Ajak teman trader lu — setiap 3 orang yang\n"
-                    f"gabung lewat link referral lu, dapet <b>PRO 7 hari GRATIS!</b>\n"
-                    f"🔗 Cek link lu: /referral"
+                    f"🤝 <b>Referral Gotong Royong:</b>\n"
+                    f"Ajak 3 teman trader lewat link kamu, dapat\n"
+                    f"<b>PRO 7 hari GRATIS.</b>\n"
+                    f"🔗 Cek link: /referral"
                 )
             else:
                 # ── 2b. DYNAMIC CONTENT: FREE ──
                 quota_line = f"{quota['remaining']}/{FREE_QUOTA_PER_DAY} Analisa/Hari"
                 welcome += (
                     f"📊 <b>STATUS: FREE TIER</b>\n"
-                    f"⚡ Kuota AI: {quota_line}\n"
-                    f"🔒 SL/TP: Subscriber Only\n"
+                    f"⚡ Kuota AI: <b>{quota_line}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"Ketik /subscribe untuk buka:\n"
-                    f"  ✅ SL/TP + AUTO-EA\n"
-                    f"  ✅ Kuota Unlimited AI\n"
-                    f"  ✅ Akses Signal Full Engines\n"
+                    f"✅ Mulai gratis:\n"
+                    f"• /analyze xauusd — scan market AI\n"
+                    f"• /price xauusd — cek harga realtime\n"
+                    f"• /killzone — lihat sesi market aktif\n"
                     f"\n"
-                    f"💡 <b>Gak mau bayar?</b>\n"
-                    f"Ajak 3 teman = <b>PRO 7 hari GRATIS!</b>\n"
-                    f"🔗 /referral\n"
+                    f"👑 Upgrade /subscribe untuk buka:\n"
+                    f"• SL/TP lengkap + confidence detail\n"
+                    f"• /signal, /stier, /sbr, /mtf full engines\n"
+                    f"• /autosync ke EA + trailing stop\n"
+                    f"\n"
+                    f"🤝 Atau ajak 3 teman via /referral,\n"
+                    f"dapat <b>PRO 7 hari GRATIS.</b>\n"
                 )
 
             # ── 3. Interactive onboarding buttons (tetap 3 tombol) ──
