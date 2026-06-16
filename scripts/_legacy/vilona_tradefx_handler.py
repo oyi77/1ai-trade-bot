@@ -4087,6 +4087,7 @@ def handle_command(cmd, text, chat_id, msg):
                     f"🧠 <b>AI SIGNALS</b>\n"
                     f"  /signal — 9 Engines MTF | /stier — S-TIER\n"
                     f"  /ahz_radar — AHZ + Killer Zone\n"
+                    f"  /sbr — SBR/BRS Killer Zone 👑\n"
                     f"\n"
                     f"📊 <b>ANALYSIS</b>\n"
                     f"  /levels — SnR+FIBO | /zones — OB+FVG\n"
@@ -4267,9 +4268,10 @@ def handle_command(cmd, text, chat_id, msg):
             "  /analyze — AI scan market (FREE 3x/hari)",
             "  /signal — Signal MTF + 9 engines 👑",
             "  /mtf — Matrix 5TF × 9 engines 👑",
-            "  /stier — S-TIER Zone GOD TIER 👑",
-            "  /ahz_radar — Apex Hunt Radar + Killer Zone 👑",
-            "  /engines — Detail semua engines active",
+            "  /stier — S-TIER Zone GOD TIER 👑\n"
+            "  /ahz_radar — Apex Hunt Radar + Killer Zone 👑\n"
+            "  /sbr — SBR/BRS Killer Zone 👑\n"
+            "  /engines — Detail semua engines active\n"
             "",
             "📊 <b>MARKET ANALYSIS</b>",
             "  /zones — OB + FVG + Supply/Demand 👑",
@@ -5731,6 +5733,91 @@ def handle_command(cmd, text, chat_id, msg):
         except Exception as e:
             logger.error(f"/stier error: {e}")
             tg_send(f"❌ Gagal scan S-TIER zone: {e}", chat_id)
+
+    elif cmd == "/sbr":
+        """🔥 SBR/BRS Killer Zone — Structural break + FVG confluence. 👑 PREMIUM ONLY."""
+        if not _is_donor(str(chat_id)):
+            tg_send(
+                "🔥 <b>SBR/BRS Killer Zone</b> [🔒 PREMIUM]\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Structural S/R Break + FVG confluence di session\
+ killzone.\n\n"
+                "🔒 Fitur ini khusus Member Premium\n\n"
+                "⚡ /subscribe — mulai dari Rp 50k/bln",
+                chat_id
+            )
+            return
+        try:
+            from tradebot.engines.sbr_killer import SBRKillerEngine, SBRKillerSetup
+            _sbr_disp = sub.upper() if sub else "XAUUSD"
+            _sbr_pair = "gold" if _sbr_disp in ("XAUUSD","GOLD") else _sbr_disp.lower()
+            _sbr_bars = _fetch_ohlcv_for_ai(_sbr_pair, keep=80)
+            if not _sbr_bars:
+                tg_send(f"❌ Data tidak cukup untuk {_sbr_disp}.", chat_id)
+                return
+
+            engine = SBRKillerEngine(bars_h1=_sbr_bars, bars_m15=_sbr_bars, symbol=_sbr_disp)
+            sbr_setup = engine.find_setup()
+            kz_active = SBRKillerEngine._detect_killzone()
+
+            lines = [
+                f"🔥 <b>SBR/BRS KILLER ZONE — {_sbr_disp}</b>",
+                f"━━━━━━━━━━━━━━━━━━━━━━",
+            ]
+            if kz_active:
+                kz_label = {"LONDON": "🇬🇧 London", "NEW_YORK": "🗽 New York",
+                            "LONDON_NY_OVERLAP": "🇬🇧/🗽 London-NY Overlap"}
+                lines.append(f"💀 Killzone: {kz_label.get(kz_active, kz_active)} — ACTIVE!")
+            else:
+                lines.append("⏸ Killzone: OFF (London 14:00-17:00 / NY 19:00-22:00 WIB)")
+            lines.append("")
+
+            if sbr_setup:
+                lines.append(engine.format_setup_text(sbr_setup))
+                lines.append(f"")
+                lines.append(f"🎯 Direction: {sbr_setup.get('action','HOLD')} | "
+                           f"Entry: ${sbr_setup.get('entry',0):.2f} | "
+                           f"SL: ${sbr_setup.get('sl',0):.2f} | "
+                           f"TP: ${sbr_setup.get('tp',0):.2f}")
+            else:
+                lines.append("🔍 No SBR/BRS setup detected at current price level.")
+                lines.append("💡 SBR/BRS terbentuk saat S/R Break + FVG confluence")
+                lines.append("   dalam sesi killzone London atau New York.")
+
+            lines.append("")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            lines.append(f"⏰ {wib_now().strftime('%H:%M WIB')}")
+            lines.append("📡 Powered by Structure Break & Retest + FVG Engine")
+
+            # ── Auto-bridge for premium users with autosync ──
+            if sbr_setup and sbr_setup.get("action") in ("BUY","SELL") and kz_active:
+                try:
+                    _sb_price = fetch_price(_sbr_pair)
+                    _sbr_sig = {
+                        "action": sbr_setup.get("action"),
+                        "entry": sbr_setup.get("entry", _sb_price or 0),
+                        "sl": sbr_setup.get("sl"),
+                        "tp": sbr_setup.get("tp"),
+                        "tp1": sbr_setup.get("tp"),
+                        "tp2": 0,
+                        "entry_mode": "zone",
+                        "zone_lo": sbr_setup.get("entry", _sb_price or 0) - 10 * (0.10 if _sbr_disp in ("XAUUSD","GOLD") else 0.01),
+                        "zone_hi": sbr_setup.get("entry", _sb_price or 0) + 10 * (0.10 if _sbr_disp in ("XAUUSD","GOLD") else 0.01),
+                        "confidence": sbr_setup.get("confidence", 0.75),
+                        "rr_ratio": 2.0,
+                        "source": "sbr_killer",
+                        "comment": f"SBR/BRS {sbr_setup['action']} {_sbr_disp}",
+                    }
+                    post_signal_to_bridge(_sbr_sig, _sb_price or 0, _sbr_disp)
+                    lines.append(f"✅ Auto-execute: {_sbr_sig['action']} {_sbr_disp} → EA bridge")
+                except Exception as sbr_be:
+                    logger.warning(f"/sbr bridge post failed: {sbr_be}")
+
+            tg_send("\n".join(lines), chat_id)
+            logger.info(f"🔥 /sbr [{_sbr_disp}]: setup={'YES' if sbr_setup else 'NONE'} | kz={kz_active}")
+        except Exception as e:
+            logger.error(f"/sbr error: {e}")
+            tg_send(f"❌ SBR/BRS scan error: {e}", chat_id)
 
     elif cmd == "/ahz_radar":
         """📡 Apex Hunt Radar — Harmonic pattern scan. PRO/ELITE/LIFETIME only."""
@@ -8638,7 +8725,7 @@ def main():
                     except Exception:
                         pass
                     cmd = text.split()[0].split('@')[0].lower()
-                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/ahz_radar","/download","/referral","/learn_report"):
+                    if cmd in ("/start","/help","/price","/analyze","/data","/killzone","/bridge_status","/status","/bill","/testpay","/subscribe","/upgrade","/autosync","/genkey","/listkeys","/revokekey","/mykey","/myid","/winrate","/history","/recap","/mapping","/news","/activate","/restart_bot","/signal","/mtf","/engines","/dashboard","/levels","/level","/zones","/structure","/session","/donate","/testbridge","/trailing","/stier","/ahz_radar","/sbr","/download","/referral","/learn_report"):
                         try:
                             handle_command(cmd, text, str(chat_id), msg)
                         except Exception as e:
